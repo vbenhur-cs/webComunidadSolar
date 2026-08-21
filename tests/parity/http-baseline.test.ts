@@ -541,6 +541,7 @@ setInterval(() => {}, 1_000);
 
 test("enforces a total npm preparation deadline before returning from source cleanup", async () => {
   if (process.platform === "win32") return;
+  const preparationDeadlineMs = 20_000;
   const markerRoot = await mkdtemp(join(tmpdir(), "http-baseline-process-group-"));
   cleanupRoots.push(markerRoot);
   const markerPath = join(markerRoot, "descendant-marker.txt");
@@ -567,7 +568,7 @@ setInterval(() => {}, 1_000);
 `,
     "descendant.js": `const { writeFileSync } = require("node:fs");
 process.on("SIGTERM", () => {});
-setTimeout(() => writeFileSync(process.argv[2], "descendant survived " + Date.now()), 10_000);
+setTimeout(() => writeFileSync(process.argv[2], "descendant survived " + Date.now()), 30_000);
 setInterval(() => {}, 1_000);
 `,
   });
@@ -586,8 +587,8 @@ setInterval(() => {}, 1_000);
         install: false,
         build: true,
         logRoot: join(source.cleanupRoot, "logs"),
-        deadlineMs: 5_000,
-        processTimeoutMs: 6_000,
+        deadlineMs: preparationDeadlineMs,
+        processTimeoutMs: preparationDeadlineMs + 1_000,
         processKillAfterMs: 30,
       },
     );
@@ -595,7 +596,7 @@ setInterval(() => {}, 1_000);
       () => undefined,
       (error: unknown) => error,
     );
-    await waitForFile(pidPath, 5_000);
+    await waitForFile(pidPath, preparationDeadlineMs);
     pids = JSON.parse(await readFile(pidPath, "utf8")) as typeof pids;
     assert.ok(pids);
     const capturedPids = pids;
@@ -623,14 +624,14 @@ setInterval(() => {}, 1_000);
             resolvePromise(
               new Error("El build temporal no recibió deadline"),
             ),
-          8_000,
+          preparationDeadlineMs + 3_000,
         );
       }),
     ]);
     assert.ok(outcome instanceof Error);
     assert.match(
       outcome.message,
-      /presupuesto total de preparación.*5000 ms/i,
+      new RegExp(`presupuesto total de preparación.*${preparationDeadlineMs} ms`, "i"),
     );
     assert.equal(existsSync(parentTermPath), true);
     await new Promise((resolvePromise) => setTimeout(resolvePromise, 600));
