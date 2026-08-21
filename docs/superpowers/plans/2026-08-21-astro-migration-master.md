@@ -276,6 +276,10 @@ repositorio funciona sin el checkout fuente.
 
 ## Task 1: Ejecutar la base y el arnés de paridad
 
+**Estado:** completada el 21 de agosto de 2026 en `20c7f5a`. El gate canónico
+pasó con 126/126 tests, `SOURCE_MANIFEST_OK 271`, build autónomo desde Git
+archive y la referencia inmutable en `68ea294c54dc5e15e20f470fc421a239927565a8`.
+
 **Files:**
 - Read: `docs/superpowers/plans/2026-08-21-astro-01-foundation-parity.md`
 - Create/modify: los archivos enumerados dentro de ese plan
@@ -284,13 +288,13 @@ repositorio funciona sin el checkout fuente.
 - Consumes: `SourceRef`, `RouteContract`, `SourceManifest` de este registro.
 - Produces: proyecto instalable, `parity/source-manifest.json`, scripts de guardia y comparadores reutilizados por todas las fases.
 
-- [ ] **Step 1: Ejecutar todas las tareas y checks del plan 01 en orden**
+- [x] **Step 1: Ejecutar todas las tareas y checks del plan 01 en orden**
 
 ```bash
 sed -n '1,9999p' docs/superpowers/plans/2026-08-21-astro-01-foundation-parity.md
 ```
 
-- [ ] **Step 2: Confirmar el gate de fase 1**
+- [x] **Step 2: Confirmar el gate de fase 1**
 
 Ejecutar los siete comandos del “Gate de fase 1”. Esperado: exit 0, `git status`
 vacío después del commit final y fuente en el commit fijado.
