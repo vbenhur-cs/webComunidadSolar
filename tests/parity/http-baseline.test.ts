@@ -511,6 +511,32 @@ test("normalizes only a real mixed-quote data-build start-tag attribute", () => 
   );
 });
 
+test("normalizes only an entire exact data-build timestamp value", () => {
+  const timestamp = "2026-08-21T10:00:00Z";
+  const html = [
+    `<main data-build="${timestamp}"></main>`,
+    `<main DATA-BUILD='${timestamp}'></main>`,
+    `<main data-build="release-${timestamp}"></main>`,
+    `<main data-build="${timestamp}-v2"></main>`,
+    `<main data-build=" ${timestamp} "></main>`,
+    `<main data-build="release ${timestamp} candidate"></main>`,
+    `<main data-build="${timestamp},${timestamp}"></main>`,
+  ].join("");
+
+  assert.equal(
+    normalizeHtml(html),
+    [
+      '<main data-build="__TIMESTAMP__"></main>',
+      "<main DATA-BUILD='__TIMESTAMP__'></main>",
+      `<main data-build="release-${timestamp}"></main>`,
+      `<main data-build="${timestamp}-v2"></main>`,
+      `<main data-build=" ${timestamp} "></main>`,
+      `<main data-build="release ${timestamp} candidate"></main>`,
+      `<main data-build="${timestamp},${timestamp}"></main>`,
+    ].join(""),
+  );
+});
+
 test("normalizes volatile source-build asset and RSC identifiers", () => {
   const first = String.raw`<link href="/assets/index-B7W9r4T8.css"/><script>import("/assets/index-B0GTT5J1.js")</script><script>self.__VINEXT_RSC_CHUNKS__.push("2:I[\"8c0f216c4604\",[],\"Children\",1]\n0:{\"deploymentVersion\":\"e72eaee0-a3b6-4821-9a2c-36e1e5d7ef52\"}")</script><img src="/comunidad-solar-logo.svg"/><p>Oferta R2-883</p>`;
   const second = String.raw`<link href="/assets/index-C1D2E3F4.css"/><script>import("/assets/index-Z9Y8X7W6.js")</script><script>self.__VINEXT_RSC_CHUNKS__.push("2:I[\"b85b39017127\",[],\"Children\",1]\n0:{\"deploymentVersion\":\"8c511eec-9748-45d4-8fcb-8d988821ecf8\"}")</script><img src="/comunidad-solar-logo.svg"/><p>Oferta R2-883</p>`;

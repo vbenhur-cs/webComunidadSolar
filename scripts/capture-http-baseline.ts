@@ -46,7 +46,7 @@ const controlledEnvironmentKeys = [
 ] as const;
 
 const volatileIsoTimestamp =
-  /\b\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:?\d{2})\b/g;
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:?\d{2})$/;
 const volatileSitemapLastmod =
   /(<lastmod>\s*)\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:?\d{2})(\s*<\/lastmod>)/g;
 const volatileBuildAsset =
@@ -454,7 +454,9 @@ function normalizeDataBuildInStartTag(tag: string): string {
       while (cursor < tag.length && tag[cursor] !== quote) cursor += 1;
       const value = tag.slice(valueStart, cursor);
       normalized += normalizeValue
-        ? value.replace(volatileIsoTimestamp, "__TIMESTAMP__")
+        ? volatileIsoTimestamp.test(value)
+          ? "__TIMESTAMP__"
+          : value
         : value;
       if (tag[cursor] === quote) {
         normalized += quote;
@@ -474,7 +476,9 @@ function normalizeDataBuildInStartTag(tag: string): string {
     }
     const value = tag.slice(valueStart, cursor);
     normalized += normalizeValue
-      ? value.replace(volatileIsoTimestamp, "__TIMESTAMP__")
+      ? volatileIsoTimestamp.test(value)
+        ? "__TIMESTAMP__"
+        : value
       : value;
   }
 
