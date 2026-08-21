@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
@@ -47,18 +47,33 @@ const controlledEnvironmentKeys = [
 
 const volatileTimestamp =
   /\b\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:?\d{2})\b/g;
+const volatileBuildAsset =
+  /\/assets\/([^/"']+)-[A-Za-z0-9_-]{8,}(\.(?:css|js))/g;
+const volatileRscModuleId = /\\"[0-9a-f]{12}\\",\[\],\\"/g;
+const volatileDeploymentVersion =
+  /\\"deploymentVersion\\":\\"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\"/g;
 
 export type HttpIdentity = (typeof identities)[number];
 
-export interface HttpContract {
+export interface CapturedHttpContract {
   routeKey: string;
   status: number;
   headers: Record<string, string>;
+  bodyCapture: "captured";
   bodySha256: string;
   normalizedHtmlPath: string | null;
   bodyText: string | null;
   bodyJsonShape: JsonShape | null;
 }
+
+export interface SuppressedHttpContract {
+  routeKey: string;
+  status: number;
+  headers: Record<string, string>;
+  bodyCapture: "suppressed-private-success";
+}
+
+export type HttpContract = CapturedHttpContract | SuppressedHttpContract;
 
 export type JsonShape =
   | "array"
@@ -330,7 +345,14 @@ export function buildCapturePlan(manifest: SourceManifest): CapturePlan {
 }
 
 export function normalizeHtml(html: string): string {
-  return html.replace(volatileTimestamp, "__TIMESTAMP__");
+  return html
+    .replace(volatileTimestamp, "__TIMESTAMP__")
+    .replace(volatileBuildAsset, "/assets/$1-__ASSET_HASH__$2")
+    .replace(volatileRscModuleId, '\\"__RSC_MODULE_ID__\\",[],\\"')
+    .replace(
+      volatileDeploymentVersion,
+      '\\"deploymentVersion\\":\\"__DEPLOYMENT_VERSION__\\"',
+    );
 }
 
 function selectedHeaders(headers: Headers): Record<string, string> {
@@ -360,6 +382,14 @@ function isJsonResponse(response: Response): boolean {
       .get("content-type")
       ?.toLowerCase()
       .includes("application/json") ?? false
+  );
+}
+
+function isXmlResponse(response: Response): boolean {
+  const contentType = response.headers.get("content-type")?.toLowerCase();
+  return (
+    contentType?.includes("application/xml") === true ||
+    contentType?.includes("text/xml") === true
   );
 }
 
@@ -399,6 +429,20 @@ function artifactFileName(routeKeyValue: string): string {
   return `${readable || "response"}-${hash}.html`;
 }
 
+function httpArtifactRoot(root: string): string {
+  return resolve(root, ".artifacts", "http-baseline");
+}
+
+export async function resetHttpBaselineArtifacts(root: string): Promise<void> {
+  const artifactRoot = httpArtifactRoot(resolve(root));
+  await rm(artifactRoot, { recursive: true, force: true });
+}
+
+function routeKeyIsAllowedPrivatePage(routeKeyValue: string): boolean {
+  const [, , identity] = routeKeyValue.split("|");
+  return routeKeyValue.startsWith("private-page:") && identity === "allowed";
+}
+
 function compareCaptureRequest(
   left: CaptureRequest,
   right: CaptureRequest,
@@ -415,17 +459,31 @@ function compareCaptureRequest(
 export async function captureHttpContract(
   routeKeyValue: string,
   response: Response,
-  options: { root?: string } = {},
+  options: { root?: string; suppressBody?: boolean } = {},
 ): Promise<HttpContract> {
   const root = resolve(options.root ?? process.cwd());
+  const headers = selectedHeaders(response.headers);
+  const suppressBody =
+    response.ok &&
+    (options.suppressBody === true ||
+      routeKeyIsAllowedPrivatePage(routeKeyValue));
+  if (suppressBody) {
+    return {
+      routeKey: routeKeyValue,
+      status: response.status,
+      headers,
+      bodyCapture: "suppressed-private-success",
+    };
+  }
   const body = await response.text();
   const html = isHtmlResponse(response);
   const json = isJsonResponse(response);
-  const normalizedBody = html ? normalizeHtml(body) : body;
+  const xml = isXmlResponse(response);
+  const normalizedBody = html || xml ? normalizeHtml(body) : body;
   let normalizedHtmlPath: string | null = null;
 
   if (html) {
-    const artifactRoot = resolve(root, ".artifacts", "http-baseline");
+    const artifactRoot = httpArtifactRoot(root);
     const destination = resolve(artifactRoot, artifactFileName(routeKeyValue));
     await mkdir(artifactRoot, { recursive: true });
     await writeFile(destination, normalizedBody);
@@ -435,7 +493,8 @@ export async function captureHttpContract(
   return {
     routeKey: routeKeyValue,
     status: response.status,
-    headers: selectedHeaders(response.headers),
+    headers,
+    bodyCapture: "captured",
     bodySha256: createHash("sha256").update(normalizedBody).digest("hex"),
     normalizedHtmlPath,
     bodyText: response.status >= 400 && !html && !json ? body : null,
@@ -452,9 +511,15 @@ function uniqueValues(values: string[]): string[] {
 
 export function assertHttpBaselineCoverage(
   manifest: SourceManifest,
-  baseline: Pick<HttpBaseline, "contracts" | "deferred">,
+  baseline: HttpBaseline,
 ): void {
   const plan = buildCapturePlan(manifest);
+  assert.equal(
+    baseline.schemaVersion,
+    1,
+    "La versión del baseline HTTP no es compatible",
+  );
+  assertManifestSource(manifest, baseline.source);
   const contractKeys = baseline.contracts.map((contract) => contract.routeKey);
   const deferredByKey = new Map(
     baseline.deferred.map((entry) => [entry.routeKey, entry]),
@@ -468,16 +533,24 @@ export function assertHttpBaselineCoverage(
     .filter((key) => !contractKeys.includes(key));
   const missingDeferred = plan.deferred.filter((expected) => {
     const actual = deferredByKey.get(expected.routeKey);
-    return actual?.deferredToPhase !== expected.deferredToPhase;
+    return (
+      actual?.deferredToPhase !== expected.deferredToPhase ||
+      actual?.reason !== expected.reason
+    );
   });
-  const expectedKeys = new Set([
-    ...plan.requests.map((request) => request.routeKey),
-    ...plan.deferred.map((entry) => entry.routeKey),
-  ]);
-  const unexpected = [
-    ...contractKeys,
-    ...baseline.deferred.map((entry) => entry.routeKey),
-  ].filter((key) => !expectedKeys.has(key));
+  const expectedContractKeys = new Set(
+    plan.requests.map((request) => request.routeKey),
+  );
+  const expectedDeferredKeys = new Set(
+    plan.deferred.map((entry) => entry.routeKey),
+  );
+  const unexpectedContracts = contractKeys.filter(
+    (key) => !expectedContractKeys.has(key),
+  );
+  const unexpectedDeferred = baseline.deferred
+    .map((entry) => entry.routeKey)
+    .filter((key) => !expectedDeferredKeys.has(key));
+  const overlap = contractKeys.filter((key) => deferredByKey.has(key));
 
   if (duplicateContracts.length > 0 || duplicateDeferred.length > 0) {
     throw new Error(
@@ -492,10 +565,128 @@ export function assertHttpBaselineCoverage(
       `Faltan deferrals HTTP: ${missingDeferred.map((entry) => entry.routeKey).join(", ")}`,
     );
   }
-  if (unexpected.length > 0) {
+  if (
+    unexpectedContracts.length > 0 ||
+    unexpectedDeferred.length > 0 ||
+    overlap.length > 0
+  ) {
     throw new Error(
-      `Hay contratos HTTP no planificados: ${unexpected.join(", ")}`,
+      `Hay contratos HTTP no planificados: ${[
+        ...unexpectedContracts,
+        ...unexpectedDeferred,
+        ...overlap,
+      ].join(", ")}`,
     );
+  }
+
+  const requestByKey = new Map(
+    plan.requests.map((request) => [request.routeKey, request]),
+  );
+  const routeByPath = new Map(
+    manifest.routes.map((route) => [route.path, route]),
+  );
+  for (const contract of baseline.contracts) {
+    const request = requestByKey.get(contract.routeKey);
+    const route =
+      request === undefined ? undefined : routeByPath.get(request.path);
+    if (request === undefined || route === undefined) continue;
+    if (
+      !Number.isInteger(contract.status) ||
+      contract.status < 100 ||
+      contract.status > 599
+    ) {
+      throw new Error(`El estado HTTP no es válido para ${contract.routeKey}`);
+    }
+    if (request.privateArea === null && request.method === "GET") {
+      if (contract.status !== route.expectedStatus) {
+        throw new Error(
+          `El estado HTTP no coincide con el manifiesto para ${contract.routeKey}`,
+        );
+      }
+    }
+    if (
+      contract.headers === null ||
+      Array.isArray(contract.headers) ||
+      typeof contract.headers !== "object"
+    ) {
+      throw new Error(
+        `Las cabeceras HTTP no son válidas para ${contract.routeKey}`,
+      );
+    }
+    for (const [name, value] of Object.entries(contract.headers)) {
+      if (
+        !headerAllowlist.includes(name as (typeof headerAllowlist)[number]) ||
+        name !== name.toLowerCase() ||
+        typeof value !== "string"
+      ) {
+        throw new Error(
+          `La cabecera HTTP no está permitida para ${contract.routeKey}`,
+        );
+      }
+    }
+    const bodyCapture = (contract as { bodyCapture?: unknown }).bodyCapture;
+    if (bodyCapture === "suppressed-private-success") {
+      if (
+        request.privateArea === null ||
+        request.identity !== "allowed" ||
+        contract.status < 200 ||
+        contract.status > 299
+      ) {
+        throw new Error(
+          `La supresión de body HTTP no es válida para ${contract.routeKey}`,
+        );
+      }
+      for (const sensitiveField of [
+        "bodySha256",
+        "normalizedHtmlPath",
+        "bodyText",
+        "bodyJsonShape",
+      ]) {
+        if (Object.hasOwn(contract, sensitiveField)) {
+          throw new Error(
+            `El contrato HTTP suprimido conserva ${sensitiveField}`,
+          );
+        }
+      }
+      continue;
+    }
+    if (bodyCapture !== "captured") {
+      throw new Error(
+        `El modo de body HTTP no es válido para ${contract.routeKey}`,
+      );
+    }
+    const capturedContract = contract as CapturedHttpContract;
+    if (request.privateArea !== null && request.identity === "allowed") {
+      throw new Error(
+        `La respuesta privada autorizada debe suprimir su body: ${contract.routeKey}`,
+      );
+    }
+    if (
+      typeof capturedContract.bodySha256 !== "string" ||
+      !/^[a-f0-9]{64}$/.test(capturedContract.bodySha256) ||
+      /^0{64}$/.test(capturedContract.bodySha256)
+    ) {
+      throw new Error(`El hash HTTP no es válido para ${contract.routeKey}`);
+    }
+    if (
+      capturedContract.normalizedHtmlPath !== null &&
+      (typeof capturedContract.normalizedHtmlPath !== "string" ||
+        !/^\.artifacts\/http-baseline\/[A-Za-z0-9._-]+\.html$/.test(
+          capturedContract.normalizedHtmlPath,
+        ))
+    ) {
+      throw new Error(
+        `El artifact HTML no es válido para ${contract.routeKey}`,
+      );
+    }
+    if (
+      capturedContract.bodyText !== null &&
+      typeof capturedContract.bodyText !== "string"
+    ) {
+      throw new Error(
+        `El body de texto HTTP no es válido para ${contract.routeKey}`,
+      );
+    }
   }
 }
 
@@ -525,6 +716,17 @@ export function serializeHttpBaseline(baseline: HttpBaseline): string {
     null,
     2,
   )}\n`;
+}
+
+export function assertHttpBaselinesMatch(
+  tracked: HttpBaseline,
+  fresh: HttpBaseline,
+): void {
+  assert.equal(
+    serializeHttpBaseline(fresh),
+    serializeHttpBaseline(tracked),
+    "La captura HTTP fresca difiere del baseline canónico",
+  );
 }
 
 function parseMode(args: string[]): CaptureMode {
@@ -677,6 +879,7 @@ async function createBaseline(
   const contracts = await withTemporarySourceBuild(
     async ({ root: temporaryRoot }) => {
       const worker = await importBuiltWorker(temporaryRoot);
+      await resetHttpBaselineArtifacts(root);
       const restoreFetch = blockExternalQuoteRequests();
       const contracts: HttpContract[] = [];
       try {
@@ -690,7 +893,13 @@ async function createBaseline(
               }),
           );
           contracts.push(
-            await captureHttpContract(request.routeKey, response, { root }),
+            await captureHttpContract(request.routeKey, response, {
+              root,
+              suppressBody:
+                request.privateArea !== null &&
+                request.identity === "allowed" &&
+                response.ok,
+            }),
           );
         }
       } finally {
@@ -724,26 +933,32 @@ export async function captureHttpBaseline(
   const manifest = await readManifest(root);
   const contractsPath = resolve(root, "parity", "http-contracts.json");
 
-  if (mode === "--check") {
-    const baseline = JSON.parse(
-      await readFile(contractsPath, "utf8"),
-    ) as HttpBaseline;
-    assertHttpBaselineCoverage(manifest, baseline);
-    assert.deepEqual(
-      JSON.parse(serializeHttpBaseline(baseline)),
-      baseline,
-      "parity/http-contracts.json no está serializado de forma determinista",
-    );
-    process.stdout.write(
-      `HTTP_BASELINE_OK ${baseline.contracts.length} ${baseline.deferred.length}\n`,
-    );
-    return baseline;
-  }
-
   const sourceRoot = await resolveSourceRoot(options.sourceRoot);
   const source = await assertSourcePristine(sourceRoot);
   assertManifestSource(manifest, source);
   try {
+    if (mode === "--check") {
+      const serializedTracked = await readFile(contractsPath, "utf8");
+      const tracked = JSON.parse(serializedTracked) as HttpBaseline;
+      assertHttpBaselineCoverage(manifest, tracked);
+      assert.equal(
+        serializedTracked,
+        serializeHttpBaseline(tracked),
+        "parity/http-contracts.json no está serializado de forma determinista",
+      );
+      const fresh = await createBaseline(
+        manifest,
+        sourceRoot,
+        source,
+        root,
+        options.logRoot,
+      );
+      assertHttpBaselinesMatch(tracked, fresh);
+      process.stdout.write(
+        `HTTP_BASELINE_OK ${tracked.contracts.length} ${tracked.deferred.length}\n`,
+      );
+      return tracked;
+    }
     const baseline = await createBaseline(
       manifest,
       sourceRoot,

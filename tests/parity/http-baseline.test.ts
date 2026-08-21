@@ -5,6 +5,7 @@ import {
   mkdtemp,
   mkdir,
   readFile,
+  readdir,
   rm,
   writeFile,
 } from "node:fs/promises";
@@ -15,10 +16,12 @@ import { promisify } from "node:util";
 
 import type { SourceManifest } from "../../scripts/lib/route-inventory.ts";
 import {
+  assertHttpBaselinesMatch,
   assertHttpBaselineCoverage,
   buildCapturePlan,
   captureHttpContract,
   normalizeHtml,
+  resetHttpBaselineArtifacts,
   serializeHttpBaseline,
   type HttpBaseline,
 } from "../../scripts/capture-http-baseline.ts";
@@ -190,6 +193,47 @@ function manifestFixture(): SourceManifest {
   };
 }
 
+function validBaselineFixture(manifest = manifestFixture()): HttpBaseline {
+  const plan = buildCapturePlan(manifest);
+  return {
+    schemaVersion: 1,
+    source: { ...manifest.source },
+    contracts: plan.requests.map((request) => {
+      const route = manifest.routes.find((entry) => entry.path === request.path);
+      assert.ok(route, `No route fixture found for ${request.path}`);
+      const common = {
+        routeKey: request.routeKey,
+        status:
+          request.privateArea === null && request.method === "GET"
+            ? route.expectedStatus
+            : 200,
+        headers: {},
+      };
+      if (request.privateArea !== null && request.identity === "allowed") {
+        return {
+          ...common,
+          bodyCapture: "suppressed-private-success" as const,
+        };
+      }
+      return {
+        ...common,
+        bodyCapture: "captured" as const,
+        bodySha256: "a".repeat(64),
+        normalizedHtmlPath: null,
+        bodyText: null,
+        bodyJsonShape: null,
+      };
+    }),
+    deferred: plan.deferred.map((entry) => ({ ...entry })),
+  };
+}
+
+async function temporaryBuildSessions(): Promise<string[]> {
+  return (await readdir(tmpdir()))
+    .filter((entry) => entry.startsWith("comunidadsolar-source-build-"))
+    .sort();
+}
+
 test("builds only inside a temporary git archive", async () => {
   const source = await createSourceRepoFixture();
   const original = await snapshotRepository(source.root);
@@ -245,12 +289,45 @@ test("runs a timeout-dependent build only in the temporary archive", async () =>
   assert.deepEqual(await snapshotRepository(source.root), original);
 });
 
-test("provides the archived source index to builds without creating .git", async () => {
+test("returns GNU timeout status 124 when TERM is handled after the deadline", async () => {
+  const source = await createSourceRepoFixture({
+    "package.json": JSON.stringify({
+      name: "temporary-timeout-status-fixture",
+      private: true,
+      scripts: {
+        build:
+          "timeout --signal=TERM 100ms node -e \"process.on('SIGTERM', () => process.exit(0)); setInterval(() => {}, 1_000)\"",
+      },
+    }),
+  });
+  const original = await snapshotRepository(source.root);
+
+  await assert.rejects(
+    withTemporarySourceBuild(
+      async () => assert.fail("a timed-out build must not reach the callback"),
+      {
+        sourceRoot: source.root,
+        commit: source.commit,
+        install: false,
+        build: true,
+        logRoot: join(source.cleanupRoot, "logs"),
+      },
+    ),
+    /código 124/i,
+  );
+
+  assert.deepEqual(await snapshotRepository(source.root), original);
+});
+
+test("provides the pinned HEAD, main branch, and index without creating .git", async () => {
   const source = await createSourceRepoFixture({
     "package.json": JSON.stringify({
       name: "temporary-git-fixture",
       private: true,
-      scripts: { build: "git ls-files --cached > indexed.txt" },
+      scripts: {
+        build:
+          "git ls-files --cached > indexed.txt && git rev-parse HEAD > head.txt && git branch --show-current > branch.txt",
+      },
     }),
   });
 
@@ -261,6 +338,8 @@ test("provides the archived source index to builds without creating .git", async
         await readFile(join(root, "indexed.txt"), "utf8"),
         "package.json\ntracked.txt\n",
       );
+      assert.equal(await readFile(join(root, "head.txt"), "utf8"), `${source.commit}\n`);
+      assert.equal(await readFile(join(root, "branch.txt"), "utf8"), "main\n");
     },
     {
       sourceRoot: source.root,
@@ -272,6 +351,39 @@ test("provides the archived source index to builds without creating .git", async
   );
 });
 
+test("uses one temporary session and cleans it after archive setup fails", async () => {
+  const source = await createSourceRepoFixture();
+  const original = await snapshotRepository(source.root);
+  const before = await temporaryBuildSessions();
+  let sessionsDuringBuild: string[] = [];
+
+  await withTemporarySourceBuild(
+    async () => {
+      sessionsDuringBuild = await temporaryBuildSessions();
+    },
+    {
+      sourceRoot: source.root,
+      commit: source.commit,
+      install: false,
+      logRoot: join(source.cleanupRoot, "logs"),
+    },
+  );
+  assert.equal(sessionsDuringBuild.length, before.length + 1);
+  assert.deepEqual(await temporaryBuildSessions(), before);
+
+  await assert.rejects(
+    withTemporarySourceBuild(async () => undefined, {
+      sourceRoot: source.root,
+      commit: "does-not-exist",
+      install: false,
+      logRoot: join(source.cleanupRoot, "logs"),
+    }),
+    /git archive terminó/i,
+  );
+  assert.deepEqual(await temporaryBuildSessions(), before);
+  assert.deepEqual(await snapshotRepository(source.root), original);
+});
+
 test("normalizes volatile dates without removing meaningful HTML", () => {
   const normalized = normalizeHtml(
     '<main data-build="2026-08-21T10:00:00Z"><h1>Sol</h1></main>',
@@ -281,6 +393,41 @@ test("normalizes volatile dates without removing meaningful HTML", () => {
     normalized,
     '<main data-build="__TIMESTAMP__"><h1>Sol</h1></main>',
   );
+});
+
+test("normalizes volatile source-build asset and RSC identifiers", () => {
+  const first = String.raw`<link href="/assets/index-B7W9r4T8.css"/><script>import("/assets/index-B0GTT5J1.js")</script><script>self.__VINEXT_RSC_CHUNKS__.push("2:I[\"8c0f216c4604\",[],\"Children\",1]\n0:{\"deploymentVersion\":\"e72eaee0-a3b6-4821-9a2c-36e1e5d7ef52\"}")</script><img src="/comunidad-solar-logo.svg"/><p>Oferta R2-883</p>`;
+  const second = String.raw`<link href="/assets/index-C1D2E3F4.css"/><script>import("/assets/index-Z9Y8X7W6.js")</script><script>self.__VINEXT_RSC_CHUNKS__.push("2:I[\"b85b39017127\",[],\"Children\",1]\n0:{\"deploymentVersion\":\"8c511eec-9748-45d4-8fcb-8d988821ecf8\"}")</script><img src="/comunidad-solar-logo.svg"/><p>Oferta R2-883</p>`;
+
+  const normalized = normalizeHtml(first);
+
+  assert.equal(normalized, normalizeHtml(second));
+  assert.match(normalized, /\/assets\/index-__ASSET_HASH__\.css/);
+  assert.match(normalized, /__RSC_MODULE_ID__/);
+  assert.match(normalized, /__DEPLOYMENT_VERSION__/);
+  assert.match(normalized, /comunidad-solar-logo\.svg/);
+  assert.match(normalized, /Oferta R2-883/);
+});
+
+test("hashes sitemap XML after normalizing volatile last-modified timestamps", async () => {
+  const first = await captureHttpContract(
+    "page:/sitemap.xml|GET|anonymous|default",
+    new Response(
+      "<urlset><url><loc>https://comunidadsolar.es/</loc><lastmod>2026-08-21T14:10:15.425Z</lastmod></url></urlset>",
+      { headers: { "content-type": "application/xml; charset=utf-8" } },
+    ),
+  );
+  const second = await captureHttpContract(
+    "page:/sitemap.xml|GET|anonymous|default",
+    new Response(
+      "<urlset><url><loc>https://comunidadsolar.es/</loc><lastmod>2026-08-21T14:12:30.001Z</lastmod></url></urlset>",
+      { headers: { "content-type": "application/xml; charset=utf-8" } },
+    ),
+  );
+
+  if (first.bodyCapture !== "captured") assert.fail("expected captured XML contract");
+  if (second.bodyCapture !== "captured") assert.fail("expected captured XML contract");
+  assert.equal(first.bodySha256, second.bodySha256);
 });
 
 test("captures allowlisted headers and a normalized HTML artifact", async () => {
@@ -303,6 +450,8 @@ test("captures allowlisted headers and a normalized HTML artifact", async () => 
     ),
     { root },
   );
+
+  if (contract.bodyCapture !== "captured") assert.fail("expected captured HTML contract");
 
   assert.equal(contract.status, 410);
   assert.deepEqual(contract.headers, {
@@ -350,6 +499,9 @@ test("records gone text and API error shapes without storing private success bod
     }),
   );
 
+  if (gone.bodyCapture !== "captured") assert.fail("expected captured gone contract");
+  if (apiError.bodyCapture !== "captured") assert.fail("expected captured API contract");
+
   assert.equal(
     gone.bodyText,
     "Este servicio ya no forma parte de la oferta destacada.",
@@ -359,8 +511,63 @@ test("records gone text and API error shapes without storing private success bod
     field: "string",
     ok: "boolean",
   });
-  assert.equal(privateSuccess.bodyText, null);
-  assert.equal(privateSuccess.bodyJsonShape, null);
+  assert.equal(privateSuccess.bodyCapture, "suppressed-private-success");
+  assert.equal(Object.hasOwn(privateSuccess, "bodySha256"), false);
+  assert.equal(Object.hasOwn(privateSuccess, "normalizedHtmlPath"), false);
+  assert.equal(Object.hasOwn(privateSuccess, "bodyText"), false);
+  assert.equal(Object.hasOwn(privateSuccess, "bodyJsonShape"), false);
+});
+
+test("suppresses every body field and artifact for an allowed private success", async () => {
+  const root = await mkdtemp(join(tmpdir(), "http-baseline-private-contract-"));
+  cleanupRoots.push(root);
+  const routeKey = "private-page:/socios|GET|allowed|default";
+
+  const contract = await captureHttpContract(
+    routeKey,
+    new Response("<main>Contenido privado que no debe persistirse</main>", {
+      headers: {
+        "cache-control": "no-store",
+        "content-type": "text/html; charset=utf-8",
+      },
+    }),
+    { root, suppressBody: true } as { root?: string },
+  );
+
+  assert.deepEqual(contract, {
+    routeKey,
+    status: 200,
+    headers: {
+      "cache-control": "no-store",
+      "content-type": "text/html; charset=utf-8",
+    },
+    bodyCapture: "suppressed-private-success",
+  });
+  assert.equal(existsSync(join(root, ".artifacts", "http-baseline")), false);
+});
+
+test("clears residual private artifacts before regenerating public artifacts", async () => {
+  const root = await mkdtemp(join(tmpdir(), "http-baseline-regeneration-"));
+  cleanupRoots.push(root);
+  const artifactRoot = join(root, ".artifacts", "http-baseline");
+  const oldPrivateArtifact = join(artifactRoot, "private-success.html");
+  await mkdir(artifactRoot, { recursive: true });
+  await writeFile(oldPrivateArtifact, "Contenido privado histórico");
+
+  await resetHttpBaselineArtifacts(root);
+  const publicContract = await captureHttpContract(
+    "page:/|GET|anonymous|default",
+    new Response("<main>Contenido público</main>", {
+      headers: { "content-type": "text/html; charset=utf-8" },
+    }),
+    { root },
+  );
+
+  assert.equal(existsSync(oldPrivateArtifact), false);
+  assert.equal(
+    existsSync(join(root, publicContract.bodyCapture === "captured" ? publicContract.normalizedHtmlPath ?? "" : "")),
+    true,
+  );
 });
 
 test("plans identity and query variants with explicit phase deferrals", () => {
@@ -403,20 +610,7 @@ test("plans identity and query variants with explicit phase deferrals", () => {
     ],
   ]));
 
-  const baseline: HttpBaseline = {
-    schemaVersion: 1,
-    source: manifestFixture().source,
-    contracts: plan.requests.map((request) => ({
-      routeKey: request.routeKey,
-      status: 200,
-      headers: {},
-      bodySha256: "0".repeat(64),
-      normalizedHtmlPath: null,
-      bodyText: null,
-      bodyJsonShape: null,
-    })),
-    deferred: plan.deferred,
-  };
+  const baseline = validBaselineFixture(manifestFixture());
   assert.doesNotThrow(() =>
     assertHttpBaselineCoverage(manifestFixture(), baseline),
   );
@@ -435,4 +629,94 @@ test("plans identity and query variants with explicit phase deferrals", () => {
     serializeHttpBaseline(baseline),
     serializeHttpBaseline(reversed),
   );
+});
+
+test("rejects malformed captured values, source, and deferral details during coverage", () => {
+  const manifest = manifestFixture();
+  const baseline = validBaselineFixture(manifest);
+  const capturedIndex = baseline.contracts.findIndex(
+    (contract) => contract.bodyCapture === "captured",
+  );
+  assert.notEqual(capturedIndex, -1);
+  const deferredIndex = 0;
+
+  const invalidStatus = structuredClone(baseline);
+  invalidStatus.contracts[capturedIndex].status = 599;
+  assert.throws(
+    () => assertHttpBaselineCoverage(manifest, invalidStatus),
+    /estado HTTP/i,
+  );
+
+  const invalidHash = structuredClone(baseline);
+  const hashContract = invalidHash.contracts[capturedIndex];
+  if (hashContract.bodyCapture !== "captured") assert.fail("expected captured contract");
+  hashContract.bodySha256 = "0".repeat(64);
+  assert.throws(
+    () => assertHttpBaselineCoverage(manifest, invalidHash),
+    /hash/i,
+  );
+
+  const invalidHeader = structuredClone(baseline);
+  invalidHeader.contracts[capturedIndex].headers = { "x-unallowlisted": "leak" };
+  assert.throws(
+    () => assertHttpBaselineCoverage(manifest, invalidHeader),
+    /cabecera/i,
+  );
+
+  const invalidSource = structuredClone(baseline);
+  (invalidSource.source as { commit: string }).commit = "0".repeat(40);
+  assert.throws(
+    () => assertHttpBaselineCoverage(manifest, invalidSource),
+    /referencia fuente/i,
+  );
+
+  const invalidDeferred = structuredClone(baseline);
+  invalidDeferred.deferred[deferredIndex].reason = "changed";
+  assert.throws(
+    () => assertHttpBaselineCoverage(manifest, invalidDeferred),
+    /deferrals HTTP/i,
+  );
+});
+
+test("compares every canonical HTTP contract value against a fresh capture", () => {
+  const baseline = validBaselineFixture();
+  const capturedIndex = baseline.contracts.findIndex(
+    (contract) => contract.bodyCapture === "captured",
+  );
+  assert.notEqual(capturedIndex, -1);
+
+  assert.doesNotThrow(() => assertHttpBaselinesMatch(baseline, baseline));
+
+  const changes: Array<[string, HttpBaseline]> = [];
+  const changedStatus = structuredClone(baseline);
+  changedStatus.contracts[capturedIndex].status = 599;
+  changes.push(["status", changedStatus]);
+
+  const changedHash = structuredClone(baseline);
+  const hashContract = changedHash.contracts[capturedIndex];
+  if (hashContract.bodyCapture !== "captured") assert.fail("expected captured contract");
+  hashContract.bodySha256 = "b".repeat(64);
+  changes.push(["hash", changedHash]);
+
+  const changedHeader = structuredClone(baseline);
+  changedHeader.contracts[capturedIndex].headers = {
+    "cache-control": "changed",
+  };
+  changes.push(["header", changedHeader]);
+
+  const changedSource = structuredClone(baseline);
+  (changedSource.source as { commit: string }).commit = "b".repeat(40);
+  changes.push(["source", changedSource]);
+
+  const changedDeferred = structuredClone(baseline);
+  changedDeferred.deferred[0].reason = "changed";
+  changes.push(["deferral", changedDeferred]);
+
+  for (const [field, changed] of changes) {
+    assert.throws(
+      () => assertHttpBaselinesMatch(baseline, changed),
+      /captura HTTP fresca difiere/i,
+      `Expected ${field} to fail the canonical comparison`,
+    );
+  }
 });

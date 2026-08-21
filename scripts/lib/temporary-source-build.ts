@@ -227,13 +227,18 @@ try {
   const parsed = parseArguments(process.argv.slice(2));
   const child = spawn(parsed.command, parsed.commandArgs, { shell: false, stdio: "inherit" });
   let killTimer;
+  let deadlineExpired = false;
+  let startFailed = false;
+  const signalName = parsed.signal.startsWith("SIG") ? parsed.signal : \`SIG\${parsed.signal}\`;
   const timer = setTimeout(() => {
-    child.kill(parsed.signal);
+    deadlineExpired = true;
+    child.kill(signalName);
     if (parsed.killAfter !== null) {
       killTimer = setTimeout(() => child.kill("SIGKILL"), parsed.killAfter);
     }
   }, parsed.duration);
   child.once("error", (error) => {
+    startFailed = true;
     clearTimeout(timer);
     if (killTimer) clearTimeout(killTimer);
     process.stderr.write(\`timeout failed to start command: \${error.message}\\n\`);
@@ -242,7 +247,7 @@ try {
   child.once("close", (code, signal) => {
     clearTimeout(timer);
     if (killTimer) clearTimeout(killTimer);
-    process.exitCode = code ?? (signal ? 124 : 1);
+    if (!startFailed) process.exitCode = deadlineExpired ? 124 : code ?? (signal ? 124 : 1);
   });
 } catch (error) {
   process.stderr.write(\`timeout: \${error instanceof Error ? error.message : String(error)}\\n\`);
@@ -290,6 +295,26 @@ async function createTemporaryGitEnvironment(
     GIT_WORK_TREE: root,
     GIT_ALTERNATE_OBJECT_DIRECTORIES: sourceObjects,
   };
+  await runProcess(
+    "temporary-git-ref",
+    "git",
+    ["update-ref", "refs/heads/main", commit],
+    {
+      cwd: root,
+      logRoot,
+      environment,
+    },
+  );
+  await runProcess(
+    "temporary-git-head",
+    "git",
+    ["symbolic-ref", "HEAD", "refs/heads/main"],
+    {
+      cwd: root,
+      logRoot,
+      environment,
+    },
+  );
   await runProcess("temporary-git-index", "git", ["read-tree", commit], {
     cwd: root,
     logRoot,
@@ -419,13 +444,16 @@ export async function withTemporarySourceBuild<T>(
   const logRoot = resolve(
     options.logRoot ?? join(process.cwd(), ".artifacts", "source-build"),
   );
-  const root = await mkdtemp(join(tmpdir(), "comunidadsolar-source-build-"));
-  const supportRoot = await mkdtemp(
-    join(tmpdir(), "comunidadsolar-source-build-support-"),
+  const sessionRoot = await mkdtemp(
+    join(tmpdir(), "comunidadsolar-source-build-"),
   );
+  const root = join(sessionRoot, "source");
+  const supportRoot = join(sessionRoot, "support");
   const archivePath = join(root, "source.tar");
 
   try {
+    await mkdir(root, { recursive: true });
+    await mkdir(supportRoot, { recursive: true });
     await archiveSource(sourceRoot, commit, archivePath, logRoot);
     try {
       await extractArchive(archivePath, root, logRoot);
@@ -466,9 +494,6 @@ export async function withTemporarySourceBuild<T>(
 
     return await run({ root, sourceRoot, commit, logRoot });
   } finally {
-    await Promise.all([
-      rm(root, { recursive: true, force: true }),
-      rm(supportRoot, { recursive: true, force: true }),
-    ]);
+    await rm(sessionRoot, { recursive: true, force: true });
   }
 }

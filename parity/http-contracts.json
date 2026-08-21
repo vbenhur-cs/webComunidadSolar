@@ -12,6 +12,7 @@
       "headers": {
         "content-type": "application/json"
       },
+      "bodyCapture": "captured",
       "bodySha256": "4eb4cc89b51f3e377500f6905407ffb51172e89fd55d99a506e663f31cfce5fb",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -25,6 +26,7 @@
       "headers": {
         "content-type": "application/json"
       },
+      "bodyCapture": "captured",
       "bodySha256": "33cbde7f0f1fea40194943da988700f72f43444154bb7620556a886bfb5e8ac4",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -38,6 +40,7 @@
       "headers": {
         "content-type": "application/json"
       },
+      "bodyCapture": "captured",
       "bodySha256": "33cbde7f0f1fea40194943da988700f72f43444154bb7620556a886bfb5e8ac4",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -51,6 +54,7 @@
       "headers": {
         "content-type": "application/json"
       },
+      "bodyCapture": "captured",
       "bodySha256": "ab6ac006181f94fcb1f7a40795cfa5f58c0e369abcdb05487408dc051897003e",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -69,6 +73,7 @@
         "x-content-type-options": "nosniff",
         "x-robots-tag": "noindex, nofollow, noarchive"
       },
+      "bodyCapture": "captured",
       "bodySha256": "f3be022c278431a5263b45df1f54f10d9a775790cb319daab7db8b1c2be7162a",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -88,6 +93,7 @@
         "x-content-type-options": "nosniff",
         "x-robots-tag": "noindex, nofollow, noarchive"
       },
+      "bodyCapture": "captured",
       "bodySha256": "30cf6b14dbb82b0ff65ee3e7a3973f75175d1497e79215d775d0cbb3f8de9569",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -104,6 +110,7 @@
         "content-type": "text/plain; charset=utf-8",
         "x-robots-tag": "noindex"
       },
+      "bodyCapture": "captured",
       "bodySha256": "768adae9570892d48afde2a6c2171d824b3c5a513501e61a9b7c5750f4a685c4",
       "normalizedHtmlPath": null,
       "bodyText": "Esta página ya no forma parte del catálogo de Comunidad Solar.",
@@ -117,6 +124,7 @@
         "content-type": "text/plain; charset=utf-8",
         "x-robots-tag": "noindex"
       },
+      "bodyCapture": "captured",
       "bodySha256": "768adae9570892d48afde2a6c2171d824b3c5a513501e61a9b7c5750f4a685c4",
       "normalizedHtmlPath": null,
       "bodyText": "Esta página ya no forma parte del catálogo de Comunidad Solar.",
@@ -130,6 +138,7 @@
         "content-type": "text/plain; charset=utf-8",
         "x-robots-tag": "noindex"
       },
+      "bodyCapture": "captured",
       "bodySha256": "768adae9570892d48afde2a6c2171d824b3c5a513501e61a9b7c5750f4a685c4",
       "normalizedHtmlPath": null,
       "bodyText": "Esta página ya no forma parte del catálogo de Comunidad Solar.",
@@ -143,6 +152,7 @@
         "content-type": "text/plain; charset=utf-8",
         "x-robots-tag": "noindex"
       },
+      "bodyCapture": "captured",
       "bodySha256": "768adae9570892d48afde2a6c2171d824b3c5a513501e61a9b7c5750f4a685c4",
       "normalizedHtmlPath": null,
       "bodyText": "Esta página ya no forma parte del catálogo de Comunidad Solar.",
@@ -156,6 +166,7 @@
         "content-type": "text/plain; charset=utf-8",
         "x-robots-tag": "noindex"
       },
+      "bodyCapture": "captured",
       "bodySha256": "768adae9570892d48afde2a6c2171d824b3c5a513501e61a9b7c5750f4a685c4",
       "normalizedHtmlPath": null,
       "bodyText": "Esta página ya no forma parte del catálogo de Comunidad Solar.",
@@ -169,6 +180,7 @@
         "content-type": "text/plain; charset=utf-8",
         "x-robots-tag": "noindex"
       },
+      "bodyCapture": "captured",
       "bodySha256": "768adae9570892d48afde2a6c2171d824b3c5a513501e61a9b7c5750f4a685c4",
       "normalizedHtmlPath": null,
       "bodyText": "Esta página ya no forma parte del catálogo de Comunidad Solar.",
@@ -182,6 +194,7 @@
         "content-type": "text/plain; charset=utf-8",
         "x-robots-tag": "noindex"
       },
+      "bodyCapture": "captured",
       "bodySha256": "768adae9570892d48afde2a6c2171d824b3c5a513501e61a9b7c5750f4a685c4",
       "normalizedHtmlPath": null,
       "bodyText": "Esta página ya no forma parte del catálogo de Comunidad Solar.",
@@ -195,6 +208,7 @@
         "content-type": "text/plain; charset=utf-8",
         "x-robots-tag": "noindex"
       },
+      "bodyCapture": "captured",
       "bodySha256": "768adae9570892d48afde2a6c2171d824b3c5a513501e61a9b7c5750f4a685c4",
       "normalizedHtmlPath": null,
       "bodyText": "Esta página ya no forma parte del catálogo de Comunidad Solar.",
@@ -208,6 +222,7 @@
         "content-type": "text/plain; charset=utf-8",
         "x-robots-tag": "noindex"
       },
+      "bodyCapture": "captured",
       "bodySha256": "768adae9570892d48afde2a6c2171d824b3c5a513501e61a9b7c5750f4a685c4",
       "normalizedHtmlPath": null,
       "bodyText": "Esta página ya no forma parte del catálogo de Comunidad Solar.",
@@ -221,6 +236,7 @@
         "content-type": "text/plain; charset=utf-8",
         "x-robots-tag": "noindex"
       },
+      "bodyCapture": "captured",
       "bodySha256": "768adae9570892d48afde2a6c2171d824b3c5a513501e61a9b7c5750f4a685c4",
       "normalizedHtmlPath": null,
       "bodyText": "Esta página ya no forma parte del catálogo de Comunidad Solar.",
@@ -234,6 +250,7 @@
         "content-type": "text/plain; charset=utf-8",
         "x-robots-tag": "noindex"
       },
+      "bodyCapture": "captured",
       "bodySha256": "768adae9570892d48afde2a6c2171d824b3c5a513501e61a9b7c5750f4a685c4",
       "normalizedHtmlPath": null,
       "bodyText": "Esta página ya no forma parte del catálogo de Comunidad Solar.",
@@ -247,6 +264,7 @@
         "content-type": "text/plain; charset=utf-8",
         "x-robots-tag": "noindex"
       },
+      "bodyCapture": "captured",
       "bodySha256": "768adae9570892d48afde2a6c2171d824b3c5a513501e61a9b7c5750f4a685c4",
       "normalizedHtmlPath": null,
       "bodyText": "Esta página ya no forma parte del catálogo de Comunidad Solar.",
@@ -260,6 +278,7 @@
         "content-type": "text/plain; charset=utf-8",
         "x-robots-tag": "noindex"
       },
+      "bodyCapture": "captured",
       "bodySha256": "768adae9570892d48afde2a6c2171d824b3c5a513501e61a9b7c5750f4a685c4",
       "normalizedHtmlPath": null,
       "bodyText": "Esta página ya no forma parte del catálogo de Comunidad Solar.",
@@ -273,6 +292,7 @@
         "content-type": "text/plain; charset=utf-8",
         "x-robots-tag": "noindex"
       },
+      "bodyCapture": "captured",
       "bodySha256": "768adae9570892d48afde2a6c2171d824b3c5a513501e61a9b7c5750f4a685c4",
       "normalizedHtmlPath": null,
       "bodyText": "Esta página ya no forma parte del catálogo de Comunidad Solar.",
@@ -286,6 +306,7 @@
         "content-type": "text/plain; charset=utf-8",
         "x-robots-tag": "noindex"
       },
+      "bodyCapture": "captured",
       "bodySha256": "768adae9570892d48afde2a6c2171d824b3c5a513501e61a9b7c5750f4a685c4",
       "normalizedHtmlPath": null,
       "bodyText": "Esta página ya no forma parte del catálogo de Comunidad Solar.",
@@ -299,6 +320,7 @@
         "content-type": "text/plain; charset=utf-8",
         "x-robots-tag": "noindex"
       },
+      "bodyCapture": "captured",
       "bodySha256": "768adae9570892d48afde2a6c2171d824b3c5a513501e61a9b7c5750f4a685c4",
       "normalizedHtmlPath": null,
       "bodyText": "Esta página ya no forma parte del catálogo de Comunidad Solar.",
@@ -312,6 +334,7 @@
         "content-type": "text/plain; charset=utf-8",
         "x-robots-tag": "noindex"
       },
+      "bodyCapture": "captured",
       "bodySha256": "768adae9570892d48afde2a6c2171d824b3c5a513501e61a9b7c5750f4a685c4",
       "normalizedHtmlPath": null,
       "bodyText": "Esta página ya no forma parte del catálogo de Comunidad Solar.",
@@ -325,6 +348,7 @@
         "content-type": "text/plain; charset=utf-8",
         "x-robots-tag": "noindex"
       },
+      "bodyCapture": "captured",
       "bodySha256": "768adae9570892d48afde2a6c2171d824b3c5a513501e61a9b7c5750f4a685c4",
       "normalizedHtmlPath": null,
       "bodyText": "Esta página ya no forma parte del catálogo de Comunidad Solar.",
@@ -338,6 +362,7 @@
         "content-type": "text/plain; charset=utf-8",
         "x-robots-tag": "noindex"
       },
+      "bodyCapture": "captured",
       "bodySha256": "768adae9570892d48afde2a6c2171d824b3c5a513501e61a9b7c5750f4a685c4",
       "normalizedHtmlPath": null,
       "bodyText": "Esta página ya no forma parte del catálogo de Comunidad Solar.",
@@ -349,7 +374,8 @@
       "headers": {
         "content-type": "text/html; charset=utf-8"
       },
-      "bodySha256": "6ca0f20a2d38d77f85f4069339553483c1eb595ecf2e4f0d30a74adc0d86e247",
+      "bodyCapture": "captured",
+      "bodySha256": "56491059697d7a3e2958903b90481fb0b27d1b0e2c2f08709921df4379f352b8",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_aerotermia_GET_anonymous_default-6c7ea77f2362.html",
       "bodyText": null,
       "bodyJsonShape": null
@@ -360,7 +386,8 @@
       "headers": {
         "content-type": "text/html; charset=utf-8"
       },
-      "bodySha256": "a61e6c3d9910184b3f14c3aaf37e4c065d8e8e347a2d97958978f011561bac76",
+      "bodyCapture": "captured",
+      "bodySha256": "d222fad184661f6e3a2e1ce3092f57356bfffaa7a150e2bf8cbebc5025176d54",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_autoconsumo_en_mi_tejado_GET_anonymous_default-71370999f1c0.html",
       "bodyText": null,
       "bodyJsonShape": null
@@ -371,7 +398,8 @@
       "headers": {
         "content-type": "text/html; charset=utf-8"
       },
-      "bodySha256": "b714486ffc91901c6601a1fcbaccad61fa3c340052cde684ae1caac2b89837b8",
+      "bodyCapture": "captured",
+      "bodySha256": "cc7b25c1304490893688d6ea1a201ec1890dbc2de1bee8f2f5f716760391c3a5",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_autoconsumo_remoto_fuente_alamo_GET_anonymous_default-ec8b580fc5e6.html",
       "bodyText": null,
       "bodyJsonShape": null
@@ -382,7 +410,8 @@
       "headers": {
         "content-type": "text/html; charset=utf-8"
       },
-      "bodySha256": "86589122dbd449a4f97944a964b6987946d5ba8b0b67c3c64d31c55df2e0c05e",
+      "bodyCapture": "captured",
+      "bodySha256": "6c1eb0fb724ff0a80b745441dd690ae7c4302273894028d9569ac1a9411e4639",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_autoconsumo_remoto_liguerzana_GET_anonymous_default-49aa26a8c483.html",
       "bodyText": null,
       "bodyJsonShape": null
@@ -393,7 +422,8 @@
       "headers": {
         "content-type": "text/html; charset=utf-8"
       },
-      "bodySha256": "ead1d24e35e64a8a00437258f1fbbca77f452f93d3ea51d467539ae7afbbc5df",
+      "bodyCapture": "captured",
+      "bodySha256": "d7bfe5e7c40ffeaf2abb5b580c34cd74f11ff19dc9f9b7b5946e947a66f02fde",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_autoconsumo_remoto_torrontera_GET_anonymous_default-43314d4cfba5.html",
       "bodyText": null,
       "bodyJsonShape": null
@@ -404,7 +434,8 @@
       "headers": {
         "content-type": "text/html; charset=utf-8"
       },
-      "bodySha256": "479f859d6c8d458e08d535aecb09a25187f6352cdeb29da1348bc2c868bf1c8a",
+      "bodyCapture": "captured",
+      "bodySha256": "6c5b38bd8d5a9fe020b7b5d65a91f20bdcbce34084d0b49bddb99f2a2b4b2752",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_autoconsumo_remoto_GET_anonymous_default-40287187a230.html",
       "bodyText": null,
       "bodyJsonShape": null
@@ -415,7 +446,8 @@
       "headers": {
         "content-type": "text/html; charset=utf-8"
       },
-      "bodySha256": "f30ba058af3eca9540c4d98b3512d58f2d15ff617e40ade5f5c1e1ea8e8cbd5d",
+      "bodyCapture": "captured",
+      "bodySha256": "c7d2fbbd12286d9c1e4abb06fc01eba42482c46cf86dcd3e30078c2cf0d8603c",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_aviso_legal_GET_anonymous_default-c27c13bac8a6.html",
       "bodyText": null,
       "bodyJsonShape": null
@@ -426,7 +458,8 @@
       "headers": {
         "content-type": "text/html; charset=utf-8"
       },
-      "bodySha256": "bba36e3f3381a218737b97c7602d1f96659254ff5386509041dbe9e315b304d8",
+      "bodyCapture": "captured",
+      "bodySha256": "e5fd038382a9114804e878ec9c46675582701fd7800900342257c514229c5d56",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_baterias_GET_anonymous_default-ebafc0944ec8.html",
       "bodyText": null,
       "bodyJsonShape": null
@@ -437,7 +470,8 @@
       "headers": {
         "content-type": "text/html; charset=utf-8"
       },
-      "bodySha256": "475a8f0d57f6d06dd778ccd43cd29cd18a42f8b735bfbbe9ecd0956ac1a48098",
+      "bodyCapture": "captured",
+      "bodySha256": "8046cd15f1264bdaf0c6f07788f7d91c03452086ced0e9ca7a906600cff2c251",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_blog_bautizo_bajo_la_lluvia_en_fuente_alamo_GET_anonymous_default-e115a67a6630.html",
       "bodyText": null,
       "bodyJsonShape": null
@@ -448,7 +482,8 @@
       "headers": {
         "content-type": "text/html; charset=utf-8"
       },
-      "bodySha256": "12561ed2c4c2deb985e12a70b396427a9f8e1e5e1ff31456abd8ee39e1f8f685",
+      "bodyCapture": "captured",
+      "bodySha256": "9a4feae7076f4c8b0615ca527ba358bde7d2d0eb1b765ba3bd6de5fdd949f5db",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_blog_ceuti_encuentro_con_los_vecinos_GET_anonymous_default-1fa7c1c0db2f.html",
       "bodyText": null,
       "bodyJsonShape": null
@@ -459,7 +494,8 @@
       "headers": {
         "content-type": "text/html; charset=utf-8"
       },
-      "bodySha256": "7d6fcee098518fe50945ec9acb393af461a06859e9b897f1a07b396daca29746",
+      "bodyCapture": "captured",
+      "bodySha256": "b4ae1ad54ecbe7d96a9ac2120b682d0ed651dde6550ec99a6b1eb3c142aca2c6",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_blog_ceuti_termina_su_instalacion_GET_anonymous_default-60183327ee0c.html",
       "bodyText": null,
       "bodyJsonShape": null
@@ -470,7 +506,8 @@
       "headers": {
         "content-type": "text/html; charset=utf-8"
       },
-      "bodySha256": "e152ecdfd08b19f97b6f91d8d881e3f530b0433a2300c94d9fa45ead9d429c8f",
+      "bodyCapture": "captured",
+      "bodySha256": "7dbdf63cf00fe5f646f73451850d770d3ba6c6f8c2fe8619538a509ba28f7f67",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_blog_comuneros_por_el_mundo_jose_luis_GET_anonymous_default-57ffd7238f51.html",
       "bodyText": null,
       "bodyJsonShape": null
@@ -481,7 +518,8 @@
       "headers": {
         "content-type": "text/html; charset=utf-8"
       },
-      "bodySha256": "2cc7f73ae923e5fac82925380014cea5c8a0ee3b95e0fa3857899c4454f8ea70",
+      "bodyCapture": "captured",
+      "bodySha256": "4cd06c1307e7f21baa754b249df08fef8a5bedb0eaaaaa2493de4de2a3b6c7b6",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_blog_el_adn_de_comunidad_solar_GET_anonymous_default-5481bcd0ea86.html",
       "bodyText": null,
       "bodyJsonShape": null
@@ -492,7 +530,8 @@
       "headers": {
         "content-type": "text/html; charset=utf-8"
       },
-      "bodySha256": "f74e4efb006e9f3a2f23af73fcf112dfac54407ab42c2669dabf64783be0204d",
+      "bodyCapture": "captured",
+      "bodySha256": "b8b84c10fb4e1838521845fb7e5159c60cc0b594f1b89e0a94aec9cf0b6cb44b",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_blog_encuentro_comunero_en_liguerzana_GET_anonymous_default-7fb2105d89ca.html",
       "bodyText": null,
       "bodyJsonShape": null
@@ -503,7 +542,8 @@
       "headers": {
         "content-type": "text/html; charset=utf-8"
       },
-      "bodySha256": "9acbc04f6651cc45dc428f368a6d232eef16a12cbc386484b1711d2566d7c45c",
+      "bodyCapture": "captured",
+      "bodySha256": "230c716d9f7ec38b35d1d7df917944e1bbc4b5bdcbd3bece9326ff52e87c5719",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_blog_fuente_alamo_vuelve_a_abrir_sus_puertas_GET_anonymous_default-73871c53e3e6.html",
       "bodyText": null,
       "bodyJsonShape": null
@@ -514,7 +554,8 @@
       "headers": {
         "content-type": "text/html; charset=utf-8"
       },
-      "bodySha256": "bf5f823578c644f70b4fe623e940fc82b4a59f97086f80b2ae51dd09d5853bee",
+      "bodyCapture": "captured",
+      "bodySha256": "12331c5dd8bd51162be35d56b89936aecb63cf9572c620363cb4ffb72f5d67ae",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_blog_manolo_un_ano_viviendo_con_el_sol_GET_anonymous_default-8f98098eb8fb.html",
       "bodyText": null,
       "bodyJsonShape": null
@@ -525,7 +566,8 @@
       "headers": {
         "content-type": "text/html; charset=utf-8"
       },
-      "bodySha256": "14e659ad38dabf65f5a8c4aa97f442efdf74a6e336c71ab4fc6a53470579c521",
+      "bodyCapture": "captured",
+      "bodySha256": "193f022881e5412bdbd32969e1d269ef4b0ad37b6c9d3a0f41862e1fffce74a7",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_blog_nace_la_comunidad_de_nuevo_baztan_GET_anonymous_default-4483dfaf8b5d.html",
       "bodyText": null,
       "bodyJsonShape": null
@@ -536,7 +578,8 @@
       "headers": {
         "content-type": "text/html; charset=utf-8"
       },
-      "bodySha256": "4830b19b4c8b228cada8e16bceb78c3758900a38809d458bbc2a10d672cee9d8",
+      "bodyCapture": "captured",
+      "bodySha256": "4fb7b1d10030033940637dc603ee30194d4b4793b48ac02e77f8eb8e9c72f328",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_blog_nuevo_baztan_abre_la_casa_de_un_comunero_GET_anonymous_default-f1ca74a46cbf.html",
       "bodyText": null,
       "bodyJsonShape": null
@@ -547,7 +590,8 @@
       "headers": {
         "content-type": "text/html; charset=utf-8"
       },
-      "bodySha256": "0e6c83406353e3ff384d75ab8434ba7006beba607b9b00c241cc41d0602c8586",
+      "bodyCapture": "captured",
+      "bodySha256": "e30b9cf7dfed48c693c7bc2b361793ee22b828f922ff53fb4a0240eebad506d4",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_blog_premio_comunidad_goparity_GET_anonymous_default-10d5fdf9faf3.html",
       "bodyText": null,
       "bodyJsonShape": null
@@ -558,7 +602,8 @@
       "headers": {
         "content-type": "text/html; charset=utf-8"
       },
-      "bodySha256": "6e0b9dfb078c16b6426a593fdc48672326962154e0e64dd00409401875db0ee7",
+      "bodyCapture": "captured",
+      "bodySha256": "976c0d446af1919d5c05ecf9bc5f89c3646178c9211b483d1dc9c93f622a46b7",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_blog_puebla_del_principe_entra_en_construccion_GET_anonymous_default-80552815e67b.html",
       "bodyText": null,
       "bodyJsonShape": null
@@ -569,7 +614,8 @@
       "headers": {
         "content-type": "text/html; charset=utf-8"
       },
-      "bodySha256": "8c90068d92e68d23d4ffc855fe25386ddb00b770dd04252c60ebb1367429b8fd",
+      "bodyCapture": "captured",
+      "bodySha256": "5a53d1eccc88d212b6d5946a60724fa76a2398b958db5068bd986f85ef7ab95a",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_blog_septimo_aniversario_capsula_del_tiempo_GET_anonymous_default-6e2b0ee8fbbf.html",
       "bodyText": null,
       "bodyJsonShape": null
@@ -580,7 +626,8 @@
       "headers": {
         "content-type": "text/html; charset=utf-8"
       },
-      "bodySha256": "32b9cc9efadb6061c077e559f210387fb406b50c2ee470c3393ddf033524ca49",
+      "bodyCapture": "captured",
+      "bodySha256": "5ad73e6ffeda4b1007559c8e371bd9f0f55ee3578d6526786965cc62acf56bdd",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_blog_solsticio_2022_puertas_abiertas_GET_anonymous_default-2c81004d4b2e.html",
       "bodyText": null,
       "bodyJsonShape": null
@@ -591,7 +638,8 @@
       "headers": {
         "content-type": "text/html; charset=utf-8"
       },
-      "bodySha256": "f23baa527982f6458382190105852c8d7929eac0df4d6567a121bee1137dec8d",
+      "bodyCapture": "captured",
+      "bodySha256": "015d31b58e6f55a9b3bad606332cdbc90c9ea67728111046243b3b0b8ebdea50",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_blog_solsticio_2023_quinto_aniversario_GET_anonymous_default-09dd862b5ea3.html",
       "bodyText": null,
       "bodyJsonShape": null
@@ -602,7 +650,8 @@
       "headers": {
         "content-type": "text/html; charset=utf-8"
       },
-      "bodySha256": "b56077877895d4dac34f5baf270c529dd3701bfb77e31d92da3ef74c8928e5b8",
+      "bodyCapture": "captured",
+      "bodySha256": "000c76c479cfc35606e4f8bf0adc8e25dae295af39066b19ec6bd3977e69e9ff",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_blog_solsticio_2024_sexto_aniversario_GET_anonymous_default-1fac9023b4f2.html",
       "bodyText": null,
       "bodyJsonShape": null
@@ -613,7 +662,8 @@
       "headers": {
         "content-type": "text/html; charset=utf-8"
       },
-      "bodySha256": "24d698bfd8619c843bf7710a81f0dd12053fbf033ceb8bdeda5a2fddc1bfc652",
+      "bodyCapture": "captured",
+      "bodySha256": "f1b2c39972fda31b0421f51955bf8246820a85f7607a094624a46f99ebd56c18",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_blog_torrontera_ya_esta_en_marcha_GET_anonymous_default-dec6c2bc06c0.html",
       "bodyText": null,
       "bodyJsonShape": null
@@ -624,7 +674,8 @@
       "headers": {
         "content-type": "text/html; charset=utf-8"
       },
-      "bodySha256": "2a12874d9e64d0c0ad1d9c3e62a68635644a2a5bc878d6c32b866aa65ac65849",
+      "bodyCapture": "captured",
+      "bodySha256": "3be176bca3be4c0f8d5ef9adae40f5209e98a567db952c0f8a5cffdc54f935b4",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_blog_villalbilla_dos_colegios_una_comunidad_GET_anonymous_default-895fca2c9db6.html",
       "bodyText": null,
       "bodyJsonShape": null
@@ -635,7 +686,8 @@
       "headers": {
         "content-type": "text/html; charset=utf-8"
       },
-      "bodySha256": "e2e0c9fcc88f3d4a4589125469a3c20f4594d7dcd1e905a419d6bda2770351c6",
+      "bodyCapture": "captured",
+      "bodySha256": "efb3740ae0778273b86aa615178d55fbf5ecbd6e4e267ab7b6366eb1f36f7df2",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_blog_villalbilla_presenta_su_comunidad_GET_anonymous_default-3a3d39ab5e53.html",
       "bodyText": null,
       "bodyJsonShape": null
@@ -646,7 +698,8 @@
       "headers": {
         "content-type": "text/html; charset=utf-8"
       },
-      "bodySha256": "5d5532856864dc27f8dd4a7e6421e5db38bbddc44b0e05eeef33efd9715f3c35",
+      "bodyCapture": "captured",
+      "bodySha256": "5a36cfcb164ba92fa05a0715cb35772d966da0d851f2ddf1eb4450a1fe580efb",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_blog_GET_anonymous_default-c873dd644542.html",
       "bodyText": null,
       "bodyJsonShape": null
@@ -657,7 +710,8 @@
       "headers": {
         "content-type": "text/html; charset=utf-8"
       },
-      "bodySha256": "e4e010db00b50513144458797145f40e5d92b8697a5d706d33af72780e45af02",
+      "bodyCapture": "captured",
+      "bodySha256": "e6ea8b61f32e8f29fd9fb7a78fc4cba4899fbf6d3d1086dd9b250c6f83463b15",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_comercializadora_y_tarifas_GET_anonymous_default-9d51148301a5.html",
       "bodyText": null,
       "bodyJsonShape": null
@@ -668,7 +722,8 @@
       "headers": {
         "content-type": "text/html; charset=utf-8"
       },
-      "bodySha256": "cc4a4408db11dc39a9ef8ec23c58a563a96f33ea9d61eb01df1e97e00d4d33e0",
+      "bodyCapture": "captured",
+      "bodySha256": "370a2687ab6c8dddf647494c317d42293cd744d6280017e2438d5993b212a016",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_comunidades_energeticas_operativas_GET_anonymous_default-15ca9b6b38d6.html",
       "bodyText": null,
       "bodyJsonShape": null
@@ -679,7 +734,8 @@
       "headers": {
         "content-type": "text/html; charset=utf-8"
       },
-      "bodySha256": "bcab26d878b3accdd6caff543a683818cec0e24142eae661d0af8e666421c37f",
+      "bodyCapture": "captured",
+      "bodySha256": "3b221bdc76755a11845d9e1b7f18e8007d1db1761fcce9ab930de0b30c37bba0",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_comunidades_energeticas_almendralejo_GET_anonymous_default-5d9402b8554d.html",
       "bodyText": null,
       "bodyJsonShape": null
@@ -690,7 +746,8 @@
       "headers": {
         "content-type": "text/html; charset=utf-8"
       },
-      "bodySha256": "f6dd5a528e7fb18071c75f85900f73671bd60033f25a352f645b59f0700036db",
+      "bodyCapture": "captured",
+      "bodySha256": "fe23600a4284a61c947a8c48e99e009094d9c734dee93445a9ee1db1fce061bf",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_comunidades_energeticas_caceres_GET_anonymous_default-ee884197c189.html",
       "bodyText": null,
       "bodyJsonShape": null
@@ -701,7 +758,8 @@
       "headers": {
         "content-type": "text/html; charset=utf-8"
       },
-      "bodySha256": "b9e7bca12326653a26d26d5304f41c5d9c0a81446c29771eadf61f57977a7b06",
+      "bodyCapture": "captured",
+      "bodySha256": "669e78992a1960c166a839df2d51b7bbcd6eec045537021d21631e0507ea739f",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_comunidades_energeticas_ceuti_GET_anonymous_default-d7ec056bfb7d.html",
       "bodyText": null,
       "bodyJsonShape": null
@@ -712,7 +770,8 @@
       "headers": {
         "content-type": "text/html; charset=utf-8"
       },
-      "bodySha256": "3278fd67dc639c52d41a6edc88b7ae7b067437142de981f94a49cdacaf77b9b5",
+      "bodyCapture": "captured",
+      "bodySha256": "44c3ce439a42dfea550b5c05d56cb4206021df98769b7169fe87317ed54068b6",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_comunidades_energeticas_coria_GET_anonymous_default-b879e322e440.html",
       "bodyText": null,
       "bodyJsonShape": null
@@ -723,7 +782,8 @@
       "headers": {
         "content-type": "text/html; charset=utf-8"
       },
-      "bodySha256": "df3a17978b071e31d6b2d7d45a4c6ee8d7abbb970712d664da6491bf4ad549ba",
+      "bodyCapture": "captured",
+      "bodySha256": "4e903c087646a811f617e1bf712ad6a8b54cf929036aaa1e60d71aebfde6fc6e",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_comunidades_energeticas_don_benito_GET_anonymous_default-36df6db7f38d.html",
       "bodyText": null,
       "bodyJsonShape": null
@@ -734,7 +794,8 @@
       "headers": {
         "content-type": "text/html; charset=utf-8"
       },
-      "bodySha256": "8600d8e05f327f32797daf11b946edcc8daf2008d5d29925d324f38f9c07e3a2",
+      "bodyCapture": "captured",
+      "bodySha256": "758cf353fcf08accc842a9c94369b0549b2af7c4324d61a5e153d60674096e2d",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_comunidades_energeticas_escurial_GET_anonymous_default-e060ff0bc952.html",
       "bodyText": null,
       "bodyJsonShape": null
@@ -745,7 +806,8 @@
       "headers": {
         "content-type": "text/html; charset=utf-8"
       },
-      "bodySha256": "2f7f88293e3ec6885663648c5f954eed3e4de85eb4c431913766a324a1e1891d",
+      "bodyCapture": "captured",
+      "bodySha256": "64bfdf212bab520009c3c0849c311337841682d16fd69c8a65bfbc2050e77f0a",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_comunidades_energeticas_extremadura_GET_anonymous_default-f2562d3adb94.html",
       "bodyText": null,
       "bodyJsonShape": null
@@ -756,7 +818,8 @@
       "headers": {
         "content-type": "text/html; charset=utf-8"
       },
-      "bodySha256": "1093f26515e5a8c0afb76fb97e0c5858e642769b80c8931aea2529030f6cc8ee",
+      "bodyCapture": "captured",
+      "bodySha256": "f5194b3ba03678b966e4eea65530da8acabb8aef9b73431a43817a8dc5377786",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_comunidades_energeticas_ibeas_de_juarros_GET_anonymous_default-afb590b53d8e.html",
       "bodyText": null,
       "bodyJsonShape": null
@@ -767,7 +830,8 @@
       "headers": {
         "content-type": "text/html; charset=utf-8"
       },
-      "bodySha256": "b831fea70297a0b96c9dc156c7c30c8552b5dc9931ca1c0878116ff660d8f333",
+      "bodyCapture": "captured",
+      "bodySha256": "8c3354f78e9e691dfc25b5491565aed3e9036f6285aebc4f7a903736ec3125f3",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_comunidades_energeticas_jerez_de_los_caballeros_GET_anonymous_default-526f95948823.html",
       "bodyText": null,
       "bodyJsonShape": null
@@ -778,7 +842,8 @@
       "headers": {
         "content-type": "text/html; charset=utf-8"
       },
-      "bodySha256": "54e928e04445c7495e28c2562222d4709c029a64b4026579ecaf8b57b9e4a59d",
+      "bodyCapture": "captured",
+      "bodySha256": "be94836b79a23e14f9ee5de6f996f5eff8eeb69ab164e1110dd93b174fe5d21c",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_comunidades_energeticas_manganafer_GET_anonymous_default-34ef1007fb00.html",
       "bodyText": null,
       "bodyJsonShape": null
@@ -789,7 +854,8 @@
       "headers": {
         "content-type": "text/html; charset=utf-8"
       },
-      "bodySha256": "69c1a4a4826671a36d7aa311fbf87227aa08eca0bdf2a9f96aa8946b79424f34",
+      "bodyCapture": "captured",
+      "bodySha256": "01e86e5e3f089f22a2afea261056711c07a1b43e82f484bbf1f69f00af8ce0d2",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_comunidades_energeticas_merida_GET_anonymous_default-668bdee08599.html",
       "bodyText": null,
       "bodyJsonShape": null
@@ -800,7 +866,8 @@
       "headers": {
         "content-type": "text/html; charset=utf-8"
       },
-      "bodySha256": "9e1b38c8ecf20f1f5112465baf89d0f9738f9fc3cf663dd53e1f8bf9e069520f",
+      "bodyCapture": "captured",
+      "bodySha256": "94bbd11c3a1d48938fb78d7eddbcf9c5b2960f00e9e5cd181aa06c814d9a0188",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_comunidades_energeticas_navalmoral_de_la_mata_GET_anonymous_default-0315b08a725e.html",
       "bodyText": null,
       "bodyJsonShape": null
@@ -811,7 +878,8 @@
       "headers": {
         "content-type": "text/html; charset=utf-8"
       },
-      "bodySha256": "fd7c3f87a0771da099a48d158f1be70e9cc69a66439aa86746b08b171bf440c1",
+      "bodyCapture": "captured",
+      "bodySha256": "b45f69a0abec5c7af31ea8d65720d61b6e4decdc1e87cb8e7800a05e156d4977",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_comunidades_energeticas_nuevo_baztan_GET_anonymous_default-f663d5b79c1e.html",
       "bodyText": null,
       "bodyJsonShape": null
@@ -822,7 +890,8 @@
       "headers": {
         "content-type": "text/html; charset=utf-8"
       },
-      "bodySha256": "eefffb1a38d2b9265997354fd49d125a626bf27dff87a6db7e149089be394b5f",
+      "bodyCapture": "captured",
+      "bodySha256": "aae089d9b196dcff23b50962dd0568d504492696fa229f6cdfef0675ecf098e4",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_comunidades_energeticas_ontinyent_GET_anonymous_default-2c03ad10ce07.html",
       "bodyText": null,
       "bodyJsonShape": null
@@ -833,7 +902,8 @@
       "headers": {
         "content-type": "text/html; charset=utf-8"
       },
-      "bodySha256": "5b5e136207b02f60b37300e5df7c4e57d3c58e57cd0b22ac79e6928e03c961b8",
+      "bodyCapture": "captured",
+      "bodySha256": "c113b7d200a7d24f43e096417990ba752d4efc8d9b7991cde5ec062bba176344",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_comunidades_energeticas_plasencia_GET_anonymous_default-2850e68bb1a7.html",
       "bodyText": null,
       "bodyJsonShape": null
@@ -844,7 +914,8 @@
       "headers": {
         "content-type": "text/html; charset=utf-8"
       },
-      "bodySha256": "20c5ffc47d366082125cde46767fc581c1c562ddafde7ba187a16331c3a36d15",
+      "bodyCapture": "captured",
+      "bodySha256": "b948bc814fb341e177906ab9f43e57019c545d412a026f8f8a8fe0c09871b65e",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_comunidades_energeticas_san_adrian_de_juarros_GET_anonymous_default-67da871d6fee.html",
       "bodyText": null,
       "bodyJsonShape": null
@@ -855,7 +926,8 @@
       "headers": {
         "content-type": "text/html; charset=utf-8"
       },
-      "bodySha256": "838432a5acef245be49943735963b3b89ea853bd12e9ab8bafa08f1ce6911378",
+      "bodyCapture": "captured",
+      "bodySha256": "7f2d858b5e95dd85e88231d0a2adb8102c121ff7749ad0d11053981026af2c29",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_comunidades_energeticas_santa_cruz_de_paniagua_GET_anonymous_default-e955712915bf.html",
       "bodyText": null,
       "bodyJsonShape": null
@@ -866,7 +938,8 @@
       "headers": {
         "content-type": "text/html; charset=utf-8"
       },
-      "bodySha256": "1cd02f3cd90dd6056fae391736647a6d30a63ce6ecce24a5ffd497270e59a6e9",
+      "bodyCapture": "captured",
+      "bodySha256": "46c638f76e4721d9b3649b1924602b00a0cb9025416a608b98a94afa4ae67ca1",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_comunidades_energeticas_sepulveda_GET_anonymous_default-c45f832440b0.html",
       "bodyText": null,
       "bodyJsonShape": null
@@ -877,7 +950,8 @@
       "headers": {
         "content-type": "text/html; charset=utf-8"
       },
-      "bodySha256": "bf582e9b3bc5afa1c53f9dd6b99f955c5f379a9abdeefd69796d4ed361a7b28c",
+      "bodyCapture": "captured",
+      "bodySha256": "2b4d252f8d65ecc8d83bf6f78ee11ea9d9415bc02252ebeb9bcf9272d81c5ba0",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_comunidades_energeticas_villafranca_de_los_barros_GET_anonymous_default-460333e04f67.html",
       "bodyText": null,
       "bodyJsonShape": null
@@ -888,7 +962,8 @@
       "headers": {
         "content-type": "text/html; charset=utf-8"
       },
-      "bodySha256": "305ccdc1d4724b684ebba916aa52ac5d17f85b212c76ee2aaaf1696f0755dccb",
+      "bodyCapture": "captured",
+      "bodySha256": "a2b5d6b4b5772b59467cfa5902b49316a3b61724f971079b82bf316c68041b5b",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_comunidades_energeticas_villalbilla_GET_anonymous_default-90f4b873e1d5.html",
       "bodyText": null,
       "bodyJsonShape": null
@@ -899,7 +974,8 @@
       "headers": {
         "content-type": "text/html; charset=utf-8"
       },
-      "bodySha256": "424254630f15c4d5a0b56978b1868caa6d5cffed6279f2bf7f11a1f3bf9abce0",
+      "bodyCapture": "captured",
+      "bodySha256": "9038e2bd35071efc6db5ce5222058bdec1b639240038d7442b7fdb756f8609b0",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_comunidades_energeticas_villaverde_getafe_GET_anonymous_default-e01a2025aacf.html",
       "bodyText": null,
       "bodyJsonShape": null
@@ -910,7 +986,8 @@
       "headers": {
         "content-type": "text/html; charset=utf-8"
       },
-      "bodySha256": "e2afdb21de996a307a50250d2694bffc13c66e9ba4104a77203b10676507d92c",
+      "bodyCapture": "captured",
+      "bodySha256": "fe913dc9a019f32ac32dc0757a9f9b5f2ec35c56a32de1af8eca4283a0116aa4",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_comunidades_energeticas_zafra_GET_anonymous_default-7e5edca4a055.html",
       "bodyText": null,
       "bodyJsonShape": null
@@ -921,7 +998,8 @@
       "headers": {
         "content-type": "text/html; charset=utf-8"
       },
-      "bodySha256": "ed035ca43a14cbd2106ac9146fccbaaeac40389697fabc6f9ad119da5806e4a5",
+      "bodyCapture": "captured",
+      "bodySha256": "ac20b9df374c38567f893f4c1c0d6bcb64f375d7ec7063ff451053564d5bf266",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_comunidades_energeticas_GET_anonymous_default-36e14f59ba90.html",
       "bodyText": null,
       "bodyJsonShape": null
@@ -932,7 +1010,8 @@
       "headers": {
         "content-type": "text/html; charset=utf-8"
       },
-      "bodySha256": "9a38d273192344ad9216479957c23f5aedccd47af272974e79f25255be03d8cd",
+      "bodyCapture": "captured",
+      "bodySha256": "4aeb84d3a64f8b18a462745cf68cdda49ef5d0c131a6f4bb2865394bf04c4628",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_contacto_GET_anonymous_default-cc8b6d97847d.html",
       "bodyText": null,
       "bodyJsonShape": null
@@ -943,7 +1022,8 @@
       "headers": {
         "content-type": "text/html; charset=utf-8"
       },
-      "bodySha256": "138bbfb4f73d00c9b39a9a4475ffecdff42e40713c5007159a5d7795687d8fca",
+      "bodyCapture": "captured",
+      "bodySha256": "bfeb23f5f3c5186d91b788da1a874a95eaa204c10133089184844113314a3f85",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_cookies_GET_anonymous_default-5103cd18ad8c.html",
       "bodyText": null,
       "bodyJsonShape": null
@@ -954,7 +1034,8 @@
       "headers": {
         "content-type": "text/html; charset=utf-8"
       },
-      "bodySha256": "cc0921ec6c3a986e8e14f01def83973e22b2fc33000c0cbda8957dc73e01026a",
+      "bodyCapture": "captured",
+      "bodySha256": "4607328ceee0bdc8153cf1f9bf939a60e4f8781116a71da4b652eda1f40ce218",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_eventos_GET_anonymous_default-e99305dd1506.html",
       "bodyText": null,
       "bodyJsonShape": null
@@ -965,7 +1046,8 @@
       "headers": {
         "content-type": "text/html; charset=utf-8"
       },
-      "bodySha256": "ff7c12365327a2d1e9f54187b5f1d6aa3c4acb72e85836feca6db6389160e209",
+      "bodyCapture": "captured",
+      "bodySha256": "b1a79aacf5e16c8ca720acd15e83ebb1ba4cd825371e740c184c87fea82adaad",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_mantenimiento_GET_anonymous_default-4ea5ea27ed52.html",
       "bodyText": null,
       "bodyJsonShape": null
@@ -976,7 +1058,8 @@
       "headers": {
         "content-type": "text/html; charset=utf-8"
       },
-      "bodySha256": "dfd694860eebd82332fd57343034e1c523019605105de34695204f3df32801ef",
+      "bodyCapture": "captured",
+      "bodySha256": "fccb7908ca83d90e8305730678c3a51dbf6af49de57d2dfa7541f8f694a2fb9e",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_nosotros_GET_anonymous_default-0182cd310369.html",
       "bodyText": null,
       "bodyJsonShape": null
@@ -987,7 +1070,8 @@
       "headers": {
         "content-type": "text/html; charset=utf-8"
       },
-      "bodySha256": "9728d56c6a4a66f8243be80558e2e9babe0d85e23709ba7fc756d209a8509e4e",
+      "bodyCapture": "captured",
+      "bodySha256": "276ffc5663259ef42c76a2a890d450b20a623172c74b6f9a7ea1a92ba6f85324",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_politica_privacidad_GET_anonymous_default-9ab1988f7fdd.html",
       "bodyText": null,
       "bodyJsonShape": null
@@ -998,7 +1082,8 @@
       "headers": {
         "content-type": "text/html; charset=utf-8"
       },
-      "bodySha256": "10b1a1cd9f349cf2643f9d2cb46325398c8707e2611b929f9e07a5ea4a6d0735",
+      "bodyCapture": "captured",
+      "bodySha256": "9ccc3801f066faea87a27b48506b0f4e7217b857590ec8d5631988290775328d",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_rentabiliza_tu_activo_GET_anonymous_default-fdbf039f928d.html",
       "bodyText": null,
       "bodyJsonShape": null
@@ -1010,6 +1095,7 @@
         "cache-control": "public, max-age=0, must-revalidate",
         "content-type": "text/plain"
       },
+      "bodyCapture": "captured",
       "bodySha256": "17ade246242f2b9878bb065a744dd0afb87041380d1cdeb622cf77f731314bd7",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -1022,7 +1108,8 @@
         "cache-control": "public, max-age=0, must-revalidate",
         "content-type": "application/xml"
       },
-      "bodySha256": "6a279e5467c8f55c60c82857cdbf8b5a827768d7ed1a2d1750821e3126a1f825",
+      "bodyCapture": "captured",
+      "bodySha256": "5c8d773119a83357006b1e39f71452eaa33db0d5860202ce30a3dd847e705ca9",
       "normalizedHtmlPath": null,
       "bodyText": null,
       "bodyJsonShape": null
@@ -1033,7 +1120,8 @@
       "headers": {
         "content-type": "text/html; charset=utf-8"
       },
-      "bodySha256": "e9774e1155108c11c8c7c129f56215b9d6f56894a4b39171e363c7847792d6cb",
+      "bodyCapture": "captured",
+      "bodySha256": "71a9633281a09598704dcd392a784669fd4599eb19be5c54c149124c91ec0586",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_soy_comunero_GET_anonymous_default-0af006b3298c.html",
       "bodyText": null,
       "bodyJsonShape": null
@@ -1044,7 +1132,8 @@
       "headers": {
         "content-type": "text/html; charset=utf-8"
       },
-      "bodySha256": "a8ce10440912dbf328a3a9cc603f2eba58c66d4b302fd54604ed40f3d9e634bd",
+      "bodyCapture": "captured",
+      "bodySha256": "c048a0faeb0da24daed7c519f8cce5901ea47c43741846221e636564353be4b3",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_terminos_y_condiciones_GET_anonymous_default-9587098f9665.html",
       "bodyText": null,
       "bodyJsonShape": null
@@ -1055,7 +1144,8 @@
       "headers": {
         "content-type": "text/html; charset=utf-8"
       },
-      "bodySha256": "6bbee057f4dba0338f9ca710591cdcd3d758a5479051c334709863eb3c830c7f",
+      "bodyCapture": "captured",
+      "bodySha256": "7a6a9e834941d4d0c0fd3cc58e58f0cfe379c027cd8125c24b6d1cc4bf635e3d",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_GET_anonymous_default-191b4661bae3.html",
       "bodyText": null,
       "bodyJsonShape": null
@@ -1071,10 +1161,7 @@
         "x-content-type-options": "nosniff",
         "x-robots-tag": "noindex, nofollow, noarchive"
       },
-      "bodySha256": "c41e5af9fa2711ed35e28f0b77f94bfd516e33fadc18c7e2152dc221205182ac",
-      "normalizedHtmlPath": null,
-      "bodyText": null,
-      "bodyJsonShape": null
+      "bodyCapture": "suppressed-private-success"
     },
     {
       "routeKey": "private-page:/guia-equipo-nueva-web-comunidad-solar.md|GET|anonymous|default",
@@ -1082,6 +1169,7 @@
       "headers": {
         "location": "http://localhost/signin-with-chatgpt?return_to=%2Fguia-equipo-nueva-web-comunidad-solar.md"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -1097,6 +1185,7 @@
         "x-content-type-options": "nosniff",
         "x-robots-tag": "noindex, nofollow, noarchive"
       },
+      "bodyCapture": "captured",
       "bodySha256": "454d6a737818b1a08534309ec233c0153ac56914e2f80361cc4523ed03d83929",
       "normalizedHtmlPath": null,
       "bodyText": "Cuenta no autorizada.",
@@ -1112,6 +1201,7 @@
         "x-content-type-options": "nosniff",
         "x-robots-tag": "noindex, nofollow, noarchive"
       },
+      "bodyCapture": "captured",
       "bodySha256": "454d6a737818b1a08534309ec233c0153ac56914e2f80361cc4523ed03d83929",
       "normalizedHtmlPath": null,
       "bodyText": "Cuenta no autorizada.",
@@ -1127,10 +1217,7 @@
         "x-content-type-options": "nosniff",
         "x-robots-tag": "noindex, nofollow, noarchive, noimageindex"
       },
-      "bodySha256": "da9b119dbbdccde5f1b36889a7bd7423605192c50b197a2e5ce69c00b332cbc0",
-      "normalizedHtmlPath": ".artifacts/http-baseline/private_page_guia_equipo_GET_allowed_default-e8a5edc9e200.html",
-      "bodyText": null,
-      "bodyJsonShape": null
+      "bodyCapture": "suppressed-private-success"
     },
     {
       "routeKey": "private-page:/guia-equipo|GET|anonymous|default",
@@ -1142,7 +1229,8 @@
         "x-content-type-options": "nosniff",
         "x-robots-tag": "noindex, nofollow, noarchive, noimageindex"
       },
-      "bodySha256": "f5ef2e4d07d4cabef96c58c5ad346637fc1075fe34ecc03d8e7cf1376c3a0f95",
+      "bodyCapture": "captured",
+      "bodySha256": "274c28ffcdf4bd39f5e22d4563f5f0d23511c116d55088318f7bd7a584c5bc66",
       "normalizedHtmlPath": ".artifacts/http-baseline/private_page_guia_equipo_GET_anonymous_default-fb0e9d77455a.html",
       "bodyText": null,
       "bodyJsonShape": null
@@ -1157,7 +1245,8 @@
         "x-content-type-options": "nosniff",
         "x-robots-tag": "noindex, nofollow, noarchive, noimageindex"
       },
-      "bodySha256": "b3301b7c0f790e2a66609b82ba7f6f2861614707423760d37615780ffd244f16",
+      "bodyCapture": "captured",
+      "bodySha256": "e334a0d1b5e986900940be025e094bbef12626f17b3be3fe303f37eb081b36a5",
       "normalizedHtmlPath": ".artifacts/http-baseline/private_page_guia_equipo_GET_denied_default-563bb12c3b85.html",
       "bodyText": null,
       "bodyJsonShape": null
@@ -1172,7 +1261,8 @@
         "x-content-type-options": "nosniff",
         "x-robots-tag": "noindex, nofollow, noarchive, noimageindex"
       },
-      "bodySha256": "4dcd00c579b11773ad3ecc04cab4798c3d78ef88d8cb66056388da2e1a63fd1f",
+      "bodyCapture": "captured",
+      "bodySha256": "bc053d71217953a21a549f7a1f46fa8b5eceb965535dc920831a1056b020b294",
       "normalizedHtmlPath": ".artifacts/http-baseline/private_page_guia_equipo_GET_unconfigured_default-43cc4e942d01.html",
       "bodyText": null,
       "bodyJsonShape": null
@@ -1184,7 +1274,8 @@
         "cache-control": "no-store, must-revalidate",
         "content-type": "text/html; charset=utf-8"
       },
-      "bodySha256": "cfec946781f242ccb7dbb72119824b3490637a4649c3f51c339fa5cc58d1db7e",
+      "bodyCapture": "captured",
+      "bodySha256": "c4cb14da96c352a886582d4e58f9b3da81b9c16ee6e0cfcfba2b4b18734e0675",
       "normalizedHtmlPath": ".artifacts/http-baseline/private_page_manganafer_interesados_GET_anonymous_default-3fff9ba85b0f.html",
       "bodyText": null,
       "bodyJsonShape": null
@@ -1196,7 +1287,8 @@
         "cache-control": "no-store, must-revalidate",
         "content-type": "text/html; charset=utf-8"
       },
-      "bodySha256": "e7914a6221fc29718f0fd8b37818c83208f36c1475e2d3caf398728889e8e177",
+      "bodyCapture": "captured",
+      "bodySha256": "4aa60d5ddabf1f077dcf3fced61ed6ec6878a64b9b2e79d103869dd80666e1f3",
       "normalizedHtmlPath": ".artifacts/http-baseline/private_page_manganafer_interesados_GET_denied_default-0c973aaeb823.html",
       "bodyText": null,
       "bodyJsonShape": null
@@ -1208,7 +1300,8 @@
         "cache-control": "no-store, must-revalidate",
         "content-type": "text/html; charset=utf-8"
       },
-      "bodySha256": "3ba211bfea2dc096cf8748dc9c02b68767e3184a97590e51d89ec1497b7d4489",
+      "bodyCapture": "captured",
+      "bodySha256": "05c73ff05cae50813077ab3c61336acd01b9af05c9f41150f3dbcde4dc4921c4",
       "normalizedHtmlPath": ".artifacts/http-baseline/private_page_manganafer_interesados_GET_unconfigured_default-fc270163b6fb.html",
       "bodyText": null,
       "bodyJsonShape": null
@@ -1223,10 +1316,7 @@
         "x-content-type-options": "nosniff",
         "x-robots-tag": "noindex, nofollow, noarchive, noimageindex"
       },
-      "bodySha256": "ff4549f88b90af2acc1b643e0de305f967ff2c07fdc2806f329d265f91547049",
-      "normalizedHtmlPath": ".artifacts/http-baseline/private_page_socios_GET_allowed_default-f09a29ec6fae.html",
-      "bodyText": null,
-      "bodyJsonShape": null
+      "bodyCapture": "suppressed-private-success"
     },
     {
       "routeKey": "private-page:/socios|GET|anonymous|default",
@@ -1238,7 +1328,8 @@
         "x-content-type-options": "nosniff",
         "x-robots-tag": "noindex, nofollow, noarchive, noimageindex"
       },
-      "bodySha256": "b2cdb57899f0ad196d098ee6fc95ce3a7cc764d1fc9d2e7a2033effb3eb7e180",
+      "bodyCapture": "captured",
+      "bodySha256": "24bb7701d1b194bed4d634213aa10a6dcbe0eea1c81c9ae863527da649dff2e8",
       "normalizedHtmlPath": ".artifacts/http-baseline/private_page_socios_GET_anonymous_default-276a0b4f9938.html",
       "bodyText": null,
       "bodyJsonShape": null
@@ -1253,7 +1344,8 @@
         "x-content-type-options": "nosniff",
         "x-robots-tag": "noindex, nofollow, noarchive, noimageindex"
       },
-      "bodySha256": "006bc0e369f72afc80e2ccd2963f5592901e4b42254ccc9eff43d04720858913",
+      "bodyCapture": "captured",
+      "bodySha256": "ea51063ec6d743b2acedce688a8801e021c86db1a1c5d5a7dabb2112c9acfb3e",
       "normalizedHtmlPath": ".artifacts/http-baseline/private_page_socios_GET_denied_default-b0318cae44ed.html",
       "bodyText": null,
       "bodyJsonShape": null
@@ -1268,7 +1360,8 @@
         "x-content-type-options": "nosniff",
         "x-robots-tag": "noindex, nofollow, noarchive, noimageindex"
       },
-      "bodySha256": "3d96c624bafc3c63849231327aed87de6d2e5bdfb7f3a8f3b9ed58b2acb5ac31",
+      "bodyCapture": "captured",
+      "bodySha256": "e4a1851eee1e2db4de3d81b1bb20bf272cffe2c97bb66656410fdd289d461ecd",
       "normalizedHtmlPath": ".artifacts/http-baseline/private_page_socios_GET_unconfigured_default-20590d05b9fe.html",
       "bodyText": null,
       "bodyJsonShape": null
@@ -1280,6 +1373,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-remoto?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -1292,6 +1386,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-remoto"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -1304,6 +1399,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/aerotermia?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -1316,6 +1412,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/aerotermia"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -1328,6 +1425,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/rentabiliza-tu-activo?utm_source=http-baseline#cubierta"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -1340,6 +1438,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/rentabiliza-tu-activo#cubierta"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -1352,6 +1451,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/rentabiliza-tu-activo?utm_source=http-baseline#cubierta"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -1364,6 +1464,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/rentabiliza-tu-activo#cubierta"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -1376,6 +1477,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/baterias?utm_source=http-baseline#preguntas"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -1388,6 +1490,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/baterias#preguntas"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -1400,6 +1503,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/soy-comunero?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -1412,6 +1516,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/soy-comunero"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -1424,6 +1529,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-remoto?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -1436,6 +1542,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-remoto"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -1448,6 +1555,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-en-mi-tejado?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -1460,6 +1568,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-en-mi-tejado"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -1472,6 +1581,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-remoto?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -1484,6 +1594,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-remoto"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -1496,6 +1607,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-remoto?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -1508,6 +1620,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-remoto"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -1520,6 +1633,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-remoto?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -1532,6 +1646,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-remoto"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -1544,6 +1659,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-remoto?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -1556,6 +1672,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-remoto"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -1568,6 +1685,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-remoto?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -1580,6 +1698,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-remoto"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -1592,6 +1711,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-remoto?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -1604,6 +1724,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-remoto"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -1616,6 +1737,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/rentabiliza-tu-activo?utm_source=http-baseline#solicitar-estudio"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -1628,6 +1750,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/rentabiliza-tu-activo#solicitar-estudio"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -1640,6 +1763,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-remoto?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -1652,6 +1776,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-remoto"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -1664,6 +1789,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-remoto?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -1676,6 +1802,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-remoto"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -1688,6 +1815,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-remoto/liguerzana?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -1700,6 +1828,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-remoto/liguerzana"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -1712,6 +1841,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/aerotermia?utm_source=http-baseline#encaje"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -1724,6 +1854,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/aerotermia#encaje"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -1736,6 +1867,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/comercializadora-y-tarifas?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -1748,6 +1880,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/comercializadora-y-tarifas"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -1760,6 +1893,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/comunidades-energeticas?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -1772,6 +1906,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/comunidades-energeticas"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -1784,6 +1919,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-remoto?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -1796,6 +1932,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-remoto"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -1808,6 +1945,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-remoto?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -1820,6 +1958,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-remoto"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -1832,6 +1971,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/baterias?utm_source=http-baseline#preguntas"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -1844,6 +1984,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/baterias#preguntas"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -1856,6 +1997,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/aerotermia?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -1868,6 +2010,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/aerotermia"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -1880,6 +2023,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-en-mi-tejado?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -1892,6 +2036,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-en-mi-tejado"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -1904,6 +2049,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-remoto?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -1916,6 +2062,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-remoto"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -1928,6 +2075,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/baterias?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -1940,6 +2088,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/baterias"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -1952,6 +2101,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/comunidades-energeticas?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -1964,6 +2114,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/comunidades-energeticas"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -1976,6 +2127,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/blog?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -1988,6 +2140,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/blog"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2000,6 +2153,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/comunidades-energeticas?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2012,6 +2166,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/comunidades-energeticas"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2024,6 +2179,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/rentabiliza-tu-activo?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2036,6 +2192,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/rentabiliza-tu-activo"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2048,6 +2205,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/mantenimiento?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2060,6 +2218,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/mantenimiento"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2072,6 +2231,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-en-mi-tejado?utm_source=http-baseline#como-lo-hacemos"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2084,6 +2244,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-en-mi-tejado#como-lo-hacemos"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2096,6 +2257,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/baterias?utm_source=http-baseline#como-elegir"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2108,6 +2270,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/baterias#como-elegir"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2120,6 +2283,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-en-mi-tejado?utm_source=http-baseline#como-lo-hacemos"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2132,6 +2296,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-en-mi-tejado#como-lo-hacemos"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2144,6 +2309,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/baterias?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2156,6 +2322,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/baterias"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2168,6 +2335,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-en-mi-tejado?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2180,6 +2348,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-en-mi-tejado"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2192,6 +2361,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-en-mi-tejado?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2204,6 +2374,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-en-mi-tejado"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2216,6 +2387,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-en-mi-tejado?utm_source=http-baseline#preguntas"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2228,6 +2400,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-en-mi-tejado#preguntas"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2240,6 +2413,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/blog/nace-la-comunidad-de-nuevo-baztan?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2252,6 +2426,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/blog/nace-la-comunidad-de-nuevo-baztan"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2264,6 +2439,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-en-mi-tejado?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2276,6 +2452,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-en-mi-tejado"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2288,6 +2465,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/comercializadora-y-tarifas?utm_source=http-baseline#monedero"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2300,6 +2478,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/comercializadora-y-tarifas#monedero"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2312,6 +2491,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/comunidades-energeticas?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2324,6 +2504,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/comunidades-energeticas"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2336,6 +2517,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/baterias?utm_source=http-baseline#como-elegir"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2348,6 +2530,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/baterias#como-elegir"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2360,6 +2543,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-remoto?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2372,6 +2556,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-remoto"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2384,6 +2569,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/comunidades-energeticas?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2396,6 +2582,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/comunidades-energeticas"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2408,6 +2595,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-remoto?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2420,6 +2608,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-remoto"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2432,6 +2621,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/comunidades-energeticas/ceuti?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2444,6 +2634,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/comunidades-energeticas/ceuti"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2456,6 +2647,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/comunidades-energeticas/sepulveda?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2468,6 +2660,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/comunidades-energeticas/sepulveda"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2480,6 +2673,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/comunidades-energeticas/villalbilla?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2492,6 +2686,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/comunidades-energeticas/villalbilla"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2504,6 +2699,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/comunidades-energeticas/villalbilla?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2516,6 +2712,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/comunidades-energeticas/villalbilla"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2528,6 +2725,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/aerotermia?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2540,6 +2738,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/aerotermia"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2552,6 +2751,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/comunidades-energeticas?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2564,6 +2764,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/comunidades-energeticas"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2576,6 +2777,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/comunidades-energeticas?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2588,6 +2790,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/comunidades-energeticas"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2600,6 +2803,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/comunidades-energeticas/extremadura?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2612,6 +2816,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/comunidades-energeticas/extremadura"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2624,6 +2829,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/comunidades-energeticas/ibeas-de-juarros?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2636,6 +2842,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/comunidades-energeticas/ibeas-de-juarros"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2648,6 +2855,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/comunidades-energeticas/ibeas-de-juarros?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2660,6 +2868,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/comunidades-energeticas/ibeas-de-juarros"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2672,6 +2881,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/comunidades-energeticas/nuevo-baztan?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2684,6 +2894,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/comunidades-energeticas/nuevo-baztan"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2696,6 +2907,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/comunidades-energeticas/nuevo-baztan?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2708,6 +2920,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/comunidades-energeticas/nuevo-baztan"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2720,6 +2933,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/comunidades-energeticas/ontinyent?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2732,6 +2946,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/comunidades-energeticas/ontinyent"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2744,6 +2959,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/comunidades-energeticas/san-adrian-de-juarros?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2756,6 +2972,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/comunidades-energeticas/san-adrian-de-juarros"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2768,6 +2985,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/comunidades-energeticas/san-adrian-de-juarros?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2780,6 +2998,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/comunidades-energeticas/san-adrian-de-juarros"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2792,6 +3011,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/comunidades-energeticas/villalbilla?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2804,6 +3024,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/comunidades-energeticas/villalbilla"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2816,6 +3037,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/comunidades-energeticas/villaverde-getafe?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2828,6 +3050,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/comunidades-energeticas/villaverde-getafe"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2840,6 +3063,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/comunidades-energeticas?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2852,6 +3076,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/comunidades-energeticas"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2864,6 +3089,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/?utm_source=http-baseline#medios"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2876,6 +3102,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/#medios"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2888,6 +3115,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/?utm_source=http-baseline#pruebas"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2900,6 +3128,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/#pruebas"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2912,6 +3141,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2924,6 +3154,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2936,6 +3167,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/rentabiliza-tu-activo?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2948,6 +3180,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/rentabiliza-tu-activo"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2960,6 +3193,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/mantenimiento?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2972,6 +3206,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/mantenimiento"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2984,6 +3219,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/?utm_source=http-baseline#opiniones"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -2996,6 +3232,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/#opiniones"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -3008,6 +3245,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-remoto/fuente-alamo?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -3020,6 +3258,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-remoto/fuente-alamo"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -3032,6 +3271,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-remoto/torrontera?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -3044,6 +3284,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-remoto/torrontera"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -3056,6 +3297,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-remoto/liguerzana?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -3068,6 +3310,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-remoto/liguerzana"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -3080,6 +3323,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-remoto?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -3092,6 +3336,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-remoto"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -3104,6 +3349,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/blog/septimo-aniversario-capsula-del-tiempo?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -3116,6 +3362,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/blog/septimo-aniversario-capsula-del-tiempo"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -3128,6 +3375,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/nosotros?utm_source=http-baseline#mision"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -3140,6 +3388,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/nosotros#mision"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -3152,6 +3401,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/nosotros?utm_source=http-baseline#mision"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -3164,6 +3414,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/nosotros#mision"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -3176,6 +3427,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/nosotros?utm_source=http-baseline#mision"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -3188,6 +3440,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/nosotros#mision"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -3200,6 +3453,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/nosotros?utm_source=http-baseline#nuestro-plan"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -3212,6 +3466,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/nosotros#nuestro-plan"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -3224,6 +3479,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/baterias?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -3236,6 +3492,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/baterias"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -3248,6 +3505,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/baterias?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -3260,6 +3518,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/baterias"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -3272,6 +3531,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/baterias?utm_source=http-baseline#solax-x1-ies"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -3284,6 +3544,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/baterias#solax-x1-ies"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -3296,6 +3557,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-remoto?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -3308,6 +3570,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-remoto"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -3320,6 +3583,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-remoto?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -3332,6 +3596,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-remoto?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -3344,6 +3609,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-remoto"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -3356,6 +3622,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-remoto"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -3368,6 +3635,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-remoto?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -3380,6 +3648,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-remoto"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -3392,6 +3661,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/nosotros?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -3404,6 +3674,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/nosotros"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -3416,6 +3687,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/soy-comunero?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -3428,6 +3700,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/soy-comunero"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -3440,6 +3713,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/contacto?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -3452,6 +3726,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/contacto"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -3464,6 +3739,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/soy-comunero?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -3476,6 +3752,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/soy-comunero"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -3488,6 +3765,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-remoto/torrontera?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -3500,6 +3778,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-remoto/torrontera"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -3512,6 +3791,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-remoto/torrontera?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -3524,6 +3804,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-remoto/torrontera"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -3536,6 +3817,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-remoto?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -3548,6 +3830,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-remoto"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -3560,6 +3843,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/rentabiliza-tu-activo?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -3572,6 +3856,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/rentabiliza-tu-activo"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -3584,6 +3869,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-remoto?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -3596,6 +3882,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-remoto"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -3608,6 +3895,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-remoto?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -3620,6 +3908,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-remoto"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -3632,6 +3921,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-remoto?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -3644,6 +3934,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-remoto"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -3656,6 +3947,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/baterias?utm_source=http-baseline#preguntas"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -3668,6 +3960,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/baterias#preguntas"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -3680,6 +3973,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/comunidades-energeticas/santa-cruz-de-paniagua?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -3692,6 +3986,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/comunidades-energeticas/santa-cruz-de-paniagua"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -3704,6 +3999,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/comercializadora-y-tarifas?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -3716,6 +4012,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/comercializadora-y-tarifas"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -3728,6 +4025,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-remoto?utm_source=http-baseline"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
@@ -3740,6 +4038,7 @@
         "cache-control": "public, max-age=3600",
         "location": "http://localhost/autoconsumo-remoto"
       },
+      "bodyCapture": "captured",
       "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "normalizedHtmlPath": null,
       "bodyText": null,
