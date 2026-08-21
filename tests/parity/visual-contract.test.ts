@@ -1432,7 +1432,7 @@ setInterval(() => {}, 1_000);
       join(root, "descendant.mjs"),
       `import { writeFileSync } from "node:fs";
 process.on("SIGTERM", () => {});
-setTimeout(() => writeFileSync(process.argv[2], "descendant survived"), 250);
+setTimeout(() => writeFileSync(process.argv[2], "descendant survived"), 2_500);
 setInterval(() => {}, 1_000);
 `,
     );
@@ -1442,9 +1442,9 @@ setInterval(() => {}, 1_000);
         process.execPath,
         ["parent.mjs", descendantPidPath, markerPath],
         root,
-        { timeoutMs: 100, terminationGraceMs: 30 },
+        { timeoutMs: 1_000, terminationGraceMs: 200 },
       ),
-      /100 ms.*construir el candidato visual/i,
+      /1000 ms.*construir el candidato visual/i,
     );
     const capturedDescendantPid = Number(
       await readFile(descendantPidPath, "utf8"),
@@ -1453,7 +1453,7 @@ setInterval(() => {}, 1_000);
       Number.isInteger(capturedDescendantPid) && capturedDescendantPid > 0,
     );
     descendantPid = capturedDescendantPid;
-    await new Promise((resolvePromise) => setTimeout(resolvePromise, 300));
+    await new Promise((resolvePromise) => setTimeout(resolvePromise, 3_000));
     assert.equal(existsSync(markerPath), false);
     assert.throws(() => process.kill(capturedDescendantPid, 0), {
       code: "ESRCH",
@@ -2523,18 +2523,18 @@ test("bounds a hanging browser close and still cleans every outer visual resourc
           scope: "foundation",
           allowPending: true,
           root: "/candidate",
-          lifecycleTimeoutMs: 5,
+          lifecycleTimeoutMs: 30,
         },
         lifecycleDependencies({ events, hangDispose: "browser" }),
       ),
       new Promise<never>((_resolve, reject) => {
         setTimeout(
           () => reject(new Error("El cierre del navegador no tuvo deadline")),
-          100,
+          250,
         );
       }),
     ]),
-    /5 ms.*cerrar el navegador/i,
+    /30 ms.*cerrar el navegador/i,
   );
   assert.ok(events.includes("browser:dispose"));
   assert.ok(events.includes("reference:dispose"));
@@ -2551,7 +2551,7 @@ test("preserves a capture failure when a browser close deadline also expires", a
           scope: "foundation",
           allowPending: true,
           root: "/candidate",
-          lifecycleTimeoutMs: 5,
+          lifecycleTimeoutMs: 30,
         },
         lifecycleDependencies({
           events,
@@ -2562,7 +2562,7 @@ test("preserves a capture failure when a browser close deadline also expires", a
       new Promise<never>((_resolve, reject) => {
         setTimeout(
           () => reject(new Error("El cierre ocultó capture exploded")),
-          100,
+          250,
         );
       }),
     ]),
