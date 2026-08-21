@@ -26,9 +26,11 @@ export async function sourceCheck(args: string[]): Promise<void> {
     throw new Error("source-check recibió --if-present más de una vez");
   }
 
+  const discoveredAutomatically =
+    process.env.COMUNIDADSOLAR_SOURCE_ROOT === undefined;
   const sourceRoot = await resolveSourceRoot();
   if (!(await sourceExists(sourceRoot))) {
-    if (args.includes("--if-present")) {
+    if (args.includes("--if-present") && discoveredAutomatically) {
       process.stdout.write("SOURCE_UNAVAILABLE\n");
       return;
     }

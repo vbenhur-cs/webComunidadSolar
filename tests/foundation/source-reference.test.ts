@@ -2,7 +2,15 @@ import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { afterEach, beforeEach, test } from "node:test";
 import { createHash } from "node:crypto";
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  stat,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { promisify } from "node:util";
@@ -66,17 +74,23 @@ afterEach(async () => {
 
 async function runSourceCheck(
   args: string[],
-  sourceRoot: string,
+  options: { sourceRoot?: string; cwd?: string } = {},
 ): Promise<CommandResult> {
   const tsx = join(process.cwd(), "node_modules", ".bin", "tsx");
+  const environment = { ...process.env };
+  if (options.sourceRoot === undefined) {
+    delete environment.COMUNIDADSOLAR_SOURCE_ROOT;
+  } else {
+    environment.COMUNIDADSOLAR_SOURCE_ROOT = options.sourceRoot;
+  }
   try {
     const { stdout, stderr } = await execFileAsync(
       tsx,
-      ["scripts/source-check.ts", ...args],
+      [join(process.cwd(), "scripts", "source-check.ts"), ...args],
       {
-        cwd: process.cwd(),
+        cwd: options.cwd ?? process.cwd(),
         encoding: "utf8",
-        env: { ...process.env, COMUNIDADSOLAR_SOURCE_ROOT: sourceRoot },
+        env: environment,
       },
     );
     return { code: 0, stdout, stderr };
@@ -190,24 +204,99 @@ test("copies committed blobs into the repository with sorted provenance", async 
   }
 });
 
-test("source-check only treats an absent selected checkout as optional", async () => {
+test("rejects a symlink escape before creating an external directory", async () => {
+  const targetDirectory = ".source-work/source-reference-symlink-test";
+  const externalDirectory = join(fixture.cleanupRoot, "external");
+  const escapeLink = join(targetDirectory, "escape");
+
+  await mkdir(targetDirectory, { recursive: true });
+  await mkdir(externalDirectory);
+  await symlink(externalDirectory, escapeLink);
+
+  try {
+    await assert.rejects(
+      copySourceFiles([
+        `public/favicon.svg:${targetDirectory}/escape/created/file.svg`,
+      ]),
+      /fuera del repositorio/i,
+    );
+    await assert.rejects(stat(join(externalDirectory, "created")), /ENOENT/);
+  } finally {
+    await rm(targetDirectory, { recursive: true, force: true });
+    await rm(externalDirectory, { recursive: true, force: true });
+  }
+});
+
+test("orders provenance with a locale-independent lexical comparator", async () => {
+  const targetDirectory = ".source-work/source-reference-order-test";
+  const provenancePath = join("parity", "provenance.json");
+  const originalProvenance = await readFile(provenancePath, "utf8");
+
+  try {
+    const entries = await copySourceFiles([
+      `public/favicon.svg:${targetDirectory}/ä.svg`,
+      `public/favicon.svg:${targetDirectory}/z.svg`,
+    ]);
+
+    assert.deepEqual(
+      entries.map((entry) => entry.destination),
+      [`${targetDirectory}/z.svg`, `${targetDirectory}/ä.svg`],
+    );
+  } finally {
+    await rm(targetDirectory, { recursive: true, force: true });
+    await writeFile(provenancePath, originalProvenance);
+  }
+});
+
+test("rejects duplicate normalized destinations before copying", async () => {
+  const targetDirectory = ".source-work/source-reference-duplicate-test";
+  const provenancePath = join("parity", "provenance.json");
+  const originalProvenance = await readFile(provenancePath, "utf8");
+
+  try {
+    await assert.rejects(
+      copySourceFiles([
+        `public/favicon.svg:${targetDirectory}/same.svg`,
+        `public/favicon.svg:${targetDirectory}/./same.svg`,
+      ]),
+      /destino duplicado/i,
+    );
+    await assert.rejects(stat(join(targetDirectory, "same.svg")), /ENOENT/);
+    assert.equal(await readFile(provenancePath, "utf8"), originalProvenance);
+  } finally {
+    await rm(targetDirectory, { recursive: true, force: true });
+    await writeFile(provenancePath, originalProvenance);
+  }
+});
+
+test("source-check treats only a missing automatic sibling as optional", async () => {
   const sourceRoot =
     "/Users/vbenhur/Documents/Projects VS/WebComunidadSolar/comunidadsolarweb";
-  const strict = await runSourceCheck([], sourceRoot);
+  const strict = await runSourceCheck([], { sourceRoot });
   assert.equal(strict.code, 0);
   assert.equal(
     strict.stdout.trim(),
     `SOURCE_OK ${EXPECTED_SOURCE_COMMIT} clean`,
   );
 
-  const missing = await runSourceCheck(
-    ["--if-present"],
-    join(fixture.cleanupRoot, "missing-source"),
-  );
-  assert.equal(missing.code, 0);
-  assert.equal(missing.stdout.trim(), "SOURCE_UNAVAILABLE");
+  const explicitMissing = await runSourceCheck(["--if-present"], {
+    sourceRoot: join(fixture.cleanupRoot, "missing-source"),
+  });
+  assert.notEqual(explicitMissing.code, 0);
+  assert.doesNotMatch(explicitMissing.stdout, /SOURCE_UNAVAILABLE/);
+  assert.match(explicitMissing.stderr, /no se encontró el repositorio fuente/i);
 
-  const wrongCheckout = await runSourceCheck(["--if-present"], fixture.repo);
+  const automaticCwd = join(fixture.cleanupRoot, "automatic-cwd");
+  await mkdir(automaticCwd);
+  const automaticMissing = await runSourceCheck(["--if-present"], {
+    cwd: automaticCwd,
+  });
+  assert.equal(automaticMissing.code, 0);
+  assert.equal(automaticMissing.stdout.trim(), "SOURCE_UNAVAILABLE");
+
+  const wrongCheckout = await runSourceCheck(["--if-present"], {
+    sourceRoot: fixture.repo,
+  });
   assert.notEqual(wrongCheckout.code, 0);
   assert.doesNotMatch(wrongCheckout.stdout, /SOURCE_UNAVAILABLE/);
   assert.match(wrongCheckout.stderr, /commit de referencia/i);

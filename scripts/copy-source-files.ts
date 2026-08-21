@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
 import {
+  lstat,
   mkdir,
   readFile,
   realpath,
@@ -12,6 +13,7 @@ import {
   basename,
   dirname,
   isAbsolute,
+  join,
   posix,
   relative,
   resolve,
@@ -83,6 +85,10 @@ function isWithin(root: string, candidate: string): boolean {
   );
 }
 
+function isWithinOrEqual(root: string, candidate: string): boolean {
+  return root === candidate || isWithin(root, candidate);
+}
+
 async function repositoryRoot(): Promise<string> {
   const { stdout } = await execFileAsync(
     "git",
@@ -102,13 +108,27 @@ async function resolveDestination(
   }
 
   const parent = dirname(absoluteDestination);
-  await mkdir(parent, { recursive: true });
-  const [realRoot, realParent] = await Promise.all([
-    realpath(root),
-    realpath(parent),
-  ]);
-  if (!isWithin(realRoot, realParent) && realParent !== realRoot) {
-    throw new Error("La ruta de destino queda fuera del repositorio");
+  const realRoot = await realpath(root);
+  let current = root;
+  for (const segment of relative(root, parent).split(sep).filter(Boolean)) {
+    current = join(current, segment);
+    try {
+      await lstat(current);
+    } catch (error: unknown) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+      try {
+        await mkdir(current);
+      } catch (mkdirError: unknown) {
+        if ((mkdirError as NodeJS.ErrnoException).code !== "EEXIST") {
+          throw mkdirError;
+        }
+      }
+    }
+
+    const realCurrent = await realpath(current);
+    if (!isWithinOrEqual(realRoot, realCurrent)) {
+      throw new Error("La ruta de destino queda fuera del repositorio");
+    }
   }
   return absoluteDestination;
 }
@@ -133,10 +153,11 @@ function compareProvenanceEntries(
   left: ProvenanceEntry,
   right: ProvenanceEntry,
 ): number {
-  return (
-    left.destination.localeCompare(right.destination) ||
-    left.sourcePath.localeCompare(right.sourcePath)
-  );
+  if (left.destination < right.destination) return -1;
+  if (left.destination > right.destination) return 1;
+  if (left.sourcePath < right.sourcePath) return -1;
+  if (left.sourcePath > right.sourcePath) return 1;
+  return 0;
 }
 
 function asProvenanceEntries(value: unknown): ProvenanceEntry[] {
@@ -184,6 +205,14 @@ export async function copySourceFiles(
   const mappings = paths.map(parseCopyMapping);
   if (mappings.length === 0) return [];
 
+  const destinations = new Set<string>();
+  for (const mapping of mappings) {
+    if (destinations.has(mapping.destination)) {
+      throw new Error(`Destino duplicado: ${mapping.destination}`);
+    }
+    destinations.add(mapping.destination);
+  }
+
   const root = await repositoryRoot();
   const sourceRoot = await resolveSourceRoot();
   const source = await assertSourcePristine(sourceRoot);
@@ -206,7 +235,6 @@ export async function copySourceFiles(
     });
   }
 
-  const destinations = new Set(entries.map((entry) => entry.destination));
   const provenance = await readProvenance(root);
   const orderedEntries = entries.sort(compareProvenanceEntries);
   const orderedProvenance = [

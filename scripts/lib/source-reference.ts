@@ -22,8 +22,10 @@ export async function git(sourceRoot: string, args: string[]): Promise<string> {
 }
 
 export async function resolveSourceRoot(sourceRoot?: string): Promise<string> {
-  const explicitRoot = sourceRoot ?? process.env.COMUNIDADSOLAR_SOURCE_ROOT;
-  if (explicitRoot) return resolve(explicitRoot);
+  if (sourceRoot !== undefined) return resolve(sourceRoot);
+
+  const environmentRoot = process.env.COMUNIDADSOLAR_SOURCE_ROOT;
+  if (environmentRoot !== undefined) return resolve(environmentRoot);
 
   try {
     const { stdout } = await execFileAsync(
