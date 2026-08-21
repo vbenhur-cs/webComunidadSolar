@@ -1,0 +1,8 @@
+docs/
+public/
+parity/
+changes/
+.superpowers/
+worker-configuration.d.ts
+src/styles/reference.css
+src/content/**/*.md
