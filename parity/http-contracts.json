@@ -1,0 +1,4156 @@
+{
+  "schemaVersion": 1,
+  "source": {
+    "repository": "../comunidadsolarweb",
+    "branch": "main",
+    "commit": "68ea294c54dc5e15e20f470fc421a239927565a8"
+  },
+  "contracts": [
+    {
+      "routeKey": "api:/api/manganafer-interest/export|GET|anonymous|default",
+      "status": 401,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "bodySha256": "4eb4cc89b51f3e377500f6905407ffb51172e89fd55d99a506e663f31cfce5fb",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": {
+        "error": "string"
+      }
+    },
+    {
+      "routeKey": "api:/api/manganafer-interest/export|GET|denied|default",
+      "status": 403,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "bodySha256": "33cbde7f0f1fea40194943da988700f72f43444154bb7620556a886bfb5e8ac4",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": {
+        "error": "string"
+      }
+    },
+    {
+      "routeKey": "api:/api/manganafer-interest/export|GET|unconfigured|default",
+      "status": 403,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "bodySha256": "33cbde7f0f1fea40194943da988700f72f43444154bb7620556a886bfb5e8ac4",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": {
+        "error": "string"
+      }
+    },
+    {
+      "routeKey": "api:/api/manganafer-interest|POST|anonymous|invalid-form",
+      "status": 400,
+      "headers": {
+        "content-type": "application/json"
+      },
+      "bodySha256": "ab6ac006181f94fcb1f7a40795cfa5f58c0e369abcdb05487408dc051897003e",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": {
+        "error": "string",
+        "ok": "boolean"
+      }
+    },
+    {
+      "routeKey": "api:/api/manganafer-quote|POST|anonymous|invalid-cups",
+      "status": 400,
+      "headers": {
+        "cache-control": "private, no-store",
+        "content-type": "application/json",
+        "referrer-policy": "no-referrer",
+        "x-content-type-options": "nosniff",
+        "x-robots-tag": "noindex, nofollow, noarchive"
+      },
+      "bodySha256": "f3be022c278431a5263b45df1f54f10d9a775790cb319daab7db8b1c2be7162a",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": {
+        "error": "string",
+        "field": "string",
+        "ok": "boolean"
+      }
+    },
+    {
+      "routeKey": "api:/api/manganafer-quote|POST|anonymous|unconfigured",
+      "status": 503,
+      "headers": {
+        "cache-control": "private, no-store",
+        "content-type": "application/json",
+        "referrer-policy": "no-referrer",
+        "x-content-type-options": "nosniff",
+        "x-robots-tag": "noindex, nofollow, noarchive"
+      },
+      "bodySha256": "30cf6b14dbb82b0ff65ee3e7a3973f75175d1497e79215d775d0cbb3f8de9569",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": {
+        "error": "string",
+        "ok": "boolean"
+      }
+    },
+    {
+      "routeKey": "gone:/aerotermia-confirmacion-formulario|GET|anonymous|default",
+      "status": 410,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "content-type": "text/plain; charset=utf-8",
+        "x-robots-tag": "noindex"
+      },
+      "bodySha256": "768adae9570892d48afde2a6c2171d824b3c5a513501e61a9b7c5750f4a685c4",
+      "normalizedHtmlPath": null,
+      "bodyText": "Esta página ya no forma parte del catálogo de Comunidad Solar.",
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "gone:/blog/elementor-hf/14157|GET|anonymous|default",
+      "status": 410,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "content-type": "text/plain; charset=utf-8",
+        "x-robots-tag": "noindex"
+      },
+      "bodySha256": "768adae9570892d48afde2a6c2171d824b3c5a513501e61a9b7c5750f4a685c4",
+      "normalizedHtmlPath": null,
+      "bodyText": "Esta página ya no forma parte del catálogo de Comunidad Solar.",
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "gone:/blog/elementor-hf/footer-contacto|GET|anonymous|default",
+      "status": 410,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "content-type": "text/plain; charset=utf-8",
+        "x-robots-tag": "noindex"
+      },
+      "bodySha256": "768adae9570892d48afde2a6c2171d824b3c5a513501e61a9b7c5750f4a685c4",
+      "normalizedHtmlPath": null,
+      "bodyText": "Esta página ya no forma parte del catálogo de Comunidad Solar.",
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "gone:/blog/elementor-hf/footer|GET|anonymous|default",
+      "status": 410,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "content-type": "text/plain; charset=utf-8",
+        "x-robots-tag": "noindex"
+      },
+      "bodySha256": "768adae9570892d48afde2a6c2171d824b3c5a513501e61a9b7c5750f4a685c4",
+      "normalizedHtmlPath": null,
+      "bodyText": "Esta página ya no forma parte del catálogo de Comunidad Solar.",
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "gone:/blog/elementor-hf/header-solo-logo-fondo-beige|GET|anonymous|default",
+      "status": 410,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "content-type": "text/plain; charset=utf-8",
+        "x-robots-tag": "noindex"
+      },
+      "bodySha256": "768adae9570892d48afde2a6c2171d824b3c5a513501e61a9b7c5750f4a685c4",
+      "normalizedHtmlPath": null,
+      "bodyText": "Esta página ya no forma parte del catálogo de Comunidad Solar.",
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "gone:/blog/elementor-hf/header-solo-logo|GET|anonymous|default",
+      "status": 410,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "content-type": "text/plain; charset=utf-8",
+        "x-robots-tag": "noindex"
+      },
+      "bodySha256": "768adae9570892d48afde2a6c2171d824b3c5a513501e61a9b7c5750f4a685c4",
+      "normalizedHtmlPath": null,
+      "bodyText": "Esta página ya no forma parte del catálogo de Comunidad Solar.",
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "gone:/blog/elementor-hf/menu-hidden|GET|anonymous|default",
+      "status": 410,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "content-type": "text/plain; charset=utf-8",
+        "x-robots-tag": "noindex"
+      },
+      "bodySha256": "768adae9570892d48afde2a6c2171d824b3c5a513501e61a9b7c5750f4a685c4",
+      "normalizedHtmlPath": null,
+      "bodyText": "Esta página ya no forma parte del catálogo de Comunidad Solar.",
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "gone:/blog/elementor-hf/menu-principal|GET|anonymous|default",
+      "status": 410,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "content-type": "text/plain; charset=utf-8",
+        "x-robots-tag": "noindex"
+      },
+      "bodySha256": "768adae9570892d48afde2a6c2171d824b3c5a513501e61a9b7c5750f4a685c4",
+      "normalizedHtmlPath": null,
+      "bodyText": "Esta página ya no forma parte del catálogo de Comunidad Solar.",
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "gone:/blog/elementor-hf/menu-reducido-al-maximo|GET|anonymous|default",
+      "status": 410,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "content-type": "text/plain; charset=utf-8",
+        "x-robots-tag": "noindex"
+      },
+      "bodySha256": "768adae9570892d48afde2a6c2171d824b3c5a513501e61a9b7c5750f4a685c4",
+      "normalizedHtmlPath": null,
+      "bodyText": "Esta página ya no forma parte del catálogo de Comunidad Solar.",
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "gone:/blog/elementor-hf/menu-simplificado|GET|anonymous|default",
+      "status": 410,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "content-type": "text/plain; charset=utf-8",
+        "x-robots-tag": "noindex"
+      },
+      "bodySha256": "768adae9570892d48afde2a6c2171d824b3c5a513501e61a9b7c5750f4a685c4",
+      "normalizedHtmlPath": null,
+      "bodyText": "Esta página ya no forma parte del catálogo de Comunidad Solar.",
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "gone:/cargador-de-coche-electrico|GET|anonymous|default",
+      "status": 410,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "content-type": "text/plain; charset=utf-8",
+        "x-robots-tag": "noindex"
+      },
+      "bodySha256": "768adae9570892d48afde2a6c2171d824b3c5a513501e61a9b7c5750f4a685c4",
+      "normalizedHtmlPath": null,
+      "bodyText": "Esta página ya no forma parte del catálogo de Comunidad Solar.",
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "gone:/comunidad-energetica-robregordo|GET|anonymous|default",
+      "status": 410,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "content-type": "text/plain; charset=utf-8",
+        "x-robots-tag": "noindex"
+      },
+      "bodySha256": "768adae9570892d48afde2a6c2171d824b3c5a513501e61a9b7c5750f4a685c4",
+      "normalizedHtmlPath": null,
+      "bodyText": "Esta página ya no forma parte del catálogo de Comunidad Solar.",
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "gone:/cs-wellsport|GET|anonymous|default",
+      "status": 410,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "content-type": "text/plain; charset=utf-8",
+        "x-robots-tag": "noindex"
+      },
+      "bodySha256": "768adae9570892d48afde2a6c2171d824b3c5a513501e61a9b7c5750f4a685c4",
+      "normalizedHtmlPath": null,
+      "bodyText": "Esta página ya no forma parte del catálogo de Comunidad Solar.",
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "gone:/gestionamos-subvenciones-placas-solares|GET|anonymous|default",
+      "status": 410,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "content-type": "text/plain; charset=utf-8",
+        "x-robots-tag": "noindex"
+      },
+      "bodySha256": "768adae9570892d48afde2a6c2171d824b3c5a513501e61a9b7c5750f4a685c4",
+      "normalizedHtmlPath": null,
+      "bodyText": "Esta página ya no forma parte del catálogo de Comunidad Solar.",
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "gone:/gestionamos-subvenciones|GET|anonymous|default",
+      "status": 410,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "content-type": "text/plain; charset=utf-8",
+        "x-robots-tag": "noindex"
+      },
+      "bodySha256": "768adae9570892d48afde2a6c2171d824b3c5a513501e61a9b7c5750f4a685c4",
+      "normalizedHtmlPath": null,
+      "bodyText": "Esta página ya no forma parte del catálogo de Comunidad Solar.",
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "gone:/invierte-en-comunidad-solar|GET|anonymous|default",
+      "status": 410,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "content-type": "text/plain; charset=utf-8",
+        "x-robots-tag": "noindex"
+      },
+      "bodySha256": "768adae9570892d48afde2a6c2171d824b3c5a513501e61a9b7c5750f4a685c4",
+      "normalizedHtmlPath": null,
+      "bodyText": "Esta página ya no forma parte del catálogo de Comunidad Solar.",
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "gone:/megapark-serracin|GET|anonymous|default",
+      "status": 410,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "content-type": "text/plain; charset=utf-8",
+        "x-robots-tag": "noindex"
+      },
+      "bodySha256": "768adae9570892d48afde2a6c2171d824b3c5a513501e61a9b7c5750f4a685c4",
+      "normalizedHtmlPath": null,
+      "bodyText": "Esta página ya no forma parte del catálogo de Comunidad Solar.",
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "gone:/prueba-los-belo|GET|anonymous|default",
+      "status": 410,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "content-type": "text/plain; charset=utf-8",
+        "x-robots-tag": "noindex"
+      },
+      "bodySha256": "768adae9570892d48afde2a6c2171d824b3c5a513501e61a9b7c5750f4a685c4",
+      "normalizedHtmlPath": null,
+      "bodyText": "Esta página ya no forma parte del catálogo de Comunidad Solar.",
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "gone:/subvenciones|GET|anonymous|default",
+      "status": 410,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "content-type": "text/plain; charset=utf-8",
+        "x-robots-tag": "noindex"
+      },
+      "bodySha256": "768adae9570892d48afde2a6c2171d824b3c5a513501e61a9b7c5750f4a685c4",
+      "normalizedHtmlPath": null,
+      "bodyText": "Esta página ya no forma parte del catálogo de Comunidad Solar.",
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "page:/aerotermia|GET|anonymous|default",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8"
+      },
+      "bodySha256": "6ca0f20a2d38d77f85f4069339553483c1eb595ecf2e4f0d30a74adc0d86e247",
+      "normalizedHtmlPath": ".artifacts/http-baseline/page_aerotermia_GET_anonymous_default-6c7ea77f2362.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "page:/autoconsumo-en-mi-tejado|GET|anonymous|default",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8"
+      },
+      "bodySha256": "a61e6c3d9910184b3f14c3aaf37e4c065d8e8e347a2d97958978f011561bac76",
+      "normalizedHtmlPath": ".artifacts/http-baseline/page_autoconsumo_en_mi_tejado_GET_anonymous_default-71370999f1c0.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "page:/autoconsumo-remoto/fuente-alamo|GET|anonymous|default",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8"
+      },
+      "bodySha256": "b714486ffc91901c6601a1fcbaccad61fa3c340052cde684ae1caac2b89837b8",
+      "normalizedHtmlPath": ".artifacts/http-baseline/page_autoconsumo_remoto_fuente_alamo_GET_anonymous_default-ec8b580fc5e6.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "page:/autoconsumo-remoto/liguerzana|GET|anonymous|default",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8"
+      },
+      "bodySha256": "86589122dbd449a4f97944a964b6987946d5ba8b0b67c3c64d31c55df2e0c05e",
+      "normalizedHtmlPath": ".artifacts/http-baseline/page_autoconsumo_remoto_liguerzana_GET_anonymous_default-49aa26a8c483.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "page:/autoconsumo-remoto/torrontera|GET|anonymous|default",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8"
+      },
+      "bodySha256": "ead1d24e35e64a8a00437258f1fbbca77f452f93d3ea51d467539ae7afbbc5df",
+      "normalizedHtmlPath": ".artifacts/http-baseline/page_autoconsumo_remoto_torrontera_GET_anonymous_default-43314d4cfba5.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "page:/autoconsumo-remoto|GET|anonymous|default",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8"
+      },
+      "bodySha256": "479f859d6c8d458e08d535aecb09a25187f6352cdeb29da1348bc2c868bf1c8a",
+      "normalizedHtmlPath": ".artifacts/http-baseline/page_autoconsumo_remoto_GET_anonymous_default-40287187a230.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "page:/aviso-legal|GET|anonymous|default",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8"
+      },
+      "bodySha256": "f30ba058af3eca9540c4d98b3512d58f2d15ff617e40ade5f5c1e1ea8e8cbd5d",
+      "normalizedHtmlPath": ".artifacts/http-baseline/page_aviso_legal_GET_anonymous_default-c27c13bac8a6.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "page:/baterias|GET|anonymous|default",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8"
+      },
+      "bodySha256": "bba36e3f3381a218737b97c7602d1f96659254ff5386509041dbe9e315b304d8",
+      "normalizedHtmlPath": ".artifacts/http-baseline/page_baterias_GET_anonymous_default-ebafc0944ec8.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "page:/blog/bautizo-bajo-la-lluvia-en-fuente-alamo|GET|anonymous|default",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8"
+      },
+      "bodySha256": "475a8f0d57f6d06dd778ccd43cd29cd18a42f8b735bfbbe9ecd0956ac1a48098",
+      "normalizedHtmlPath": ".artifacts/http-baseline/page_blog_bautizo_bajo_la_lluvia_en_fuente_alamo_GET_anonymous_default-e115a67a6630.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "page:/blog/ceuti-encuentro-con-los-vecinos|GET|anonymous|default",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8"
+      },
+      "bodySha256": "12561ed2c4c2deb985e12a70b396427a9f8e1e5e1ff31456abd8ee39e1f8f685",
+      "normalizedHtmlPath": ".artifacts/http-baseline/page_blog_ceuti_encuentro_con_los_vecinos_GET_anonymous_default-1fa7c1c0db2f.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "page:/blog/ceuti-termina-su-instalacion|GET|anonymous|default",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8"
+      },
+      "bodySha256": "7d6fcee098518fe50945ec9acb393af461a06859e9b897f1a07b396daca29746",
+      "normalizedHtmlPath": ".artifacts/http-baseline/page_blog_ceuti_termina_su_instalacion_GET_anonymous_default-60183327ee0c.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "page:/blog/comuneros-por-el-mundo-jose-luis|GET|anonymous|default",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8"
+      },
+      "bodySha256": "e152ecdfd08b19f97b6f91d8d881e3f530b0433a2300c94d9fa45ead9d429c8f",
+      "normalizedHtmlPath": ".artifacts/http-baseline/page_blog_comuneros_por_el_mundo_jose_luis_GET_anonymous_default-57ffd7238f51.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "page:/blog/el-adn-de-comunidad-solar|GET|anonymous|default",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8"
+      },
+      "bodySha256": "2cc7f73ae923e5fac82925380014cea5c8a0ee3b95e0fa3857899c4454f8ea70",
+      "normalizedHtmlPath": ".artifacts/http-baseline/page_blog_el_adn_de_comunidad_solar_GET_anonymous_default-5481bcd0ea86.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "page:/blog/encuentro-comunero-en-liguerzana|GET|anonymous|default",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8"
+      },
+      "bodySha256": "f74e4efb006e9f3a2f23af73fcf112dfac54407ab42c2669dabf64783be0204d",
+      "normalizedHtmlPath": ".artifacts/http-baseline/page_blog_encuentro_comunero_en_liguerzana_GET_anonymous_default-7fb2105d89ca.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "page:/blog/fuente-alamo-vuelve-a-abrir-sus-puertas|GET|anonymous|default",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8"
+      },
+      "bodySha256": "9acbc04f6651cc45dc428f368a6d232eef16a12cbc386484b1711d2566d7c45c",
+      "normalizedHtmlPath": ".artifacts/http-baseline/page_blog_fuente_alamo_vuelve_a_abrir_sus_puertas_GET_anonymous_default-73871c53e3e6.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "page:/blog/manolo-un-ano-viviendo-con-el-sol|GET|anonymous|default",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8"
+      },
+      "bodySha256": "bf5f823578c644f70b4fe623e940fc82b4a59f97086f80b2ae51dd09d5853bee",
+      "normalizedHtmlPath": ".artifacts/http-baseline/page_blog_manolo_un_ano_viviendo_con_el_sol_GET_anonymous_default-8f98098eb8fb.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "page:/blog/nace-la-comunidad-de-nuevo-baztan|GET|anonymous|default",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8"
+      },
+      "bodySha256": "14e659ad38dabf65f5a8c4aa97f442efdf74a6e336c71ab4fc6a53470579c521",
+      "normalizedHtmlPath": ".artifacts/http-baseline/page_blog_nace_la_comunidad_de_nuevo_baztan_GET_anonymous_default-4483dfaf8b5d.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "page:/blog/nuevo-baztan-abre-la-casa-de-un-comunero|GET|anonymous|default",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8"
+      },
+      "bodySha256": "4830b19b4c8b228cada8e16bceb78c3758900a38809d458bbc2a10d672cee9d8",
+      "normalizedHtmlPath": ".artifacts/http-baseline/page_blog_nuevo_baztan_abre_la_casa_de_un_comunero_GET_anonymous_default-f1ca74a46cbf.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "page:/blog/premio-comunidad-goparity|GET|anonymous|default",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8"
+      },
+      "bodySha256": "0e6c83406353e3ff384d75ab8434ba7006beba607b9b00c241cc41d0602c8586",
+      "normalizedHtmlPath": ".artifacts/http-baseline/page_blog_premio_comunidad_goparity_GET_anonymous_default-10d5fdf9faf3.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "page:/blog/puebla-del-principe-entra-en-construccion|GET|anonymous|default",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8"
+      },
+      "bodySha256": "6e0b9dfb078c16b6426a593fdc48672326962154e0e64dd00409401875db0ee7",
+      "normalizedHtmlPath": ".artifacts/http-baseline/page_blog_puebla_del_principe_entra_en_construccion_GET_anonymous_default-80552815e67b.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "page:/blog/septimo-aniversario-capsula-del-tiempo|GET|anonymous|default",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8"
+      },
+      "bodySha256": "8c90068d92e68d23d4ffc855fe25386ddb00b770dd04252c60ebb1367429b8fd",
+      "normalizedHtmlPath": ".artifacts/http-baseline/page_blog_septimo_aniversario_capsula_del_tiempo_GET_anonymous_default-6e2b0ee8fbbf.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "page:/blog/solsticio-2022-puertas-abiertas|GET|anonymous|default",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8"
+      },
+      "bodySha256": "32b9cc9efadb6061c077e559f210387fb406b50c2ee470c3393ddf033524ca49",
+      "normalizedHtmlPath": ".artifacts/http-baseline/page_blog_solsticio_2022_puertas_abiertas_GET_anonymous_default-2c81004d4b2e.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "page:/blog/solsticio-2023-quinto-aniversario|GET|anonymous|default",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8"
+      },
+      "bodySha256": "f23baa527982f6458382190105852c8d7929eac0df4d6567a121bee1137dec8d",
+      "normalizedHtmlPath": ".artifacts/http-baseline/page_blog_solsticio_2023_quinto_aniversario_GET_anonymous_default-09dd862b5ea3.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "page:/blog/solsticio-2024-sexto-aniversario|GET|anonymous|default",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8"
+      },
+      "bodySha256": "b56077877895d4dac34f5baf270c529dd3701bfb77e31d92da3ef74c8928e5b8",
+      "normalizedHtmlPath": ".artifacts/http-baseline/page_blog_solsticio_2024_sexto_aniversario_GET_anonymous_default-1fac9023b4f2.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "page:/blog/torrontera-ya-esta-en-marcha|GET|anonymous|default",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8"
+      },
+      "bodySha256": "24d698bfd8619c843bf7710a81f0dd12053fbf033ceb8bdeda5a2fddc1bfc652",
+      "normalizedHtmlPath": ".artifacts/http-baseline/page_blog_torrontera_ya_esta_en_marcha_GET_anonymous_default-dec6c2bc06c0.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "page:/blog/villalbilla-dos-colegios-una-comunidad|GET|anonymous|default",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8"
+      },
+      "bodySha256": "2a12874d9e64d0c0ad1d9c3e62a68635644a2a5bc878d6c32b866aa65ac65849",
+      "normalizedHtmlPath": ".artifacts/http-baseline/page_blog_villalbilla_dos_colegios_una_comunidad_GET_anonymous_default-895fca2c9db6.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "page:/blog/villalbilla-presenta-su-comunidad|GET|anonymous|default",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8"
+      },
+      "bodySha256": "e2e0c9fcc88f3d4a4589125469a3c20f4594d7dcd1e905a419d6bda2770351c6",
+      "normalizedHtmlPath": ".artifacts/http-baseline/page_blog_villalbilla_presenta_su_comunidad_GET_anonymous_default-3a3d39ab5e53.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "page:/blog|GET|anonymous|default",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8"
+      },
+      "bodySha256": "5d5532856864dc27f8dd4a7e6421e5db38bbddc44b0e05eeef33efd9715f3c35",
+      "normalizedHtmlPath": ".artifacts/http-baseline/page_blog_GET_anonymous_default-c873dd644542.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "page:/comercializadora-y-tarifas|GET|anonymous|default",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8"
+      },
+      "bodySha256": "e4e010db00b50513144458797145f40e5d92b8697a5d706d33af72780e45af02",
+      "normalizedHtmlPath": ".artifacts/http-baseline/page_comercializadora_y_tarifas_GET_anonymous_default-9d51148301a5.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "page:/comunidades-energeticas-operativas|GET|anonymous|default",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8"
+      },
+      "bodySha256": "cc4a4408db11dc39a9ef8ec23c58a563a96f33ea9d61eb01df1e97e00d4d33e0",
+      "normalizedHtmlPath": ".artifacts/http-baseline/page_comunidades_energeticas_operativas_GET_anonymous_default-15ca9b6b38d6.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "page:/comunidades-energeticas/almendralejo|GET|anonymous|default",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8"
+      },
+      "bodySha256": "bcab26d878b3accdd6caff543a683818cec0e24142eae661d0af8e666421c37f",
+      "normalizedHtmlPath": ".artifacts/http-baseline/page_comunidades_energeticas_almendralejo_GET_anonymous_default-5d9402b8554d.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "page:/comunidades-energeticas/caceres|GET|anonymous|default",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8"
+      },
+      "bodySha256": "f6dd5a528e7fb18071c75f85900f73671bd60033f25a352f645b59f0700036db",
+      "normalizedHtmlPath": ".artifacts/http-baseline/page_comunidades_energeticas_caceres_GET_anonymous_default-ee884197c189.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "page:/comunidades-energeticas/ceuti|GET|anonymous|default",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8"
+      },
+      "bodySha256": "b9e7bca12326653a26d26d5304f41c5d9c0a81446c29771eadf61f57977a7b06",
+      "normalizedHtmlPath": ".artifacts/http-baseline/page_comunidades_energeticas_ceuti_GET_anonymous_default-d7ec056bfb7d.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "page:/comunidades-energeticas/coria|GET|anonymous|default",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8"
+      },
+      "bodySha256": "3278fd67dc639c52d41a6edc88b7ae7b067437142de981f94a49cdacaf77b9b5",
+      "normalizedHtmlPath": ".artifacts/http-baseline/page_comunidades_energeticas_coria_GET_anonymous_default-b879e322e440.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "page:/comunidades-energeticas/don-benito|GET|anonymous|default",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8"
+      },
+      "bodySha256": "df3a17978b071e31d6b2d7d45a4c6ee8d7abbb970712d664da6491bf4ad549ba",
+      "normalizedHtmlPath": ".artifacts/http-baseline/page_comunidades_energeticas_don_benito_GET_anonymous_default-36df6db7f38d.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "page:/comunidades-energeticas/escurial|GET|anonymous|default",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8"
+      },
+      "bodySha256": "8600d8e05f327f32797daf11b946edcc8daf2008d5d29925d324f38f9c07e3a2",
+      "normalizedHtmlPath": ".artifacts/http-baseline/page_comunidades_energeticas_escurial_GET_anonymous_default-e060ff0bc952.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "page:/comunidades-energeticas/extremadura|GET|anonymous|default",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8"
+      },
+      "bodySha256": "2f7f88293e3ec6885663648c5f954eed3e4de85eb4c431913766a324a1e1891d",
+      "normalizedHtmlPath": ".artifacts/http-baseline/page_comunidades_energeticas_extremadura_GET_anonymous_default-f2562d3adb94.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "page:/comunidades-energeticas/ibeas-de-juarros|GET|anonymous|default",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8"
+      },
+      "bodySha256": "1093f26515e5a8c0afb76fb97e0c5858e642769b80c8931aea2529030f6cc8ee",
+      "normalizedHtmlPath": ".artifacts/http-baseline/page_comunidades_energeticas_ibeas_de_juarros_GET_anonymous_default-afb590b53d8e.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "page:/comunidades-energeticas/jerez-de-los-caballeros|GET|anonymous|default",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8"
+      },
+      "bodySha256": "b831fea70297a0b96c9dc156c7c30c8552b5dc9931ca1c0878116ff660d8f333",
+      "normalizedHtmlPath": ".artifacts/http-baseline/page_comunidades_energeticas_jerez_de_los_caballeros_GET_anonymous_default-526f95948823.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "page:/comunidades-energeticas/manganafer|GET|anonymous|default",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8"
+      },
+      "bodySha256": "54e928e04445c7495e28c2562222d4709c029a64b4026579ecaf8b57b9e4a59d",
+      "normalizedHtmlPath": ".artifacts/http-baseline/page_comunidades_energeticas_manganafer_GET_anonymous_default-34ef1007fb00.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "page:/comunidades-energeticas/merida|GET|anonymous|default",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8"
+      },
+      "bodySha256": "69c1a4a4826671a36d7aa311fbf87227aa08eca0bdf2a9f96aa8946b79424f34",
+      "normalizedHtmlPath": ".artifacts/http-baseline/page_comunidades_energeticas_merida_GET_anonymous_default-668bdee08599.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "page:/comunidades-energeticas/navalmoral-de-la-mata|GET|anonymous|default",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8"
+      },
+      "bodySha256": "9e1b38c8ecf20f1f5112465baf89d0f9738f9fc3cf663dd53e1f8bf9e069520f",
+      "normalizedHtmlPath": ".artifacts/http-baseline/page_comunidades_energeticas_navalmoral_de_la_mata_GET_anonymous_default-0315b08a725e.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "page:/comunidades-energeticas/nuevo-baztan|GET|anonymous|default",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8"
+      },
+      "bodySha256": "fd7c3f87a0771da099a48d158f1be70e9cc69a66439aa86746b08b171bf440c1",
+      "normalizedHtmlPath": ".artifacts/http-baseline/page_comunidades_energeticas_nuevo_baztan_GET_anonymous_default-f663d5b79c1e.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "page:/comunidades-energeticas/ontinyent|GET|anonymous|default",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8"
+      },
+      "bodySha256": "eefffb1a38d2b9265997354fd49d125a626bf27dff87a6db7e149089be394b5f",
+      "normalizedHtmlPath": ".artifacts/http-baseline/page_comunidades_energeticas_ontinyent_GET_anonymous_default-2c03ad10ce07.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "page:/comunidades-energeticas/plasencia|GET|anonymous|default",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8"
+      },
+      "bodySha256": "5b5e136207b02f60b37300e5df7c4e57d3c58e57cd0b22ac79e6928e03c961b8",
+      "normalizedHtmlPath": ".artifacts/http-baseline/page_comunidades_energeticas_plasencia_GET_anonymous_default-2850e68bb1a7.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "page:/comunidades-energeticas/san-adrian-de-juarros|GET|anonymous|default",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8"
+      },
+      "bodySha256": "20c5ffc47d366082125cde46767fc581c1c562ddafde7ba187a16331c3a36d15",
+      "normalizedHtmlPath": ".artifacts/http-baseline/page_comunidades_energeticas_san_adrian_de_juarros_GET_anonymous_default-67da871d6fee.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "page:/comunidades-energeticas/santa-cruz-de-paniagua|GET|anonymous|default",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8"
+      },
+      "bodySha256": "838432a5acef245be49943735963b3b89ea853bd12e9ab8bafa08f1ce6911378",
+      "normalizedHtmlPath": ".artifacts/http-baseline/page_comunidades_energeticas_santa_cruz_de_paniagua_GET_anonymous_default-e955712915bf.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "page:/comunidades-energeticas/sepulveda|GET|anonymous|default",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8"
+      },
+      "bodySha256": "1cd02f3cd90dd6056fae391736647a6d30a63ce6ecce24a5ffd497270e59a6e9",
+      "normalizedHtmlPath": ".artifacts/http-baseline/page_comunidades_energeticas_sepulveda_GET_anonymous_default-c45f832440b0.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "page:/comunidades-energeticas/villafranca-de-los-barros|GET|anonymous|default",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8"
+      },
+      "bodySha256": "bf582e9b3bc5afa1c53f9dd6b99f955c5f379a9abdeefd69796d4ed361a7b28c",
+      "normalizedHtmlPath": ".artifacts/http-baseline/page_comunidades_energeticas_villafranca_de_los_barros_GET_anonymous_default-460333e04f67.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "page:/comunidades-energeticas/villalbilla|GET|anonymous|default",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8"
+      },
+      "bodySha256": "305ccdc1d4724b684ebba916aa52ac5d17f85b212c76ee2aaaf1696f0755dccb",
+      "normalizedHtmlPath": ".artifacts/http-baseline/page_comunidades_energeticas_villalbilla_GET_anonymous_default-90f4b873e1d5.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "page:/comunidades-energeticas/villaverde-getafe|GET|anonymous|default",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8"
+      },
+      "bodySha256": "424254630f15c4d5a0b56978b1868caa6d5cffed6279f2bf7f11a1f3bf9abce0",
+      "normalizedHtmlPath": ".artifacts/http-baseline/page_comunidades_energeticas_villaverde_getafe_GET_anonymous_default-e01a2025aacf.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "page:/comunidades-energeticas/zafra|GET|anonymous|default",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8"
+      },
+      "bodySha256": "e2afdb21de996a307a50250d2694bffc13c66e9ba4104a77203b10676507d92c",
+      "normalizedHtmlPath": ".artifacts/http-baseline/page_comunidades_energeticas_zafra_GET_anonymous_default-7e5edca4a055.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "page:/comunidades-energeticas|GET|anonymous|default",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8"
+      },
+      "bodySha256": "ed035ca43a14cbd2106ac9146fccbaaeac40389697fabc6f9ad119da5806e4a5",
+      "normalizedHtmlPath": ".artifacts/http-baseline/page_comunidades_energeticas_GET_anonymous_default-36e14f59ba90.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "page:/contacto|GET|anonymous|default",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8"
+      },
+      "bodySha256": "9a38d273192344ad9216479957c23f5aedccd47af272974e79f25255be03d8cd",
+      "normalizedHtmlPath": ".artifacts/http-baseline/page_contacto_GET_anonymous_default-cc8b6d97847d.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "page:/cookies|GET|anonymous|default",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8"
+      },
+      "bodySha256": "138bbfb4f73d00c9b39a9a4475ffecdff42e40713c5007159a5d7795687d8fca",
+      "normalizedHtmlPath": ".artifacts/http-baseline/page_cookies_GET_anonymous_default-5103cd18ad8c.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "page:/eventos|GET|anonymous|default",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8"
+      },
+      "bodySha256": "cc0921ec6c3a986e8e14f01def83973e22b2fc33000c0cbda8957dc73e01026a",
+      "normalizedHtmlPath": ".artifacts/http-baseline/page_eventos_GET_anonymous_default-e99305dd1506.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "page:/mantenimiento|GET|anonymous|default",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8"
+      },
+      "bodySha256": "ff7c12365327a2d1e9f54187b5f1d6aa3c4acb72e85836feca6db6389160e209",
+      "normalizedHtmlPath": ".artifacts/http-baseline/page_mantenimiento_GET_anonymous_default-4ea5ea27ed52.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "page:/nosotros|GET|anonymous|default",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8"
+      },
+      "bodySha256": "dfd694860eebd82332fd57343034e1c523019605105de34695204f3df32801ef",
+      "normalizedHtmlPath": ".artifacts/http-baseline/page_nosotros_GET_anonymous_default-0182cd310369.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "page:/politica-privacidad|GET|anonymous|default",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8"
+      },
+      "bodySha256": "9728d56c6a4a66f8243be80558e2e9babe0d85e23709ba7fc756d209a8509e4e",
+      "normalizedHtmlPath": ".artifacts/http-baseline/page_politica_privacidad_GET_anonymous_default-9ab1988f7fdd.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "page:/rentabiliza-tu-activo|GET|anonymous|default",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8"
+      },
+      "bodySha256": "10b1a1cd9f349cf2643f9d2cb46325398c8707e2611b929f9e07a5ea4a6d0735",
+      "normalizedHtmlPath": ".artifacts/http-baseline/page_rentabiliza_tu_activo_GET_anonymous_default-fdbf039f928d.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "page:/robots.txt|GET|anonymous|default",
+      "status": 200,
+      "headers": {
+        "cache-control": "public, max-age=0, must-revalidate",
+        "content-type": "text/plain"
+      },
+      "bodySha256": "17ade246242f2b9878bb065a744dd0afb87041380d1cdeb622cf77f731314bd7",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "page:/sitemap.xml|GET|anonymous|default",
+      "status": 200,
+      "headers": {
+        "cache-control": "public, max-age=0, must-revalidate",
+        "content-type": "application/xml"
+      },
+      "bodySha256": "6a279e5467c8f55c60c82857cdbf8b5a827768d7ed1a2d1750821e3126a1f825",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "page:/soy-comunero|GET|anonymous|default",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8"
+      },
+      "bodySha256": "e9774e1155108c11c8c7c129f56215b9d6f56894a4b39171e363c7847792d6cb",
+      "normalizedHtmlPath": ".artifacts/http-baseline/page_soy_comunero_GET_anonymous_default-0af006b3298c.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "page:/terminos-y-condiciones|GET|anonymous|default",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8"
+      },
+      "bodySha256": "a8ce10440912dbf328a3a9cc603f2eba58c66d4b302fd54604ed40f3d9e634bd",
+      "normalizedHtmlPath": ".artifacts/http-baseline/page_terminos_y_condiciones_GET_anonymous_default-9587098f9665.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "page:/|GET|anonymous|default",
+      "status": 200,
+      "headers": {
+        "content-type": "text/html; charset=utf-8"
+      },
+      "bodySha256": "6bbee057f4dba0338f9ca710591cdcd3d758a5479051c334709863eb3c830c7f",
+      "normalizedHtmlPath": ".artifacts/http-baseline/page_GET_anonymous_default-191b4661bae3.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "private-page:/guia-equipo-nueva-web-comunidad-solar.md|GET|allowed|default",
+      "status": 200,
+      "headers": {
+        "cache-control": "private, no-store",
+        "content-disposition": "attachment; filename=\"guia-equipo-nueva-web-comunidad-solar.md\"",
+        "content-type": "text/markdown; charset=utf-8",
+        "referrer-policy": "no-referrer",
+        "x-content-type-options": "nosniff",
+        "x-robots-tag": "noindex, nofollow, noarchive"
+      },
+      "bodySha256": "c41e5af9fa2711ed35e28f0b77f94bfd516e33fadc18c7e2152dc221205182ac",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "private-page:/guia-equipo-nueva-web-comunidad-solar.md|GET|anonymous|default",
+      "status": 307,
+      "headers": {
+        "location": "http://localhost/signin-with-chatgpt?return_to=%2Fguia-equipo-nueva-web-comunidad-solar.md"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "private-page:/guia-equipo-nueva-web-comunidad-solar.md|GET|denied|default",
+      "status": 403,
+      "headers": {
+        "cache-control": "private, no-store",
+        "content-type": "text/plain;charset=UTF-8",
+        "referrer-policy": "no-referrer",
+        "x-content-type-options": "nosniff",
+        "x-robots-tag": "noindex, nofollow, noarchive"
+      },
+      "bodySha256": "454d6a737818b1a08534309ec233c0153ac56914e2f80361cc4523ed03d83929",
+      "normalizedHtmlPath": null,
+      "bodyText": "Cuenta no autorizada.",
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "private-page:/guia-equipo-nueva-web-comunidad-solar.md|GET|unconfigured|default",
+      "status": 403,
+      "headers": {
+        "cache-control": "private, no-store",
+        "content-type": "text/plain;charset=UTF-8",
+        "referrer-policy": "no-referrer",
+        "x-content-type-options": "nosniff",
+        "x-robots-tag": "noindex, nofollow, noarchive"
+      },
+      "bodySha256": "454d6a737818b1a08534309ec233c0153ac56914e2f80361cc4523ed03d83929",
+      "normalizedHtmlPath": null,
+      "bodyText": "Cuenta no autorizada.",
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "private-page:/guia-equipo|GET|allowed|default",
+      "status": 200,
+      "headers": {
+        "cache-control": "no-store, must-revalidate",
+        "content-type": "text/html; charset=utf-8",
+        "referrer-policy": "no-referrer",
+        "x-content-type-options": "nosniff",
+        "x-robots-tag": "noindex, nofollow, noarchive, noimageindex"
+      },
+      "bodySha256": "da9b119dbbdccde5f1b36889a7bd7423605192c50b197a2e5ce69c00b332cbc0",
+      "normalizedHtmlPath": ".artifacts/http-baseline/private_page_guia_equipo_GET_allowed_default-e8a5edc9e200.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "private-page:/guia-equipo|GET|anonymous|default",
+      "status": 200,
+      "headers": {
+        "cache-control": "no-store, must-revalidate",
+        "content-type": "text/html; charset=utf-8",
+        "referrer-policy": "no-referrer",
+        "x-content-type-options": "nosniff",
+        "x-robots-tag": "noindex, nofollow, noarchive, noimageindex"
+      },
+      "bodySha256": "f5ef2e4d07d4cabef96c58c5ad346637fc1075fe34ecc03d8e7cf1376c3a0f95",
+      "normalizedHtmlPath": ".artifacts/http-baseline/private_page_guia_equipo_GET_anonymous_default-fb0e9d77455a.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "private-page:/guia-equipo|GET|denied|default",
+      "status": 200,
+      "headers": {
+        "cache-control": "no-store, must-revalidate",
+        "content-type": "text/html; charset=utf-8",
+        "referrer-policy": "no-referrer",
+        "x-content-type-options": "nosniff",
+        "x-robots-tag": "noindex, nofollow, noarchive, noimageindex"
+      },
+      "bodySha256": "b3301b7c0f790e2a66609b82ba7f6f2861614707423760d37615780ffd244f16",
+      "normalizedHtmlPath": ".artifacts/http-baseline/private_page_guia_equipo_GET_denied_default-563bb12c3b85.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "private-page:/guia-equipo|GET|unconfigured|default",
+      "status": 200,
+      "headers": {
+        "cache-control": "no-store, must-revalidate",
+        "content-type": "text/html; charset=utf-8",
+        "referrer-policy": "no-referrer",
+        "x-content-type-options": "nosniff",
+        "x-robots-tag": "noindex, nofollow, noarchive, noimageindex"
+      },
+      "bodySha256": "4dcd00c579b11773ad3ecc04cab4798c3d78ef88d8cb66056388da2e1a63fd1f",
+      "normalizedHtmlPath": ".artifacts/http-baseline/private_page_guia_equipo_GET_unconfigured_default-43cc4e942d01.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "private-page:/manganafer/interesados|GET|anonymous|default",
+      "status": 200,
+      "headers": {
+        "cache-control": "no-store, must-revalidate",
+        "content-type": "text/html; charset=utf-8"
+      },
+      "bodySha256": "cfec946781f242ccb7dbb72119824b3490637a4649c3f51c339fa5cc58d1db7e",
+      "normalizedHtmlPath": ".artifacts/http-baseline/private_page_manganafer_interesados_GET_anonymous_default-3fff9ba85b0f.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "private-page:/manganafer/interesados|GET|denied|default",
+      "status": 200,
+      "headers": {
+        "cache-control": "no-store, must-revalidate",
+        "content-type": "text/html; charset=utf-8"
+      },
+      "bodySha256": "e7914a6221fc29718f0fd8b37818c83208f36c1475e2d3caf398728889e8e177",
+      "normalizedHtmlPath": ".artifacts/http-baseline/private_page_manganafer_interesados_GET_denied_default-0c973aaeb823.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "private-page:/manganafer/interesados|GET|unconfigured|default",
+      "status": 200,
+      "headers": {
+        "cache-control": "no-store, must-revalidate",
+        "content-type": "text/html; charset=utf-8"
+      },
+      "bodySha256": "3ba211bfea2dc096cf8748dc9c02b68767e3184a97590e51d89ec1497b7d4489",
+      "normalizedHtmlPath": ".artifacts/http-baseline/private_page_manganafer_interesados_GET_unconfigured_default-fc270163b6fb.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "private-page:/socios|GET|allowed|default",
+      "status": 200,
+      "headers": {
+        "cache-control": "no-store, must-revalidate",
+        "content-type": "text/html; charset=utf-8",
+        "referrer-policy": "no-referrer",
+        "x-content-type-options": "nosniff",
+        "x-robots-tag": "noindex, nofollow, noarchive, noimageindex"
+      },
+      "bodySha256": "ff4549f88b90af2acc1b643e0de305f967ff2c07fdc2806f329d265f91547049",
+      "normalizedHtmlPath": ".artifacts/http-baseline/private_page_socios_GET_allowed_default-f09a29ec6fae.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "private-page:/socios|GET|anonymous|default",
+      "status": 200,
+      "headers": {
+        "cache-control": "no-store, must-revalidate",
+        "content-type": "text/html; charset=utf-8",
+        "referrer-policy": "no-referrer",
+        "x-content-type-options": "nosniff",
+        "x-robots-tag": "noindex, nofollow, noarchive, noimageindex"
+      },
+      "bodySha256": "b2cdb57899f0ad196d098ee6fc95ce3a7cc764d1fc9d2e7a2033effb3eb7e180",
+      "normalizedHtmlPath": ".artifacts/http-baseline/private_page_socios_GET_anonymous_default-276a0b4f9938.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "private-page:/socios|GET|denied|default",
+      "status": 200,
+      "headers": {
+        "cache-control": "no-store, must-revalidate",
+        "content-type": "text/html; charset=utf-8",
+        "referrer-policy": "no-referrer",
+        "x-content-type-options": "nosniff",
+        "x-robots-tag": "noindex, nofollow, noarchive, noimageindex"
+      },
+      "bodySha256": "006bc0e369f72afc80e2ccd2963f5592901e4b42254ccc9eff43d04720858913",
+      "normalizedHtmlPath": ".artifacts/http-baseline/private_page_socios_GET_denied_default-b0318cae44ed.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "private-page:/socios|GET|unconfigured|default",
+      "status": 200,
+      "headers": {
+        "cache-control": "no-store, must-revalidate",
+        "content-type": "text/html; charset=utf-8",
+        "referrer-policy": "no-referrer",
+        "x-content-type-options": "nosniff",
+        "x-robots-tag": "noindex, nofollow, noarchive, noimageindex"
+      },
+      "bodySha256": "3d96c624bafc3c63849231327aed87de6d2e5bdfb7f3a8f3b9ed58b2acb5ac31",
+      "normalizedHtmlPath": ".artifacts/http-baseline/private_page_socios_GET_unconfigured_default-20590d05b9fe.html",
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/a-remoto?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-remoto?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/a-remoto|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-remoto"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/aerotermia-comunidad-solarcoolfy?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/aerotermia?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/aerotermia-comunidad-solarcoolfy|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/aerotermia"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/anfitrion-solar-v2?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/rentabiliza-tu-activo?utm_source=http-baseline#cubierta"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/anfitrion-solar-v2|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/rentabiliza-tu-activo#cubierta"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/anfitrion-solar?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/rentabiliza-tu-activo?utm_source=http-baseline#cubierta"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/anfitrion-solar|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/rentabiliza-tu-activo#cubierta"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/apagon-energetico?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/baterias?utm_source=http-baseline#preguntas"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/apagon-energetico|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/baterias#preguntas"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/app-asistente-energetico?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/soy-comunero?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/app-asistente-energetico|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/soy-comunero"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/arv2?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-remoto?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/arv2|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-remoto"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/autoconsumo-en-mi-tejado-v2?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-en-mi-tejado?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/autoconsumo-en-mi-tejado-v2|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-en-mi-tejado"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/autoconsumo-remoto-con-baterias-calculadora?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-remoto?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/autoconsumo-remoto-con-baterias-calculadora|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-remoto"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/autoconsumo-remoto-con-baterias-v2?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-remoto?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/autoconsumo-remoto-con-baterias-v2|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-remoto"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/autoconsumo-remoto-con-baterias?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-remoto?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/autoconsumo-remoto-con-baterias|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-remoto"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/autoconsumo-remoto-megapark?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-remoto?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/autoconsumo-remoto-megapark|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-remoto"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/autoconsumo-remoto-portal-renovables?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-remoto?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/autoconsumo-remoto-portal-renovables|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-remoto"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/autoconsumo-remoto-v2?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-remoto?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/autoconsumo-remoto-v2|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-remoto"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/autoconsumo-remoto/b2b-formulario?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/rentabiliza-tu-activo?utm_source=http-baseline#solicitar-estudio"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/autoconsumo-remoto/b2b-formulario|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/rentabiliza-tu-activo#solicitar-estudio"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/autoconsumo-remoto/b2c-calculadora?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-remoto?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/autoconsumo-remoto/b2c-calculadora|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-remoto"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/autoconsumo-remoto/b2c-formulario?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-remoto?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/autoconsumo-remoto/b2c-formulario|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-remoto"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/autoconsumo-remoto/pisuerga?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-remoto/liguerzana?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/autoconsumo-remoto/pisuerga|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-remoto/liguerzana"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/blog/aerotermia-la-revolucion-energetica-para-una-vida-sostenible?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/aerotermia?utm_source=http-baseline#encaje"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/blog/aerotermia-la-revolucion-energetica-para-una-vida-sostenible|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/aerotermia#encaje"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/blog/ahorro-energetico?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/comercializadora-y-tarifas?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/blog/ahorro-energetico|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/comercializadora-y-tarifas"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/blog/autoconsumo-colectivo-y-comunidades-energeticas?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/comunidades-energeticas?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/blog/autoconsumo-colectivo-y-comunidades-energeticas|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/comunidades-energeticas"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/blog/autoconsumo-remoto-baterias-independencia-energetica?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-remoto?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/blog/autoconsumo-remoto-baterias-independencia-energetica|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-remoto"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/blog/autoconsumo-remoto-de-comunidad-solar?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-remoto?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/blog/autoconsumo-remoto-de-comunidad-solar|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-remoto"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/blog/baterias-solucion-cargas-criticas-cortes-energia?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/baterias?utm_source=http-baseline#preguntas"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/blog/baterias-solucion-cargas-criticas-cortes-energia|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/baterias#preguntas"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/blog/category/aerotermia?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/aerotermia?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/blog/category/aerotermia|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/aerotermia"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/blog/category/autoconsumo-en-casa?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-en-mi-tejado?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/blog/category/autoconsumo-en-casa|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-en-mi-tejado"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/blog/category/autoconsumo-remoto?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-remoto?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/blog/category/autoconsumo-remoto|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-remoto"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/blog/category/baterias?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/baterias?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/blog/category/baterias|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/baterias"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/blog/category/comunidades-energeticas?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/comunidades-energeticas?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/blog/category/comunidades-energeticas|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/comunidades-energeticas"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/blog/category/sin-categoria?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/blog?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/blog/category/sin-categoria|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/blog"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/blog/como-comunidades-energeticas-reducir-costos?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/comunidades-energeticas?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/blog/como-comunidades-energeticas-reducir-costos|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/comunidades-energeticas"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/blog/como-crear-comunidad-energetica-area?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/rentabiliza-tu-activo?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/blog/como-crear-comunidad-energetica-area|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/rentabiliza-tu-activo"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/blog/consejos-mantenimiento-paneles-solares?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/mantenimiento?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/blog/consejos-mantenimiento-paneles-solares|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/mantenimiento"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/blog/cuando-ampliar-instalacion-placas-solares?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-en-mi-tejado?utm_source=http-baseline#como-lo-hacemos"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/blog/cuando-ampliar-instalacion-placas-solares|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-en-mi-tejado#como-lo-hacemos"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/blog/elegir-bateria-luna2000-huawei?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/baterias?utm_source=http-baseline#como-elegir"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/blog/elegir-bateria-luna2000-huawei|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/baterias#como-elegir"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/blog/elegir-mejores-placas-solares?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-en-mi-tejado?utm_source=http-baseline#como-lo-hacemos"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/blog/elegir-mejores-placas-solares|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-en-mi-tejado#como-lo-hacemos"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/blog/energia-solar-merece-pena-instalar-baterias?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/baterias?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/blog/energia-solar-merece-pena-instalar-baterias|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/baterias"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/blog/guia-instalar-paneles-solares?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-en-mi-tejado?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/blog/guia-instalar-paneles-solares|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-en-mi-tejado"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/blog/instalar-paneles-solares-aumenta-valor-propiedad?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-en-mi-tejado?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/blog/instalar-paneles-solares-aumenta-valor-propiedad|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-en-mi-tejado"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/blog/mitos-realidades-placas-solares?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-en-mi-tejado?utm_source=http-baseline#preguntas"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/blog/mitos-realidades-placas-solares|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-en-mi-tejado#preguntas"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/blog/novedad-comunidad-energetica-nuevo-baztan?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/blog/nace-la-comunidad-de-nuevo-baztan?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/blog/novedad-comunidad-energetica-nuevo-baztan|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/blog/nace-la-comunidad-de-nuevo-baztan"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/blog/paneles-solares-energia-solar-sostenible?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-en-mi-tejado?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/blog/paneles-solares-energia-solar-sostenible|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-en-mi-tejado"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/blog/que-hacer-excedentes-paneles-solares?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/comercializadora-y-tarifas?utm_source=http-baseline#monedero"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/blog/que-hacer-excedentes-paneles-solares|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/comercializadora-y-tarifas#monedero"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/blog/que-son-comunidades-energeticas?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/comunidades-energeticas?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/blog/que-son-comunidades-energeticas|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/comunidades-energeticas"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/blog/tipos-baterias-placas-solares?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/baterias?utm_source=http-baseline#como-elegir"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/blog/tipos-baterias-placas-solares|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/baterias#como-elegir"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/blog/ventajas-autoconsumo-remoto-energia-solar?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-remoto?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/blog/ventajas-autoconsumo-remoto-energia-solar|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-remoto"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/blog/ventajas-comunidades-energeticas?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/comunidades-energeticas?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/blog/ventajas-comunidades-energeticas|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/comunidades-energeticas"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/calcula-tu-ahorro?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-remoto?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/calcula-tu-ahorro|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-remoto"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/ce-ceuti?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/comunidades-energeticas/ceuti?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/ce-ceuti|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/comunidades-energeticas/ceuti"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/ce-sepulveda?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/comunidades-energeticas/sepulveda?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/ce-sepulveda|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/comunidades-energeticas/sepulveda"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/ce-villalbilla-test?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/comunidades-energeticas/villalbilla?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/ce-villalbilla-test|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/comunidades-energeticas/villalbilla"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/ce-villalbilla-v2?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/comunidades-energeticas/villalbilla?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/ce-villalbilla-v2|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/comunidades-energeticas/villalbilla"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/compra-grupo-aerotermia?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/aerotermia?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/compra-grupo-aerotermia|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/aerotermia"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/comunidad-energetica-de-mi-edificio?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/comunidades-energeticas?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/comunidad-energetica-de-mi-edificio|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/comunidades-energeticas"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/comunidad-energetica-de-mi-pueblo?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/comunidades-energeticas?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/comunidad-energetica-de-mi-pueblo|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/comunidades-energeticas"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/comunidad-energetica-extremadura?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/comunidades-energeticas/extremadura?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/comunidad-energetica-extremadura|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/comunidades-energeticas/extremadura"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/comunidad-energetica-ibeas-de-juarros-v2?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/comunidades-energeticas/ibeas-de-juarros?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/comunidad-energetica-ibeas-de-juarros-v2|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/comunidades-energeticas/ibeas-de-juarros"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/comunidad-energetica-ibeas-de-juarros?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/comunidades-energeticas/ibeas-de-juarros?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/comunidad-energetica-ibeas-de-juarros|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/comunidades-energeticas/ibeas-de-juarros"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/comunidad-energetica-nuevo-baztan-v2?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/comunidades-energeticas/nuevo-baztan?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/comunidad-energetica-nuevo-baztan-v2|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/comunidades-energeticas/nuevo-baztan"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/comunidad-energetica-nuevo-baztan?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/comunidades-energeticas/nuevo-baztan?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/comunidad-energetica-nuevo-baztan|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/comunidades-energeticas/nuevo-baztan"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/comunidad-energetica-ontinyent?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/comunidades-energeticas/ontinyent?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/comunidad-energetica-ontinyent|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/comunidades-energeticas/ontinyent"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/comunidad-energetica-san-adrian-de-juarros-v2?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/comunidades-energeticas/san-adrian-de-juarros?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/comunidad-energetica-san-adrian-de-juarros-v2|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/comunidades-energeticas/san-adrian-de-juarros"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/comunidad-energetica-san-adrian-de-juarros?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/comunidades-energeticas/san-adrian-de-juarros?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/comunidad-energetica-san-adrian-de-juarros|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/comunidades-energeticas/san-adrian-de-juarros"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/comunidad-energetica-villalbilla-madrid?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/comunidades-energeticas/villalbilla?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/comunidad-energetica-villalbilla-madrid|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/comunidades-energeticas/villalbilla"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/comunidad-energetica-villaverde?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/comunidades-energeticas/villaverde-getafe?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/comunidad-energetica-villaverde|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/comunidades-energeticas/villaverde-getafe"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/comunidades-energeticas-v2?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/comunidades-energeticas?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/comunidades-energeticas-v2|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/comunidades-energeticas"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/cs-en-los-medios-de-comunicacion?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/?utm_source=http-baseline#medios"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/cs-en-los-medios-de-comunicacion|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/#medios"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/el-toro-tv?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/?utm_source=http-baseline#pruebas"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/el-toro-tv|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/#pruebas"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/home-2?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/home-2|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/instala-con-nosotros?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/rentabiliza-tu-activo?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/instala-con-nosotros|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/rentabiliza-tu-activo"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/mantenimiento-placas-solares?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/mantenimiento?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/mantenimiento-placas-solares|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/mantenimiento"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/mapa-con-resenas?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/?utm_source=http-baseline#opiniones"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/mapa-con-resenas|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/#opiniones"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/megapark-fuente-alamo?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-remoto/fuente-alamo?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/megapark-fuente-alamo|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-remoto/fuente-alamo"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/megapark-las-vegas?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-remoto/torrontera?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/megapark-las-vegas|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-remoto/torrontera"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/megapark-pisuerga?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-remoto/liguerzana?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/megapark-pisuerga|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-remoto/liguerzana"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/megapark-talavera-eolico?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-remoto?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/megapark-talavera-eolico|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-remoto"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/mensaje-a-descendientes?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/blog/septimo-aniversario-capsula-del-tiempo?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/mensaje-a-descendientes|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/blog/septimo-aniversario-capsula-del-tiempo"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/mision-2?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/nosotros?utm_source=http-baseline#mision"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/mision-2|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/nosotros#mision"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/mision?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/nosotros?utm_source=http-baseline#mision"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/mision|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/nosotros#mision"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/nuestra-mision?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/nosotros?utm_source=http-baseline#mision"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/nuestra-mision|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/nosotros#mision"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/nuestro-plan?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/nosotros?utm_source=http-baseline#nuestro-plan"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/nuestro-plan|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/nosotros#nuestro-plan"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/oferta-baterias-ecoflow-powerocean-con-instalacion-fotovoltaica?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/baterias?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/oferta-baterias-ecoflow-powerocean-con-instalacion-fotovoltaica|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/baterias"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/oferta-baterias-huawei?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/baterias?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/oferta-baterias-huawei|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/baterias"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/oferta-baterias-solax-x1-ies?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/baterias?utm_source=http-baseline#solax-x1-ies"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/oferta-baterias-solax-x1-ies|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/baterias#solax-x1-ies"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/pack-ahorro-energetico-autoconsumo-baterias-b2b?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-remoto?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/pack-ahorro-energetico-autoconsumo-baterias-b2b|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-remoto"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/pack-ahorro-energetico-autoconsumo-baterias-pack_ar?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-remoto?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/pack-ahorro-energetico-autoconsumo-baterias-pack_ar_canadian_lp?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-remoto?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/pack-ahorro-energetico-autoconsumo-baterias-pack_ar_canadian_lp|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-remoto"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/pack-ahorro-energetico-autoconsumo-baterias-pack_ar|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-remoto"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/pack-ahorro-energetico-b2b-crealsa?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-remoto?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/pack-ahorro-energetico-b2b-crealsa|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-remoto"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/partners-y-empleo?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/nosotros?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/partners-y-empleo|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/nosotros"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/preguntas-frecuentes-app?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/soy-comunero?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/preguntas-frecuentes-app|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/soy-comunero"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/preguntas-frecuentes?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/contacto?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/preguntas-frecuentes|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/contacto"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/programa-de-referidos-csp?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/soy-comunero?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/programa-de-referidos-csp|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/soy-comunero"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/proyecto-torrontera-configurador?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-remoto/torrontera?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/proyecto-torrontera-configurador|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-remoto/torrontera"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/proyecto-torrontera?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-remoto/torrontera?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/proyecto-torrontera|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-remoto/torrontera"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/prueba-autoconsumo-remoto?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-remoto?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/prueba-autoconsumo-remoto|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-remoto"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/prueba-tejados-en-red?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/rentabiliza-tu-activo?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/prueba-tejados-en-red|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/rentabiliza-tu-activo"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/que-es-autoconsumo-remoto-como-funciona?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-remoto?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/que-es-autoconsumo-remoto-como-funciona|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-remoto"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/remoto?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-remoto?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/remoto|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-remoto"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/reserva-megapark-talavera-eolico?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-remoto?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/reserva-megapark-talavera-eolico|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-remoto"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/respaldo-sin-placas?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/baterias?utm_source=http-baseline#preguntas"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/respaldo-sin-placas|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/baterias#preguntas"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/santa-cruz-de-paniagua?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/comunidades-energeticas/santa-cruz-de-paniagua?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/santa-cruz-de-paniagua|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/comunidades-energeticas/santa-cruz-de-paniagua"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/tarifas?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/comercializadora-y-tarifas?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/tarifas|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/comercializadora-y-tarifas"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/vimart-gt-autoconsumo-remoto-con-baterias?utm_source=http-baseline|GET|anonymous|redirect-query",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-remoto?utm_source=http-baseline"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    },
+    {
+      "routeKey": "redirect:/vimart-gt-autoconsumo-remoto-con-baterias|GET|anonymous|default",
+      "status": 308,
+      "headers": {
+        "cache-control": "public, max-age=3600",
+        "location": "http://localhost/autoconsumo-remoto"
+      },
+      "bodySha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "normalizedHtmlPath": null,
+      "bodyText": null,
+      "bodyJsonShape": null
+    }
+  ],
+  "deferred": [
+    {
+      "routeKey": "api:/api/manganafer-interest/export|GET|allowed|database-read",
+      "deferredToPhase": 3,
+      "reason": "La exportación autorizada necesita una instantánea D1 determinista, definida en la fase 3."
+    },
+    {
+      "routeKey": "api:/api/manganafer-interest|POST|anonymous|persistence",
+      "deferredToPhase": 3,
+      "reason": "La persistencia correcta requiere una base D1 de fixture, definida en la fase 3."
+    },
+    {
+      "routeKey": "api:/api/manganafer-quote|POST|anonymous|external-quote",
+      "deferredToPhase": 3,
+      "reason": "La cotización válida depende de fixtures para los dos upstreams de CUPS y simulación, definidos en la fase 3."
+    },
+    {
+      "routeKey": "asset:/comunidad-solar-evolucion.png|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/comunidad-solar-hero.png|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/comunidad-solar-logo-option-1.svg|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/comunidad-solar-logo-option-3.svg|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/comunidad-solar-logo.svg|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/comunidades-colegio-pueblo-1024x792.png|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/comunidades-hero-v2.png|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/cubierta-comunidad.png|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/favicon.svg|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/file.svg|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/globe.svg|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/media/antena3-noticias-autoconsumo-remoto-2023.jpg|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/media/asesor-victor.jpg|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/media/asesora-gema.png|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/media/asesora-irene.png|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/media/asesora-laura.png|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/media/autoconsumo-remoto-baterias.svg|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/media/blog-ceuti-detalle.jpg|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/media/blog-nuevo-baztan-detalle.jpg|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/media/blog-villalbilla-evento.jpg|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/media/ceuti.jpg|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/media/comunero-alfredo-izaskun.png|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/media/comunero-jose-familia.png|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/media/comuneros-luis-marisa.png|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/media/comuneros-nuria-carlos.png|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/media/comunidades-energeticas.svg|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/media/comunidades/escurial-marmoles-jimenez.webp|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/media/comunidades/extremadura/almendralejo.webp|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/media/comunidades/extremadura/caceres.webp|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/media/comunidades/extremadura/coria.webp|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/media/comunidades/extremadura/don-benito.webp|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/media/comunidades/extremadura/jerez-de-los-caballeros.webp|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/media/comunidades/extremadura/merida.webp|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/media/comunidades/extremadura/navalmoral-de-la-mata.webp|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/media/comunidades/extremadura/plasencia.webp|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/media/comunidades/extremadura/villafranca-de-los-barros.webp|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/media/comunidades/extremadura/zafra.webp|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/media/comunidades/ontinyent-dream-home-textil.webp|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/media/coolfy-logo.png|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/media/cs-medios-2025-poster-antena3.jpg|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/media/cs-medios-2025-poster.jpg|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/media/damian-villa-por-el-planeta.jpg|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/media/evento-solsticio-2022.jpg|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/media/evento-solsticio-2023.jpg|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/media/evento-solsticio-2024.jpg|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/media/evento-solsticio-2025.jpg|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/media/evento-visita-parque.jpg|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/media/experiencia-comunero.jpg|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/media/extremadura.jpg|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/media/fuente-alamo.jpeg|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/media/hero-operativas-red-de-valor-clean-1024x792.png|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/media/historia-adn-comunidad.jpg|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/media/historia-comunero-8.png|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/media/historia-youtube-reqBqJBFQIk.jpg|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/media/home-hero-option-1-spain-connected-1024x792.png|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/media/home-hero-option-3-exact-1024x792.png|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/media/ibeas-de-juarros.jpeg|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/media/kike-saenz.png|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/media/las-vegas-mazarron.jpg|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/media/liguerzana.jpg|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/media/manganafer-hero-1024x792.png|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/media/merida.webp|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/media/nuevo-baztan.jpeg|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/media/premio-goparity.jpg|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/media/puebla-del-principe.jpg|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/media/radio-cyl.jpg|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/media/san-adrian-de-juarros.jpg|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/media/santa-cruz-de-paniagua.jpg|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/media/sepulveda.webp|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/media/solax-x1-ies.png|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/media/tomas-bensadon.png|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/media/torrontera.jpg|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/media/villalbilla-gregorio-canella-cubierta.jpg|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/media/villalbilla.jpg|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/media/villaverde-getafe.jpg|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/planta-fotovoltaica-proximidad.png|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "asset:/window.svg|GET|anonymous|asset-delivery",
+      "deferredToPhase": 2,
+      "reason": "La entrega de assets se valida contra el inventario con hash y se porta en la fase 2."
+    },
+    {
+      "routeKey": "private-page:/manganafer/interesados|GET|allowed|database-read",
+      "deferredToPhase": 3,
+      "reason": "La vista autorizada necesita una instantánea D1 determinista, definida en la fase 3."
+    }
+  ]
+}
