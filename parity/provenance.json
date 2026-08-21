@@ -1,9 +1,611 @@
 [
   {
+    "sourcePath": "public/comunidad-solar-evolucion.png",
+    "destination": "public/comunidad-solar-evolucion.png",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "636e51005755c2427aaa16ade4bfa7ecd30c1559d0dbba04ee731ad40748ac8c",
+    "bytes": 2585744
+  },
+  {
+    "sourcePath": "public/comunidad-solar-hero.png",
+    "destination": "public/comunidad-solar-hero.png",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "20b99ed37b0b6731773fa5ff989f14b43b2d05c0350893277a498fcacf8d4f6c",
+    "bytes": 1489558
+  },
+  {
+    "sourcePath": "public/comunidad-solar-logo-option-1.svg",
+    "destination": "public/comunidad-solar-logo-option-1.svg",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "062480e6b90fe3359c92aa2f0657b536058d4d97448ce62f8694abe534b4e57b",
+    "bytes": 784
+  },
+  {
+    "sourcePath": "public/comunidad-solar-logo-option-3.svg",
+    "destination": "public/comunidad-solar-logo-option-3.svg",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "baac7e7a6180c4b8172e8dc5e2df2a0c0e6009a01a455a1af4e77b396c728899",
+    "bytes": 1320
+  },
+  {
+    "sourcePath": "public/comunidad-solar-logo.svg",
+    "destination": "public/comunidad-solar-logo.svg",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "402be99eefa59f25e6a3e917a8faff272020d398499fa18a0a4693e64d712ad8",
+    "bytes": 11409
+  },
+  {
+    "sourcePath": "public/comunidades-colegio-pueblo-1024x792.png",
+    "destination": "public/comunidades-colegio-pueblo-1024x792.png",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "e684b9e7e80a6a261ed1c4e8f21c6785d2f1c265dedfb53ab4c65c03372e1932",
+    "bytes": 1284859
+  },
+  {
+    "sourcePath": "public/comunidades-hero-v2.png",
+    "destination": "public/comunidades-hero-v2.png",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "bb83fbf8da996bcabf899d3a08328eb6b90a9fff6e9a26b1434efaaac83ea598",
+    "bytes": 1630795
+  },
+  {
+    "sourcePath": "public/cubierta-comunidad.png",
+    "destination": "public/cubierta-comunidad.png",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "794325bf575397e4143c0e331b88c4ca1a40157bbef82ad7a320ec9a6b8a25d9",
+    "bytes": 1350745
+  },
+  {
+    "sourcePath": "public/favicon.svg",
+    "destination": "public/favicon.svg",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "e6d2e59b7b5bbb0342e0fb496dfc262decbfe4426bbb7b047aec8d467d1dc6f7",
+    "bytes": 712
+  },
+  {
+    "sourcePath": "public/file.svg",
+    "destination": "public/file.svg",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "2b67812c325c199a02536cdbeea0c593a72f707d323b72ee3e08dbab06753bd4",
+    "bytes": 391
+  },
+  {
+    "sourcePath": "public/globe.svg",
+    "destination": "public/globe.svg",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "b614b9bf183925957661ac851498fe1d8029fd43a62fbfed86f9e2624a57e7cf",
+    "bytes": 1035
+  },
+  {
+    "sourcePath": "public/media/antena3-noticias-autoconsumo-remoto-2023.jpg",
+    "destination": "public/media/antena3-noticias-autoconsumo-remoto-2023.jpg",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "570291942f62eb06357ae4345afc6b12dd5364542be65e1db65f4cbe3723ab08",
+    "bytes": 81736
+  },
+  {
+    "sourcePath": "public/media/asesor-victor.jpg",
+    "destination": "public/media/asesor-victor.jpg",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "5cca0191b9069ed75536da53f1c48618b5542c0d434cd61299b7c209cf008fa0",
+    "bytes": 166162
+  },
+  {
+    "sourcePath": "public/media/asesora-gema.png",
+    "destination": "public/media/asesora-gema.png",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "e24e5df97b3cc534812ec5d34f1d8e161f87740be966393bf0804691ead2d70b",
+    "bytes": 493845
+  },
+  {
+    "sourcePath": "public/media/asesora-irene.png",
+    "destination": "public/media/asesora-irene.png",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "8a2b6886a968de84f6570be0945c122c77551f5c49597f70079c98960f3d9404",
+    "bytes": 424334
+  },
+  {
+    "sourcePath": "public/media/asesora-laura.png",
+    "destination": "public/media/asesora-laura.png",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "fae1551f4262769ead3d76f9e23b01e1458fe2cb2255a888fb9a39611723f732",
+    "bytes": 351808
+  },
+  {
+    "sourcePath": "public/media/autoconsumo-remoto-baterias.svg",
+    "destination": "public/media/autoconsumo-remoto-baterias.svg",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "85f3e2c24b422b04f26b15ea4562a6e93a8698ad239d78a2e33aa4a5633c1d1e",
+    "bytes": 31324
+  },
+  {
+    "sourcePath": "public/media/blog-ceuti-detalle.jpg",
+    "destination": "public/media/blog-ceuti-detalle.jpg",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "20172c582c78969b2147309f290e1e2d0afd9c7cdc26e2866e84cdd08f7b2900",
+    "bytes": 6201721
+  },
+  {
+    "sourcePath": "public/media/blog-nuevo-baztan-detalle.jpg",
+    "destination": "public/media/blog-nuevo-baztan-detalle.jpg",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "2ff1ba2c925e65047b73b15e8afeade317c4a4b95baf0b2cd7a58f93b74c7766",
+    "bytes": 331033
+  },
+  {
+    "sourcePath": "public/media/blog-villalbilla-evento.jpg",
+    "destination": "public/media/blog-villalbilla-evento.jpg",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "c640a5fe1b80932af8959a3957fd4af0653388b5f50d068876d201316df08692",
+    "bytes": 297591
+  },
+  {
+    "sourcePath": "public/media/ceuti.jpg",
+    "destination": "public/media/ceuti.jpg",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "17d3c31d01329166d9a5826b728a6453c5adf78e5208851dfce017acf0b8614c",
+    "bytes": 83612
+  },
+  {
+    "sourcePath": "public/media/comunero-alfredo-izaskun.png",
+    "destination": "public/media/comunero-alfredo-izaskun.png",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "663a92a1d685f04d066e27674ffa06acb51e4d5cb8e925c9eace60dbd8309930",
+    "bytes": 716738
+  },
+  {
+    "sourcePath": "public/media/comunero-jose-familia.png",
+    "destination": "public/media/comunero-jose-familia.png",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "fc6d9f4d0d915ed6d7b39d0745d8fd42e68fabbf4f0a461f25f5a2e5efe238a0",
+    "bytes": 978492
+  },
+  {
+    "sourcePath": "public/media/comuneros-luis-marisa.png",
+    "destination": "public/media/comuneros-luis-marisa.png",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "8056afbde49599ff3d1fa6a7809f9437635de3c821b56043dbd3f34122e3ff65",
+    "bytes": 802695
+  },
+  {
+    "sourcePath": "public/media/comuneros-nuria-carlos.png",
+    "destination": "public/media/comuneros-nuria-carlos.png",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "765aa217d43c9e3c4ae699789b14f0a9d6fcacef140161591b28cce15e9c8c57",
+    "bytes": 802036
+  },
+  {
+    "sourcePath": "public/media/comunidades-energeticas.svg",
+    "destination": "public/media/comunidades-energeticas.svg",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "ec2c7aac556019cf5b080fde75344155226d56c2262f49c8151e759a55cc953e",
+    "bytes": 35568
+  },
+  {
+    "sourcePath": "public/media/comunidades/escurial-marmoles-jimenez.webp",
+    "destination": "public/media/comunidades/escurial-marmoles-jimenez.webp",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "44fb0a2293db79b62e3d8e0d16a7dc167afe1a0892916254f6c1716b08859a3e",
+    "bytes": 170052
+  },
+  {
+    "sourcePath": "public/media/comunidades/extremadura/almendralejo.webp",
+    "destination": "public/media/comunidades/extremadura/almendralejo.webp",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "09a6e2d4f5a8a89173b6cfe7012982bdc0d42c9a7e933515b56a29ffcd532555",
+    "bytes": 96476
+  },
+  {
+    "sourcePath": "public/media/comunidades/extremadura/caceres.webp",
+    "destination": "public/media/comunidades/extremadura/caceres.webp",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "bdf1c84edb2f5637f275986fce2589af31ec7f2b1fca00d45f9c1a09c0acfb43",
+    "bytes": 65510
+  },
+  {
+    "sourcePath": "public/media/comunidades/extremadura/coria.webp",
+    "destination": "public/media/comunidades/extremadura/coria.webp",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "5d1fda5ada5ab7ef4567739f35ef3282cf5d001e40f88c3e1fbed3504f81f58e",
+    "bytes": 101952
+  },
+  {
+    "sourcePath": "public/media/comunidades/extremadura/don-benito.webp",
+    "destination": "public/media/comunidades/extremadura/don-benito.webp",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "9102f0bc524e9c3d17e3929cf9021d494099ee366453f853ba2f26794b502c9e",
+    "bytes": 82018
+  },
+  {
+    "sourcePath": "public/media/comunidades/extremadura/jerez-de-los-caballeros.webp",
+    "destination": "public/media/comunidades/extremadura/jerez-de-los-caballeros.webp",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "39763b4aef94c0d4ba18b2233b9775fdccfb8a1bed8d17f05a165158f2d62deb",
+    "bytes": 64794
+  },
+  {
+    "sourcePath": "public/media/comunidades/extremadura/merida.webp",
+    "destination": "public/media/comunidades/extremadura/merida.webp",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "49219114798f81ff60a74cebc1e8bcbe253f732cfcbd585667852122428cef82",
+    "bytes": 44714
+  },
+  {
+    "sourcePath": "public/media/comunidades/extremadura/navalmoral-de-la-mata.webp",
+    "destination": "public/media/comunidades/extremadura/navalmoral-de-la-mata.webp",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "5d697945c2e0c2c2f658798ecb97d66e04c82ab2531b6d26dc44ff8f27ebd792",
+    "bytes": 41684
+  },
+  {
+    "sourcePath": "public/media/comunidades/extremadura/plasencia.webp",
+    "destination": "public/media/comunidades/extremadura/plasencia.webp",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "76153e2862a2b775fce558fa1667ce1045c600ac728f574a7030bbfc1c443191",
+    "bytes": 73296
+  },
+  {
+    "sourcePath": "public/media/comunidades/extremadura/villafranca-de-los-barros.webp",
+    "destination": "public/media/comunidades/extremadura/villafranca-de-los-barros.webp",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "11e7c13f26cad704a635c9a7ec4d496d020619509a670aea50d2e3d51183041e",
+    "bytes": 30980
+  },
+  {
+    "sourcePath": "public/media/comunidades/extremadura/zafra.webp",
+    "destination": "public/media/comunidades/extremadura/zafra.webp",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "eddcba4c337b42424d5b0f25f3bd90cbf07226a4a4965cf3f59eb007b10e311b",
+    "bytes": 121614
+  },
+  {
+    "sourcePath": "public/media/comunidades/ontinyent-dream-home-textil.webp",
+    "destination": "public/media/comunidades/ontinyent-dream-home-textil.webp",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "7e1510774b05e49c85b1300949c0a4cf0c3f5fe73fb9be599446451d63074aab",
+    "bytes": 47394
+  },
+  {
+    "sourcePath": "public/media/coolfy-logo.png",
+    "destination": "public/media/coolfy-logo.png",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "110e8cb3b6b23d20d9ca6bcea923b2636f68bd06d4bc03585b333458bd3631be",
+    "bytes": 24546
+  },
+  {
+    "sourcePath": "public/media/cs-medios-2025-poster-antena3.jpg",
+    "destination": "public/media/cs-medios-2025-poster-antena3.jpg",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "7171acc06d49ec1c67fd9a1e76efc9d3509129448c8ed7670f0cd1d3b430c536",
+    "bytes": 82468
+  },
+  {
+    "sourcePath": "public/media/cs-medios-2025-poster.jpg",
+    "destination": "public/media/cs-medios-2025-poster.jpg",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "aae68046ce5aadc607711a256eb6e7940bb4830618804c05aa2289038f6b7e95",
+    "bytes": 73134
+  },
+  {
+    "sourcePath": "public/media/damian-villa-por-el-planeta.jpg",
+    "destination": "public/media/damian-villa-por-el-planeta.jpg",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "5300f563be4ddce05f724e67d7cb701876f7907d6b7a3f0eb854b284380c756a",
+    "bytes": 215279
+  },
+  {
+    "sourcePath": "public/media/evento-solsticio-2022.jpg",
+    "destination": "public/media/evento-solsticio-2022.jpg",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "f347fafafc31d471e1d19a06742f9a4a123670cfaee6148c855de6c8297f9855",
+    "bytes": 18737
+  },
+  {
+    "sourcePath": "public/media/evento-solsticio-2023.jpg",
+    "destination": "public/media/evento-solsticio-2023.jpg",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "a405fa4e7ab68915ef68b2d2f2c6da7709f286272a4e824b40e1c23dacac00e2",
+    "bytes": 6402
+  },
+  {
+    "sourcePath": "public/media/evento-solsticio-2024.jpg",
+    "destination": "public/media/evento-solsticio-2024.jpg",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "a405fa4e7ab68915ef68b2d2f2c6da7709f286272a4e824b40e1c23dacac00e2",
+    "bytes": 6402
+  },
+  {
+    "sourcePath": "public/media/evento-solsticio-2025.jpg",
+    "destination": "public/media/evento-solsticio-2025.jpg",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "1862889569c4943ba58ac6d5d3f9afd1ab4ec75150773fa6c4ff7473b1185b52",
+    "bytes": 45609
+  },
+  {
+    "sourcePath": "public/media/evento-visita-parque.jpg",
+    "destination": "public/media/evento-visita-parque.jpg",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "1862889569c4943ba58ac6d5d3f9afd1ab4ec75150773fa6c4ff7473b1185b52",
+    "bytes": 45609
+  },
+  {
+    "sourcePath": "public/media/experiencia-comunero.jpg",
+    "destination": "public/media/experiencia-comunero.jpg",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "01bb79933fdb73c9bf02007515606a3b2c50b678d72f739fcac2a8758f3f6acb",
+    "bytes": 542072
+  },
+  {
+    "sourcePath": "public/media/extremadura.jpg",
+    "destination": "public/media/extremadura.jpg",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "f3cd10d12c330db89ac04dbdb977c25942acbca51bc07b57e4e3aed42f349d48",
+    "bytes": 108163
+  },
+  {
+    "sourcePath": "public/media/fuente-alamo.jpeg",
+    "destination": "public/media/fuente-alamo.jpeg",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "a4075cedeeeea90a1caa0a4e7b5945aadd635c177b13d63162d6be1f112e3080",
+    "bytes": 83915
+  },
+  {
+    "sourcePath": "public/media/hero-operativas-red-de-valor-clean-1024x792.png",
+    "destination": "public/media/hero-operativas-red-de-valor-clean-1024x792.png",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "86566339a97e192e1f771d85aad7791ac34470f4c47e3710231ec711e0759f77",
+    "bytes": 1583551
+  },
+  {
+    "sourcePath": "public/media/historia-adn-comunidad.jpg",
+    "destination": "public/media/historia-adn-comunidad.jpg",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "355f0a72711a6f9d3d01fc45e325997aeac02cd156ea285108e391e1eae24b58",
+    "bytes": 926328
+  },
+  {
+    "sourcePath": "public/media/historia-comunero-8.png",
+    "destination": "public/media/historia-comunero-8.png",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "9b9b27a33856a762d9dc2f28957c3e5265461cb8075a47723d754d259ecc3f86",
+    "bytes": 1329141
+  },
+  {
+    "sourcePath": "public/media/historia-youtube-reqBqJBFQIk.jpg",
+    "destination": "public/media/historia-youtube-reqBqJBFQIk.jpg",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "5b131ca14aa96311d3432b0062c7443d3b0e6346ec279bd376a75f0a76bcd5d7",
+    "bytes": 195
+  },
+  {
+    "sourcePath": "public/media/home-hero-option-1-spain-connected-1024x792.png",
+    "destination": "public/media/home-hero-option-1-spain-connected-1024x792.png",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "6656d09452a4bcab46e44b9aea319c38d5b17140b6e2e2052fac976d5a392744",
+    "bytes": 1312031
+  },
+  {
+    "sourcePath": "public/media/home-hero-option-3-exact-1024x792.png",
+    "destination": "public/media/home-hero-option-3-exact-1024x792.png",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "fecda26bcae6273caabf1110f191c99d688d98afdd8631885fc9cfe2431e182f",
+    "bytes": 1359605
+  },
+  {
+    "sourcePath": "public/media/ibeas-de-juarros.jpeg",
+    "destination": "public/media/ibeas-de-juarros.jpeg",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "aee17c25c062f64ac8d7ccded5f58652a39494f56f968576aca1b9dab2650206",
+    "bytes": 94260
+  },
+  {
+    "sourcePath": "public/media/kike-saenz.png",
+    "destination": "public/media/kike-saenz.png",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "b6e278011d53d01907adf17fb97069e24e493d4a6a1396f14b3704706b1809d6",
+    "bytes": 488915
+  },
+  {
+    "sourcePath": "public/media/las-vegas-mazarron.jpg",
+    "destination": "public/media/las-vegas-mazarron.jpg",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "20a3862cfbab2ef954cee4d13864e7dc14be077c4393364d4f2facfaf44b8bb9",
+    "bytes": 207557
+  },
+  {
+    "sourcePath": "public/media/liguerzana.jpg",
+    "destination": "public/media/liguerzana.jpg",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "4153e3459273af0fd5c9d3d310b6ea9d68650199f81d8b820c961e0df72640de",
+    "bytes": 855437
+  },
+  {
+    "sourcePath": "public/media/manganafer-hero-1024x792.png",
+    "destination": "public/media/manganafer-hero-1024x792.png",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "55569b2e22c4d8c986433775e37d65eee00d373153aa19e40db2fa5088e21633",
+    "bytes": 1377796
+  },
+  {
+    "sourcePath": "public/media/merida.webp",
+    "destination": "public/media/merida.webp",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "3575a7048d9f5bef49a21fab8ce352ae6f3c260e57e2144a6205a28e8c771bdf",
+    "bytes": 136468
+  },
+  {
+    "sourcePath": "public/media/nuevo-baztan.jpeg",
+    "destination": "public/media/nuevo-baztan.jpeg",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "3be6ace18a0ca7f3ab2b14017a1bb8445bff84a667ad63df586de6acd0b89541",
+    "bytes": 291763
+  },
+  {
+    "sourcePath": "public/media/premio-goparity.jpg",
+    "destination": "public/media/premio-goparity.jpg",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "e1a9b61497db476fa6f8d78cfd179ac462d817b4ea5735cce20da35479c6560d",
+    "bytes": 4515606
+  },
+  {
+    "sourcePath": "public/media/puebla-del-principe.jpg",
+    "destination": "public/media/puebla-del-principe.jpg",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "c583e9d8b99cfa27b7bdee6ecb16555809f8a8954180ef9c0d85791abdd821d5",
+    "bytes": 1675548
+  },
+  {
+    "sourcePath": "public/media/radio-cyl.jpg",
+    "destination": "public/media/radio-cyl.jpg",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "7e4b3fd218d095616163bc39edcbe93dda076f960c49d44e0198eb2a05d90342",
+    "bytes": 12053
+  },
+  {
+    "sourcePath": "public/media/san-adrian-de-juarros.jpg",
+    "destination": "public/media/san-adrian-de-juarros.jpg",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "2757e3c15215720ca62f03e12c42c3de1067a8d94b03d867e2bcca96fec987d7",
+    "bytes": 135911
+  },
+  {
+    "sourcePath": "public/media/santa-cruz-de-paniagua.jpg",
+    "destination": "public/media/santa-cruz-de-paniagua.jpg",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "6945f3a29faf6de4ae2ab17e4f0a331c458426e8b689b1aa45d73b8a9debf329",
+    "bytes": 81859
+  },
+  {
+    "sourcePath": "public/media/sepulveda.webp",
+    "destination": "public/media/sepulveda.webp",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "3575a7048d9f5bef49a21fab8ce352ae6f3c260e57e2144a6205a28e8c771bdf",
+    "bytes": 136468
+  },
+  {
+    "sourcePath": "public/media/solax-x1-ies.png",
+    "destination": "public/media/solax-x1-ies.png",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "ee95ee778d7fca2663d1f429c8e903a340e653ac954f52b0e436b6ee116501a6",
+    "bytes": 47710
+  },
+  {
+    "sourcePath": "public/media/tomas-bensadon.png",
+    "destination": "public/media/tomas-bensadon.png",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "6a54281b980bb0651461b82a5d9077dbc5e6b43b9a8d2d4e669a9f06fd6eef9a",
+    "bytes": 80657
+  },
+  {
+    "sourcePath": "public/media/torrontera.jpg",
+    "destination": "public/media/torrontera.jpg",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "b7e80d78faaa58b7fba2e4534863b8607d874589d011c736dfa9ad4aeef86037",
+    "bytes": 98222
+  },
+  {
+    "sourcePath": "public/media/villalbilla-gregorio-canella-cubierta.jpg",
+    "destination": "public/media/villalbilla-gregorio-canella-cubierta.jpg",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "aadba2787e43e03c08a1839e15b7514f3f490fd75fe7ccc1cf031d9ae6d9d3fa",
+    "bytes": 379305
+  },
+  {
+    "sourcePath": "public/media/villalbilla.jpg",
+    "destination": "public/media/villalbilla.jpg",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "c88268a6f194291f382e88d49705064d9bc828c12e5171fab9521fc5f97e33de",
+    "bytes": 95921
+  },
+  {
+    "sourcePath": "public/media/villaverde-getafe.jpg",
+    "destination": "public/media/villaverde-getafe.jpg",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "1ea32ce520235af0eb247f3ccf991ef9bc21bc63cc85600b5f0e8da54b1039fc",
+    "bytes": 102841
+  },
+  {
+    "sourcePath": "public/planta-fotovoltaica-proximidad.png",
+    "destination": "public/planta-fotovoltaica-proximidad.png",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "e23950c319deaa1d1ea84d19dc8e1d15556b966ab00f689eccbec1dd984b7af0",
+    "bytes": 1467566
+  },
+  {
+    "sourcePath": "public/window.svg",
+    "destination": "public/window.svg",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "644768c4aaeb4767bce293344eeb0c125fb804a94d801440424072202d85e3a1",
+    "bytes": 385
+  },
+  {
+    "sourcePath": "app/blog-data.ts",
+    "destination": "src/content/blog-data.ts",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "adf588b60a98f0d32fcfc34ffc8ca33a94f7d09e9de1fd722a7a3eff608c57cb",
+    "bytes": 28304
+  },
+  {
+    "sourcePath": "app/community-data.ts",
+    "destination": "src/content/community-data.ts",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "c61d327b5c8f336cbada97146afee6cfe08fc73e75cb4507fbf4655dc2fe2468",
+    "bytes": 52972
+  },
+  {
+    "sourcePath": "app/events-data.ts",
+    "destination": "src/content/events-data.ts",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "36ee27c5f39229dd546949262d4d9609834129e880ee8e49b58ecd09309386aa",
+    "bytes": 3601
+  },
+  {
+    "sourcePath": "app/guide-content.md",
+    "destination": "src/content/guide-content.md",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "21bc7b3087231dff5dc6ca5521404fba042ebd8987952d3ee35f50f84b2c5aef",
+    "bytes": 87516
+  },
+  {
+    "sourcePath": "app/legal-content.ts",
+    "destination": "src/content/legal-content.ts",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "9072478d561cb64278e1a45fbdd5608eb44bd661d0c6a00a5053120b2d65a7d7",
+    "bytes": 56478
+  },
+  {
+    "sourcePath": "app/socios/partner-data.ts",
+    "destination": "src/content/partner-data.ts",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "8c7e0b4f1bb20cea3c5e92a64fab96433fd5ddfedcbf6257ef79028755f75de2",
+    "bytes": 9305
+  },
+  {
+    "sourcePath": "app/remote-project-data.ts",
+    "destination": "src/content/remote-project-data.ts",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "3e0887c124f4d84bc453c8d1d438bda79669d8f7805cb782c54db851af7c1d53",
+    "bytes": 11429
+  },
+  {
+    "sourcePath": "app/trust-data.ts",
+    "destination": "src/content/trust-data.ts",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "1f71189a0a442d61dfe36bd7ccd4bee99de24c62bdbf4f742a7bcbd1e8a3a399",
+    "bytes": 4253
+  },
+  {
     "sourcePath": "app/legacy-routes.ts",
     "destination": "src/lib/routing/legacy.ts",
     "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
     "sha256": "d5daefb7774b8f0c6ddfa81fd29138ebb073ebb49e0715a6b311c052d292cff2",
     "bytes": 19895
+  },
+  {
+    "sourcePath": "app/globals.css",
+    "destination": "src/styles/reference.css",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "3a3e6c96604ba3d635cc8dbcb2eaa0639f261f03962da6e88a4c42c58f3e05c8",
+    "bytes": 485081
   }
 ]

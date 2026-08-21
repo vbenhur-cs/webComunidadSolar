@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 364 64" role="img" aria-labelledby="title">
+  <title id="title">Comunidad Solar</title>
+  <g transform="translate(31 32)" fill="none" stroke="#f5b91f" stroke-linecap="round" stroke-width="5">
+    <circle r="5.5" fill="#f5b91f" stroke="none"/>
+    <path d="M0-28v12M0 16v12M-28 0h12M16 0h12"/>
+    <path d="m-20-20 8.5 8.5M11.5 11.5 20 20M20-20l-8.5 8.5M-11.5 11.5-20 20"/>
+    <path d="m-10.7-25.8 4.6 11.1M6.1 14.7l4.6 11.1M25.8-10.7l-11.1 4.6M-14.7 6.1l-11.1 4.6"/>
+    <path d="m10.7-25.8-4.6 11.1M-6.1 14.7l-4.6 11.1M25.8 10.7l-11.1-4.6M-14.7-6.1l-11.1-4.6"/>
+  </g>
+  <text x="70" y="41" fill="#082e25" font-family="Inter, Arial, sans-serif" font-size="26" font-weight="850" letter-spacing="-.7">COMUNIDAD SOLAR</text>
+</svg>
