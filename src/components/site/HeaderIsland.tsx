@@ -190,7 +190,7 @@ export function HeaderIsland({ page }: HeaderIslandProps) {
               <span aria-hidden="true" />
               Soy comunero
             </a>
-            <a className="header-cta" href="/comunidades-energeticas#cobertura">
+            <a href="/comunidades-energeticas#cobertura" className="header-cta">
               Comprueba tu cobertura <span aria-hidden="true">→</span>
             </a>
           </div>

@@ -1,0 +1,492 @@
+---
+import { CoverageFinder } from "../../islands/CoverageFinder";
+import CustomerProof from "../../site/CustomerProof.astro";
+import HumanHelp from "../../site/HumanHelp.astro";
+import Pill from "../../site/Pill.astro";
+import PressTrustBand from "../../site/PressTrustBand.astro";
+import SectionHeading from "../../site/SectionHeading.astro";
+import TrustBand from "../../site/TrustBand.astro";
+import { blogPosts, type BlogPost } from "../../../content/blog-data";
+import HomeHero from "./HomeHero.astro";
+
+const homeSolutions = [
+  {
+    title: "Instalación fotovoltaica",
+    copy: "Diseñamos tu instalación según tu consumo, tu tejado y cómo utilizas la energía.",
+    href: "/autoconsumo-en-mi-tejado",
+    number: "01",
+  },
+  {
+    title: "Baterías",
+    copy: "Instala una batería doméstica con o sin paneles y añade respaldo si lo necesitas.",
+    href: "/baterias",
+    number: "02",
+  },
+  {
+    title: "Aerotermia",
+    copy: "Con Coolfy, nuestro partner oficial: calefacción, refrigeración y agua caliente.",
+    href: "/aerotermia",
+    number: "03",
+  },
+];
+
+const recentPosts: BlogPost[] = blogPosts.slice(0, 3);
+---
+
+<main>
+  <HomeHero />
+
+  <TrustBand />
+
+  <section class="coverage-section coverage-section-home" id="cobertura">
+    <div class="shell">
+      <CoverageFinder compact />
+    </div>
+  </section>
+
+  <section class="market-section section">
+    <div class="shell market-grid">
+      <SectionHeading
+        eyebrow="Una evolución necesaria"
+        title="El mercado ha cambiado. Nosotros también."
+        copy="La energía solar de mediodía vale menos y transportar electricidad cuesta más. Por eso estamos acelerando un modelo que produce cerca, reduce costes de red e incorpora almacenamiento."
+      />
+      <div class="market-note">
+        <span class="note-index">2026</span>
+        <p>
+          No abandonamos lo que nos trajo hasta aquí. Lo mejoramos para seguir
+          cumpliendo la misma misión en un mercado mucho más difícil.
+        </p>
+        <a href="/nosotros#nuestro-plan">
+          Ver cómo evoluciona nuestro plan <span aria-hidden="true">↗</span>
+        </a>
+      </div>
+    </div>
+    <div class="shell">
+      <figure class="evolution-visual">
+        <img
+          src="/comunidad-solar-evolucion.png"
+          alt="Un parque solar remoto evoluciona hacia una comunidad energética próxima a las viviendas y conectada a almacenamiento"
+        />
+        <figcaption class="evolution-legend">
+          <div>
+            <span>01 · Lo que nos trajo hasta aquí</span>
+            <strong>Autoconsumo remoto</strong>
+          </div>
+          <div>
+            <span>02 · La gran evolución</span>
+            <strong>Energía de proximidad</strong>
+          </div>
+          <div>
+            <span>03 · Aprovecharla mejor</span>
+            <strong>Almacenamiento</strong>
+          </div>
+        </figcaption>
+        <div class="evolution-message">
+          <span>MISMA MISIÓN</span>
+          <strong>Más cerca. Más útil. Más independiente.</strong>
+        </div>
+      </figure>
+    </div>
+  </section>
+
+  <section class="section solutions-section">
+    <div class="shell">
+      <SectionHeading
+        eyebrow="Elige cómo participar"
+        title="Tres caminos. Una misma misión."
+        copy="Tu situación, tu ubicación y si quieres invertir o no determinan qué solución encaja mejor contigo."
+        align="center"
+      />
+      <div class="product-grid">
+        <article class="product-card product-green featured">
+          <div class="product-topline">
+            <Pill tone="green">Comunidad energética</Pill>
+            <span class="recommended">La gran apuesta</span>
+          </div>
+          <h3>Encuentra energía solar cerca de ti.</h3>
+          <p>
+            Comprueba si una comunidad cercana puede compartir energía contigo y
+            elige después si prefieres comprar o alquilar.
+          </p>
+          <ul>
+            <li><span aria-hidden="true">✓</span>Compra o alquiler</li>
+            <li><span aria-hidden="true">✓</span>Hasta 5 km</li>
+            <li><span aria-hidden="true">✓</span>Sin obras en casa</li>
+          </ul>
+          <a class="card-link" href="#cobertura">
+            Buscar mi comunidad <span aria-hidden="true">↗</span>
+          </a>
+        </article>
+        <article class="product-card product-blue">
+          <div class="product-topline">
+            <Pill tone="blue">Autoconsumo remoto</Pill>
+          </div>
+          <h3>Tus paneles solares, a distancia.</h3>
+          <p>
+            Elige tus paneles en una planta solar real y aprovecha su energía
+            sin instalarlos en tu tejado.
+          </p>
+          <ul>
+            <li><span aria-hidden="true">✓</span>Cobertura nacional</li>
+            <li><span aria-hidden="true">✓</span>Sin obras en casa</li>
+            <li><span aria-hidden="true">✓</span>Producción renovable</li>
+          </ul>
+          <a class="card-link" href="/autoconsumo-remoto">
+            Descubrir mis paneles a distancia <span aria-hidden="true">↗</span>
+          </a>
+        </article>
+        <article class="product-card product-yellow">
+          <div class="product-topline">
+            <Pill tone="yellow">Instalación en tu tejado</Pill>
+          </div>
+          <h3>Produce tu propia energía en casa.</h3>
+          <p>
+            Diseñamos tu instalación fotovoltaica para aprovechar tu tejado y
+            estudiar desde el principio si una batería mejora el resultado.
+          </p>
+          <ul>
+            <li><span aria-hidden="true">✓</span>Estudio personalizado</li>
+            <li><span aria-hidden="true">✓</span>Instalación llave en mano</li>
+            <li><span aria-hidden="true">✓</span>Batería opcional</li>
+          </ul>
+          <a class="card-link" href="/autoconsumo-en-mi-tejado">
+            Solicitar mi estudio <span aria-hidden="true">↗</span>
+          </a>
+        </article>
+      </div>
+      <p class="claims-note">
+        El buscador parte siempre de tu dirección. Si no tienes cobertura en una
+        comunidad cercana, te ayuda a continuar con la alternativa que mejor
+        encaja contigo.
+      </p>
+    </div>
+  </section>
+
+  <PressTrustBand />
+
+  <HumanHelp />
+
+  <CustomerProof />
+
+  <section class="storage-band">
+    <div class="shell storage-grid">
+      <div class="storage-copy">
+        <Pill tone="yellow">La siguiente pieza</Pill>
+        <h2>El sol no tiene que terminar cuando se pone.</h2>
+        <p>
+          Incorporamos baterías en hogares y parques para guardar la energía
+          solar de las horas centrales y utilizarla cuando más se necesita y más
+          valor tiene.
+        </p>
+        <a href="/nosotros#almacenamiento">
+          Por qué el almacenamiento lo cambia todo <span aria-hidden="true"
+            >↗</span
+          >
+        </a>
+      </div>
+      <div class="storage-visual" aria-hidden="true">
+        <div class="storage-sun"></div>
+        <div class="energy-line line-one"></div>
+        <div class="energy-line line-two"></div>
+        <div class="battery-large">
+          <span class="battery-fill"></span>
+          <i></i>
+        </div>
+        <p>ENERGÍA SOLAR<br />CUANDO LA NECESITAS</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section asset-opportunity-section">
+    <div class="shell">
+      <div class="asset-opportunity-heading">
+        <SectionHeading
+          eyebrow="Para propietarios y productores"
+          title="¿Tienes una cubierta o una planta? Ponla a trabajar con nosotros."
+          copy="Las comunidades energéticas también crecen sumando activos de terceros. Tú aportas el espacio o la generación; nosotros construimos la comunidad, encontramos a los consumidores y gestionamos toda la parte energética y comercial."
+        />
+        <a class="button button-secondary" href="/rentabiliza-tu-activo">
+          <span>Rentabiliza tu activo</span>
+          <span aria-hidden="true">↗</span>
+        </a>
+      </div>
+      <div class="asset-path-grid">
+        <a
+          class="asset-path-card asset-roof"
+          href="/rentabiliza-tu-activo#cubierta"
+        >
+          <span class="asset-path-index">01 · CUBIERTA DISPONIBLE</span>
+          <div>
+            <h3>Cede tu tejado. Nosotros creamos la comunidad.</h3>
+            <p>
+              Si tienes una nave o una gran cubierta bien situada, desarrollamos
+              el proyecto y tú recibes una remuneración por convertir ese
+              espacio en energía para tu entorno.
+            </p>
+          </div>
+          <strong>
+            Quiero rentabilizar mi cubierta <span aria-hidden="true">↗</span>
+          </strong>
+        </a>
+        <a
+          class="asset-path-card asset-plant"
+          href="/comunidades-energeticas-operativas"
+        >
+          <span class="asset-path-index">02 · PLANTA EN FUNCIONAMIENTO</span>
+          <div>
+            <h3>
+              Tú generas la energía. Nosotros encontramos cómo venderla mejor.
+            </h3>
+            <p>
+              Incorporamos tu planta a nuestro modelo de comunidades energéticas
+              y nos ocupamos de la comercialización, los consumidores, el
+              reparto y la gestión continuada.
+            </p>
+          </div>
+          <strong>
+            Quiero que gestionéis mi planta <span aria-hidden="true">↗</span>
+          </strong>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <section class="section home-services-section">
+    <div class="shell">
+      <div class="home-services-heading">
+        <SectionHeading
+          eyebrow="También en tu hogar"
+          title="Todo lo que necesitas para producir y aprovechar mejor tu energía."
+          copy="Nuestra apuesta estratégica está en la energía compartida y de proximidad. Y seguimos acompañándote en casa con soluciones que completan tu camino hacia la independencia energética."
+        />
+        <a class="text-link" href="/autoconsumo-en-mi-tejado">
+          Ver todas las soluciones <span aria-hidden="true">↗</span>
+        </a>
+      </div>
+      <div class="home-services-grid">
+        {
+          homeSolutions.map((item) => (
+            <a class="home-service-card" href={item.href}>
+              <span>{item.number}</span>
+              <div>
+                <h3>{item.title}</h3>
+                <p>{item.copy}</p>
+              </div>
+              <span aria-hidden="true">↗</span>
+            </a>
+          ))
+        }
+      </div>
+      <div class="support-services">
+        <p>Y para que todo funcione:</p>
+        <a href="/mantenimiento">Mantenimiento</a>
+        <a href="/comercializadora-y-tarifas">Comercializadora</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="section proof-section">
+    <div class="shell proof-grid">
+      <div class="proof-image">
+        <img
+          src="/media/villalbilla-gregorio-canella-cubierta.jpg"
+          alt="Paneles solares en la cubierta del colegio Gregorio Canella de Villalbilla"
+        />
+        <Pill tone="green">Villalbilla · Madrid</Pill>
+      </div>
+      <div class="proof-copy">
+        <p class="eyebrow">Ya está pasando</p>
+        <h2>
+          La energía de proximidad ya se refleja en las primeras facturas.
+        </h2>
+        <p>
+          La planta de Villalbilla está conectada a la red desde 2025. Desde
+          julio de 2026, sus comuneros están empezando a recibir las primeras
+          facturas en las que aparece la energía de la comunidad. Es la primera
+          comunidad energética de proximidad de Comunidad Solar que alcanza este
+          hito.
+        </p>
+        <a
+          class="button button-secondary"
+          href="/comunidades-energeticas/villalbilla"
+        >
+          <span>Ver el caso de Villalbilla</span>
+          <span aria-hidden="true">↗</span>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <section class="section evidence-hub" id="pruebas">
+    <div class="shell">
+      <SectionHeading
+        eyebrow="Pruebas que puedes abrir"
+        title="Proyectos que avanzan. Historias con fecha. Medios con enlace."
+        copy="La actividad de Comunidad Solar no se resume en un eslogan: cada pieza lleva a su historia, su fuente o su publicación original."
+      />
+      <div class="evidence-hub-grid">
+        <div class="evidence-stories">
+          <div class="evidence-column-heading">
+            <strong>Historias recientes del archivo</strong>
+            <a href="/blog">
+              Ir al Blog <span aria-hidden="true">↗</span>
+            </a>
+          </div>
+          {
+            recentPosts.map((post) => (
+              <a class="evidence-story" href={`/blog/${post.slug}`}>
+                <img src={post.image} alt={post.imageAlt} loading="lazy" />
+                <div>
+                  <span>
+                    {post.category}
+                    <Fragment set:html="<!-- -->" /> ·{" "}
+                    <Fragment set:html="<!-- -->" />
+                    {post.displayDate}
+                  </span>
+                  <h3>{post.title}</h3>
+                  <small>{post.location ?? "Comunidad Solar"}</small>
+                </div>
+                <span aria-hidden="true">↗</span>
+              </a>
+            ))
+          }
+        </div>
+        <aside class="press-proof-panel">
+          <div>
+            <span>Archivo de medios</span>
+            <h3>Así se ha contado Comunidad Solar.</h3>
+            <p>
+              Recuperamos publicaciones originales de 2023 y 2024 como parte de
+              nuestra historia. Sus cifras y condiciones pertenecen a aquella
+              etapa; salir en un medio no implica que recomiende el producto.
+            </p>
+          </div>
+          <div class="press-proof-list">
+            <a
+              href="https://www.antena3.com/noticias/economia/energia-solar-distancia-autoconsumo-remoto-reduce-facturas-70_2023081364d951a09598e30001bbef7f.html"
+              target="_blank"
+              rel="noreferrer"
+            >
+              <span>Antena 3</span>
+              <strong
+                >Energía solar a distancia: así funciona el autoconsumo remoto</strong
+              >
+              <small>Archivo · Autoconsumo remoto · Agosto 2023</small>
+              <span aria-hidden="true">↗</span>
+            </a>
+            <a
+              href="https://www.lasexta.com/noticias/sociedad/energia-solar-distancia-asi-funciona-autoconsumo-remoto-que-ayuda-reducir-facturas-70_2023072364bd28dc1f11910001040549.html"
+              target="_blank"
+              rel="noreferrer"
+            >
+              <span>laSexta</span>
+              <strong
+                >Autoconsumo remoto para quienes no pueden instalar en casa</strong
+              >
+              <small>Archivo · Autoconsumo remoto · Julio 2023</small>
+              <span aria-hidden="true">↗</span>
+            </a>
+            <a
+              href="https://cadenaser.com/cmadrid/2023/04/20/generar-energia-limpia-de-tu-propiedad-a-cientos-de-kilometros-el-autoconsumo-remoto-se-abre-camino-entre-las-renovables-cadena-ser/"
+              target="_blank"
+              rel="noreferrer"
+            >
+              <span>Cadena SER</span>
+              <strong
+                >Generar energía limpia de tu propiedad a cientos de kilómetros</strong
+              >
+              <small>Archivo · Autoconsumo remoto · Abril 2023</small>
+              <span aria-hidden="true">↗</span>
+            </a>
+            <a
+              href="https://www.xataka.com/energia/autoconsumo-solar-remoto-cuando-no-puedes-instalar-tu-tejado-paneles-pide-esa-energia-a-distancia"
+              target="_blank"
+              rel="noreferrer"
+            >
+              <span>Xataka</span>
+              <strong
+                >Cuando no puedes instalar paneles en tu tejado, los pides a
+                distancia</strong
+              >
+              <small>Archivo · Autoconsumo remoto · Mayo 2023</small>
+              <span aria-hidden="true">↗</span>
+            </a>
+            <a
+              href="https://www.elespanol.com/invertia/empresas/energia/20230513/boom-ofertas-autoconsumo-constelacion-solar-producir-remoto/763173983_0.html"
+              target="_blank"
+              rel="noreferrer"
+            >
+              <span>El Español</span>
+              <strong
+                >El auge del autoconsumo y los nuevos modelos de producción
+                remota</strong
+              >
+              <small>Archivo · Autoconsumo remoto · Mayo 2023</small>
+              <span aria-hidden="true">↗</span>
+            </a>
+            <a
+              href="https://www.energias-renovables.com/entrevistas/cuando-descubri-el-potencial-de-la-20240527-1"
+              target="_blank"
+              rel="noreferrer"
+            >
+              <span>Energías Renovables</span>
+              <strong
+                >El origen de Comunidad Solar y el activismo energético</strong
+              >
+              <small>Archivo · Entrevista · Mayo 2024</small>
+              <span aria-hidden="true">↗</span>
+            </a>
+            <a
+              href="https://www.larazon.es/economia/autoconsumo-remoto-energia-verde-ahorrar-1000-euros-ano-pisos-locales_20230510645b839ef921370001ab30ba.html"
+              target="_blank"
+              rel="noreferrer"
+            >
+              <span>La Razón</span>
+              <strong
+                >Autoconsumo remoto para hogares y negocios sin tejado propio</strong
+              >
+              <small>Archivo · Autoconsumo remoto · Mayo 2023</small>
+              <span aria-hidden="true">↗</span>
+            </a>
+          </div>
+        </aside>
+      </div>
+    </div>
+  </section>
+
+  <section class="independent-section">
+    <div class="shell independent-grid">
+      <div>
+        <Pill tone="dark">Nuestra diferencia</Pill>
+        <h2>No pertenecemos a ningún gran grupo eléctrico.</h2>
+      </div>
+      <div>
+        <p>
+          Somos una compañía energética independiente. Eso nos permite diseñar
+          cada paso pensando en nuestra comunidad y seguir peleando por un
+          modelo más justo, más local y más transparente.
+        </p>
+        <a href="/nosotros">
+          Conoce quiénes somos <span aria-hidden="true">↗</span>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <section class="final-cta">
+    <div class="shell final-cta-inner">
+      <div>
+        <p class="eyebrow">Tu siguiente paso</p>
+        <h2>¿Hay una comunidad energética cerca de ti?</h2>
+      </div>
+      <a
+        class="button button-primary"
+        href="/comunidades-energeticas#cobertura"
+      >
+        <span>Comprobar mi cobertura</span>
+        <span aria-hidden="true">↗</span>
+      </a>
+    </div>
+  </section>
+</main>

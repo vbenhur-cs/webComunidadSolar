@@ -1,0 +1,80 @@
+---
+import {
+  communityVoices,
+  googleReviewHighlights,
+  googleReviewsUrl,
+} from "../../content/trust-data";
+import SectionHeading from "./SectionHeading.astro";
+---
+
+<section class="section customer-proof-section" id="opiniones">
+  <div class="shell">
+    <div class="customer-proof-heading">
+      <SectionHeading
+        eyebrow="Opiniones públicas seleccionadas"
+        title="La confianza se construye cuando las cosas pasan."
+        copy="Seleccionamos opiniones recientes sobre la atención y el acompañamiento. Cada producto tiene condiciones distintas; estas reseñas hablan de la experiencia con el equipo, no prometen un ahorro concreto."
+      />
+      <a
+        class="google-score-card"
+        href={googleReviewsUrl}
+        target="_blank"
+        rel="noreferrer"
+      >
+        <span aria-hidden="true">4,8 ★</span>
+        <strong>4,8 / 5</strong>
+        <small>Más de 400 reseñas en Google</small>
+        <i>Ver todas las opiniones →</i>
+      </a>
+    </div>
+
+    <div class="review-proof-grid">
+      {
+        googleReviewHighlights.map((review) => (
+          <blockquote>
+            <span class="review-context">{review.context}</span>
+            <p>
+              “<Fragment set:html="<!-- -->" />
+              {review.quote}
+              <Fragment set:html="<!-- -->" />”
+            </p>
+            <footer>
+              <strong>{review.name}</strong>
+              <time>{review.date}</time>
+            </footer>
+          </blockquote>
+        ))
+      }
+    </div>
+
+    <div class="voice-proof">
+      <div class="voice-proof-copy">
+        <span>También en primera persona</span>
+        <h3>Escucha a quienes ya forman parte.</h3>
+        <p>
+          Cuatro conversaciones con comuneros, conservadas dentro del archivo
+          vivo de la comunidad.
+        </p>
+        <a href="/blog#voces">
+          Ver todos los testimonios <span aria-hidden="true">↗</span>
+        </a>
+      </div>
+      <div class="voice-proof-grid">
+        {
+          communityVoices.map((voice) => (
+            <a
+              href={voice.href}
+              target="_blank"
+              rel="noreferrer"
+              aria-label={`Ver el testimonio de ${voice.names}`}
+            >
+              <img src={voice.image} alt="" loading="lazy" />
+              <span aria-hidden="true">▶</span>
+              <strong>{voice.names}</strong>
+            </a>
+          ))
+        }
+      </div>
+    </div>
+  </div>
+</section>

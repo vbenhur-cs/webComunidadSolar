@@ -1,0 +1,102 @@
+---
+import { pressMentions } from "../../content/trust-data";
+
+const leadMention =
+  pressMentions.find((mention) => mention.outlet === "Antena 3") ??
+  pressMentions[0];
+const secondaryMentions = pressMentions.filter((mention) =>
+  ["Cadena SER", "Xataka"].includes(mention.outlet),
+);
+const leadDate = leadMention.date.split(" · ").at(-1);
+---
+
+<section
+  class="press-trust-band"
+  id="medios"
+  aria-labelledby="press-trust-title"
+>
+  <div class="shell press-trust-shell">
+    <div class="press-trust-copy">
+      <p class="eyebrow">Han hablado de nosotros</p>
+      <h2 id="press-trust-title">Comunidad Solar en los medios.</h2>
+      <p>
+        Televisión, radio y prensa han contado cómo abrimos el autoconsumo a
+        quienes no podían instalar paneles en su propio tejado.
+      </p>
+      <a href="#pruebas">
+        Ver el archivo detallado <span aria-hidden="true">↗</span>
+      </a>
+    </div>
+
+    <div class="press-trust-showcase">
+      <a
+        class="press-trust-lead"
+        href={leadMention.href}
+        target="_blank"
+        rel="noreferrer"
+        aria-label="Ver el reportaje de Comunidad Solar en Antena 3"
+      >
+        <img
+          src="/media/antena3-noticias-autoconsumo-remoto-2023.jpg"
+          alt="Antena 3 Noticias presenta un reportaje sobre energía solar"
+          loading="lazy"
+        />
+        <span class="press-trust-lead-shade" aria-hidden="true"></span>
+        <span class="press-trust-lead-meta"
+          >{leadMention.medium}<Fragment set:html="<!-- -->" /> · <Fragment
+            set:html="<!-- -->"
+          />{leadDate}</span
+        >
+        <span class="press-trust-lead-copy">
+          <strong>{leadMention.outlet}</strong>
+          <span>{leadMention.title}</span>
+        </span>
+        <span class="press-trust-lead-cta">
+          Ver reportaje <span aria-hidden="true">↗</span>
+        </span>
+      </a>
+
+      <div class="press-trust-secondary">
+        {
+          secondaryMentions.map((mention) => (
+            <a
+              class="press-trust-secondary-card"
+              href={mention.href}
+              target="_blank"
+              rel="noreferrer"
+              aria-label={`Ver la aparición de Comunidad Solar en ${mention.outlet}`}
+            >
+              <small>
+                {mention.medium}
+                <Fragment set:html="<!-- -->" /> ·{" "}
+                <Fragment set:html="<!-- -->" />
+                {mention.date.slice(-4)}
+              </small>
+              <strong>{mention.outlet}</strong>
+              <p>{mention.title}</p>
+              <span>
+                Abrir publicación <span aria-hidden="true">↗</span>
+              </span>
+            </a>
+          ))
+        }
+      </div>
+
+      <nav
+        class="press-trust-index"
+        aria-label="Archivo de apariciones de Comunidad Solar en medios"
+      >
+        <span>Archivo completo</span>
+        <div>
+          {
+            pressMentions.map((mention) => (
+              <a href={mention.href} target="_blank" rel="noreferrer">
+                {mention.outlet}
+              </a>
+            ))
+          }
+        </div>
+      </nav>
+    </div>
+  </div>
+</section>

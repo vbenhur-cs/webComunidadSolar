@@ -40,3 +40,24 @@ test("emits the absolute author and icon metadata from the document layout", asy
     /<link rel="shortcut icon" href="https:\/\/comunidadsolar\.es\/comunidad-solar-logo\.svg">/,
   );
 });
+
+test("preserves React text-node delimiters in dynamic home metadata", async () => {
+  const html = await builtIndex();
+
+  for (const metadata of [
+    "Televisión<!-- --> · <!-- -->Agosto 2023",
+    "Radio<!-- --> · <!-- -->2023",
+    "Prensa<!-- --> · <!-- -->2023",
+    "Proyectos<!-- --> · <!-- -->12 enero 2026",
+    "Proyectos<!-- --> · <!-- -->23 diciembre 2025",
+    "Comunidad<!-- --> · <!-- -->12 diciembre 2025",
+    "“<!-- -->…se han preocupado por solucionarlo. Seguiremos confiando en ellos.<!-- -->”",
+    "“<!-- -->Me han guiado desde el principio… en un proceso largo que ellos han hecho fácil.<!-- -->”",
+    "“<!-- -->Su servicio de atención al cliente es realmente destacable.<!-- -->”",
+  ]) {
+    assert.ok(
+      html.includes(metadata),
+      `La frontera de texto React debe mantenerse: ${metadata}`,
+    );
+  }
+});

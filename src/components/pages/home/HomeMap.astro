@@ -1,0 +1,67 @@
+---
+import { communities } from "../../../content/community-data";
+
+const communityCountLabel = `${
+  communities.filter((community) => community.kind !== "network").length
+} comunidades`;
+---
+
+<div class="home-option1-map">
+  <svg
+    viewBox="0 0 760 500"
+    role="img"
+    aria-labelledby="home-option1-map-title home-option1-map-description"
+  >
+    <title id="home-option1-map-title">
+      Comunidad Solar conecta comunidades energéticas en España
+    </title>
+    <desc id="home-option1-map-description">
+      Mapa esquemático de España con varios puntos de la red de comunidades
+      energéticas de Comunidad Solar.
+    </desc>
+    <path
+      class="home-option1-map-mainland"
+      d="M88 122C106 94 139 79 171 92L215 77C264 65 312 78 346 72L405 90 457 83 501 105 558 108 600 132 628 165 613 198 634 232 606 260 591 304 557 327 522 361 471 375 425 397 373 388 323 410 270 403 218 386 176 351 147 314 157 282 139 245 150 211 128 186 101 171Z"
+    ></path>
+    <path
+      class="home-option1-map-portugal"
+      d="M104 171C125 181 142 191 150 211L139 245 157 282 147 314 161 333 147 350 126 331 116 297 121 260 111 225 119 196Z"
+    ></path>
+    <path
+      class="home-option1-map-island"
+      d="M661 213c15-9 31-7 40 4-4 12-18 18-36 15-8-5-9-12-4-19Z"></path>
+    <path
+      class="home-option1-map-island"
+      d="M712 196c10-5 22-3 29 5-5 8-17 11-29 7-4-4-4-8 0-12Z"></path>
+    <path
+      class="home-option1-map-island"
+      d="M638 247c8-7 20-6 27 2-2 9-12 14-23 11-6-3-7-8-4-13Z"></path>
+    <g class="home-option1-map-routes" aria-hidden="true">
+      <path d="M160 298C230 236 302 218 380 215"></path>
+      <path d="M380 215C439 170 500 157 557 171"></path>
+      <path d="M380 215C423 257 444 302 454 348"></path>
+      <path d="M380 215C351 173 337 139 330 108"></path>
+    </g>
+    <g class="home-option1-map-nodes" aria-hidden="true">
+      <circle cx="160" cy="298" r="7"></circle>
+      <circle cx="557" cy="171" r="7"></circle>
+      <circle cx="454" cy="348" r="7"></circle>
+      <circle cx="330" cy="108" r="7"></circle>
+      <circle class="home-option1-map-node-main" cx="380" cy="215" r="11"
+      ></circle>
+    </g>
+  </svg>
+  <a
+    class="home-option1-map-card"
+    href="/comunidades-energeticas#proyectos"
+    aria-label="Ver todas las comunidades energéticas de Comunidad Solar"
+  >
+    <span class="home-option1-map-dot" aria-hidden="true"></span>
+    <span>
+      <small>NUESTRA RED EN ESPAÑA</small>
+      <strong>{communityCountLabel}</strong>
+      <em>Ver ubicación, estado y ficha</em>
+    </span>
+    <span class="home-option1-map-arrow" aria-hidden="true">→</span>
+  </a>
+</div>

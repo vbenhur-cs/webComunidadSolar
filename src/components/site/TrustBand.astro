@@ -1,0 +1,59 @@
+---
+import { cnmcRegistryUrl, googleReviewsUrl } from "../../content/trust-data";
+
+interface Props {
+  compact?: boolean;
+}
+
+const { compact = false } = Astro.props;
+---
+
+<section
+  class={`trust-band ${compact ? "trust-band-compact" : ""}`}
+  aria-label="Datos verificados de Comunidad Solar"
+  id={compact ? undefined : "confianza"}
+>
+  <div class="shell trust-band-grid">
+    <a
+      class="trust-band-item trust-band-review"
+      href={googleReviewsUrl}
+      target="_blank"
+      rel="noreferrer"
+    >
+      <span class="trust-stars" aria-label="Puntuación media: 4,8 sobre 5">
+        4,8 ★
+      </span>
+      <strong>4,8 / 5</strong>
+      <small>Más de 400 reseñas en Google</small>
+      <i>Ver opiniones →</i>
+    </a>
+    <div class="trust-band-item">
+      <span class="trust-band-kicker">Una comunidad real</span>
+      <strong>+3.500</strong>
+      <small>personas y empresas ya forman parte de Comunidad Solar</small>
+    </div>
+    <div class="trust-band-item">
+      <span class="trust-band-kicker">Trayectoria</span>
+      <strong>Desde 2018</strong>
+      <small>construyendo independencia energética</small>
+    </div>
+    <a
+      class="trust-band-item trust-band-registry"
+      href={cnmcRegistryUrl}
+      target="_blank"
+      rel="noreferrer"
+    >
+      <span class="trust-band-kicker">Registro oficial</span>
+      <strong>R2-883</strong>
+      <small>comercializadora inscrita en la CNMC</small>
+      <i>Ver censo oficial →</i>
+    </a>
+  </div>
+  {
+    !compact && (
+      <p class="shell trust-band-verified">
+        Datos públicos verificados en julio de 2026.
+      </p>
+    )
+  }
+</section>

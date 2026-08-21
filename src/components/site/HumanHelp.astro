@@ -1,0 +1,157 @@
+---
+import Pill from "./Pill.astro";
+import SectionHeading from "./SectionHeading.astro";
+
+interface Props {
+  compact?: boolean;
+  context?: "general" | "commercializer";
+}
+
+const { compact = false, context = "general" } = Astro.props;
+const isCommercializer = context === "commercializer";
+const advisorBooking = "https://comunidadsolar.zohobookings.eu/";
+const whatsappSupport = "https://wa.me/34611195869";
+const helpCenter = "https://ayuda.comunidadsolar.es/portal/en-gb/home";
+const energyAdvisors = [
+  {
+    name: "Víctor Romero",
+    image: "/media/asesor-victor.jpg",
+  },
+  {
+    name: "Gema Hidalgo",
+    image: "/media/asesora-gema.png",
+  },
+  {
+    name: "Laura Varella",
+    image: "/media/asesora-laura.png",
+  },
+  {
+    name: "Irene Andrés",
+    image: "/media/asesora-irene.png",
+  },
+];
+---
+
+{
+  compact ? (
+    <section class="human-help-inline" id="asesores">
+      <div class="shell human-help-inline-grid">
+        <div
+          class="advisor-portraits advisor-portraits-compact"
+          aria-label="Asesores energéticos de Comunidad Solar"
+        >
+          {energyAdvisors.map((advisor) => (
+            <figure>
+              <img
+                src={advisor.image}
+                alt={`${advisor.name}, del equipo de asesores energéticos de Comunidad Solar`}
+                loading="lazy"
+              />
+            </figure>
+          ))}
+        </div>
+        <div>
+          <span>Personas reales, cuando las necesitas</span>
+          <h2>
+            {isCommercializer
+              ? "¿Quieres información sobre Megapark o ayuda con Megahome?"
+              : "¿No tienes claro qué opción encaja contigo?"}
+          </h2>
+          <p>
+            {isCommercializer
+              ? "Te explicamos cómo acceder a Remoto o Comunidad Energética y te ayudamos a validar tu email o código si quieres contratar Megahome."
+              : "Un asesor energético puede ayudarte a comprobar cobertura y comparar compra, alquiler o remoto con tu situación real."}
+          </p>
+        </div>
+        <div class="human-help-inline-actions">
+          <a class="button button-primary" href={advisorBooking}>
+            <span>
+              {isCommercializer
+                ? "Hablar con un asesor"
+                : "Reservar una llamada"}
+            </span>
+            <span aria-hidden="true">↗</span>
+          </a>
+          <a href="tel:+34900802812">O llámanos al 900 802 812</a>
+        </div>
+      </div>
+    </section>
+  ) : (
+    <section class="section human-help-section" id="personas">
+      <div class="shell">
+        <div class="human-help-heading">
+          <SectionHeading
+            eyebrow="Personas reales, de principio a fin"
+            title="Aquí te atienden personas que conocen tu energía."
+            copy="La tecnología hace el proceso más sencillo. Las personas te ayudan a decidir y siguen ahí cuando ya formas parte de la comunidad."
+          />
+          <a class="human-help-phone" href="tel:+34900802812">
+            <span>Atención telefónica</span>
+            <strong>900 802 812</strong>
+            <small>Lunes a viernes · 9:00–18:00</small>
+          </a>
+        </div>
+
+        <div class="human-help-grid">
+          <article class="advisor-help-card">
+            <div class="advisor-help-copy">
+              <div class="advisor-help-title">
+                <Pill tone="yellow">Estoy decidiendo</Pill>
+                <h3>Habla con un asesor energético.</h3>
+              </div>
+              <div class="advisor-help-explainer">
+                <p>
+                  Te ayudamos a comprobar cobertura y comparar las opciones sin
+                  empujarte a una que no encaje contigo.
+                </p>
+                <a href={advisorBooking}>
+                  Reservar una cita <span aria-hidden="true">↗</span>
+                </a>
+              </div>
+            </div>
+            <div
+              class="advisor-portraits"
+              aria-label="Asesores energéticos de Comunidad Solar"
+            >
+              {energyAdvisors.map((advisor) => (
+                <figure>
+                  <img
+                    src={advisor.image}
+                    alt={`${advisor.name}, del equipo de asesores energéticos de Comunidad Solar`}
+                    loading="eager"
+                  />
+                  <figcaption>
+                    <strong>{advisor.name}</strong>
+                    <span>Asesor energético</span>
+                  </figcaption>
+                </figure>
+              ))}
+            </div>
+          </article>
+
+          <aside class="community-support-card">
+            <div>
+              <Pill tone="green">Ya soy comunero</Pill>
+              <h3>Atención al Comunero sigue a tu lado.</h3>
+              <p>
+                Para dudas sobre tu proyecto, tu suministro, tu factura o una
+                incidencia, entra directamente en los canales de atención.
+              </p>
+            </div>
+            <div class="community-support-links">
+              <a href="/soy-comunero#atencion">
+                Entrar en Atención al Comunero <span aria-hidden="true">↗</span>
+              </a>
+              <a href={whatsappSupport}>
+                Escribir por WhatsApp <span aria-hidden="true">↗</span>
+              </a>
+              <a href={helpCenter}>
+                Ir al Centro de Ayuda <span aria-hidden="true">↗</span>
+              </a>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </section>
+  )
+}

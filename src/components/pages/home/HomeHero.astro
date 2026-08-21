@@ -1,0 +1,212 @@
+---
+import ButtonLink from "../../site/ButtonLink.astro";
+import HomeMap from "./HomeMap.astro";
+---
+
+<section class="hero hero-home hero-home-option1">
+  <div class="home-option1-stage">
+    <div class="home-option1-media">
+      <img
+        class="home-option1-image"
+        src="/media/home-hero-option-1-spain-connected-1024x792.png"
+        alt="Escena conceptual de un pueblo español conectado con producción solar y almacenamiento"
+        width="1024"
+        height="792"
+        fetchpriority="high"
+      />
+    </div>
+    <div class="home-option1-shade" aria-hidden="true"></div>
+    <svg
+      class="home-option1-territory-lines"
+      viewBox="0 0 1440 820"
+      preserveAspectRatio="none"
+      aria-hidden="true"
+    >
+      <path
+        class="home-option1-territory-halo"
+        d="M1260 758C1242 748 1228 735 1218 720"></path>
+      <path
+        class="home-option1-territory-halo home-option1-territory-feeder-halo"
+        d="M1218 720C1280 686 1325 636 1328 585C1329 539 1288 516 1224 500C1112 471 996 463 892 467C849 469 818 470 796 472"
+      ></path>
+      <path
+        class="home-option1-territory-halo home-option1-territory-feeder-halo"
+        d="M1218 720C1115 722 1011 713 906 698C805 684 712 663 648 623C606 597 592 566 612 535C636 499 704 484 796 472"
+      ></path>
+      <path
+        class="home-option1-territory-halo"
+        d="M796 472C772 452 758 432 752 412"></path>
+      <path
+        class="home-option1-territory-halo home-option1-territory-branch-halo"
+        d="M752 412C719 420 686 428 650 433"></path>
+      <path
+        class="home-option1-territory-halo home-option1-territory-twig-halo"
+        d="M650 433C627 414 608 394 593 374"></path>
+      <path
+        class="home-option1-territory-halo home-option1-territory-twig-halo"
+        d="M650 433C649 405 649 380 650 360"></path>
+      <path
+        class="home-option1-territory-halo home-option1-territory-twig-halo"
+        d="M650 433C669 401 687 368 706 342"></path>
+      <path
+        class="home-option1-territory-halo home-option1-territory-branch-halo"
+        d="M752 412C759 384 771 359 790 335C808 313 829 297 851 287"></path>
+      <path
+        class="home-option1-territory-halo home-option1-territory-branch-halo"
+        d="M752 412C795 405 831 394 862 378C882 368 899 355 914 341"></path>
+      <path
+        class="home-option1-territory-halo home-option1-territory-twig-halo"
+        d="M851 287C833 275 816 264 801 255"></path>
+      <path
+        class="home-option1-territory-halo home-option1-territory-twig-halo"
+        d="M851 287C858 268 865 251 873 240"></path>
+      <path
+        class="home-option1-territory-halo home-option1-territory-twig-halo"
+        d="M851 287C870 283 885 276 900 267"></path>
+      <path
+        class="home-option1-territory-halo home-option1-territory-twig-halo"
+        d="M914 341C931 330 944 319 954 309"></path>
+      <path
+        class="home-option1-territory-halo home-option1-territory-twig-halo"
+        d="M914 341C945 334 974 324 998 308"></path>
+      <path
+        class="home-option1-territory-halo home-option1-territory-twig-halo"
+        d="M914 341C962 350 1019 333 1060 295"></path>
+      <path
+        class="home-option1-territory-route"
+        d="M1260 758C1242 748 1228 735 1218 720"></path>
+      <path
+        class="home-option1-territory-route home-option1-territory-feeder"
+        d="M1218 720C1280 686 1325 636 1328 585C1329 539 1288 516 1224 500C1112 471 996 463 892 467C849 469 818 470 796 472"
+      ></path>
+      <path
+        class="home-option1-territory-route home-option1-territory-feeder"
+        d="M1218 720C1115 722 1011 713 906 698C805 684 712 663 648 623C606 597 592 566 612 535C636 499 704 484 796 472"
+      ></path>
+      <path
+        class="home-option1-territory-route"
+        d="M796 472C772 452 758 432 752 412"></path>
+      <path
+        class="home-option1-territory-route home-option1-territory-branch"
+        d="M752 412C719 420 686 428 650 433"></path>
+      <path
+        class="home-option1-territory-route home-option1-territory-twig"
+        d="M650 433C627 414 608 394 593 374"></path>
+      <path
+        class="home-option1-territory-route home-option1-territory-twig"
+        d="M650 433C649 405 649 380 650 360"></path>
+      <path
+        class="home-option1-territory-route home-option1-territory-twig"
+        d="M650 433C669 401 687 368 706 342"></path>
+      <path
+        class="home-option1-territory-route home-option1-territory-branch"
+        d="M752 412C759 384 771 359 790 335C808 313 829 297 851 287"></path>
+      <path
+        class="home-option1-territory-route home-option1-territory-branch"
+        d="M752 412C795 405 831 394 862 378C882 368 899 355 914 341"></path>
+      <path
+        class="home-option1-territory-route home-option1-territory-twig"
+        d="M851 287C833 275 816 264 801 255"></path>
+      <path
+        class="home-option1-territory-route home-option1-territory-twig"
+        d="M851 287C858 268 865 251 873 240"></path>
+      <path
+        class="home-option1-territory-route home-option1-territory-twig"
+        d="M851 287C870 283 885 276 900 267"></path>
+      <path
+        class="home-option1-territory-route home-option1-territory-twig"
+        d="M914 341C931 330 944 319 954 309"></path>
+      <path
+        class="home-option1-territory-route home-option1-territory-twig"
+        d="M914 341C945 334 974 324 998 308"></path>
+      <path
+        class="home-option1-territory-route home-option1-territory-twig"
+        d="M914 341C962 350 1019 333 1060 295"></path>
+      <g class="home-option1-territory-nodes">
+        <circle cx="1260" cy="758" r="7"></circle>
+        <circle cx="1218" cy="720" r="6"></circle>
+        <circle cx="796" cy="472" r="6"></circle>
+        <circle cx="752" cy="412" r="7"></circle>
+        <circle cx="650" cy="433" r="5"></circle>
+        <circle cx="851" cy="287" r="5"></circle>
+        <circle cx="914" cy="341" r="5"></circle>
+        <circle
+          class="home-option1-territory-secondary-node"
+          cx="593"
+          cy="374"
+          r="3.5"></circle>
+        <circle
+          class="home-option1-territory-secondary-node"
+          cx="650"
+          cy="360"
+          r="3.5"></circle>
+        <circle
+          class="home-option1-territory-secondary-node"
+          cx="706"
+          cy="342"
+          r="3.5"></circle>
+        <circle
+          class="home-option1-territory-secondary-node"
+          cx="801"
+          cy="255"
+          r="3.5"></circle>
+        <circle
+          class="home-option1-territory-secondary-node"
+          cx="873"
+          cy="240"
+          r="3.5"></circle>
+        <circle
+          class="home-option1-territory-secondary-node"
+          cx="900"
+          cy="267"
+          r="3.5"></circle>
+        <circle
+          class="home-option1-territory-secondary-node"
+          cx="954"
+          cy="309"
+          r="3.5"></circle>
+        <circle
+          class="home-option1-territory-secondary-node"
+          cx="998"
+          cy="308"
+          r="3.5"></circle>
+        <circle
+          class="home-option1-territory-secondary-node"
+          cx="1060"
+          cy="295"
+          r="3.5"></circle>
+      </g>
+    </svg>
+    <div class="hero-copy home-option1-copy">
+      <span class="home-option1-eyebrow">
+        Independencia energética, de verdad
+      </span>
+      <h1>
+        La energía
+        <span>vuelve a manos</span>
+        <span>de las personas.</span>
+      </h1>
+      <p class="hero-lead">
+        Produce energía cerca de ti, almacénala y elige si quieres comprarla o
+        alquilarla.
+      </p>
+      <div class="hero-actions home-option1-actions">
+        <ButtonLink href="/comunidades-energeticas#cobertura">
+          Encuentra tu comunidad
+        </ButtonLink>
+        <ButtonLink href="/nosotros#nuestro-plan" kind="secondary">
+          Conoce nuestro plan
+        </ButtonLink>
+      </div>
+      <div
+        class="home-option1-proof"
+        aria-label="Tres razones para confiar en Comunidad Solar"
+      >
+        <span>Más de 3.500 personas y empresas</span>
+        <span>Independientes de grandes grupos</span>
+        <span>Compra o alquiler</span>
+      </div>
+    </div>
+    <HomeMap />
+  </div>
+</section>

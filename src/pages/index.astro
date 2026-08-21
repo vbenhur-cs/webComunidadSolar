@@ -1,11 +1,10 @@
 ---
 export const prerender = true;
 
+import HomePage from "../components/pages/home/HomePage.astro";
 import SiteLayout from "../layouts/SiteLayout.astro";
 ---
 
 <SiteLayout page="inicio" meta={{ title: null, canonical: "/" }}>
-  <main>
-    <h1>Comunidad Solar</h1>
-  </main>
+  <HomePage />
 </SiteLayout>
