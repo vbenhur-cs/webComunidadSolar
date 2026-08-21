@@ -45,8 +45,10 @@ const controlledEnvironmentKeys = [
   "MANGANAFER_MAXIMUM_PANELS_PER_QUOTE",
 ] as const;
 
-const volatileTimestamp =
-  /\b\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:?\d{2})\b/g;
+const volatileDataBuild =
+  /(\bdata-build\s*=\s*)(["'])\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:?\d{2})\2/g;
+const volatileSitemapLastmod =
+  /(<lastmod>\s*)\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:?\d{2})(\s*<\/lastmod>)/g;
 const volatileBuildAsset =
   /\/assets\/([^/"']+)-[A-Za-z0-9_-]{8,}(\.(?:css|js))/g;
 const volatileRscModuleId = /\\"[0-9a-f]{12}\\",\[\],\\"/g;
@@ -346,13 +348,20 @@ export function buildCapturePlan(manifest: SourceManifest): CapturePlan {
 
 export function normalizeHtml(html: string): string {
   return html
-    .replace(volatileTimestamp, "__TIMESTAMP__")
+    .replace(volatileDataBuild, "$1$2__TIMESTAMP__$2")
     .replace(volatileBuildAsset, "/assets/$1-__ASSET_HASH__$2")
     .replace(volatileRscModuleId, '\\"__RSC_MODULE_ID__\\",[],\\"')
     .replace(
       volatileDeploymentVersion,
       '\\"deploymentVersion\\":\\"__DEPLOYMENT_VERSION__\\"',
     );
+}
+
+function normalizeXml(routeKeyValue: string, xml: string): string {
+  if (routeKeyValue !== "page:/sitemap.xml|GET|anonymous|default") {
+    return xml;
+  }
+  return xml.replace(volatileSitemapLastmod, "$1__TIMESTAMP__$2");
 }
 
 function selectedHeaders(headers: Headers): Record<string, string> {
@@ -479,7 +488,11 @@ export async function captureHttpContract(
   const html = isHtmlResponse(response);
   const json = isJsonResponse(response);
   const xml = isXmlResponse(response);
-  const normalizedBody = html || xml ? normalizeHtml(body) : body;
+  const normalizedBody = html
+    ? normalizeHtml(body)
+    : xml
+      ? normalizeXml(routeKeyValue, body)
+      : body;
   let normalizedHtmlPath: string | null = null;
 
   if (html) {

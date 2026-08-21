@@ -225,16 +225,32 @@ function parseArguments(args) {
 
 try {
   const parsed = parseArguments(process.argv.slice(2));
-  const child = spawn(parsed.command, parsed.commandArgs, { shell: false, stdio: "inherit" });
+  const processGroup = process.platform !== "win32";
+  const child = spawn(parsed.command, parsed.commandArgs, {
+    detached: processGroup,
+    shell: false,
+    stdio: "inherit",
+  });
   let killTimer;
   let deadlineExpired = false;
   let startFailed = false;
   const signalName = parsed.signal.startsWith("SIG") ? parsed.signal : \`SIG\${parsed.signal}\`;
+  function signalTimedCommand(signal) {
+    if (processGroup && typeof child.pid === "number") {
+      try {
+        process.kill(-child.pid, signal);
+        return;
+      } catch (error) {
+        if (error && typeof error === "object" && error.code === "ESRCH") return;
+      }
+    }
+    child.kill(signal);
+  }
   const timer = setTimeout(() => {
     deadlineExpired = true;
-    child.kill(signalName);
+    signalTimedCommand(signalName);
     if (parsed.killAfter !== null) {
-      killTimer = setTimeout(() => child.kill("SIGKILL"), parsed.killAfter);
+      killTimer = setTimeout(() => signalTimedCommand("SIGKILL"), parsed.killAfter);
     }
   }, parsed.duration);
   child.once("error", (error) => {
@@ -246,7 +262,7 @@ try {
   });
   child.once("close", (code, signal) => {
     clearTimeout(timer);
-    if (killTimer) clearTimeout(killTimer);
+    if (killTimer && !deadlineExpired) clearTimeout(killTimer);
     if (!startFailed) process.exitCode = deadlineExpired ? 124 : code ?? (signal ? 124 : 1);
   });
 } catch (error) {
@@ -262,15 +278,6 @@ try {
   return toolRoot;
 }
 
-async function sourceObjectsDirectory(sourceRoot: string): Promise<string> {
-  const { stdout } = await execFileAsync(
-    "git",
-    ["rev-parse", "--git-path", "objects"],
-    { cwd: sourceRoot, encoding: "utf8", maxBuffer: 64 * 1024 },
-  );
-  return resolve(sourceRoot, stdout.trim());
-}
-
 async function createTemporaryGitEnvironment(
   root: string,
   sourceRoot: string,
@@ -279,11 +286,10 @@ async function createTemporaryGitEnvironment(
   logRoot: string,
 ): Promise<NodeJS.ProcessEnv> {
   const gitDirectory = join(supportRoot, "git");
-  const sourceObjects = await sourceObjectsDirectory(sourceRoot);
   await runProcess(
-    "temporary-git-init",
+    "temporary-git-clone",
     "git",
-    ["init", "--bare", "--quiet", gitDirectory],
+    ["clone", "--mirror", "--no-local", "--quiet", sourceRoot, gitDirectory],
     {
       cwd: supportRoot,
       logRoot,
@@ -293,7 +299,6 @@ async function createTemporaryGitEnvironment(
     ...process.env,
     GIT_DIR: gitDirectory,
     GIT_WORK_TREE: root,
-    GIT_ALTERNATE_OBJECT_DIRECTORIES: sourceObjects,
   };
   await runProcess(
     "temporary-git-ref",

@@ -319,17 +319,92 @@ test("returns GNU timeout status 124 when TERM is handled after the deadline", a
   assert.deepEqual(await snapshotRepository(source.root), original);
 });
 
-test("provides the pinned HEAD, main branch, and index without creating .git", async () => {
+test("terminates timeout descendants before they can outlive the temporary session", async () => {
+  const markerRoot = await mkdtemp(join(tmpdir(), "http-baseline-descendant-"));
+  cleanupRoots.push(markerRoot);
+  const markerPath = join(markerRoot, "descendant-marker.txt");
+  const pidPath = join(markerRoot, "descendant.pid");
+  const source = await createSourceRepoFixture({
+    "package.json": JSON.stringify({
+      name: "temporary-timeout-descendant-fixture",
+      private: true,
+      scripts: {
+        build: `timeout --signal=TERM --kill-after=200ms 500ms node parent.js ${JSON.stringify(markerPath)} ${JSON.stringify(pidPath)}`,
+      },
+    }),
+    "parent.js": `const { spawn } = require("node:child_process");
+const { writeFileSync } = require("node:fs");
+const { join } = require("node:path");
+const child = spawn(process.execPath, [join(__dirname, "descendant.js"), process.argv[2]], { stdio: "ignore" });
+writeFileSync(process.argv[3], String(child.pid));
+process.on("SIGTERM", () => process.exit(0));
+setInterval(() => {}, 1_000);
+`,
+    "descendant.js": `const { writeFileSync } = require("node:fs");
+process.on("SIGTERM", () => {});
+setTimeout(() => writeFileSync(process.argv[2], "descendant survived"), 1_000);
+setInterval(() => {}, 1_000);
+`,
+  });
+  const original = await snapshotRepository(source.root);
+  let descendantPid: number | undefined;
+
+  try {
+    await assert.rejects(
+      withTemporarySourceBuild(
+        async () => assert.fail("a timed-out build must not reach the callback"),
+        {
+          sourceRoot: source.root,
+          commit: source.commit,
+          install: false,
+          build: true,
+          logRoot: join(source.cleanupRoot, "logs"),
+        },
+      ),
+      /código 124/i,
+    );
+
+    const capturedDescendantPid = Number(await readFile(pidPath, "utf8"));
+    assert.ok(
+      Number.isInteger(capturedDescendantPid) && capturedDescendantPid > 0,
+    );
+    descendantPid = capturedDescendantPid;
+    await new Promise((resolvePromise) => setTimeout(resolvePromise, 1_200));
+    assert.equal(existsSync(markerPath), false);
+    assert.throws(() => process.kill(capturedDescendantPid, 0), {
+      code: "ESRCH",
+    });
+  } finally {
+    if (descendantPid !== undefined) {
+      try {
+        process.kill(descendantPid, "SIGKILL");
+      } catch {
+        // The timeout process group has already terminated the descendant.
+      }
+    }
+  }
+
+  assert.deepEqual(await snapshotRepository(source.root), original);
+});
+
+test("provides the pinned HEAD, main branch, index, and reachable tags without creating .git", async () => {
   const source = await createSourceRepoFixture({
     "package.json": JSON.stringify({
       name: "temporary-git-fixture",
       private: true,
       scripts: {
         build:
-          "git ls-files --cached > indexed.txt && git rev-parse HEAD > head.txt && git branch --show-current > branch.txt",
+          "git ls-files --cached > indexed.txt && git rev-parse HEAD > head.txt && git branch --show-current > branch.txt && git describe --tags HEAD > describe.txt",
       },
     }),
   });
+  await git(source.root, ["tag", "-a", "v1.0.0", "-m", "fixture", source.commit]);
+  const original = await snapshotRepository(source.root);
+  const sourceDescription = await git(source.root, [
+    "describe",
+    "--tags",
+    source.commit,
+  ]);
 
   await withTemporarySourceBuild(
     async ({ root }) => {
@@ -340,6 +415,7 @@ test("provides the pinned HEAD, main branch, and index without creating .git", a
       );
       assert.equal(await readFile(join(root, "head.txt"), "utf8"), `${source.commit}\n`);
       assert.equal(await readFile(join(root, "branch.txt"), "utf8"), "main\n");
+      assert.equal(await readFile(join(root, "describe.txt"), "utf8"), sourceDescription);
     },
     {
       sourceRoot: source.root,
@@ -349,6 +425,8 @@ test("provides the pinned HEAD, main branch, and index without creating .git", a
       logRoot: join(source.cleanupRoot, "logs"),
     },
   );
+
+  assert.deepEqual(await snapshotRepository(source.root), original);
 });
 
 test("uses one temporary session and cleans it after archive setup fails", async () => {
@@ -395,6 +473,16 @@ test("normalizes volatile dates without removing meaningful HTML", () => {
   );
 });
 
+test("preserves meaningful HTML timestamps outside the data-build attribute", () => {
+  const timestamp = "2026-08-21T10:00:00Z";
+  const html = `<main data-build="${timestamp}"><time datetime="${timestamp}">Publicado ${timestamp}</time><section data-published="${timestamp}"></section><script>window.release = "${timestamp}"</script></main>`;
+
+  assert.equal(
+    normalizeHtml(html),
+    `<main data-build="__TIMESTAMP__"><time datetime="${timestamp}">Publicado ${timestamp}</time><section data-published="${timestamp}"></section><script>window.release = "${timestamp}"</script></main>`,
+  );
+});
+
 test("normalizes volatile source-build asset and RSC identifiers", () => {
   const first = String.raw`<link href="/assets/index-B7W9r4T8.css"/><script>import("/assets/index-B0GTT5J1.js")</script><script>self.__VINEXT_RSC_CHUNKS__.push("2:I[\"8c0f216c4604\",[],\"Children\",1]\n0:{\"deploymentVersion\":\"e72eaee0-a3b6-4821-9a2c-36e1e5d7ef52\"}")</script><img src="/comunidad-solar-logo.svg"/><p>Oferta R2-883</p>`;
   const second = String.raw`<link href="/assets/index-C1D2E3F4.css"/><script>import("/assets/index-Z9Y8X7W6.js")</script><script>self.__VINEXT_RSC_CHUNKS__.push("2:I[\"b85b39017127\",[],\"Children\",1]\n0:{\"deploymentVersion\":\"8c511eec-9748-45d4-8fcb-8d988821ecf8\"}")</script><img src="/comunidad-solar-logo.svg"/><p>Oferta R2-883</p>`;
@@ -428,6 +516,50 @@ test("hashes sitemap XML after normalizing volatile last-modified timestamps", a
   if (first.bodyCapture !== "captured") assert.fail("expected captured XML contract");
   if (second.bodyCapture !== "captured") assert.fail("expected captured XML contract");
   assert.equal(first.bodySha256, second.bodySha256);
+});
+
+test("preserves sitemap XML timestamps outside lastmod", async () => {
+  const routeKey = "page:/sitemap.xml|GET|anonymous|default";
+  const first = await captureHttpContract(
+    routeKey,
+    new Response(
+      "<urlset><url><lastmod>2026-08-21T14:10:15.425Z</lastmod><updated>2026-08-21T14:10:15.425Z</updated></url></urlset>",
+      { headers: { "content-type": "application/xml; charset=utf-8" } },
+    ),
+  );
+  const second = await captureHttpContract(
+    routeKey,
+    new Response(
+      "<urlset><url><lastmod>2026-08-21T14:10:15.425Z</lastmod><updated>2026-08-21T14:12:30.001Z</updated></url></urlset>",
+      { headers: { "content-type": "application/xml; charset=utf-8" } },
+    ),
+  );
+
+  if (first.bodyCapture !== "captured") assert.fail("expected captured XML contract");
+  if (second.bodyCapture !== "captured") assert.fail("expected captured XML contract");
+  assert.notEqual(first.bodySha256, second.bodySha256);
+});
+
+test("preserves lastmod timestamps outside the sitemap route", async () => {
+  const routeKey = "page:/feed.xml|GET|anonymous|default";
+  const first = await captureHttpContract(
+    routeKey,
+    new Response(
+      "<feed><lastmod>2026-08-21T14:10:15.425Z</lastmod></feed>",
+      { headers: { "content-type": "application/xml; charset=utf-8" } },
+    ),
+  );
+  const second = await captureHttpContract(
+    routeKey,
+    new Response(
+      "<feed><lastmod>2026-08-21T14:12:30.001Z</lastmod></feed>",
+      { headers: { "content-type": "application/xml; charset=utf-8" } },
+    ),
+  );
+
+  if (first.bodyCapture !== "captured") assert.fail("expected captured XML contract");
+  if (second.bodyCapture !== "captured") assert.fail("expected captured XML contract");
+  assert.notEqual(first.bodySha256, second.bodySha256);
 });
 
 test("captures allowlisted headers and a normalized HTML artifact", async () => {
