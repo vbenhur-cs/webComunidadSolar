@@ -5,13 +5,14 @@ import { createHash } from "node:crypto";
 import {
   mkdir,
   mkdtemp,
+  readdir,
   readFile,
   rm,
   stat,
   symlink,
   writeFile,
 } from "node:fs/promises";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 import { tmpdir } from "node:os";
 import { promisify } from "node:util";
 
@@ -121,6 +122,51 @@ async function runSourceCheck(
     };
   }
 }
+
+const executableOrTestInput = /\.(?:[cm]?js|tsx?)$/;
+const hostSpecificSourcePath =
+  /["'\x60](?:\/Users\/|\/home\/|[A-Za-z]:[\\/])[^"'\x60\r\n]*[\\/]comunidadsolarweb\b/i;
+
+async function executableAndTestInputs(root: string): Promise<string[]> {
+  const entries = await readdir(root, { withFileTypes: true });
+  entries.sort((first, second) =>
+    first.name < second.name ? -1 : first.name > second.name ? 1 : 0,
+  );
+  const paths = await Promise.all(
+    entries.map(async (entry) => {
+      const path = join(root, entry.name);
+      if (entry.isDirectory()) return executableAndTestInputs(path);
+      return entry.isFile() && executableOrTestInput.test(entry.name)
+        ? [path]
+        : [];
+    }),
+  );
+  return paths.flat();
+}
+
+test("executable and test inputs avoid host-specific absolute source paths", async () => {
+  const inputs = (
+    await Promise.all(
+      ["scripts", "tests"].map((root) =>
+        executableAndTestInputs(join(process.cwd(), root)),
+      ),
+    )
+  ).flat();
+  const violations = (
+    await Promise.all(
+      inputs.map(async (input) => {
+        const contents = await readFile(input, "utf8");
+        return hostSpecificSourcePath.test(contents)
+          ? relative(process.cwd(), input).replaceAll("\\", "/")
+          : undefined;
+      }),
+    )
+  )
+    .filter((path): path is string => path !== undefined)
+    .sort();
+
+  assert.deepEqual(violations, []);
+});
 
 test("rejects a source checkout on another commit", async () => {
   await assert.rejects(
@@ -317,15 +363,6 @@ test("rejects duplicate normalized destinations before copying", async () => {
 });
 
 test("source-check treats only a missing automatic sibling as optional", async () => {
-  const sourceRoot =
-    "/Users/vbenhur/Documents/Projects VS/WebComunidadSolar/comunidadsolarweb";
-  const strict = await runSourceCheck([], { sourceRoot });
-  assert.equal(strict.code, 0);
-  assert.equal(
-    strict.stdout.trim(),
-    `SOURCE_OK ${EXPECTED_SOURCE_COMMIT} clean`,
-  );
-
   const explicitMissing = await runSourceCheck(["--if-present"], {
     sourceRoot: join(fixture.cleanupRoot, "missing-source"),
   });
