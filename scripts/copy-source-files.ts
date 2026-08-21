@@ -45,6 +45,12 @@ interface CopyMapping {
   destination: string;
 }
 
+export interface CopySourceFilesOptions {
+  repositoryRoot?: string;
+  sourceRoot?: string;
+  expectedCommit?: string;
+}
+
 function assertSafeRelativePath(path: string, label: string): string {
   const portablePath = path.replaceAll("\\", "/");
   if (
@@ -201,6 +207,7 @@ async function writeProvenance(
 
 export async function copySourceFiles(
   paths: string[],
+  options: CopySourceFilesOptions = {},
 ): Promise<ProvenanceEntry[]> {
   const mappings = paths.map(parseCopyMapping);
   if (mappings.length === 0) return [];
@@ -213,9 +220,12 @@ export async function copySourceFiles(
     destinations.add(mapping.destination);
   }
 
-  const root = await repositoryRoot();
-  const sourceRoot = await resolveSourceRoot();
-  const source = await assertSourcePristine(sourceRoot);
+  const root =
+    options.repositoryRoot === undefined
+      ? await repositoryRoot()
+      : resolve(options.repositoryRoot);
+  const sourceRoot = await resolveSourceRoot(options.sourceRoot);
+  const source = await assertSourcePristine(sourceRoot, options.expectedCommit);
   const entries: ProvenanceEntry[] = [];
 
   for (const mapping of mappings) {

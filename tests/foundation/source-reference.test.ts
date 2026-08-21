@@ -32,6 +32,7 @@ interface CommandResult {
 
 interface SourceFixture {
   repo: string;
+  targetRoot: string;
   head: string;
   committedFavicon: string;
   cleanupRoot: string;
@@ -42,9 +43,12 @@ let fixture: SourceFixture;
 beforeEach(async () => {
   const cleanupRoot = await mkdtemp(join(tmpdir(), "source-reference-"));
   const repo = join(cleanupRoot, "source");
+  const targetRoot = join(cleanupRoot, "target");
   const committedFavicon = "<svg>committed favicon</svg>";
 
   await mkdir(join(repo, "public"), { recursive: true });
+  await mkdir(join(targetRoot, "parity"), { recursive: true });
+  await writeFile(join(targetRoot, "parity", "provenance.json"), "[]\n");
   await execFileAsync("git", ["init", "-b", "main"], { cwd: repo });
   await execFileAsync("git", ["config", "user.email", "test@example.test"], {
     cwd: repo,
@@ -62,11 +66,22 @@ beforeEach(async () => {
 
   fixture = {
     repo,
+    targetRoot,
     head: stdout.trim(),
     committedFavicon,
     cleanupRoot,
   };
 });
+
+async function fromTargetRoot<T>(run: () => Promise<T>): Promise<T> {
+  const originalCwd = process.cwd();
+  process.chdir(fixture.targetRoot);
+  try {
+    return await run();
+  } finally {
+    process.chdir(originalCwd);
+  }
+}
 
 afterEach(async () => {
   await rm(fixture.cleanupRoot, { recursive: true, force: true });
@@ -140,31 +155,40 @@ test("reads the committed blob instead of the working tree", async () => {
 });
 
 test("copies committed blobs into the repository with sorted provenance", async () => {
-  const sourceRoot =
-    "/Users/vbenhur/Documents/Projects VS/WebComunidadSolar/comunidadsolarweb";
   const targetDirectory = ".source-work/source-reference-copy-test";
-  const provenancePath = join("parity", "provenance.json");
+  const provenancePath = join(fixture.targetRoot, "parity", "provenance.json");
   const originalProvenance = await readFile(provenancePath, "utf8");
-  const { stdout } = await execFileAsync(
-    "git",
-    ["show", `${EXPECTED_SOURCE_COMMIT}:public/favicon.svg`],
-    { cwd: sourceRoot, encoding: "buffer" },
+  const expectedBlob = await readSourceBlob(
+    "public/favicon.svg",
+    fixture.repo,
+    fixture.head,
   );
-  const expectedBlob = stdout as Buffer;
   const expectedHash = createHash("sha256").update(expectedBlob).digest("hex");
 
   try {
-    const entries = await copySourceFiles([
-      `public/favicon.svg:${targetDirectory}/z.svg`,
-      `public/favicon.svg:${targetDirectory}/a.svg`,
-    ]);
+    const entries = await fromTargetRoot(() =>
+      copySourceFiles(
+        [
+          `public/favicon.svg:${targetDirectory}/z.svg`,
+          `public/favicon.svg:${targetDirectory}/a.svg`,
+        ],
+        {
+          repositoryRoot: fixture.targetRoot,
+          sourceRoot: fixture.repo,
+          expectedCommit: fixture.head,
+        },
+      ),
+    );
 
     assert.deepEqual(
       entries.map((entry) => entry.destination),
       [`${targetDirectory}/a.svg`, `${targetDirectory}/z.svg`],
     );
     assert.equal(
-      await readFile(join(targetDirectory, "a.svg"), "utf8"),
+      await readFile(
+        join(fixture.targetRoot, targetDirectory, "a.svg"),
+        "utf8",
+      ),
       expectedBlob.toString(),
     );
 
@@ -177,14 +201,14 @@ test("copies committed blobs into the repository with sorted provenance", async 
         {
           sourcePath: "public/favicon.svg",
           destination: `${targetDirectory}/a.svg`,
-          sourceCommit: EXPECTED_SOURCE_COMMIT,
+          sourceCommit: fixture.head,
           sha256: expectedHash,
           bytes: expectedBlob.byteLength,
         },
         {
           sourcePath: "public/favicon.svg",
           destination: `${targetDirectory}/z.svg`,
-          sourceCommit: EXPECTED_SOURCE_COMMIT,
+          sourceCommit: fixture.head,
           sha256: expectedHash,
           bytes: expectedBlob.byteLength,
         },
@@ -199,7 +223,10 @@ test("copies committed blobs into the repository with sorted provenance", async 
       /relativa|fuera del repositorio/i,
     );
   } finally {
-    await rm(targetDirectory, { recursive: true, force: true });
+    await rm(join(fixture.targetRoot, targetDirectory), {
+      recursive: true,
+      force: true,
+    });
     await writeFile(provenancePath, originalProvenance);
   }
 });
@@ -207,43 +234,63 @@ test("copies committed blobs into the repository with sorted provenance", async 
 test("rejects a symlink escape before creating an external directory", async () => {
   const targetDirectory = ".source-work/source-reference-symlink-test";
   const externalDirectory = join(fixture.cleanupRoot, "external");
-  const escapeLink = join(targetDirectory, "escape");
+  const targetRoot = join(fixture.targetRoot, targetDirectory);
+  const escapeLink = join(targetRoot, "escape");
 
-  await mkdir(targetDirectory, { recursive: true });
+  await mkdir(targetRoot, { recursive: true });
   await mkdir(externalDirectory);
   await symlink(externalDirectory, escapeLink);
 
   try {
     await assert.rejects(
-      copySourceFiles([
-        `public/favicon.svg:${targetDirectory}/escape/created/file.svg`,
-      ]),
+      fromTargetRoot(() =>
+        copySourceFiles(
+          [`public/favicon.svg:${targetDirectory}/escape/created/file.svg`],
+          {
+            repositoryRoot: fixture.targetRoot,
+            sourceRoot: fixture.repo,
+            expectedCommit: fixture.head,
+          },
+        ),
+      ),
       /fuera del repositorio/i,
     );
     await assert.rejects(stat(join(externalDirectory, "created")), /ENOENT/);
   } finally {
-    await rm(targetDirectory, { recursive: true, force: true });
+    await rm(targetRoot, { recursive: true, force: true });
     await rm(externalDirectory, { recursive: true, force: true });
   }
 });
 
 test("orders provenance with a locale-independent lexical comparator", async () => {
   const targetDirectory = ".source-work/source-reference-order-test";
-  const provenancePath = join("parity", "provenance.json");
+  const provenancePath = join(fixture.targetRoot, "parity", "provenance.json");
   const originalProvenance = await readFile(provenancePath, "utf8");
 
   try {
-    const entries = await copySourceFiles([
-      `public/favicon.svg:${targetDirectory}/ä.svg`,
-      `public/favicon.svg:${targetDirectory}/z.svg`,
-    ]);
+    const entries = await fromTargetRoot(() =>
+      copySourceFiles(
+        [
+          `public/favicon.svg:${targetDirectory}/ä.svg`,
+          `public/favicon.svg:${targetDirectory}/z.svg`,
+        ],
+        {
+          repositoryRoot: fixture.targetRoot,
+          sourceRoot: fixture.repo,
+          expectedCommit: fixture.head,
+        },
+      ),
+    );
 
     assert.deepEqual(
       entries.map((entry) => entry.destination),
       [`${targetDirectory}/z.svg`, `${targetDirectory}/ä.svg`],
     );
   } finally {
-    await rm(targetDirectory, { recursive: true, force: true });
+    await rm(join(fixture.targetRoot, targetDirectory), {
+      recursive: true,
+      force: true,
+    });
     await writeFile(provenancePath, originalProvenance);
   }
 });
