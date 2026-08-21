@@ -1,1 +1,9 @@
-[]
+[
+  {
+    "sourcePath": "app/legacy-routes.ts",
+    "destination": "src/lib/routing/legacy.ts",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "d5daefb7774b8f0c6ddfa81fd29138ebb073ebb49e0715a6b311c052d292cff2",
+    "bytes": 19895
+  }
+]

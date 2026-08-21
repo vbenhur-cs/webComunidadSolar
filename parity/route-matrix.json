@@ -888,7 +888,7 @@
     "expectedLocation": null,
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/blog/elementor-hf/14157",
@@ -899,7 +899,7 @@
     "expectedLocation": null,
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/blog/elementor-hf/footer",
@@ -910,7 +910,7 @@
     "expectedLocation": null,
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/blog/elementor-hf/footer-contacto",
@@ -921,7 +921,7 @@
     "expectedLocation": null,
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/blog/elementor-hf/header-solo-logo",
@@ -932,7 +932,7 @@
     "expectedLocation": null,
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/blog/elementor-hf/header-solo-logo-fondo-beige",
@@ -943,7 +943,7 @@
     "expectedLocation": null,
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/blog/elementor-hf/menu-hidden",
@@ -954,7 +954,7 @@
     "expectedLocation": null,
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/blog/elementor-hf/menu-principal",
@@ -965,7 +965,7 @@
     "expectedLocation": null,
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/blog/elementor-hf/menu-reducido-al-maximo",
@@ -976,7 +976,7 @@
     "expectedLocation": null,
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/blog/elementor-hf/menu-simplificado",
@@ -987,7 +987,7 @@
     "expectedLocation": null,
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/cargador-de-coche-electrico",
@@ -998,7 +998,7 @@
     "expectedLocation": null,
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/comunidad-energetica-robregordo",
@@ -1009,7 +1009,7 @@
     "expectedLocation": null,
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/cs-wellsport",
@@ -1020,7 +1020,7 @@
     "expectedLocation": null,
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/gestionamos-subvenciones",
@@ -1031,7 +1031,7 @@
     "expectedLocation": null,
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/gestionamos-subvenciones-placas-solares",
@@ -1042,7 +1042,7 @@
     "expectedLocation": null,
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/invierte-en-comunidad-solar",
@@ -1053,7 +1053,7 @@
     "expectedLocation": null,
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/megapark-serracin",
@@ -1064,7 +1064,7 @@
     "expectedLocation": null,
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/prueba-los-belo",
@@ -1075,7 +1075,7 @@
     "expectedLocation": null,
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/subvenciones",
@@ -1086,7 +1086,7 @@
     "expectedLocation": null,
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/",
@@ -1856,7 +1856,7 @@
     "expectedLocation": "/autoconsumo-remoto",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/aerotermia-comunidad-solarcoolfy",
@@ -1867,7 +1867,7 @@
     "expectedLocation": "/aerotermia",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/anfitrion-solar",
@@ -1878,7 +1878,7 @@
     "expectedLocation": "/rentabiliza-tu-activo#cubierta",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/anfitrion-solar-v2",
@@ -1889,7 +1889,7 @@
     "expectedLocation": "/rentabiliza-tu-activo#cubierta",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/apagon-energetico",
@@ -1900,7 +1900,7 @@
     "expectedLocation": "/baterias#preguntas",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/app-asistente-energetico",
@@ -1911,7 +1911,7 @@
     "expectedLocation": "/soy-comunero",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/arv2",
@@ -1922,7 +1922,7 @@
     "expectedLocation": "/autoconsumo-remoto",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/autoconsumo-en-mi-tejado-v2",
@@ -1933,7 +1933,7 @@
     "expectedLocation": "/autoconsumo-en-mi-tejado",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/autoconsumo-remoto-con-baterias",
@@ -1944,7 +1944,7 @@
     "expectedLocation": "/autoconsumo-remoto",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/autoconsumo-remoto-con-baterias-calculadora",
@@ -1955,7 +1955,7 @@
     "expectedLocation": "/autoconsumo-remoto",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/autoconsumo-remoto-con-baterias-v2",
@@ -1966,7 +1966,7 @@
     "expectedLocation": "/autoconsumo-remoto",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/autoconsumo-remoto-megapark",
@@ -1977,7 +1977,7 @@
     "expectedLocation": "/autoconsumo-remoto",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/autoconsumo-remoto-portal-renovables",
@@ -1988,7 +1988,7 @@
     "expectedLocation": "/autoconsumo-remoto",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/autoconsumo-remoto-v2",
@@ -1999,7 +1999,7 @@
     "expectedLocation": "/autoconsumo-remoto",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/autoconsumo-remoto/b2b-formulario",
@@ -2010,7 +2010,7 @@
     "expectedLocation": "/rentabiliza-tu-activo#solicitar-estudio",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/autoconsumo-remoto/b2c-calculadora",
@@ -2021,7 +2021,7 @@
     "expectedLocation": "/autoconsumo-remoto",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/autoconsumo-remoto/b2c-formulario",
@@ -2032,7 +2032,7 @@
     "expectedLocation": "/autoconsumo-remoto",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/autoconsumo-remoto/pisuerga",
@@ -2043,7 +2043,7 @@
     "expectedLocation": "/autoconsumo-remoto/liguerzana",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/blog/aerotermia-la-revolucion-energetica-para-una-vida-sostenible",
@@ -2054,7 +2054,7 @@
     "expectedLocation": "/aerotermia#encaje",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/blog/ahorro-energetico",
@@ -2065,7 +2065,7 @@
     "expectedLocation": "/comercializadora-y-tarifas",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/blog/autoconsumo-colectivo-y-comunidades-energeticas",
@@ -2076,7 +2076,7 @@
     "expectedLocation": "/comunidades-energeticas",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/blog/autoconsumo-remoto-baterias-independencia-energetica",
@@ -2087,7 +2087,7 @@
     "expectedLocation": "/autoconsumo-remoto",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/blog/autoconsumo-remoto-de-comunidad-solar",
@@ -2098,7 +2098,7 @@
     "expectedLocation": "/autoconsumo-remoto",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/blog/baterias-solucion-cargas-criticas-cortes-energia",
@@ -2109,7 +2109,7 @@
     "expectedLocation": "/baterias#preguntas",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/blog/category/aerotermia",
@@ -2120,7 +2120,7 @@
     "expectedLocation": "/aerotermia",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/blog/category/autoconsumo-en-casa",
@@ -2131,7 +2131,7 @@
     "expectedLocation": "/autoconsumo-en-mi-tejado",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/blog/category/autoconsumo-remoto",
@@ -2142,7 +2142,7 @@
     "expectedLocation": "/autoconsumo-remoto",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/blog/category/baterias",
@@ -2153,7 +2153,7 @@
     "expectedLocation": "/baterias",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/blog/category/comunidades-energeticas",
@@ -2164,7 +2164,7 @@
     "expectedLocation": "/comunidades-energeticas",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/blog/category/sin-categoria",
@@ -2175,7 +2175,7 @@
     "expectedLocation": "/blog",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/blog/como-comunidades-energeticas-reducir-costos",
@@ -2186,7 +2186,7 @@
     "expectedLocation": "/comunidades-energeticas",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/blog/como-crear-comunidad-energetica-area",
@@ -2197,7 +2197,7 @@
     "expectedLocation": "/rentabiliza-tu-activo",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/blog/consejos-mantenimiento-paneles-solares",
@@ -2208,7 +2208,7 @@
     "expectedLocation": "/mantenimiento",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/blog/cuando-ampliar-instalacion-placas-solares",
@@ -2219,7 +2219,7 @@
     "expectedLocation": "/autoconsumo-en-mi-tejado#como-lo-hacemos",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/blog/elegir-bateria-luna2000-huawei",
@@ -2230,7 +2230,7 @@
     "expectedLocation": "/baterias#como-elegir",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/blog/elegir-mejores-placas-solares",
@@ -2241,7 +2241,7 @@
     "expectedLocation": "/autoconsumo-en-mi-tejado#como-lo-hacemos",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/blog/energia-solar-merece-pena-instalar-baterias",
@@ -2252,7 +2252,7 @@
     "expectedLocation": "/baterias",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/blog/guia-instalar-paneles-solares",
@@ -2263,7 +2263,7 @@
     "expectedLocation": "/autoconsumo-en-mi-tejado",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/blog/instalar-paneles-solares-aumenta-valor-propiedad",
@@ -2274,7 +2274,7 @@
     "expectedLocation": "/autoconsumo-en-mi-tejado",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/blog/mitos-realidades-placas-solares",
@@ -2285,7 +2285,7 @@
     "expectedLocation": "/autoconsumo-en-mi-tejado#preguntas",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/blog/novedad-comunidad-energetica-nuevo-baztan",
@@ -2296,7 +2296,7 @@
     "expectedLocation": "/blog/nace-la-comunidad-de-nuevo-baztan",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/blog/paneles-solares-energia-solar-sostenible",
@@ -2307,7 +2307,7 @@
     "expectedLocation": "/autoconsumo-en-mi-tejado",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/blog/que-hacer-excedentes-paneles-solares",
@@ -2318,7 +2318,7 @@
     "expectedLocation": "/comercializadora-y-tarifas#monedero",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/blog/que-son-comunidades-energeticas",
@@ -2329,7 +2329,7 @@
     "expectedLocation": "/comunidades-energeticas",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/blog/tipos-baterias-placas-solares",
@@ -2340,7 +2340,7 @@
     "expectedLocation": "/baterias#como-elegir",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/blog/ventajas-autoconsumo-remoto-energia-solar",
@@ -2351,7 +2351,7 @@
     "expectedLocation": "/autoconsumo-remoto",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/blog/ventajas-comunidades-energeticas",
@@ -2362,7 +2362,7 @@
     "expectedLocation": "/comunidades-energeticas",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/calcula-tu-ahorro",
@@ -2373,7 +2373,7 @@
     "expectedLocation": "/autoconsumo-remoto",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/ce-ceuti",
@@ -2384,7 +2384,7 @@
     "expectedLocation": "/comunidades-energeticas/ceuti",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/ce-sepulveda",
@@ -2395,7 +2395,7 @@
     "expectedLocation": "/comunidades-energeticas/sepulveda",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/ce-villalbilla-test",
@@ -2406,7 +2406,7 @@
     "expectedLocation": "/comunidades-energeticas/villalbilla",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/ce-villalbilla-v2",
@@ -2417,7 +2417,7 @@
     "expectedLocation": "/comunidades-energeticas/villalbilla",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/compra-grupo-aerotermia",
@@ -2428,7 +2428,7 @@
     "expectedLocation": "/aerotermia",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/comunidad-energetica-de-mi-edificio",
@@ -2439,7 +2439,7 @@
     "expectedLocation": "/comunidades-energeticas",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/comunidad-energetica-de-mi-pueblo",
@@ -2450,7 +2450,7 @@
     "expectedLocation": "/comunidades-energeticas",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/comunidad-energetica-extremadura",
@@ -2461,7 +2461,7 @@
     "expectedLocation": "/comunidades-energeticas/extremadura",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/comunidad-energetica-ibeas-de-juarros",
@@ -2472,7 +2472,7 @@
     "expectedLocation": "/comunidades-energeticas/ibeas-de-juarros",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/comunidad-energetica-ibeas-de-juarros-v2",
@@ -2483,7 +2483,7 @@
     "expectedLocation": "/comunidades-energeticas/ibeas-de-juarros",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/comunidad-energetica-nuevo-baztan",
@@ -2494,7 +2494,7 @@
     "expectedLocation": "/comunidades-energeticas/nuevo-baztan",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/comunidad-energetica-nuevo-baztan-v2",
@@ -2505,7 +2505,7 @@
     "expectedLocation": "/comunidades-energeticas/nuevo-baztan",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/comunidad-energetica-ontinyent",
@@ -2516,7 +2516,7 @@
     "expectedLocation": "/comunidades-energeticas/ontinyent",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/comunidad-energetica-san-adrian-de-juarros",
@@ -2527,7 +2527,7 @@
     "expectedLocation": "/comunidades-energeticas/san-adrian-de-juarros",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/comunidad-energetica-san-adrian-de-juarros-v2",
@@ -2538,7 +2538,7 @@
     "expectedLocation": "/comunidades-energeticas/san-adrian-de-juarros",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/comunidad-energetica-villalbilla-madrid",
@@ -2549,7 +2549,7 @@
     "expectedLocation": "/comunidades-energeticas/villalbilla",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/comunidad-energetica-villaverde",
@@ -2560,7 +2560,7 @@
     "expectedLocation": "/comunidades-energeticas/villaverde-getafe",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/comunidades-energeticas-v2",
@@ -2571,7 +2571,7 @@
     "expectedLocation": "/comunidades-energeticas",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/cs-en-los-medios-de-comunicacion",
@@ -2582,7 +2582,7 @@
     "expectedLocation": "/#medios",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/el-toro-tv",
@@ -2593,7 +2593,7 @@
     "expectedLocation": "/#pruebas",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/home-2",
@@ -2604,7 +2604,7 @@
     "expectedLocation": "/",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/instala-con-nosotros",
@@ -2615,7 +2615,7 @@
     "expectedLocation": "/rentabiliza-tu-activo",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/mantenimiento-placas-solares",
@@ -2626,7 +2626,7 @@
     "expectedLocation": "/mantenimiento",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/mapa-con-resenas",
@@ -2637,7 +2637,7 @@
     "expectedLocation": "/#opiniones",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/megapark-fuente-alamo",
@@ -2648,7 +2648,7 @@
     "expectedLocation": "/autoconsumo-remoto/fuente-alamo",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/megapark-las-vegas",
@@ -2659,7 +2659,7 @@
     "expectedLocation": "/autoconsumo-remoto/torrontera",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/megapark-pisuerga",
@@ -2670,7 +2670,7 @@
     "expectedLocation": "/autoconsumo-remoto/liguerzana",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/megapark-talavera-eolico",
@@ -2681,7 +2681,7 @@
     "expectedLocation": "/autoconsumo-remoto",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/mensaje-a-descendientes",
@@ -2692,7 +2692,7 @@
     "expectedLocation": "/blog/septimo-aniversario-capsula-del-tiempo",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/mision",
@@ -2703,7 +2703,7 @@
     "expectedLocation": "/nosotros#mision",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/mision-2",
@@ -2714,7 +2714,7 @@
     "expectedLocation": "/nosotros#mision",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/nuestra-mision",
@@ -2725,7 +2725,7 @@
     "expectedLocation": "/nosotros#mision",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/nuestro-plan",
@@ -2736,7 +2736,7 @@
     "expectedLocation": "/nosotros#nuestro-plan",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/oferta-baterias-ecoflow-powerocean-con-instalacion-fotovoltaica",
@@ -2747,7 +2747,7 @@
     "expectedLocation": "/baterias",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/oferta-baterias-huawei",
@@ -2758,7 +2758,7 @@
     "expectedLocation": "/baterias",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/oferta-baterias-solax-x1-ies",
@@ -2769,7 +2769,7 @@
     "expectedLocation": "/baterias#solax-x1-ies",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/pack-ahorro-energetico-autoconsumo-baterias-b2b",
@@ -2780,7 +2780,7 @@
     "expectedLocation": "/autoconsumo-remoto",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/pack-ahorro-energetico-autoconsumo-baterias-pack_ar",
@@ -2791,7 +2791,7 @@
     "expectedLocation": "/autoconsumo-remoto",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/pack-ahorro-energetico-autoconsumo-baterias-pack_ar_canadian_lp",
@@ -2802,7 +2802,7 @@
     "expectedLocation": "/autoconsumo-remoto",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/pack-ahorro-energetico-b2b-crealsa",
@@ -2813,7 +2813,7 @@
     "expectedLocation": "/autoconsumo-remoto",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/partners-y-empleo",
@@ -2824,7 +2824,7 @@
     "expectedLocation": "/nosotros",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/preguntas-frecuentes",
@@ -2835,7 +2835,7 @@
     "expectedLocation": "/contacto",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/preguntas-frecuentes-app",
@@ -2846,7 +2846,7 @@
     "expectedLocation": "/soy-comunero",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/programa-de-referidos-csp",
@@ -2857,7 +2857,7 @@
     "expectedLocation": "/soy-comunero",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/proyecto-torrontera",
@@ -2868,7 +2868,7 @@
     "expectedLocation": "/autoconsumo-remoto/torrontera",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/proyecto-torrontera-configurador",
@@ -2879,7 +2879,7 @@
     "expectedLocation": "/autoconsumo-remoto/torrontera",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/prueba-autoconsumo-remoto",
@@ -2890,7 +2890,7 @@
     "expectedLocation": "/autoconsumo-remoto",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/prueba-tejados-en-red",
@@ -2901,7 +2901,7 @@
     "expectedLocation": "/rentabiliza-tu-activo",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/que-es-autoconsumo-remoto-como-funciona",
@@ -2912,7 +2912,7 @@
     "expectedLocation": "/autoconsumo-remoto",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/remoto",
@@ -2923,7 +2923,7 @@
     "expectedLocation": "/autoconsumo-remoto",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/reserva-megapark-talavera-eolico",
@@ -2934,7 +2934,7 @@
     "expectedLocation": "/autoconsumo-remoto",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/respaldo-sin-placas",
@@ -2945,7 +2945,7 @@
     "expectedLocation": "/baterias#preguntas",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/santa-cruz-de-paniagua",
@@ -2956,7 +2956,7 @@
     "expectedLocation": "/comunidades-energeticas/santa-cruz-de-paniagua",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/tarifas",
@@ -2967,7 +2967,7 @@
     "expectedLocation": "/comercializadora-y-tarifas",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/vimart-gt-autoconsumo-remoto-con-baterias",
@@ -2978,6 +2978,6 @@
     "expectedLocation": "/autoconsumo-remoto",
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   }
 ]
