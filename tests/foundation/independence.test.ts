@@ -174,6 +174,23 @@ test("source scanning detects forbidden references without following symlinks", 
   ]);
 });
 
+test("source scanning permits content literals named next", async () => {
+  const fixture = await createRepository();
+  const scanRoot = join(fixture.cleanupRoot, "scan");
+  const contentPath = join(scanRoot, "community-data.ts");
+
+  await mkdir(scanRoot);
+  await writeFile(
+    contentPath,
+    [
+      'export type MilestoneState = "active" | "current" | "next";',
+      'export const nextAction = "Completar la legalización";',
+    ].join("\n"),
+  );
+
+  assert.deepEqual(await findSourceCheckoutReferences([contentPath]), []);
+});
+
 test("source scanning skips binary public assets and detects backtick runtime imports", async () => {
   const fixture = await createRepository();
   const scanRoot = join(fixture.cleanupRoot, "scan");

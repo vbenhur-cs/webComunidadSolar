@@ -95,6 +95,17 @@ function isBinaryPublicAsset(contents: Buffer): boolean {
   }
 }
 
+function hasForbiddenModuleReference(
+  text: string,
+  moduleName: "next" | "vinext",
+): boolean {
+  const quotedSpecifier = String.raw`["'\x60]${moduleName}(?:\/[^"'\x60\s)]+)?["'\x60]`;
+  return new RegExp(
+    String.raw`(?:\bimport\s*(?:${quotedSpecifier}|\(\s*${quotedSpecifier}\s*\)|[^\r\n;]*?\bfrom\s+${quotedSpecifier})|\bexport\s+[^\r\n;]*?\bfrom\s+${quotedSpecifier}|\brequire\s*\(\s*${quotedSpecifier}\s*\))`,
+    "i",
+  ).test(text);
+}
+
 async function scanSourceEntry(
   path: string,
   displayPath: string,
@@ -140,10 +151,10 @@ async function scanSourceEntry(
   if (/\bcomunidadsolarweb\b/i.test(text)) {
     violations.add(`${portableDisplayPath}: comunidadsolarweb`);
   }
-  if (/["'\x60]next(?:\/[^"'\x60]*)?["'\x60]/i.test(text)) {
+  if (hasForbiddenModuleReference(text, "next")) {
     violations.add(`${portableDisplayPath}: next`);
   }
-  if (/["'\x60]vinext(?:\/[^"'\x60]*)?["'\x60]/i.test(text)) {
+  if (hasForbiddenModuleReference(text, "vinext")) {
     violations.add(`${portableDisplayPath}: vinext`);
   }
 }
