@@ -4,8 +4,17 @@ import {
   type ServerResponse,
 } from "node:http";
 import { randomUUID } from "node:crypto";
-import { access, mkdir, readFile, stat, writeFile } from "node:fs/promises";
-import { isAbsolute, join, relative, resolve, sep } from "node:path";
+import {
+  access,
+  lstat,
+  mkdir,
+  readFile,
+  realpath,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawn } from "node:child_process";
 
@@ -67,6 +76,7 @@ export interface RunVisualParityOptions {
   scope: "foundation";
   allowPending: boolean;
   root?: string;
+  lifecycleTimeoutMs?: number;
 }
 
 export interface VisualCaptureInput {
@@ -128,13 +138,150 @@ interface StartedWranglerWorker {
   dispose(): Promise<void>;
 }
 
+export interface CandidateRuntimeDependencies {
+  startWorker?(topology: DeploymentTopology): Promise<StartedWranglerWorker>;
+  startBridge?(
+    fetchWorker: (request: Request) => Promise<Response>,
+    timeoutMs: number,
+  ): Promise<VisualRuntime>;
+}
+
 const sourceWorkerEntry = ["dist", "server", "index.js"] as const;
 const visualFixtureFile = ["parity", "visual-fixtures.json"] as const;
+const defaultVisualLifecycleTimeoutMs = 30_000;
+const defaultCandidateBuildTimeoutMs = 120_000;
+const defaultProcessTerminationGraceMs = 5_000;
 
 function compareText(left: string, right: string): number {
   if (left < right) return -1;
   if (left > right) return 1;
   return 0;
+}
+
+function visualLifecycleTimeout(timeoutMs: number | undefined): number {
+  const resolved = timeoutMs ?? defaultVisualLifecycleTimeoutMs;
+  if (!Number.isInteger(resolved) || resolved <= 0) {
+    throw new Error(
+      "El timeout de ciclo de vida visual debe ser un entero positivo",
+    );
+  }
+  return resolved;
+}
+
+async function withinVisualTimeout<T>(
+  stage: string,
+  operation: Promise<T>,
+  timeoutMs: number,
+): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      operation,
+      new Promise<T>((_resolve, reject) => {
+        timer = setTimeout(
+          () =>
+            reject(
+              new Error(
+                `El ciclo de vida visual superó ${timeoutMs} ms durante ${stage}`,
+              ),
+            ),
+          timeoutMs,
+        );
+      }),
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
+
+function preserveVisualFailure(
+  primaryFailure: unknown,
+  cleanupFailure: unknown,
+): void {
+  if (!(primaryFailure instanceof Error)) return;
+  try {
+    const existingCause = (primaryFailure as Error & { cause?: unknown }).cause;
+    Object.defineProperty(primaryFailure, "cause", {
+      configurable: true,
+      value:
+        existingCause === undefined
+          ? cleanupFailure
+          : new AggregateError(
+              [existingCause, cleanupFailure],
+              "También falló la limpieza visual",
+            ),
+    });
+  } catch {
+    // Keep the primary error actionable even if it cannot carry a cause.
+  }
+}
+
+async function acquireVisualResource<T>(
+  acquisitionStage: string,
+  operation: Promise<T>,
+  cleanupStage: string,
+  cleanup: (resource: T) => Promise<void>,
+  timeoutMs: number,
+): Promise<T> {
+  try {
+    return await withinVisualTimeout(acquisitionStage, operation, timeoutMs);
+  } catch (error) {
+    void operation.then(
+      async (lateResource) => {
+        try {
+          await withinVisualTimeout(
+            cleanupStage,
+            cleanup(lateResource),
+            timeoutMs,
+          );
+        } catch {
+          // The acquisition deadline is the actionable failure for this run.
+        }
+      },
+      () => undefined,
+    );
+    throw error;
+  }
+}
+
+async function withVisualResource<T, TResult>(
+  acquisitionStage: string,
+  acquire: () => Promise<T>,
+  cleanupStage: string,
+  cleanup: (resource: T) => Promise<void>,
+  timeoutMs: number,
+  use: (resource: T) => Promise<TResult>,
+): Promise<TResult> {
+  const resource = await acquireVisualResource(
+    acquisitionStage,
+    acquire(),
+    cleanupStage,
+    cleanup,
+    timeoutMs,
+  );
+  let result!: TResult;
+  let primaryFailure: unknown;
+  let failed = false;
+  try {
+    result = await use(resource);
+  } catch (error) {
+    failed = true;
+    primaryFailure = error;
+  }
+  let cleanupFailure: unknown;
+  try {
+    await withinVisualTimeout(cleanupStage, cleanup(resource), timeoutMs);
+  } catch (error) {
+    cleanupFailure = error;
+  }
+  if (failed) {
+    if (cleanupFailure !== undefined) {
+      preserveVisualFailure(primaryFailure, cleanupFailure);
+    }
+    throw primaryFailure;
+  }
+  if (cleanupFailure !== undefined) throw cleanupFailure;
+  return result;
 }
 
 function routeKey(route: Pick<RouteMatrixEntry, "kind" | "path">): string {
@@ -297,11 +444,18 @@ function parseFixture(value: unknown): CaptureFixture {
       throw new Error("Header de fixture visual inválido");
     return [name, header] as const;
   });
+  if (!/^[A-Za-z0-9+/]*={0,2}$/.test(value.bodyBase64)) {
+    throw new Error("Body base64 de fixture visual inválido");
+  }
+  const body = Buffer.from(value.bodyBase64, "base64");
+  if (body.toString("base64") !== value.bodyBase64) {
+    throw new Error("Body base64 de fixture visual no es canónico");
+  }
   return {
     url: value.url,
     status: value.status,
     headers: Object.fromEntries(headers),
-    body: Buffer.from(value.bodyBase64, "base64"),
+    body,
   };
 }
 
@@ -309,7 +463,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
-async function readVisualFixtures(root: string): Promise<CaptureFixture[]> {
+export async function readVisualFixtures(
+  root: string,
+): Promise<CaptureFixture[]> {
   const path = join(root, ...visualFixtureFile);
   let contents: string;
   try {
@@ -324,29 +480,114 @@ async function readVisualFixtures(root: string): Promise<CaptureFixture[]> {
   return value.map(parseFixture);
 }
 
-async function runCommand(
+export interface VisualCommandOptions {
+  timeoutMs?: number;
+  terminationGraceMs?: number;
+}
+
+interface VisualCommandCompletion {
+  code: number | null;
+  signal: NodeJS.Signals | null;
+}
+
+function signalVisualProcessGroup(
+  child: ReturnType<typeof spawn>,
+  signal: NodeJS.Signals,
+): void {
+  if (process.platform !== "win32" && typeof child.pid === "number") {
+    try {
+      process.kill(-child.pid, signal);
+      return;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ESRCH") return;
+    }
+  }
+  try {
+    child.kill(signal);
+  } catch {
+    // The child may already have exited while its close event is pending.
+  }
+}
+
+async function terminateVisualProcessGroup(
+  child: ReturnType<typeof spawn>,
+  completion: Promise<VisualCommandCompletion>,
+  graceMs: number,
+): Promise<void> {
+  const settled = completion.then(
+    () => undefined,
+    () => undefined,
+  );
+  signalVisualProcessGroup(child, "SIGTERM");
+  let graceTimer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      settled,
+      new Promise<void>((resolveGrace) => {
+        graceTimer = setTimeout(resolveGrace, graceMs);
+      }),
+    ]);
+  } finally {
+    if (graceTimer !== undefined) clearTimeout(graceTimer);
+  }
+  // A leader can close before descendants that inherited its process group.
+  // Signal the whole group again so that a TERM-resistant descendant cannot
+  // survive merely because the leader's close event resolved first.
+  signalVisualProcessGroup(child, "SIGKILL");
+  try {
+    await withinVisualTimeout(
+      "esperar la terminación SIGKILL del build candidato",
+      settled,
+      graceMs,
+    );
+  } catch {
+    // The original build deadline remains actionable after bounded kill attempts.
+  }
+}
+
+export async function runVisualCommand(
   command: string,
   arguments_: string[],
   root: string,
+  options: VisualCommandOptions = {},
 ): Promise<void> {
+  const timeoutMs = visualLifecycleTimeout(
+    options.timeoutMs ?? defaultCandidateBuildTimeoutMs,
+  );
+  const terminationGraceMs = visualLifecycleTimeout(
+    options.terminationGraceMs ?? defaultProcessTerminationGraceMs,
+  );
   const child = spawn(command, arguments_, {
     cwd: root,
+    detached: process.platform !== "win32",
     shell: false,
     stdio: "inherit",
   });
-  const code = await new Promise<number>((resolveCode, reject) => {
-    child.once("error", reject);
-    child.once("close", (exitCode) => resolveCode(exitCode ?? 1));
-  });
-  if (code !== 0) {
-    throw new Error(
-      `${command} ${arguments_.join(" ")} falló con código ${code}`,
+  const completion = new Promise<VisualCommandCompletion>(
+    (resolveCode, reject) => {
+      child.once("error", reject);
+      child.once("close", (code, signal) => resolveCode({ code, signal }));
+    },
+  );
+  try {
+    const result = await withinVisualTimeout(
+      "construir el candidato visual",
+      completion,
+      timeoutMs,
     );
+    if (result.code !== 0) {
+      throw new Error(
+        `${command} ${arguments_.join(" ")} falló con código ${result.code ?? "desconocido"}${result.signal === null ? "" : ` (${result.signal})`}`,
+      );
+    }
+  } catch (error) {
+    await terminateVisualProcessGroup(child, completion, terminationGraceMs);
+    throw error;
   }
 }
 
 async function buildCandidate(root: string): Promise<void> {
-  await runCommand(
+  await runVisualCommand(
     process.platform === "win32" ? "npm.cmd" : "npm",
     ["run", "build"],
     root,
@@ -355,19 +596,29 @@ async function buildCandidate(root: string): Promise<void> {
 
 async function closeServer(
   server: ReturnType<typeof createServer>,
+  timeoutMs = defaultVisualLifecycleTimeoutMs,
 ): Promise<void> {
-  await new Promise<void>((resolveClose, reject) => {
-    server.close((error) => {
-      if (
-        error &&
-        (error as NodeJS.ErrnoException).code !== "ERR_SERVER_NOT_RUNNING"
-      ) {
-        reject(error);
-        return;
-      }
-      resolveClose();
-    });
-  });
+  try {
+    await withinVisualTimeout(
+      "cerrar el bridge loopback",
+      new Promise<void>((resolveClose, reject) => {
+        server.close((error) => {
+          if (
+            error &&
+            (error as NodeJS.ErrnoException).code !== "ERR_SERVER_NOT_RUNNING"
+          ) {
+            reject(error);
+            return;
+          }
+          resolveClose();
+        });
+      }),
+      visualLifecycleTimeout(timeoutMs),
+    );
+  } catch (error) {
+    server.closeAllConnections?.();
+    throw error;
+  }
 }
 
 function requestHeaders(incoming: IncomingMessage): Headers {
@@ -402,7 +653,9 @@ function writeBridgeFailure(error: unknown, outgoing: ServerResponse): void {
 
 async function startLoopbackBridge(
   fetchWorker: (request: Request) => Promise<Response>,
+  timeoutMs = defaultVisualLifecycleTimeoutMs,
 ): Promise<VisualRuntime> {
+  const boundedTimeoutMs = visualLifecycleTimeout(timeoutMs);
   let origin = "";
   const server = createServer((incoming, outgoing) => {
     void (async () => {
@@ -420,16 +673,35 @@ async function startLoopbackBridge(
       }
     })();
   });
-  await new Promise<void>((resolveListen, reject) => {
+  const listening = new Promise<void>((resolveListen, reject) => {
     server.once("error", reject);
     server.listen({ host: "127.0.0.1", port: 0 }, () => {
       server.off("error", reject);
       resolveListen();
     });
   });
+  try {
+    await withinVisualTimeout(
+      "escuchar el bridge loopback",
+      listening,
+      boundedTimeoutMs,
+    );
+  } catch (error) {
+    void listening.then(
+      async () => {
+        try {
+          await closeServer(server, boundedTimeoutMs);
+        } catch {
+          // The bridge readiness deadline is the actionable failure.
+        }
+      },
+      () => undefined,
+    );
+    throw error;
+  }
   const address = server.address();
   if (address === null || typeof address === "string" || address.port <= 0) {
-    await closeServer(server);
+    await closeServer(server, boundedTimeoutMs);
     throw new Error(
       "No se pudo asignar un puerto loopback para captura visual",
     );
@@ -441,16 +713,16 @@ async function startLoopbackBridge(
     async dispose() {
       if (disposed) return;
       disposed = true;
-      await closeServer(server);
+      await closeServer(server, boundedTimeoutMs);
     },
   };
 }
 
-async function startCandidateRuntime(
+async function defaultStartCandidateWorker(
   topology: DeploymentTopology,
-): Promise<VisualRuntime> {
+): Promise<StartedWranglerWorker> {
   const { unstable_startWorker } = await import("wrangler");
-  const worker = (await unstable_startWorker({
+  return (await unstable_startWorker({
     config: topology.wranglerConfigPath,
     entrypoint: topology.entryPath,
     dev: {
@@ -463,27 +735,87 @@ async function startCandidateRuntime(
   } as Parameters<
     typeof unstable_startWorker
   >[0])) as unknown as StartedWranglerWorker;
+}
+
+async function disposeCandidateRuntimeParts(
+  worker: StartedWranglerWorker,
+  bridge: VisualRuntime | undefined,
+  timeoutMs: number,
+): Promise<void> {
+  let cleanupFailure: unknown;
+  if (bridge !== undefined) {
+    try {
+      await withinVisualTimeout(
+        "cerrar el bridge loopback candidato",
+        bridge.dispose(),
+        timeoutMs,
+      );
+    } catch (error) {
+      cleanupFailure = error;
+    }
+  }
   try {
-    await worker.ready;
-    const bridge = await startLoopbackBridge(async (request) =>
-      worker.fetch(request.url, {
-        method: request.method,
-        headers: request.headers,
-        redirect: "manual",
-      }),
+    await withinVisualTimeout(
+      "cerrar el Worker candidato",
+      worker.dispose(),
+      timeoutMs,
+    );
+  } catch (error) {
+    if (cleanupFailure === undefined) cleanupFailure = error;
+    else preserveVisualFailure(cleanupFailure, error);
+  }
+  if (cleanupFailure !== undefined) throw cleanupFailure;
+}
+
+export async function startCandidateRuntime(
+  topology: DeploymentTopology,
+  timeoutMs = defaultVisualLifecycleTimeoutMs,
+  dependencies: CandidateRuntimeDependencies = {},
+): Promise<VisualRuntime> {
+  const boundedTimeoutMs = visualLifecycleTimeout(timeoutMs);
+  const startWorker = dependencies.startWorker ?? defaultStartCandidateWorker;
+  const startBridge = dependencies.startBridge ?? startLoopbackBridge;
+  const worker = await acquireVisualResource(
+    "iniciar el Worker candidato",
+    startWorker(topology),
+    "cerrar el Worker candidato",
+    (candidateWorker) => candidateWorker.dispose(),
+    boundedTimeoutMs,
+  );
+  let bridge: VisualRuntime | undefined;
+  try {
+    await withinVisualTimeout(
+      "esperar el Worker candidato listo",
+      worker.ready,
+      boundedTimeoutMs,
+    );
+    bridge = await acquireVisualResource(
+      "iniciar el bridge loopback candidato",
+      startBridge(
+        async (request) =>
+          worker.fetch(request.url, {
+            method: request.method,
+            headers: request.headers,
+            redirect: "manual",
+          }),
+        boundedTimeoutMs,
+      ),
+      "cerrar el bridge loopback candidato",
+      (candidateBridge) => candidateBridge.dispose(),
+      boundedTimeoutMs,
     );
     return {
       origin: bridge.origin,
       async dispose() {
-        try {
-          await bridge.dispose();
-        } finally {
-          await worker.dispose();
-        }
+        await disposeCandidateRuntimeParts(worker, bridge, boundedTimeoutMs);
       },
     };
   } catch (error) {
-    await worker.dispose();
+    try {
+      await disposeCandidateRuntimeParts(worker, bridge, boundedTimeoutMs);
+    } catch (cleanupFailure) {
+      preserveVisualFailure(error, cleanupFailure);
+    }
     throw error;
   }
 }
@@ -527,13 +859,55 @@ function assetPath(
   return isWithin(resolvedRoot, candidate) ? candidate : null;
 }
 
-async function existingFile(path: string): Promise<boolean> {
+async function resolveArchiveRoot(root: string): Promise<string> {
+  const rootEntry = await lstat(root);
+  if (!rootEntry.isDirectory() && !rootEntry.isSymbolicLink()) {
+    throw new Error(
+      `La raíz de assets del archive no es un directorio: ${root}`,
+    );
+  }
+  const resolvedRoot = await realpath(root);
+  if (!(await stat(resolvedRoot)).isDirectory()) {
+    throw new Error(
+      `La raíz de assets del archive no es un directorio: ${root}`,
+    );
+  }
+  return resolvedRoot;
+}
+
+async function existingArchiveFile(
+  archiveRoot: string,
+  candidate: string,
+): Promise<string | null> {
+  let resolvedParent: string;
   try {
-    return (await stat(path)).isFile();
+    resolvedParent = await realpath(dirname(candidate));
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
     throw error;
   }
+  if (!isWithin(archiveRoot, resolvedParent)) {
+    throw new Error(`El asset del archive sale de su raíz: ${candidate}`);
+  }
+  let entry: Awaited<ReturnType<typeof lstat>>;
+  try {
+    entry = await lstat(candidate);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+    throw error;
+  }
+  if (!entry.isFile() && !entry.isSymbolicLink()) return null;
+  let resolvedFile: string;
+  try {
+    resolvedFile = await realpath(candidate);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+    throw error;
+  }
+  if (!isWithin(archiveRoot, resolvedFile)) {
+    throw new Error(`El asset del archive sale de su raíz: ${candidate}`);
+  }
+  return (await stat(resolvedFile)).isFile() ? resolvedFile : null;
 }
 
 export interface SourceAssetFetcher {
@@ -542,13 +916,20 @@ export interface SourceAssetFetcher {
 
 export function sourceAssetFetcher(root: string): SourceAssetFetcher {
   const assetRoots = ["dist/client", "dist/public", "public"];
+  const archiveRoot = resolveArchiveRoot(root);
   return {
     async fetch(request) {
       const url = new URL(request.url);
+      const resolvedArchiveRoot = await archiveRoot;
       for (const assetRoot of assetRoots) {
         const path = assetPath(root, assetRoot, url.pathname);
-        if (path === null || !(await existingFile(path))) continue;
-        const body = await readFile(path);
+        if (path === null) continue;
+        const resolvedFile = await existingArchiveFile(
+          resolvedArchiveRoot,
+          path,
+        );
+        if (resolvedFile === null) continue;
+        const body = await readFile(resolvedFile);
         return new Response(request.method === "HEAD" ? null : body, {
           status: 200,
           headers: { "content-type": assetContentType(path) },
@@ -570,6 +951,7 @@ export async function dispatchSourceRuntimeRequest(
 
 async function startSourceRuntime(
   build: TemporarySourceBuild,
+  timeoutMs = defaultVisualLifecycleTimeoutMs,
 ): Promise<VisualRuntime> {
   const entryPath = resolveInside(
     build.root,
@@ -613,14 +995,16 @@ async function startSourceRuntime(
     waitUntil() {},
     passThroughOnException() {},
   };
-  return startLoopbackBridge(async (request) =>
-    dispatchSourceRuntimeRequest(
-      request,
-      assets,
-      (workerRequest) =>
-        module.default?.fetch(workerRequest, environment, context) ??
-        Promise.reject(new Error("El Worker fuente no está disponible")),
-    ),
+  return startLoopbackBridge(
+    async (request) =>
+      dispatchSourceRuntimeRequest(
+        request,
+        assets,
+        (workerRequest) =>
+          module.default?.fetch(workerRequest, environment, context) ??
+          Promise.reject(new Error("El Worker fuente no está disponible")),
+      ),
+    timeoutMs,
   );
 }
 
@@ -667,6 +1051,7 @@ function escapeHtml(value: unknown): string {
 
 function serializableResult(result: VisualComparison): VisualResult & {
   dimensionMismatch: VisualComparison["dimensionMismatch"];
+  missingSelectors: VisualComparison["missingSelectors"];
 } {
   return {
     routeKey: result.routeKey,
@@ -677,6 +1062,7 @@ function serializableResult(result: VisualComparison): VisualResult & {
     files: result.files,
     status: result.status,
     dimensionMismatch: result.dimensionMismatch,
+    missingSelectors: result.missingSelectors,
   };
 }
 
@@ -689,7 +1075,8 @@ function reportHtml(
     .map((result) => {
       const diff = result.files.diff ?? "—";
       const geometry = JSON.stringify(result.geometryDiffs);
-      return `<tr><td>${escapeHtml(result.routeKey)}</td><td>${escapeHtml(result.viewport.name)}</td><td>${escapeHtml(result.status)}</td><td>${escapeHtml(result.differentPixels)}</td><td>${escapeHtml(result.diffRatio)}</td><td>${escapeHtml(result.files.reference)}</td><td>${escapeHtml(result.files.candidate)}</td><td>${escapeHtml(diff)}</td><td><code>${escapeHtml(geometry)}</code></td></tr>`;
+      const missingSelectors = JSON.stringify(result.missingSelectors);
+      return `<tr><td>${escapeHtml(result.routeKey)}</td><td>${escapeHtml(result.viewport.name)}</td><td>${escapeHtml(result.status)}</td><td>${escapeHtml(result.differentPixels)}</td><td>${escapeHtml(result.diffRatio)}</td><td>${escapeHtml(result.files.reference)}</td><td>${escapeHtml(result.files.candidate)}</td><td>${escapeHtml(diff)}</td><td><code>${escapeHtml(geometry)}</code></td><td><code>${escapeHtml(missingSelectors)}</code></td></tr>`;
     })
     .join("");
   return `<!doctype html>
@@ -700,7 +1087,7 @@ function reportHtml(
 <style>body{font-family:system-ui,sans-serif;margin:2rem;color:#1f2937}table{border-collapse:collapse;width:100%;font-size:.875rem}th,td{border:1px solid #d1d5db;padding:.5rem;text-align:left;vertical-align:top}th{background:#f3f4f6}code{white-space:pre-wrap;overflow-wrap:anywhere}</style>
 <h1>Visual parity: ${escapeHtml(scope)}</h1>
 <p>routes=${escapeHtml(summary.routes)} results=${escapeHtml(summary.results)} pending=${escapeHtml(summary.pending)} review-required=${escapeHtml(summary.reviewRequired)} matched=${escapeHtml(summary.matched)}</p>
-<table><thead><tr><th>route</th><th>viewport</th><th>status</th><th>different pixels</th><th>ratio</th><th>reference</th><th>candidate</th><th>diff</th><th>geometry diffs</th></tr></thead><tbody>${rows}</tbody></table>
+<table><thead><tr><th>route</th><th>viewport</th><th>status</th><th>different pixels</th><th>ratio</th><th>reference</th><th>candidate</th><th>diff</th><th>geometry diffs</th><th>missing selectors</th></tr></thead><tbody>${rows}</tbody></table>
 </html>
 `;
 }
@@ -716,7 +1103,7 @@ function artifactPath(root: string, portablePath: string): string {
   return path;
 }
 
-async function writeVisualReports(
+export async function writeVisualReports(
   input: VisualReportInput,
 ): Promise<VisualArtifactPaths> {
   const artifactRoot = resolve(input.root, ".artifacts", "visual");
@@ -741,6 +1128,15 @@ async function writeVisualReports(
         artifactPath(input.root, evidence.result.files.diff),
         evidence.result.diffPng,
       );
+    } else {
+      const staleDiffPath = artifactPath(
+        input.root,
+        toPortableRelative(
+          input.root,
+          join(dirname(referencePath), "diff.png"),
+        ),
+      );
+      await rm(staleDiffPath, { force: true });
     }
   }
   const summary = summaryFor(input.results);
@@ -770,6 +1166,7 @@ export async function runVisualParity(
     throw new Error(`Scope visual no soportado: ${options.scope}`);
   }
   const root = resolve(options.root ?? process.cwd());
+  const lifecycleTimeoutMs = visualLifecycleTimeout(options.lifecycleTimeoutMs);
   const assertSource =
     dependencies.assertSourcePristine ?? assertSourcePristine;
   const build = dependencies.buildCandidate ?? buildCandidate;
@@ -777,105 +1174,160 @@ export async function runVisualParity(
     dependencies.resolveCandidateTopology ?? resolveDeploymentTopology;
   const readMatrix = dependencies.readMatrix ?? readExistingRouteMatrix;
   const readFixtures = dependencies.readFixtures ?? readVisualFixtures;
-  const startCandidate = dependencies.startCandidate ?? startCandidateRuntime;
+  const startCandidate =
+    dependencies.startCandidate ??
+    ((topology: DeploymentTopology) =>
+      startCandidateRuntime(topology, lifecycleTimeoutMs));
   const sourceBuild =
     dependencies.withTemporarySourceBuild ?? withTemporarySourceBuild;
-  const startReference = dependencies.startReference ?? startSourceRuntime;
+  const startReference =
+    dependencies.startReference ??
+    ((build: TemporarySourceBuild) =>
+      startSourceRuntime(build, lifecycleTimeoutMs));
   const launchBrowser = dependencies.launchBrowser ?? launchChromium;
   const capture = dependencies.capture ?? captureVisual;
   const writeReports = dependencies.writeReports ?? writeVisualReports;
 
-  await assertSource();
+  await withinVisualTimeout(
+    "verificar la referencia antes de captura",
+    assertSource(),
+    lifecycleTimeoutMs,
+  );
+  let visualResult!: VisualParityResult;
+  let primaryFailure: unknown;
+  let failed = false;
   try {
-    const [matrix, fixtures] = await Promise.all([
-      readMatrix(root),
-      readFixtures(root),
-    ]);
+    const [matrix, fixtures] = await withinVisualTimeout(
+      "leer matriz y fixtures visuales",
+      Promise.all([readMatrix(root), readFixtures(root)]),
+      lifecycleTimeoutMs,
+    );
     const routes = selectFoundationVisualRoutes(matrix);
     await build(root);
-    const topology = await resolveTopology(root);
-    const candidate = await startCandidate(topology, root);
-    try {
-      return await sourceBuild(async (source) => {
-        const reference = await startReference(source);
-        try {
-          const browser = await launchBrowser();
-          try {
-            const localOrigins = [reference.origin, candidate.origin];
-            const evidence: VisualEvidence[] = [];
-            for (const route of routes) {
-              for (const viewport of VISUAL_VIEWPORTS) {
-                const referenceCapture = await capture({
-                  browser,
-                  side: "reference",
-                  runtime: reference,
-                  route,
-                  viewport,
-                  localOrigins,
-                  fixtures,
-                });
-                const candidateCapture = await capture({
-                  browser,
-                  side: "candidate",
-                  runtime: candidate,
-                  route,
-                  viewport,
-                  localOrigins,
-                  fixtures,
-                });
-                const comparison = resultForPendingRoute(
-                  route,
-                  await compareVisuals(
-                    referenceCapture.screenshot,
-                    candidateCapture.screenshot,
-                    {
-                      routeKey: routeKey(route),
-                      viewport,
-                      referenceGeometry: referenceCapture.geometry,
-                      candidateGeometry: candidateCapture.geometry,
-                      files: artifactFiles(
-                        root,
-                        options.scope,
+    const topology = await withinVisualTimeout(
+      "resolver la topología del candidato visual",
+      resolveTopology(root),
+      lifecycleTimeoutMs,
+    );
+    visualResult = await withVisualResource(
+      "iniciar el runtime candidato",
+      () => startCandidate(topology, root),
+      "cerrar el runtime candidato",
+      (candidate) => candidate.dispose(),
+      lifecycleTimeoutMs,
+      async (candidate) =>
+        sourceBuild(async (source) =>
+          withVisualResource(
+            "iniciar el runtime de referencia",
+            () => startReference(source),
+            "cerrar el runtime de referencia",
+            (reference) => reference.dispose(),
+            lifecycleTimeoutMs,
+            async (reference) =>
+              withVisualResource(
+                "abrir Chromium para captura visual",
+                () => launchBrowser(),
+                "cerrar el navegador",
+                (browser) => browser.close(),
+                lifecycleTimeoutMs,
+                async (browser) => {
+                  const localOrigins = [reference.origin, candidate.origin];
+                  const evidence: VisualEvidence[] = [];
+                  for (const route of routes) {
+                    for (const viewport of VISUAL_VIEWPORTS) {
+                      const referenceCapture = await capture({
+                        browser,
+                        side: "reference",
+                        runtime: reference,
                         route,
                         viewport,
-                      ),
-                    },
-                  ),
-                );
-                evidence.push({
-                  result: comparison,
-                  reference: referenceCapture,
-                  candidate: candidateCapture,
-                });
-              }
-            }
-            const results = evidence.map((entry) => entry.result);
-            const summary = summaryFor(results);
-            const artifacts = await writeReports({
-              root,
-              scope: options.scope,
-              results,
-              evidence,
-            });
-            if (summary.pending > 0 && !options.allowPending) {
-              throw new Error(
-                "Visual parity contiene resultados pendiente; repita con --allow-pending para registrar evidencia sin afirmar paridad",
-              );
-            }
-            return { scope: options.scope, results, summary, artifacts };
-          } finally {
-            await browser.close();
-          }
-        } finally {
-          await reference.dispose();
-        }
-      });
-    } finally {
-      await candidate.dispose();
-    }
-  } finally {
-    await assertSource();
+                        localOrigins,
+                        fixtures,
+                      });
+                      const candidateCapture = await capture({
+                        browser,
+                        side: "candidate",
+                        runtime: candidate,
+                        route,
+                        viewport,
+                        localOrigins,
+                        fixtures,
+                      });
+                      const comparison = resultForPendingRoute(
+                        route,
+                        await compareVisuals(
+                          referenceCapture.screenshot,
+                          candidateCapture.screenshot,
+                          {
+                            routeKey: routeKey(route),
+                            viewport,
+                            referenceGeometry: referenceCapture.geometry,
+                            candidateGeometry: candidateCapture.geometry,
+                            referenceMissingSelectors:
+                              referenceCapture.missingSelectors,
+                            candidateMissingSelectors:
+                              candidateCapture.missingSelectors,
+                            files: artifactFiles(
+                              root,
+                              options.scope,
+                              route,
+                              viewport,
+                            ),
+                          },
+                        ),
+                      );
+                      evidence.push({
+                        result: comparison,
+                        reference: referenceCapture,
+                        candidate: candidateCapture,
+                      });
+                    }
+                  }
+                  const results = evidence.map((entry) => entry.result);
+                  const summary = summaryFor(results);
+                  const artifacts = await withinVisualTimeout(
+                    "escribir los reportes visuales",
+                    writeReports({
+                      root,
+                      scope: options.scope,
+                      results,
+                      evidence,
+                    }),
+                    lifecycleTimeoutMs,
+                  );
+                  if (summary.pending > 0 && !options.allowPending) {
+                    throw new Error(
+                      "Visual parity contiene resultados pendiente; repita con --allow-pending para registrar evidencia sin afirmar paridad",
+                    );
+                  }
+                  return { scope: options.scope, results, summary, artifacts };
+                },
+              ),
+          ),
+        ),
+    );
+  } catch (error) {
+    failed = true;
+    primaryFailure = error;
   }
+  let sourceCheckFailure: unknown;
+  try {
+    await withinVisualTimeout(
+      "verificar la referencia después de captura",
+      assertSource(),
+      lifecycleTimeoutMs,
+    );
+  } catch (error) {
+    sourceCheckFailure = error;
+  }
+  if (failed) {
+    if (sourceCheckFailure !== undefined) {
+      preserveVisualFailure(primaryFailure, sourceCheckFailure);
+    }
+    throw primaryFailure;
+  }
+  if (sourceCheckFailure !== undefined) throw sourceCheckFailure;
+  return visualResult;
 }
 
 export function formatVisualParitySummary(result: VisualParityResult): string {

@@ -252,3 +252,137 @@ staged final review below.
 - The deliberate concern remains: home is a pending smoke and visibly differs
   from the source. This harness records that evidence and does not call it
   matched or verified.
+
+## Round 2 — review remediation
+
+This round was applied on top of the initial Task 6 harness. It changes only
+the visual-harness scripts and their focused contract tests; it does not alter
+pages, CSS, baselines, routing, or `parity/route-matrix.json`.
+
+### TDD record
+
+Each review item was added as a failing focused test before its production
+change, then rerun GREEN before moving to the next item.
+
+1. **Strict raw pixels and dimensions.** The RED image contains four one-channel
+   RGBA deltas, including `[48,48,48,0]` versus `[48,48,48,1]`, a transparent
+   RGB delta, and an edge delta. The former `pixelmatch` count was `2` where
+   the test required `4`. GREEN keeps `pixelmatch` only for rendering and makes
+   a direct raw-RGBA scan authoritative, painting every raw-different pixel
+   opaque red in a same-dimension diff PNG. A separate RED/GREEN uses 2x3 and
+   3x2 images: four non-overlap coordinates plus one raw overlap delta now
+   report `differentPixels=5`, `diffRatio=0.625`, and no diff PNG. Thus a
+   dimension mismatch no longer fabricates the maximum canvas area as its
+   difference count.
+2. **Network fail-closed after capture.** The RED double invokes an undeclared
+   `https://late.example.test/close.js` route while `context.close()` is in
+   progress; the old behavior resolved capture (`Missing expected rejection`).
+   GREEN retains the first external-request `Error`, verifies it after a
+   successful close, and preserves the full URL. The current focused test
+   rejects with `Solicitud externa sin fixture visual:
+   https://late.example.test/close.js`.
+3. **Bounded lifecycle and child process cleanup.** REDs cover a late
+   `newContext()` resolution, a hanging context close, a hanging candidate
+   `worker.ready`, a hanging browser close while outer resources still close,
+   and preservation of a primary navigation/capture failure when cleanup also
+   expires. GREEN attaches bounded late cleanup to resources acquired after a
+   deadline; context, browser, worker, bridge readiness/disposal, report
+   writing, source guards, and loopback server close have actionable lifecycle
+   deadlines. The primary error remains the thrown error and a cleanup failure
+   is retained as its cause where possible. The candidate build has an
+   independent 120 s deadline and bounded detached process-group termination.
+   Its RED launches a leader that exits on `SIGTERM` and a descendant that
+   ignores it; GREEN always follows with group `SIGKILL`, proving neither the
+   descendant marker nor its PID survives.
+4. **Missing selectors.** The RED supplied every declared selector as missing
+   on both sides and was previously matched. GREEN serializes separately
+   sorted reference/candidate lists, retains them in JSON/HTML evidence, and
+   makes either list review-required. The deterministic assertion is
+   `{"reference":["footer","header"],"candidate":["footer","header"]}`.
+5. **Archive-only assets.** The existing regular `dist/client/assets` GET/HEAD
+   test remains green with exact bytes and MIME and without a Worker call.
+   The new RED puts an external directory behind `dist/public` and initially
+   failed with `Missing expected rejection`. GREEN uses `lstat` and `realpath`
+   for the archive root, candidate parent, and file before `readFile`; any
+   parent/file target outside the real archive root hard-fails before bytes are
+   read. Lexical traversal checks and worker delegation for absent paths and
+   `/` remain intact.
+6. **Artifact and fixture audits.** A two-write RED showed that a later
+   no-diff run left that route/viewport's old `diff.png`. GREEN removes only
+   the contained sibling `diff.png` when the later result has no diff buffer.
+   The fixture parser REDs for `%%%` and non-canonical `AA`, both of which
+   previously decoded silently; GREEN requires canonical standard Base64 while
+   accepting an explicit empty string as a zero-byte body.
+
+The final focused command passed all 31 tests:
+
+```text
+npm run test:unit -- tests/parity/visual-contract.test.ts
+# tests 31
+# pass 31
+# fail 0
+```
+
+### Round 2 full verification
+
+All gates were rerun after the final GREEN, followed by a real smoke without
+external intervention:
+
+```text
+npx playwright install chromium                       # exit 0
+npm test                                              # 89/89 pass, 13.02 s
+npm run format:check                                  # exit 0
+npm run lint                                          # exit 0
+npm run check                                         # 0 errors, 0 warnings, 2 hints
+npm run build                                         # exit 0
+npm run parity:manifest -- --check                    # SOURCE_MANIFEST_OK 271
+npx tsx scripts/capture-http-baseline.ts --check      # HTTP_BASELINE_OK 311 81
+npm run parity:http -- --scope foundation             # HTTP_PARITY_OK contracts=225 verified=122 pending=149 disposed=true
+npm run parity:visual -- --scope foundation --allow-pending
+# VISUAL_PARITY_PENDING scope=foundation routes=1 results=3 pending=3 review_required=0
+# real 71.39
+npm run source:check                                  # SOURCE_OK 68ea294c54dc5e15e20f470fc421a239927565a8 clean
+git diff --check                                      # exit 0
+```
+
+The real smoke's summary records exactly one route and three pending results.
+Both screenshot sides decode at the fixed viewport widths `1440`, `768`, and
+`390`. The reference screenshots remain the real styled archive page (all
+declared reference selectors present; visibly rendered stylesheet/layout),
+while the intentionally unimplemented foundation home candidate retains its
+round-one evidence: heights `900/1024/844`, missing structural selectors, and
+pixel/geometry/dimension differences. Those differences are pending evidence,
+not a visual-parity assertion. No `diff.png` exists for this pending-only
+smoke.
+
+The route-matrix hash is unchanged both immediately before and after the smoke:
+
+```text
+5ca79957e6c307f64c96cadfa36782f7c426129a1dddaca35c942bcb12f7de7f  parity/route-matrix.json
+```
+
+The post-smoke audit found no `comunidadsolar-source-build-*`,
+`visual-command-timeout-*`, fixture, stale-diff, or asset-escape temporary
+directory; no harness-attributable PID/PGID remained; and no stale artifact
+diff was present. The only observed running `workerd` is the pre-existing,
+unrelated Vite process in sibling `comunidadsolarweb`, so it was not touched.
+
+The two non-blocking check hints are unchanged in kind: the pre-existing
+deprecated `tseslint.config` signature in `eslint.config.js:6:25`, and the
+new TypeScript suggestion at `scripts/lib/visual-contract.ts:748:10` that
+`captureGeometry` could be `async`. They are hints, not errors/warnings; the
+latter remains a deliberate promise-combinator shape.
+
+### Round 2 self-review
+
+- Raw channel equality, not `pixelmatch`, is authoritative for the reported
+  same-dimension count; every raw delta is visible in its diff artifact.
+- Mismatched dimensions use a coordinate-union count, never an invented
+  maximum-area count, and intentionally have no diff PNG.
+- Error-preserving bounded cleanup covers acquired-late resources as well as
+  normal close paths; the actual child-process test proves the descendant
+  cannot outlive a timeout even when its leader exits first.
+- Archive serving verifies real filesystem containment before any read and
+  still delegates non-assets to the Worker; no source archive is mutated.
+- The only current worktree changes are the two harness files and their test;
+  ignored smoke artifacts were audited but not deleted.

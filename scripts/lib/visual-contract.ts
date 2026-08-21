@@ -51,7 +51,13 @@ export interface VisualComparison extends VisualResult {
     reference: PngDimensions;
     candidate: PngDimensions;
   } | null;
+  missingSelectors: MissingSelectorEvidence;
   diffPng: Buffer | null;
+}
+
+export interface MissingSelectorEvidence {
+  reference: string[];
+  candidate: string[];
 }
 
 export interface CompareVisualsOptions {
@@ -59,6 +65,8 @@ export interface CompareVisualsOptions {
   viewport: ViewportContract;
   referenceGeometry: GeometryBox[];
   candidateGeometry: GeometryBox[];
+  referenceMissingSelectors?: readonly string[];
+  candidateMissingSelectors?: readonly string[];
   files: {
     reference: string;
     candidate: string;
@@ -143,6 +151,7 @@ export interface CaptureContextOptions {
 
 export interface CaptureNetworkPolicyHandle {
   externalRequestFailure: Promise<never>;
+  assertNoExternalRequest(): void;
 }
 
 interface PngImage {
@@ -309,6 +318,84 @@ function ratio(differentPixels: number, pixelCount: number): number {
   return Number((differentPixels / pixelCount).toFixed(12));
 }
 
+function rawRgbaDifference(
+  reference: PngImage,
+  referenceOffset: number,
+  candidate: PngImage,
+  candidateOffset: number,
+): boolean {
+  return (
+    reference.data[referenceOffset] !== candidate.data[candidateOffset] ||
+    reference.data[referenceOffset + 1] !==
+      candidate.data[candidateOffset + 1] ||
+    reference.data[referenceOffset + 2] !==
+      candidate.data[candidateOffset + 2] ||
+    reference.data[referenceOffset + 3] !== candidate.data[candidateOffset + 3]
+  );
+}
+
+function normalizeMissingSelectors(
+  selectors: readonly string[] | undefined,
+  side: "reference" | "candidate",
+): string[] {
+  const normalized = [...(selectors ?? [])];
+  const seen = new Set<string>();
+  for (const selector of normalized) {
+    if (!selector || seen.has(selector)) {
+      throw new Error(`Selector ausente ${side} inválido: ${selector}`);
+    }
+    seen.add(selector);
+  }
+  return normalized.sort(compareText);
+}
+
+function markRawRgbaDifferences(
+  reference: PngImage,
+  candidate: PngImage,
+  diff: PngImage,
+): number {
+  let differentPixels = 0;
+  for (let offset = 0; offset < reference.data.length; offset += 4) {
+    if (!rawRgbaDifference(reference, offset, candidate, offset)) continue;
+    differentPixels += 1;
+    diff.data[offset] = 255;
+    diff.data[offset + 1] = 0;
+    diff.data[offset + 2] = 0;
+    diff.data[offset + 3] = 255;
+  }
+  return differentPixels;
+}
+
+function countDimensionMismatchDifferences(
+  reference: PngImage,
+  candidate: PngImage,
+): { differentPixels: number; unionPixelCount: number } {
+  const overlapWidth = Math.min(reference.width, candidate.width);
+  const overlapHeight = Math.min(reference.height, candidate.height);
+  const overlapPixels = overlapWidth * overlapHeight;
+  const referencePixels = reference.width * reference.height;
+  const candidatePixels = candidate.width * candidate.height;
+  const unionPixelCount = referencePixels + candidatePixels - overlapPixels;
+  let differentPixels = referencePixels + candidatePixels - overlapPixels * 2;
+  for (let y = 0; y < overlapHeight; y += 1) {
+    for (let x = 0; x < overlapWidth; x += 1) {
+      const referenceOffset = (y * reference.width + x) * 4;
+      const candidateOffset = (y * candidate.width + x) * 4;
+      if (
+        rawRgbaDifference(
+          reference,
+          referenceOffset,
+          candidate,
+          candidateOffset,
+        )
+      ) {
+        differentPixels += 1;
+      }
+    }
+  }
+  return { differentPixels, unionPixelCount };
+}
+
 export async function compareVisuals(
   referencePng: Buffer,
   candidatePng: Buffer,
@@ -320,6 +407,16 @@ export async function compareVisuals(
     options.referenceGeometry,
     options.candidateGeometry,
   );
+  const missingSelectors: MissingSelectorEvidence = {
+    reference: normalizeMissingSelectors(
+      options.referenceMissingSelectors,
+      "reference",
+    ),
+    candidate: normalizeMissingSelectors(
+      options.candidateMissingSelectors,
+      "candidate",
+    ),
+  };
   const sameDimensions =
     reference.width === candidate.width &&
     reference.height === candidate.height;
@@ -329,16 +426,13 @@ export async function compareVisuals(
         reference: { width: reference.width, height: reference.height },
         candidate: { width: candidate.width, height: candidate.height },
       };
-  const pixelCount = Math.max(
-    reference.width * reference.height,
-    candidate.width * candidate.height,
-  );
+  let pixelCount = reference.width * reference.height;
   let differentPixels = 0;
   let diffPng: Buffer | null = null;
 
   if (sameDimensions) {
     const diff = new PNG({ width: reference.width, height: reference.height });
-    differentPixels = pixelmatch(
+    pixelmatch(
       reference.data,
       candidate.data,
       diff.data,
@@ -346,14 +440,19 @@ export async function compareVisuals(
       reference.height,
       { threshold: 0, includeAA: true },
     );
+    differentPixels = markRawRgbaDifferences(reference, candidate, diff);
     if (differentPixels > 0) diffPng = PNG.sync.write(diff);
   } else {
-    differentPixels = pixelCount;
+    const mismatch = countDimensionMismatchDifferences(reference, candidate);
+    differentPixels = mismatch.differentPixels;
+    pixelCount = mismatch.unionPixelCount;
   }
 
   const status: VisualStatus =
     differentPixels > 0 ||
     geometryDiffs.length > 0 ||
+    missingSelectors.reference.length > 0 ||
+    missingSelectors.candidate.length > 0 ||
     dimensionMismatch !== null
       ? "review-required"
       : "matched";
@@ -370,6 +469,7 @@ export async function compareVisuals(
     },
     status,
     dimensionMismatch,
+    missingSelectors,
     diffPng,
   };
 }
@@ -460,6 +560,7 @@ export async function installCaptureNetworkPolicy(
   const localOrigins = new Set(policy.localOrigins.map(assertLoopbackOrigin));
   const fixtures = fixtureMap(policy.fixtures);
   let rejectExternalRequest: (error: Error) => void = () => undefined;
+  let firstExternalRequest: Error | undefined;
   const externalRequestFailure = new Promise<never>((_resolve, reject) => {
     rejectExternalRequest = reject;
   });
@@ -473,7 +574,10 @@ export async function installCaptureNetworkPolicy(
     const fixture = fixtures.get(url);
     if (fixture === undefined) {
       const error = new Error(`Solicitud externa sin fixture visual: ${url}`);
-      rejectExternalRequest(error);
+      if (firstExternalRequest === undefined) {
+        firstExternalRequest = error;
+        rejectExternalRequest(error);
+      }
       await route.abort?.("blockedbyclient");
       throw error;
     }
@@ -483,7 +587,12 @@ export async function installCaptureNetworkPolicy(
       body: Buffer.from(fixture.body),
     });
   });
-  return { externalRequestFailure };
+  return {
+    externalRequestFailure,
+    assertNoExternalRequest() {
+      if (firstExternalRequest !== undefined) throw firstExternalRequest;
+    },
+  };
 }
 
 function assertSelectors(selectors: readonly string[]): void {
@@ -570,6 +679,41 @@ async function withinCaptureTimeout<T>(
   }
 }
 
+async function closeCaptureContext(
+  context: CaptureContextLike,
+  timeoutMs: number,
+  target: string,
+): Promise<void> {
+  await withinCaptureTimeout(
+    "cerrar el contexto aislado",
+    context.close(),
+    timeoutMs,
+    target,
+  );
+}
+
+function preserveCaptureFailure(
+  captureFailure: unknown,
+  cleanupFailure: unknown,
+): void {
+  if (!(captureFailure instanceof Error)) return;
+  try {
+    const existingCause = (captureFailure as Error & { cause?: unknown }).cause;
+    Object.defineProperty(captureFailure, "cause", {
+      configurable: true,
+      value:
+        existingCause === undefined
+          ? cleanupFailure
+          : new AggregateError(
+              [existingCause, cleanupFailure],
+              "También falló la limpieza de captura visual",
+            ),
+    });
+  } catch {
+    // The primary capture error remains more useful than a cleanup timeout.
+  }
+}
+
 async function capturePendingImageDiagnostics(
   page: CapturePageLike,
   timeoutMs: number,
@@ -641,12 +785,34 @@ export async function captureDeterministicPage(
   assertSelectors(options.selectors);
   const timeoutMs = captureTimeout(options.timeoutMs);
   const target = `url=${options.url} viewport=${options.viewport.name}:${options.viewport.width}x${options.viewport.height}`;
-  const context = (await withinCaptureTimeout(
-    "crear el contexto aislado",
-    options.browser.newContext(CAPTURE_CONTEXT_OPTIONS(options.viewport)),
-    timeoutMs,
-    target,
-  )) as CaptureContextLike;
+  const contextPromise = options.browser.newContext(
+    CAPTURE_CONTEXT_OPTIONS(options.viewport),
+  ) as Promise<CaptureContextLike>;
+  let context: CaptureContextLike;
+  try {
+    context = await withinCaptureTimeout(
+      "crear el contexto aislado",
+      contextPromise,
+      timeoutMs,
+      target,
+    );
+  } catch (error) {
+    void contextPromise.then(
+      async (lateContext) => {
+        try {
+          await closeCaptureContext(lateContext, timeoutMs, target);
+        } catch {
+          // The original context-creation timeout remains the actionable error.
+        }
+      },
+      () => undefined,
+    );
+    throw error;
+  }
+  let networkPolicy: CaptureNetworkPolicyHandle | undefined;
+  let capturedVisual!: CapturedVisual;
+  let captureFailure: unknown;
+  let captureFailed = false;
   try {
     await withinCaptureTimeout(
       "inyectar el consentimiento necesario",
@@ -656,14 +822,15 @@ export async function captureDeterministicPage(
       timeoutMs,
       target,
     );
-    const networkPolicy = await withinCaptureTimeout(
+    const installedNetworkPolicy = await withinCaptureTimeout(
       "instalar la política de red",
       installCaptureNetworkPolicy(context, options),
       timeoutMs,
       target,
     );
+    networkPolicy = installedNetworkPolicy;
     const withExternalRequestFailure = <T>(operation: Promise<T>): Promise<T> =>
-      Promise.race([operation, networkPolicy.externalRequestFailure]);
+      Promise.race([operation, installedNetworkPolicy.externalRequestFailure]);
     const page = await withinCaptureTimeout(
       "crear una página aislada",
       withExternalRequestFailure(context.newPage()),
@@ -736,8 +903,24 @@ export async function captureDeterministicPage(
       timeoutMs,
       target,
     );
-    return { screenshot, geometry, missingSelectors };
-  } finally {
-    await context.close();
+    capturedVisual = { screenshot, geometry, missingSelectors };
+  } catch (error) {
+    captureFailed = true;
+    captureFailure = error;
   }
+  let cleanupFailure: unknown;
+  try {
+    await closeCaptureContext(context, timeoutMs, target);
+    if (!captureFailed) networkPolicy?.assertNoExternalRequest();
+  } catch (error) {
+    cleanupFailure = error;
+  }
+  if (captureFailed) {
+    if (cleanupFailure !== undefined) {
+      preserveCaptureFailure(captureFailure, cleanupFailure);
+    }
+    throw captureFailure;
+  }
+  if (cleanupFailure !== undefined) throw cleanupFailure;
+  return capturedVisual;
 }
