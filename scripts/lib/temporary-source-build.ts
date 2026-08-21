@@ -19,6 +19,16 @@ export interface TemporarySourceOptions {
   install?: boolean;
   build?: boolean;
   logRoot?: string;
+  /**
+   * Shared budget for the helper's `npm ci` / `npm run build` preparation.
+   * It only constrains npm stages: archive/git/tar setup is allowed to finish
+   * before expiry is observed, and the callback is outside this budget. An
+   * expiry waits for the bounded process group and this helper's finally
+   * cleanup before rejecting; it never returns while that archive is live.
+   */
+  deadlineMs?: number;
+  processTimeoutMs?: number;
+  processKillAfterMs?: number;
 }
 
 export interface TemporarySourceBuild {
@@ -174,6 +184,122 @@ async function runProcess(
     throw new Error(
       `${command} ${args.join(" ")} terminó con código ${result.code ?? "desconocido"}; log: ${logPath}`,
     );
+  }
+}
+
+function positiveMilliseconds(value: number, label: string): number {
+  if (!Number.isInteger(value) || value <= 0) {
+    throw new Error(`${label} debe ser un entero positivo de milisegundos`);
+  }
+  return value;
+}
+
+interface NpmPreparationDeadline {
+  expiresAt: number;
+  timeoutMs: number;
+}
+
+function npmPreparationDeadline(
+  timeoutMs: number | undefined,
+): NpmPreparationDeadline | undefined {
+  if (timeoutMs === undefined) return undefined;
+  const resolvedTimeoutMs = positiveMilliseconds(
+    timeoutMs,
+    "El presupuesto de procesos npm del archive temporal",
+  );
+  return {
+    expiresAt: Date.now() + resolvedTimeoutMs,
+    timeoutMs: resolvedTimeoutMs,
+  };
+}
+
+function remainingNpmPreparationMilliseconds(
+  deadline: NpmPreparationDeadline | undefined,
+): number | undefined {
+  if (deadline === undefined) return undefined;
+  const remaining = deadline.expiresAt - Date.now();
+  if (remaining <= 0) {
+    throw new Error(
+      `El presupuesto de procesos npm del archive temporal superó ${deadline.timeoutMs} ms`,
+    );
+  }
+  return Math.max(1, Math.ceil(remaining));
+}
+
+function sourcePreparationDeadlineFailure(
+  deadline: NpmPreparationDeadline,
+  cause: unknown,
+): Error {
+  return new Error(
+    `El presupuesto de procesos npm del archive temporal superó ${deadline.timeoutMs} ms`,
+    { cause },
+  );
+}
+
+function boundedProcessCommand(
+  command: string,
+  args: string[],
+  timeoutMs: number | undefined,
+  killAfterMs: number | undefined,
+): { command: string; args: string[] } {
+  if (timeoutMs === undefined) return { command, args };
+  const resolvedTimeoutMs = positiveMilliseconds(
+    timeoutMs,
+    "El timeout de proceso del archive temporal",
+  );
+  const resolvedKillAfterMs = positiveMilliseconds(
+    killAfterMs ?? 15_000,
+    "La gracia de terminación del archive temporal",
+  );
+  return {
+    command: "timeout",
+    args: [
+      "--signal=TERM",
+      `--kill-after=${resolvedKillAfterMs}ms`,
+      `${resolvedTimeoutMs}ms`,
+      command,
+      ...args,
+    ],
+  };
+}
+
+async function runNpmPreparationProcess(
+  label: string,
+  args: string[],
+  options: {
+    cwd: string;
+    deadline: NpmPreparationDeadline | undefined;
+    environment?: NodeJS.ProcessEnv;
+    logRoot: string;
+    processKillAfterMs: number | undefined;
+    processTimeoutMs: number | undefined;
+  },
+): Promise<void> {
+  const remaining = remainingNpmPreparationMilliseconds(options.deadline);
+  const timeoutMs =
+    remaining === undefined
+      ? options.processTimeoutMs
+      : Math.min(options.processTimeoutMs ?? remaining, remaining);
+  const process = boundedProcessCommand(
+    "npm",
+    args,
+    timeoutMs,
+    options.processKillAfterMs,
+  );
+  try {
+    await runProcess(label, process.command, process.args, {
+      cwd: options.cwd,
+      logRoot: options.logRoot,
+      environment: options.environment,
+    });
+  } catch (error) {
+    if (
+      options.deadline !== undefined &&
+      Date.now() >= options.deadline.expiresAt
+    ) {
+      throw sourcePreparationDeadlineFailure(options.deadline, error);
+    }
+    throw error;
   }
 }
 
@@ -444,6 +570,7 @@ export async function withTemporarySourceBuild<T>(
   run: (build: TemporarySourceBuild) => Promise<T>,
   options: TemporarySourceOptions = {},
 ): Promise<T> {
+  const preparationDeadline = npmPreparationDeadline(options.deadlineMs);
   const sourceRoot = await resolveSourceRoot(options.sourceRoot);
   const commit = options.commit ?? EXPECTED_SOURCE_COMMIT;
   const logRoot = resolve(
@@ -477,25 +604,43 @@ export async function withTemporarySourceBuild<T>(
             logRoot,
           )
         : undefined;
-
+    const timeoutRoot =
+      shouldBuild || options.processTimeoutMs !== undefined
+        ? await createPortableTimeout(supportRoot)
+        : undefined;
+    const useBoundedNpmProcesses =
+      options.deadlineMs !== undefined ||
+      options.processTimeoutMs !== undefined;
+    const processEnvironment =
+      timeoutRoot === undefined
+        ? environment
+        : {
+            ...environment,
+            PATH: [timeoutRoot, process.env.PATH]
+              .filter(Boolean)
+              .join(delimiter),
+          };
     if (options.install !== false) {
-      await runProcess("npm-ci", "npm", ["ci"], {
+      await runNpmPreparationProcess("npm-ci", ["ci"], {
         cwd: root,
         logRoot,
-        environment,
+        environment: useBoundedNpmProcesses ? processEnvironment : environment,
+        deadline: preparationDeadline,
+        processTimeoutMs: options.processTimeoutMs,
+        processKillAfterMs: options.processKillAfterMs,
       });
     }
     if (shouldBuild) {
-      const timeoutRoot = await createPortableTimeout(supportRoot);
-      await runProcess("npm-build", "npm", ["run", "build"], {
+      await runNpmPreparationProcess("npm-build", ["run", "build"], {
         cwd: root,
         logRoot,
-        environment: {
-          ...environment,
-          PATH: [timeoutRoot, process.env.PATH].filter(Boolean).join(delimiter),
-        },
+        environment: processEnvironment,
+        deadline: preparationDeadline,
+        processTimeoutMs: options.processTimeoutMs,
+        processKillAfterMs: options.processKillAfterMs,
       });
     }
+    remainingNpmPreparationMilliseconds(preparationDeadline);
 
     return await run({ root, sourceRoot, commit, logRoot });
   } finally {

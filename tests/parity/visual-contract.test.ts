@@ -26,6 +26,7 @@ import {
 import {
   dispatchSourceRuntimeRequest,
   formatVisualParitySummary,
+  launchChromium,
   readVisualFixtures,
   runVisualParity,
   runVisualCommand,
@@ -36,6 +37,10 @@ import {
   type VisualCaptureInput,
   type VisualParityDependencies,
 } from "../../scripts/parity-visual.ts";
+import type {
+  TemporarySourceBuild,
+  TemporarySourceOptions,
+} from "../../scripts/lib/temporary-source-build.ts";
 import type { RouteMatrixEntry } from "../../scripts/lib/route-inventory.ts";
 
 interface PngImage {
@@ -472,6 +477,42 @@ test("serves exact archive assets before the source worker and delegates absent 
   }
 });
 
+test("rejects a source archive root symlink before reading its assets", async () => {
+  const parent = await mkdtemp(join(tmpdir(), "visual-source-root-link-"));
+  const outsideRoot = await mkdtemp(
+    join(tmpdir(), "visual-source-root-outside-"),
+  );
+  const linkedRoot = join(parent, "linked-archive");
+  let workerCalls = 0;
+  try {
+    await mkdir(join(outsideRoot, "dist", "client", "assets"), {
+      recursive: true,
+    });
+    await writeFile(
+      join(outsideRoot, "dist", "client", "assets", "inside.css"),
+      "body{color:teal}\n",
+    );
+    await symlink(outsideRoot, linkedRoot, "dir");
+    const assets = sourceAssetFetcher(linkedRoot);
+
+    await assert.rejects(
+      dispatchSourceRuntimeRequest(
+        new Request("http://127.0.0.1:40133/assets/inside.css"),
+        assets,
+        async () => {
+          workerCalls += 1;
+          return new Response("worker");
+        },
+      ),
+      /raíz.*archive.*enlace|archive.*raíz.*enlace|symlink/i,
+    );
+    assert.equal(workerCalls, 0);
+  } finally {
+    await rm(parent, { recursive: true, force: true });
+    await rm(outsideRoot, { recursive: true, force: true });
+  }
+});
+
 test("removes only the stale diff PNG when a later write has no pixel diff", async () => {
   const root = await mkdtemp(join(tmpdir(), "visual-stale-diff-"));
   const referencePng = createPng(1, 1);
@@ -518,6 +559,248 @@ test("removes only the stale diff PNG when a later write has no pixel diff", asy
   }
 });
 
+test("refuses an external .artifacts/visual symlink before writing visual reports", async () => {
+  const root = await mkdtemp(join(tmpdir(), "visual-artifact-root-link-"));
+  const outsideRoot = await mkdtemp(
+    join(tmpdir(), "visual-artifact-root-outside-"),
+  );
+  const screenshot = createPng(1, 1);
+  const result = await compareVisuals(
+    screenshot,
+    createPng(1, 1, [[1, 0, 0, 255]]),
+    comparisonOptions(),
+  );
+  const evidence = {
+    result,
+    reference: { screenshot, geometry: [], missingSelectors: [] },
+    candidate: { screenshot, geometry: [], missingSelectors: [] },
+  };
+  try {
+    await mkdir(join(root, ".artifacts"), { recursive: true });
+    await symlink(outsideRoot, join(root, ".artifacts", "visual"), "dir");
+
+    await assert.rejects(
+      writeVisualReports({
+        root,
+        scope: "foundation",
+        results: [result],
+        evidence: [evidence],
+      }),
+      /artifacts.*visual.*enlace|enlace.*artifacts.*visual|symlink/i,
+    );
+    assert.equal(existsSync(join(outsideRoot, "foundation")), false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+    await rm(outsideRoot, { recursive: true, force: true });
+  }
+});
+
+test("refuses an external .artifacts parent symlink before writing visual reports", async () => {
+  const root = await mkdtemp(join(tmpdir(), "visual-artifact-parent-link-"));
+  const outsideRoot = await mkdtemp(
+    join(tmpdir(), "visual-artifact-parent-outside-"),
+  );
+  const screenshot = createPng(1, 1);
+  const result = await compareVisuals(
+    screenshot,
+    createPng(1, 1, [[1, 0, 0, 255]]),
+    comparisonOptions(),
+  );
+  const evidence = {
+    result,
+    reference: { screenshot, geometry: [], missingSelectors: [] },
+    candidate: { screenshot, geometry: [], missingSelectors: [] },
+  };
+  try {
+    await symlink(outsideRoot, join(root, ".artifacts"), "dir");
+
+    await assert.rejects(
+      writeVisualReports({
+        root,
+        scope: "foundation",
+        results: [result],
+        evidence: [evidence],
+      }),
+      /artifacts.*enlace|enlace.*artifacts|symlink/i,
+    );
+    assert.equal(existsSync(join(outsideRoot, "visual")), false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+    await rm(outsideRoot, { recursive: true, force: true });
+  }
+});
+
+test("refuses symlinked report components and final files", async () => {
+  const screenshot = createPng(1, 1);
+  const result = await compareVisuals(
+    screenshot,
+    createPng(1, 1, [[1, 0, 0, 255]]),
+    comparisonOptions(),
+  );
+  const evidence = {
+    result,
+    reference: { screenshot, geometry: [], missingSelectors: [] },
+    candidate: { screenshot, geometry: [], missingSelectors: [] },
+  };
+  const componentRoot = await mkdtemp(
+    join(tmpdir(), "visual-artifact-component-link-"),
+  );
+  const componentOutside = await mkdtemp(
+    join(tmpdir(), "visual-artifact-component-outside-"),
+  );
+  const finalRoot = await mkdtemp(join(tmpdir(), "visual-artifact-file-link-"));
+  const finalOutside = await mkdtemp(
+    join(tmpdir(), "visual-artifact-file-outside-"),
+  );
+  const outsideFile = join(finalOutside, "reference.png");
+  try {
+    await mkdir(join(componentRoot, ".artifacts", "visual"), {
+      recursive: true,
+    });
+    await symlink(
+      componentOutside,
+      join(componentRoot, ".artifacts", "visual", "foundation"),
+      "dir",
+    );
+    await assert.rejects(
+      writeVisualReports({
+        root: componentRoot,
+        scope: "foundation",
+        results: [result],
+        evidence: [evidence],
+      }),
+      /artifacts.*enlace|enlace.*artifacts|symlink/i,
+    );
+    assert.equal(existsSync(join(componentOutside, "home")), false);
+
+    await mkdir(
+      join(finalRoot, ".artifacts", "visual", "foundation", "home", "desktop"),
+      { recursive: true },
+    );
+    await writeFile(outsideFile, "outside sentinel");
+    await symlink(
+      outsideFile,
+      join(
+        finalRoot,
+        ".artifacts",
+        "visual",
+        "foundation",
+        "home",
+        "desktop",
+        "reference.png",
+      ),
+      "file",
+    );
+    await assert.rejects(
+      writeVisualReports({
+        root: finalRoot,
+        scope: "foundation",
+        results: [result],
+        evidence: [evidence],
+      }),
+      /artifact.*enlace|enlace.*artifact|symlink/i,
+    );
+    assert.equal(await readFile(outsideFile, "utf8"), "outside sentinel");
+  } finally {
+    await rm(componentRoot, { recursive: true, force: true });
+    await rm(componentOutside, { recursive: true, force: true });
+    await rm(finalRoot, { recursive: true, force: true });
+    await rm(finalOutside, { recursive: true, force: true });
+  }
+});
+
+test("refuses symlinked summaries and stale diff files without touching their targets", async () => {
+  const screenshot = createPng(1, 1);
+  const mismatched = await compareVisuals(
+    screenshot,
+    createPng(1, 1, [[1, 0, 0, 255]]),
+    comparisonOptions(),
+  );
+  const matched = await compareVisuals(
+    screenshot,
+    screenshot,
+    comparisonOptions(),
+  );
+  const summaryEvidence = {
+    result: mismatched,
+    reference: { screenshot, geometry: [], missingSelectors: [] },
+    candidate: { screenshot, geometry: [], missingSelectors: [] },
+  };
+  const staleEvidence = { ...summaryEvidence, result: matched };
+  const summaryRoot = await mkdtemp(join(tmpdir(), "visual-summary-file-link-"));
+  const staleRoot = await mkdtemp(join(tmpdir(), "visual-stale-file-link-"));
+  const outsideRoot = await mkdtemp(join(tmpdir(), "visual-file-link-outside-"));
+  const summaryOutside = join(outsideRoot, "summary.json");
+  const staleOutside = join(outsideRoot, "diff.png");
+  try {
+    await mkdir(join(summaryRoot, ".artifacts", "visual", "foundation"), {
+      recursive: true,
+    });
+    await writeFile(summaryOutside, "summary sentinel");
+    await symlink(
+      summaryOutside,
+      join(
+        summaryRoot,
+        ".artifacts",
+        "visual",
+        "foundation",
+        "summary.json",
+      ),
+      "file",
+    );
+    await assert.rejects(
+      writeVisualReports({
+        root: summaryRoot,
+        scope: "foundation",
+        results: [mismatched],
+        evidence: [summaryEvidence],
+      }),
+      /artifact.*enlace|enlace.*artifact|symlink/i,
+    );
+    assert.equal(await readFile(summaryOutside, "utf8"), "summary sentinel");
+
+    await mkdir(
+      join(
+        staleRoot,
+        ".artifacts",
+        "visual",
+        "foundation",
+        "home",
+        "desktop",
+      ),
+      { recursive: true },
+    );
+    await writeFile(staleOutside, "diff sentinel");
+    await symlink(
+      staleOutside,
+      join(
+        staleRoot,
+        ".artifacts",
+        "visual",
+        "foundation",
+        "home",
+        "desktop",
+        "diff.png",
+      ),
+      "file",
+    );
+    await assert.rejects(
+      writeVisualReports({
+        root: staleRoot,
+        scope: "foundation",
+        results: [matched],
+        evidence: [staleEvidence],
+      }),
+      /artifact.*enlace|enlace.*artifact|symlink/i,
+    );
+    assert.equal(await readFile(staleOutside, "utf8"), "diff sentinel");
+  } finally {
+    await rm(summaryRoot, { recursive: true, force: true });
+    await rm(staleRoot, { recursive: true, force: true });
+    await rm(outsideRoot, { recursive: true, force: true });
+  }
+});
+
 test("rejects invalid or non-canonical fixture base64 while accepting an explicit empty body", async () => {
   const root = await mkdtemp(join(tmpdir(), "visual-fixture-base64-"));
   const fixturePath = join(root, "parity", "visual-fixtures.json");
@@ -560,6 +843,9 @@ test("bounds candidate worker readiness and disposes the worker after its deadli
     async dispose() {
       disposed += 1;
     },
+    raw: {
+      async teardown() {},
+    },
   };
 
   await assert.rejects(
@@ -582,6 +868,442 @@ test("bounds candidate worker readiness and disposes the worker after its deadli
     /5 ms.*Worker candidato listo/i,
   );
   assert.equal(disposed, 1);
+});
+
+test("falls back to Wrangler raw teardown after a bounded candidate dispose failure", async () => {
+  let disposed = 0;
+  let tornDown = 0;
+  const worker = {
+    ready: new Promise<void>(() => undefined),
+    async fetch() {
+      return new Response("unused");
+    },
+    async dispose() {
+      disposed += 1;
+      await new Promise<void>(() => undefined);
+    },
+    raw: {
+      async teardown() {
+        tornDown += 1;
+      },
+    },
+  };
+
+  await assert.rejects(
+    startCandidateRuntime(
+      {
+        deployConfigPath: "/candidate/.wrangler/deploy/config.json",
+        wranglerConfigPath: "/candidate/dist/server/wrangler.json",
+        entryPath: "/candidate/dist/server/entry.mjs",
+      },
+      5,
+      {
+        async startWorker() {
+          return worker;
+        },
+        async startBridge() {
+          assert.fail("the bridge must not start before worker.ready");
+        },
+      },
+    ),
+    /5 ms.*Worker candidato listo/i,
+  );
+  assert.equal(disposed, 1);
+  assert.equal(tornDown, 1);
+});
+
+test("preserves candidate dispose and raw teardown deadline failures", async () => {
+  const worker = {
+    ready: new Promise<void>(() => undefined),
+    async fetch() {
+      return new Response("unused");
+    },
+    async dispose() {
+      await new Promise<void>(() => undefined);
+    },
+    raw: {
+      async teardown() {
+        await new Promise<void>(() => undefined);
+      },
+    },
+  };
+
+  await assert.rejects(
+    Promise.race([
+      startCandidateRuntime(
+        {
+          deployConfigPath: "/candidate/.wrangler/deploy/config.json",
+          wranglerConfigPath: "/candidate/dist/server/wrangler.json",
+          entryPath: "/candidate/dist/server/entry.mjs",
+        },
+        5,
+        {
+          async startWorker() {
+            return worker;
+          },
+          async startBridge() {
+            assert.fail("the bridge must not start before worker.ready");
+          },
+        },
+      ),
+      new Promise<never>((_resolve, reject) => {
+        setTimeout(
+          () => reject(new Error("El fallback raw teardown no tuvo deadline")),
+          100,
+        );
+      }),
+    ]),
+    (error: unknown) => {
+      assert.ok(error instanceof Error);
+      assert.match(error.message, /5 ms.*Worker candidato listo/i);
+      assert.ok(error.cause instanceof Error);
+      assert.match(error.cause.message, /1 ms.*cerrar el Worker candidato/i);
+      assert.ok(error.cause.cause instanceof Error);
+      assert.match(
+        error.cause.cause.message,
+        /1 ms.*forzar teardown del Worker candidato/i,
+      );
+      return true;
+    },
+  );
+});
+
+test("fails fast on Windows before spawning a visual candidate build", async () => {
+  const root = await mkdtemp(join(tmpdir(), "visual-command-windows-"));
+  const markerPath = join(root, "spawned.txt");
+  try {
+    await assert.rejects(
+      runVisualCommand(
+        process.execPath,
+        [
+          "-e",
+          `require("node:fs").writeFileSync(${JSON.stringify(markerPath)}, "spawned")`,
+        ],
+        root,
+        { platform: "win32" },
+      ),
+      /Windows.*árbol de procesos|árbol de procesos.*Windows/i,
+    );
+    assert.equal(existsSync(markerPath), false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("launches Chromium through BrowserServer and forces kill after a close deadline", async () => {
+  const events: string[] = [];
+  const browser = await launchChromium(5, {
+    chromium: {
+      async launchServer(options) {
+        assert.deepEqual(options, { headless: true });
+        events.push("launchServer");
+        return {
+          wsEndpoint() {
+            events.push("wsEndpoint");
+            return "ws://127.0.0.1:40151/playwright";
+          },
+          async close() {
+            events.push("server:close");
+            await new Promise<void>(() => undefined);
+          },
+          async kill() {
+            events.push("server:kill");
+          },
+        };
+      },
+      async connect(endpoint) {
+        events.push(`connect:${endpoint}`);
+        return {
+          async newContext() {
+            throw new Error("not used by this lifecycle test");
+          },
+        };
+      },
+    },
+  });
+
+  await assert.rejects(
+    Promise.race([
+      browser.close(),
+      new Promise<never>((_resolve, reject) => {
+        setTimeout(
+          () => reject(new Error("El kill del BrowserServer no tuvo deadline")),
+          100,
+        );
+      }),
+    ]),
+    /2 ms.*cerrar el servidor Chromium/i,
+  );
+  assert.deepEqual(events, [
+    "launchServer",
+    "wsEndpoint",
+    "connect:ws://127.0.0.1:40151/playwright",
+    "server:close",
+    "server:kill",
+  ]);
+});
+
+test("bounds a hanging BrowserServer kill without hiding its close deadline", async () => {
+  const browser = await launchChromium(5, {
+    chromium: {
+      async launchServer() {
+        return {
+          wsEndpoint() {
+            return "ws://127.0.0.1:40153/playwright";
+          },
+          async close() {
+            await new Promise<void>(() => undefined);
+          },
+          async kill() {
+            await new Promise<void>(() => undefined);
+          },
+        };
+      },
+      async connect() {
+        return {
+          async newContext() {
+            throw new Error("not used by this lifecycle test");
+          },
+        };
+      },
+    },
+  });
+
+  await assert.rejects(
+    Promise.race([
+      browser.close(),
+      new Promise<never>((_resolve, reject) => {
+        setTimeout(
+          () => reject(new Error("El kill del BrowserServer no tuvo deadline")),
+          100,
+        );
+      }),
+    ]),
+    (error: unknown) => {
+      assert.ok(error instanceof Error);
+      assert.match(error.message, /2 ms.*cerrar el servidor Chromium/i);
+      assert.ok(error.cause instanceof Error);
+      assert.match(
+        error.cause.message,
+        /2 ms.*forzar kill del servidor Chromium/i,
+      );
+      return true;
+    },
+  );
+});
+
+test("kills a BrowserServer that resolves after its launch deadline", async () => {
+  const events: string[] = [];
+  let releaseServer: (() => void) | undefined;
+  let confirmKill: (() => void) | undefined;
+  const killed = new Promise<void>((resolveKilled) => {
+    confirmKill = resolveKilled;
+  });
+  const server = {
+    wsEndpoint() {
+      return "ws://127.0.0.1:40154/playwright";
+    },
+    async close() {},
+    async kill() {
+      events.push("server:kill");
+      confirmKill?.();
+    },
+  };
+
+  await assert.rejects(
+    launchChromium(5, {
+      chromium: {
+        async launchServer() {
+          return await new Promise<typeof server>((resolveServer) => {
+            releaseServer = () => resolveServer(server);
+          });
+        },
+        async connect() {
+          assert.fail("a late BrowserServer must be killed before connect");
+        },
+      },
+    }),
+    /5 ms.*iniciar el servidor Chromium/i,
+  );
+  assert.ok(releaseServer);
+  releaseServer();
+  await Promise.race([
+    killed,
+    new Promise<never>((_resolve, reject) => {
+      setTimeout(
+        () => reject(new Error("El BrowserServer tardío no recibió kill")),
+        100,
+      );
+    }),
+  ]);
+  assert.deepEqual(events, ["server:kill"]);
+});
+
+test("kills an acquired BrowserServer after a failed or late Chromium connection", async () => {
+  for (const connection of ["failed", "late"] as const) {
+    const events: string[] = [];
+    await assert.rejects(
+      Promise.race([
+        launchChromium(5, {
+          chromium: {
+            async launchServer() {
+              events.push("launchServer");
+              return {
+                wsEndpoint() {
+                  events.push("wsEndpoint");
+                  return "ws://127.0.0.1:40152/playwright";
+                },
+                async close() {
+                  events.push("server:close");
+                },
+                async kill() {
+                  events.push("server:kill");
+                },
+              };
+            },
+            async connect() {
+              events.push("connect");
+              if (connection === "failed") throw new Error("connect exploded");
+              await new Promise<void>(() => undefined);
+              throw new Error("unreachable");
+            },
+          },
+        }),
+        new Promise<never>((_resolve, reject) => {
+          setTimeout(
+            () => reject(new Error("La conexión Chromium no tuvo deadline")),
+            100,
+          );
+        }),
+      ]),
+      connection === "failed"
+        ? /connect exploded/
+        : /5 ms.*conectar Chromium/i,
+    );
+    assert.deepEqual(events, ["launchServer", "wsEndpoint", "connect", "server:kill"]);
+  }
+});
+
+test("finishes the BrowserServer kill before visual parity returns from browser cleanup", async () => {
+  let killed = false;
+  const browser = await launchChromium(30, {
+    chromium: {
+      async launchServer() {
+        return {
+          wsEndpoint() {
+            return "ws://127.0.0.1:40155/playwright";
+          },
+          async close() {
+            await new Promise<void>((_resolve, reject) => {
+              setTimeout(() => reject(new Error("close root failure")), 25);
+            });
+          },
+          async kill() {
+            await new Promise((resolvePromise) => setTimeout(resolvePromise, 10));
+            killed = true;
+          },
+        };
+      },
+      async connect() {
+        return {
+          async newContext() {
+            throw new Error("the injected capture does not use newContext");
+          },
+        };
+      },
+    },
+  });
+  const events: string[] = [];
+  const dependencies = lifecycleDependencies({ events });
+  dependencies.launchBrowser = async () => browser;
+
+  await assert.rejects(
+    Promise.race([
+      runVisualParity(
+        {
+          scope: "foundation",
+          allowPending: true,
+          root: "/candidate",
+          lifecycleTimeoutMs: 30,
+        },
+        dependencies,
+      ),
+      new Promise<never>((_resolve, reject) => {
+        setTimeout(
+          () => reject(new Error("El cleanup Chromium no terminó")),
+          150,
+        );
+      }),
+    ]),
+  );
+  assert.equal(killed, true);
+  assert.ok(events.includes("archive:close"));
+});
+
+test("finishes raw Worker teardown before visual parity returns from candidate cleanup", async () => {
+  let tornDown = false;
+  const candidate = await startCandidateRuntime(
+    {
+      deployConfigPath: "/candidate/.wrangler/deploy/config.json",
+      wranglerConfigPath: "/candidate/dist/server/wrangler.json",
+      entryPath: "/candidate/dist/server/entry.mjs",
+    },
+    30,
+    {
+      async startWorker() {
+        return {
+          ready: Promise.resolve(),
+          async fetch() {
+            return new Response("unused");
+          },
+          async dispose() {
+            await new Promise<void>((_resolve, reject) => {
+              setTimeout(() => reject(new Error("dispose root failure")), 27);
+            });
+          },
+          raw: {
+            async teardown() {
+              await new Promise((resolvePromise) =>
+                setTimeout(resolvePromise, 5),
+              );
+              tornDown = true;
+            },
+          },
+        };
+      },
+      async startBridge() {
+        return {
+          origin: "http://127.0.0.1:40156",
+          async dispose() {},
+        };
+      },
+    },
+  );
+  const events: string[] = [];
+  const dependencies = lifecycleDependencies({ events });
+  dependencies.startCandidate = async () => candidate;
+
+  await assert.rejects(
+    Promise.race([
+      runVisualParity(
+        {
+          scope: "foundation",
+          allowPending: true,
+          root: "/candidate",
+          lifecycleTimeoutMs: 30,
+        },
+        dependencies,
+      ),
+      new Promise<never>((_resolve, reject) => {
+        setTimeout(
+          () => reject(new Error("El cleanup Worker no terminó")),
+          150,
+        );
+      }),
+    ]),
+  );
+  assert.equal(tornDown, true);
+  assert.ok(events.includes("archive:close"));
 });
 
 test("terminates a timed-out candidate build process group including a TERM-resistant descendant", async () => {
@@ -1267,6 +1989,94 @@ test("fails closed when an undeclared external request arrives during context cl
   assert.equal(contextClosed, true);
 });
 
+test("keeps a late external request visible when context close also fails", async () => {
+  let handler:
+    | ((route: ReturnType<typeof createRoute>["route"]) => Promise<void>)
+    | undefined;
+  const lateRequest = createRoute("https://late.example.test/close-failure.js");
+  const geometryElement = {
+    getBoundingClientRect() {
+      return { x: 0, y: 0, width: 1, height: 1 };
+    },
+  };
+  const context = {
+    async addInitScript() {},
+    async route(
+      _pattern: string,
+      registered: typeof handler,
+    ): Promise<void> {
+      handler = registered;
+    },
+    async newPage() {
+      return {
+        setDefaultTimeout() {},
+        setDefaultNavigationTimeout() {},
+        async goto() {},
+        async evaluate() {},
+        locator(selector: string) {
+          return {
+            async evaluateAll(
+              callback: (
+                items: unknown[],
+                argument?: unknown,
+              ) => Promise<unknown> | unknown,
+              argument?: unknown,
+            ) {
+              if (selector === "img") {
+                return callback(
+                  [
+                    {
+                      loading: "eager",
+                      complete: true,
+                      naturalWidth: 1,
+                    },
+                  ],
+                  argument,
+                );
+              }
+              return callback([geometryElement], argument);
+            },
+          };
+        },
+        async screenshot() {
+          return createPng(1, 1);
+        },
+      };
+    },
+    async close() {
+      assert.ok(handler);
+      await assert.rejects(
+        handler(lateRequest.route),
+        /Solicitud externa sin fixture visual: https:\/\/late\.example\.test\/close-failure\.js/,
+      );
+      throw new Error("close root failure");
+    },
+  };
+
+  await assert.rejects(
+    captureDeterministicPage({
+      browser: { async newContext() { return context; } },
+      side: "candidate",
+      url: "http://127.0.0.1:40131/",
+      viewport: desktop,
+      selectors: ["body"],
+      localOrigins: ["http://127.0.0.1:40131"],
+      fixtures: [],
+    }),
+    (error: unknown) => {
+      assert.ok(error instanceof Error);
+      assert.match(
+        error.message,
+        /Solicitud externa sin fixture visual: https:\/\/late\.example\.test\/close-failure\.js/,
+      );
+      const cause = (error as Error & { cause?: unknown }).cause;
+      assert.ok(cause instanceof Error);
+      assert.match(cause.message, /close root failure/);
+      return true;
+    },
+  );
+});
+
 test("reports a bounded deterministic pending-image diagnostic with the capture side", async () => {
   let contextClosed = false;
   let imageEvaluation = 0;
@@ -1656,4 +2466,97 @@ test("preserves a capture failure when a browser close deadline also expires", a
   assert.ok(events.includes("reference:dispose"));
   assert.ok(events.includes("candidate:dispose"));
   assert.ok(events.includes("archive:close"));
+});
+
+test("does not apply the source preparation deadline after its callback begins", async () => {
+  const events: string[] = [];
+  const dependencies = lifecycleDependencies({ events });
+  dependencies.writeReports = async () => {
+    events.push("report:write");
+    await new Promise((resolvePromise) => setTimeout(resolvePromise, 15));
+    return {
+      root: ".artifacts/visual/foundation",
+      json: ".artifacts/visual/foundation/summary.json",
+      html: ".artifacts/visual/foundation/summary.html",
+    };
+  };
+
+  const result = await Promise.race([
+    runVisualParity(
+      {
+        scope: "foundation",
+        allowPending: true,
+        root: "/candidate",
+        sourceBuildTimeoutMs: 5,
+      },
+      dependencies,
+    ),
+    new Promise<never>((_resolve, reject) => {
+      setTimeout(
+        () => reject(new Error("El callback fuente no terminó normalmente")),
+        100,
+      );
+    }),
+  ]);
+
+  assert.equal(result.summary.pending, 3);
+  assert.ok(events.includes("browser:dispose"));
+  assert.ok(events.includes("reference:dispose"));
+  assert.ok(events.includes("candidate:dispose"));
+  assert.ok(events.includes("archive:close"));
+});
+
+test("does not start a candidate when the source build expires before its callback", async () => {
+  const events: string[] = [];
+  let candidateStarts = 0;
+  let lateCallback: (() => Promise<unknown>) | undefined;
+  let processTimeoutMs: number | undefined;
+  const dependencies = lifecycleDependencies({ events });
+  dependencies.startCandidate = async () => {
+    candidateStarts += 1;
+    return {
+      origin: "http://127.0.0.1:40144",
+      async dispose() {},
+    };
+  };
+  dependencies.withTemporarySourceBuild = async <T>(
+    callback: (build: TemporarySourceBuild) => Promise<T>,
+    sourceOptions?: TemporarySourceOptions,
+  ) => {
+    processTimeoutMs = sourceOptions?.processTimeoutMs;
+    lateCallback = () =>
+      callback({
+        root: "/archive/source",
+        sourceRoot: "/reference",
+        commit: "68ea294c54dc5e15e20f470fc421a239927565a8",
+        logRoot: "/logs",
+      });
+    return new Promise<T>(() => undefined);
+  };
+
+  await assert.rejects(
+    Promise.race([
+      runVisualParity(
+        {
+          scope: "foundation",
+          allowPending: true,
+          root: "/candidate",
+          sourceBuildTimeoutMs: 5,
+        },
+        dependencies,
+      ),
+      new Promise<never>((_resolve, reject) => {
+        setTimeout(
+          () => reject(new Error("El build fuente no recibió deadline global")),
+          100,
+        );
+      }),
+    ]),
+    /5 ms.*build fuente temporal/i,
+  );
+  assert.equal(candidateStarts, 0);
+  assert.equal(processTimeoutMs, 5);
+  assert.ok(lateCallback);
+  await assert.rejects(lateCallback(), /5 ms.*build fuente temporal/i);
+  assert.equal(candidateStarts, 0);
 });

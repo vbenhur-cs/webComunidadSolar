@@ -386,3 +386,143 @@ latter remains a deliberate promise-combinator shape.
   still delegates non-assets to the Worker; no source archive is mutated.
 - The only current worktree changes are the two harness files and their test;
   ignored smoke artifacts were audited but not deleted.
+
+## Round 3 — lifecycle, source, and artifact re-review
+
+Round 3 remediates the five Important review findings without changing pages,
+CSS, baselines, routing, or the route matrix. It also preserves all Round 2
+raw-pixel, missing-selector, Base64, and stale-diff behavior.
+
+### TDD record
+
+Every new behavioral change was first reproduced by a focused injected test.
+
+1. **External request plus failed close.** The new close double emits an
+   undeclared `https://late.example.test/close-failure.js` request and then
+   throws `close root failure`. GREEN makes the external URL the actionable
+   failure and retains the close failure as its cause rather than allowing
+   cleanup to hide a fail-closed network violation.
+2. **Archive and artifact symlink boundaries.** The source-root fixture now
+   points a lexical archive root at a genuinely external directory. Report
+   fixtures cover an external `.artifacts` parent, `.artifacts/visual`, a
+   route component, a final PNG, `summary.json`, and a stale `diff.png`.
+   All reject before an external target is read, written, or removed. Archive
+   reads use `O_NOFOLLOW`, `fstat`, inode/realpath containment revalidation,
+   and document the private immutable-archive trust boundary: Node has no
+   `openat`/directory-FD primitive that could promise to defeat an adversarial
+   parent rename.
+3. **Source callback and real npm preparation deadline.** The callback-admit
+   RED failed with:
+
+   ```text
+   El ciclo de vida visual superó 5 ms durante preparar el build fuente temporal
+   ```
+
+   while a callback already owned candidate/reference/browser cleanup. GREEN
+   cancels that admission timer as soon as the callback starts. A separate
+   real Task 4 process-group RED initially returned:
+
+   ```text
+   timeout --signal=TERM --kill-after=30ms 500ms npm run build terminó con código 124
+   ```
+
+   GREEN adds `deadlineMs`, a shared npm-preparation budget consumed by
+   `withTemporarySourceBuild`. It rejects only after the bounded npm process
+   group has exited and the helper finally has removed its archive; the test
+   observes `El presupuesto de procesos npm del archive temporal superó 500 ms`,
+   the parent TERM marker, absent descendant PID/marker, and no temporary
+   session. The budget deliberately gates npm stages only; archive/git/tar
+   setup may finish before the expiry is observed, and is documented as such.
+   For an injected runner with no cancellation contract, the deadline only
+   guarantees no late callback/candidate starts; the never-resolving fake is
+   kept as a separate test.
+4. **Forced cleanup completes before orchestration returns.** The browser and
+   candidate REDs both ended `false !== true`: `runVisualParity` had returned
+   while the BrowserServer kill or Wrangler raw teardown was still pending.
+   GREEN partitions a cleanup budget with reserved slack across close/kill and
+   bridge/dispose/raw-teardown phases, and gives the outer resource wrapper the
+   same total budget. The injected tests prove the force operation has finished
+   before the rejected orchestration promise returns. Existing error chains
+   retain close/dispose as the primary failure and kill/teardown as causes.
+5. **Browser, Worker, and Windows hard-stop paths.** Chromium uses
+   `launchServer` plus `connect`, closes the BrowserServer with bounded
+   `close`, and invokes bounded `kill` as a fallback. A late server and both a
+   failed and a late `connect` are killed. Candidate Worker disposal falls back
+   to supported `raw.teardown()` after a failed/expired `dispose`. The command
+   runner now fails before spawning on Windows, instead of pretending that a
+   single `child.kill()` can terminate a process tree. The candidate build and
+   temporary-source test both prove TERM-resistant descendants receive SIGKILL.
+
+Focused Task 4 + Task 6 verification after the last GREEN:
+
+```text
+npm run test:unit -- tests/parity/http-baseline.test.ts tests/parity/visual-contract.test.ts
+# tests 74
+# pass 74
+# fail 0
+```
+
+### Round 3 final verification
+
+The full gates were rerun after the final GREEN:
+
+```text
+npx playwright install chromium                       # exit 0
+npm test                                              # 107/107 pass
+npm run format:check                                  # exit 0
+npm run lint                                          # exit 0
+npm run check                                         # 0 errors, 0 warnings, 2 hints
+npm run build                                         # exit 0
+npm run parity:manifest -- --check                    # SOURCE_MANIFEST_OK 271
+npx tsx scripts/capture-http-baseline.ts --check      # exit 0
+npm run parity:http -- --scope foundation             # HTTP_PARITY_OK contracts=225 verified=122 pending=149 disposed=true
+npm run parity:visual -- --scope foundation --allow-pending
+# exit 0, real 54.23 s
+# VISUAL_PARITY_PENDING scope=foundation routes=1 results=3 pending=3 review_required=0 artifacts=.artifacts/visual
+npm run source:check                                  # SOURCE_OK 68ea294c54dc5e15e20f470fc421a239927565a8 clean
+git diff --check                                      # exit 0
+```
+
+The final smoke summary has one route and exactly three `pending` results;
+`matched=0`, `reviewRequired=0`, and `pending=3`. Reference PNG widths are
+exactly `1440`, `768`, and `390` at desktop/tablet/mobile. A direct visual
+audit of the desktop reference confirms the real styled archive page and its
+CSS-loaded layout. It retains pending evidence rather than a parity claim:
+
+```text
+desktop reference/candidate heights 13761/900, pixels 19815349, geometry 10
+tablet  reference/candidate heights 17704/1024, pixels 13562589, geometry 10
+mobile  reference/candidate heights 21009/844, pixels 8192390, geometry 10
+```
+
+The files are contained under `.artifacts/visual/foundation/root-home/`; no
+`diff.png` is written for these dimension-mismatch comparisons, as required.
+The matrix SHA-256 immediately before and after the final visual command is
+unchanged:
+
+```text
+5ca79957e6c307f64c96cadfa36782f7c426129a1dddaca35c942bcb12f7de7f  parity/route-matrix.json
+```
+
+Post-smoke audit found no harness-attributable child/runtime/browser process,
+no `comunidadsolar-source-build-*` session, and no lifecycle test marker/temp
+directory. It did observe the pre-existing source-sibling Vite/workerd pair
+(`49212`/`49223`, started 20 August, outside this harness); it was not touched.
+
+### Round 3 self-review and concerns
+
+- All five review findings are covered by deterministic RED/GREEN tests;
+  source, artifact, network, BrowserServer, raw-teardown, process-group, and
+  Windows paths preserve actionable primary errors and bounded cleanup.
+- Raw RGBA equality remains authoritative, dimension mismatches retain their
+  real union count without a fabricated diff PNG, and missing selectors remain
+  visible in serialized evidence.
+- The two check hints remain non-blocking: the pre-existing deprecated
+  `tseslint.config` signature and the Task 6 `captureGeometry` async
+  suggestion. Neither is an error or warning.
+- The foundation home remains intentionally pending; its large real
+  differences are evidence for a later migration phase, not a Task 6 defect.
+- `deadlineMs` intentionally cannot preempt a hung archive/git/tar operation;
+  it bounds the helper's npm preparation and waits for process-group/finally
+  cleanup before returning. This explicit Node API limitation is documented
+  rather than hidden by a premature outer `Promise.race`.

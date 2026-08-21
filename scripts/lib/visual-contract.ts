@@ -911,9 +911,30 @@ export async function captureDeterministicPage(
   let cleanupFailure: unknown;
   try {
     await closeCaptureContext(context, timeoutMs, target);
-    if (!captureFailed) networkPolicy?.assertNoExternalRequest();
   } catch (error) {
     cleanupFailure = error;
+  }
+  let externalRequestFailure: unknown;
+  try {
+    networkPolicy?.assertNoExternalRequest();
+  } catch (error) {
+    externalRequestFailure = error;
+  }
+  if (externalRequestFailure !== undefined) {
+    if (cleanupFailure !== undefined) {
+      preserveCaptureFailure(externalRequestFailure, cleanupFailure);
+    }
+    if (captureFailed) {
+      const externalMessage =
+        externalRequestFailure instanceof Error
+          ? externalRequestFailure.message
+          : String(externalRequestFailure);
+      throw new AggregateError(
+        [captureFailure, externalRequestFailure],
+        `La captura visual falló y recibió una solicitud externa durante el cierre: ${externalMessage}`,
+      );
+    }
+    throw externalRequestFailure;
   }
   if (captureFailed) {
     if (cleanupFailure !== undefined) {

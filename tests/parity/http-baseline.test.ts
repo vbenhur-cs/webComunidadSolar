@@ -87,6 +87,36 @@ async function snapshotRepository(root: string): Promise<Record<string, string>>
   };
 }
 
+async function waitForFile(path: string, timeoutMs: number): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (!existsSync(path)) {
+    if (Date.now() >= deadline) {
+      throw new Error(`No apareció el archivo esperado antes del deadline: ${path}`);
+    }
+    await new Promise((resolvePromise) => setTimeout(resolvePromise, 10));
+  }
+}
+
+async function processGroup(pid: number): Promise<number> {
+  const { stdout } = await execFileAsync("ps", ["-o", "pgid=", "-p", String(pid)], {
+    encoding: "utf8",
+  });
+  const group = Number(stdout.trim());
+  if (!Number.isInteger(group) || group <= 0) {
+    throw new Error(`ps no devolvió un PGID válido para ${pid}: ${stdout}`);
+  }
+  return group;
+}
+
+async function processDetails(pids: number[]): Promise<string> {
+  const { stdout } = await execFileAsync(
+    "ps",
+    ["-o", "pid=,ppid=,pgid=,command=", "-p", pids.join(",")],
+    { encoding: "utf8" },
+  );
+  return stdout.trim();
+}
+
 function manifestFixture(): SourceManifest {
   return {
     schemaVersion: 1,
@@ -388,6 +418,126 @@ setInterval(() => {}, 1_000);
   }
 
   assert.deepEqual(await snapshotRepository(source.root), original);
+});
+
+test("enforces a total npm preparation deadline before returning from source cleanup", async () => {
+  if (process.platform === "win32") return;
+  const markerRoot = await mkdtemp(join(tmpdir(), "http-baseline-process-group-"));
+  cleanupRoots.push(markerRoot);
+  const markerPath = join(markerRoot, "descendant-marker.txt");
+  const parentTermPath = join(markerRoot, "parent-term.txt");
+  const pidPath = join(markerRoot, "pids.json");
+  const source = await createSourceRepoFixture({
+    "package.json": JSON.stringify({
+      name: "temporary-process-group-fixture",
+      private: true,
+      scripts: {
+        build: `node parent.js ${JSON.stringify(markerPath)} ${JSON.stringify(pidPath)} ${JSON.stringify(parentTermPath)}`,
+      },
+    }),
+    "parent.js": `const { spawn } = require("node:child_process");
+const { writeFileSync } = require("node:fs");
+const { join } = require("node:path");
+const child = spawn(process.execPath, [join(__dirname, "descendant.js"), process.argv[2]], { stdio: "ignore" });
+writeFileSync(process.argv[3], JSON.stringify({ parent: process.pid, descendant: child.pid }));
+process.on("SIGTERM", () => {
+  writeFileSync(process.argv[4], "received TERM");
+  process.exit(0);
+});
+setInterval(() => {}, 1_000);
+`,
+    "descendant.js": `const { writeFileSync } = require("node:fs");
+process.on("SIGTERM", () => {});
+setTimeout(() => writeFileSync(process.argv[2], "descendant survived"), 1_000);
+setInterval(() => {}, 1_000);
+`,
+  });
+  const original = await snapshotRepository(source.root);
+  const sessionsBefore = await temporaryBuildSessions();
+  let processPromise: Promise<void> | undefined;
+  let processOutcome: Promise<unknown> | undefined;
+  let pids: { parent: number; descendant: number } | undefined;
+  try {
+    processPromise = withTemporarySourceBuild(
+      async () => assert.fail("a timed-out build must not reach the callback"),
+      {
+        sourceRoot: source.root,
+        commit: source.commit,
+        install: false,
+        build: true,
+        logRoot: join(source.cleanupRoot, "logs"),
+        deadlineMs: 500,
+        processTimeoutMs: 1_500,
+        processKillAfterMs: 30,
+      },
+    );
+    processOutcome = processPromise.then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+    await waitForFile(pidPath, 1_000);
+    pids = JSON.parse(await readFile(pidPath, "utf8")) as typeof pids;
+    assert.ok(pids);
+    const capturedPids = pids;
+    const [parentGroup, descendantGroup] = await Promise.all([
+      processGroup(capturedPids.parent),
+      processGroup(capturedPids.descendant),
+    ]);
+    const details = await processDetails([
+      capturedPids.parent,
+      capturedPids.descendant,
+      parentGroup,
+    ]);
+    assert.equal(
+      parentGroup,
+      descendantGroup,
+      `el fixture debe mantener líder y descendiente en el mismo PGID:\n${details}`,
+    );
+    const observedOutcome = processOutcome;
+    assert.ok(observedOutcome);
+    const outcome = await Promise.race([
+      observedOutcome,
+      new Promise<Error>((resolvePromise) => {
+        setTimeout(
+          () =>
+            resolvePromise(
+              new Error("El build temporal no recibió deadline"),
+            ),
+          3_000,
+        );
+      }),
+    ]);
+    assert.ok(outcome instanceof Error);
+    assert.match(
+      outcome.message,
+      /presupuesto de procesos npm.*500 ms/i,
+    );
+    assert.equal(existsSync(parentTermPath), true);
+    await new Promise((resolvePromise) => setTimeout(resolvePromise, 600));
+    assert.equal(existsSync(markerPath), false);
+    assert.throws(() => process.kill(capturedPids.descendant, 0), {
+      code: "ESRCH",
+    });
+  } finally {
+    if (pids === undefined && existsSync(pidPath)) {
+      pids = JSON.parse(await readFile(pidPath, "utf8")) as typeof pids;
+    }
+    for (const pid of pids === undefined ? [] : [pids.parent, pids.descendant]) {
+      try {
+        process.kill(pid, "SIGKILL");
+      } catch {
+        // The bounded process group should already have removed fixture PIDs.
+      }
+    }
+    if (processPromise !== undefined) {
+      await Promise.race([
+        processPromise.catch(() => undefined),
+        new Promise<void>((resolvePromise) => setTimeout(resolvePromise, 1_000)),
+      ]);
+    }
+  }
+  assert.deepEqual(await snapshotRepository(source.root), original);
+  assert.deepEqual(await temporaryBuildSessions(), sessionsBefore);
 });
 
 test("provides the pinned HEAD, main branch, index, and reachable tags without creating .git", async () => {
