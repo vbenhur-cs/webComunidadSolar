@@ -526,3 +526,72 @@ directory. It did observe the pre-existing source-sibling Vite/workerd pair
   it bounds the helper's npm preparation and waits for process-group/finally
   cleanup before returning. This explicit Node API limitation is documented
   rather than hidden by a premature outer `Promise.race`.
+
+## Round 4 — composed acquisition deadlines and portable install bounds
+
+### TDD record
+
+1. **Acquisition cleanup cannot be outrun by its owner timeout.** Two new
+   deterministic REDs made a fast candidate Worker hang in `ready()` and a
+   fast BrowserServer hang in `connect()`. In each case, the forced fallback
+   (`raw.teardown()` or `BrowserServer.kill()`) was deliberately delayed. With
+   a single outer `lifecycleTimeoutMs`, `runVisualParity` rejected first with
+   `El ciclo de vida visual superó 30 ms durante iniciar el runtime candidato`
+   or `... abrir Chromium para captura visual`, while the fallback flag was
+   still false. GREEN gives acquisition an explicit composed budget with
+   deterministic slack: four lifecycle phases for candidate acquisition and
+   three for browser acquisition, each plus one millisecond. The internal
+   bounded factory remains the authoritative error, so the resulting failures
+   identify `esperar el Worker candidato listo` and `conectar Chromium` while
+   proving raw teardown/kill completed before `runVisualParity` returned.
+2. **A deadline-only `npm ci` must receive the portable timeout shim.** The
+   initial RED exercised `deadlineMs` with `install: true`, `build: false`, and
+   no `processTimeoutMs` under a hermetic PATH. It failed to start
+   `timeout --signal=TERM ... npm ci`, because the helper created its shim only
+   for builds or an explicit process timeout. GREEN makes any bounded npm
+   path, including `deadlineMs` alone, create the shim. The child-process
+   fixture proves the shim is selected without relying on the host GNU
+   `timeout`; its companion proves the default unbounded install remains a
+   direct `npm ci`.
+3. **Preparation-budget semantics are explicit.** `deadlineMs` continues to
+   begin at helper entry: it is a total preparation budget observed at npm
+   boundaries. Archive/git/tar setup is not interruptible through these Node
+   APIs and may finish after expiry, but the next npm boundary rejects before
+   npm or the callback begins. The bounded process group and helper `finally`
+   still finish before that rejection returns. The real process-group fixture
+   uses a five-second budget and a descendant marker scheduled after forced
+   termination, avoiding a false claim from a marker written before TERM.
+
+### Round 4 focused verification
+
+```text
+npm run test:unit -- tests/parity/http-baseline.test.ts tests/parity/visual-contract.test.ts
+# tests 78
+# pass 78
+# fail 0
+
+npm run format:check
+# exit 0
+npm run lint
+# exit 0
+npm run check
+# 0 errors, 0 warnings, 2 existing hints
+git diff --check
+# exit 0
+```
+
+The two non-blocking hints remain the pre-existing deprecated
+`tseslint.config` signature and the existing `captureGeometry` async
+suggestion. Per the Round 4 review protocol, no full gate suite or real visual
+smoke was repeated after these focused fixes.
+
+### Round 4 self-review
+
+- Scope is limited to the visual harness, temporary source-build helper, their
+  focused tests, and this report; no page, CSS, matrix, baseline, or routing
+  file changed.
+- The composed outer acquisition budget is deliberately larger than the inner
+  sequential lifecycle phases, so it cannot preempt their terminal cleanup;
+  inner errors remain actionable.
+- The portable timeout change leaves the no-deadline/no-process-timeout default
+  path unchanged and does not depend on a globally mutated `PATH`.

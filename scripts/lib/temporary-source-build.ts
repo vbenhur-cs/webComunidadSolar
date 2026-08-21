@@ -20,11 +20,11 @@ export interface TemporarySourceOptions {
   build?: boolean;
   logRoot?: string;
   /**
-   * Shared budget for the helper's `npm ci` / `npm run build` preparation.
-   * It only constrains npm stages: archive/git/tar setup is allowed to finish
-   * before expiry is observed, and the callback is outside this budget. An
-   * expiry waits for the bounded process group and this helper's finally
-   * cleanup before rejecting; it never returns while that archive is live.
+   * Total preparation budget, observed at `npm` boundaries. Archive/git/tar
+   * setup cannot be interrupted, so it may overrun before the next npm stage
+   * observes expiry and rejects before npm or the callback begins. An expiry
+   * waits for the bounded process group and this helper's finally cleanup; it
+   * never returns while that archive is live.
    */
   deadlineMs?: number;
   processTimeoutMs?: number;
@@ -205,7 +205,7 @@ function npmPreparationDeadline(
   if (timeoutMs === undefined) return undefined;
   const resolvedTimeoutMs = positiveMilliseconds(
     timeoutMs,
-    "El presupuesto de procesos npm del archive temporal",
+    "El presupuesto total de preparación del archive temporal",
   );
   return {
     expiresAt: Date.now() + resolvedTimeoutMs,
@@ -220,7 +220,7 @@ function remainingNpmPreparationMilliseconds(
   const remaining = deadline.expiresAt - Date.now();
   if (remaining <= 0) {
     throw new Error(
-      `El presupuesto de procesos npm del archive temporal superó ${deadline.timeoutMs} ms`,
+      `El presupuesto total de preparación del archive temporal superó ${deadline.timeoutMs} ms`,
     );
   }
   return Math.max(1, Math.ceil(remaining));
@@ -231,7 +231,7 @@ function sourcePreparationDeadlineFailure(
   cause: unknown,
 ): Error {
   return new Error(
-    `El presupuesto de procesos npm del archive temporal superó ${deadline.timeoutMs} ms`,
+    `El presupuesto total de preparación del archive temporal superó ${deadline.timeoutMs} ms`,
     { cause },
   );
 }
@@ -604,13 +604,13 @@ export async function withTemporarySourceBuild<T>(
             logRoot,
           )
         : undefined;
-    const timeoutRoot =
-      shouldBuild || options.processTimeoutMs !== undefined
-        ? await createPortableTimeout(supportRoot)
-        : undefined;
     const useBoundedNpmProcesses =
       options.deadlineMs !== undefined ||
       options.processTimeoutMs !== undefined;
+    const timeoutRoot =
+      shouldBuild || useBoundedNpmProcesses
+        ? await createPortableTimeout(supportRoot)
+        : undefined;
     const processEnvironment =
       timeoutRoot === undefined
         ? environment

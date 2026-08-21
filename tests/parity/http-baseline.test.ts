@@ -117,6 +117,125 @@ async function processDetails(pids: number[]): Promise<string> {
   return stdout.trim();
 }
 
+interface PortableNpmFixture {
+  callbackMarkerPath: string;
+  fakeTimeoutMarkerPath: string;
+  logRoot: string;
+  npmMarkerPath: string;
+  runnerPath: string;
+  source: SourceFixture;
+  binRoot: string;
+}
+
+async function createPortableNpmFixture(
+  source: SourceFixture,
+): Promise<PortableNpmFixture> {
+  const binRoot = await mkdtemp(join(source.cleanupRoot, "portable-bin-"));
+  const npmMarkerPath = join(source.cleanupRoot, "npm-ci-marker.json");
+  const callbackMarkerPath = join(source.cleanupRoot, "callback-marker.txt");
+  const fakeTimeoutMarkerPath = join(
+    source.cleanupRoot,
+    "unexpected-timeout-marker.txt",
+  );
+  const runnerPath = join(source.cleanupRoot, "run-portable-npm-install.ts");
+  const [{ stdout: gitExecutable }, { stdout: tarExecutable }] =
+    await Promise.all([
+      execFileAsync("which", ["git"], { encoding: "utf8" }),
+      execFileAsync("which", ["tar"], { encoding: "utf8" }),
+    ]);
+  await Promise.all([
+    writeFile(
+      join(binRoot, "git"),
+      `#!/bin/sh\nexec ${JSON.stringify(gitExecutable.trim())} "$@"\n`,
+      { mode: 0o755 },
+    ),
+    writeFile(
+      join(binRoot, "tar"),
+      `#!/bin/sh\nexec ${JSON.stringify(tarExecutable.trim())} "$@"\n`,
+      { mode: 0o755 },
+    ),
+    writeFile(
+      join(binRoot, "node"),
+      `#!/bin/sh\nexec ${JSON.stringify(process.execPath)} "$@"\n`,
+      { mode: 0o755 },
+    ),
+    writeFile(
+      join(binRoot, "npm"),
+      `#!/usr/bin/env node\nrequire("node:fs").writeFileSync(process.env.NPM_CI_MARKER, JSON.stringify(process.argv.slice(2)));\n`,
+      { mode: 0o755 },
+    ),
+    writeFile(
+      join(binRoot, "timeout"),
+      `#!/bin/sh\nprintf unexpected-timeout > "$FAKE_TIMEOUT_MARKER"\nexit 99\n`,
+      { mode: 0o755 },
+    ),
+  ]);
+  const sourceBuildUrl = new URL(
+    "../../scripts/lib/temporary-source-build.ts",
+    import.meta.url,
+  ).href;
+  await writeFile(
+    runnerPath,
+    `import { writeFile } from "node:fs/promises";
+import { withTemporarySourceBuild } from ${JSON.stringify(sourceBuildUrl)};
+async function main() {
+  const [sourceRoot, commit, logRoot, callbackMarkerPath, deadline] = process.argv.slice(2);
+  await withTemporarySourceBuild(
+    async () => writeFile(callbackMarkerPath, "callback"),
+    {
+      sourceRoot,
+      commit,
+      install: true,
+      build: false,
+      ...(deadline === "" ? {} : { deadlineMs: Number(deadline) }),
+      logRoot,
+    },
+  );
+}
+void main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});
+`,
+  );
+  return {
+    binRoot,
+    callbackMarkerPath,
+    fakeTimeoutMarkerPath,
+    logRoot: join(source.cleanupRoot, "logs"),
+    npmMarkerPath,
+    runnerPath,
+    source,
+  };
+}
+
+async function runPortableNpmInstall(
+  fixture: PortableNpmFixture,
+  deadlineMs: number | undefined,
+): Promise<void> {
+  await execFileAsync(
+    process.execPath,
+    [
+      join(process.cwd(), "node_modules", "tsx", "dist", "cli.mjs"),
+      fixture.runnerPath,
+      fixture.source.root,
+      fixture.source.commit,
+      fixture.logRoot,
+      fixture.callbackMarkerPath,
+      deadlineMs === undefined ? "" : String(deadlineMs),
+    ],
+    {
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        PATH: fixture.binRoot,
+        NPM_CI_MARKER: fixture.npmMarkerPath,
+        FAKE_TIMEOUT_MARKER: fixture.fakeTimeoutMarkerPath,
+      },
+    },
+  );
+}
+
 function manifestFixture(): SourceManifest {
   return {
     schemaVersion: 1,
@@ -448,7 +567,7 @@ setInterval(() => {}, 1_000);
 `,
     "descendant.js": `const { writeFileSync } = require("node:fs");
 process.on("SIGTERM", () => {});
-setTimeout(() => writeFileSync(process.argv[2], "descendant survived"), 1_000);
+setTimeout(() => writeFileSync(process.argv[2], "descendant survived " + Date.now()), 10_000);
 setInterval(() => {}, 1_000);
 `,
   });
@@ -458,6 +577,7 @@ setInterval(() => {}, 1_000);
   let processOutcome: Promise<unknown> | undefined;
   let pids: { parent: number; descendant: number } | undefined;
   try {
+    const startedAt = Date.now();
     processPromise = withTemporarySourceBuild(
       async () => assert.fail("a timed-out build must not reach the callback"),
       {
@@ -466,8 +586,8 @@ setInterval(() => {}, 1_000);
         install: false,
         build: true,
         logRoot: join(source.cleanupRoot, "logs"),
-        deadlineMs: 500,
-        processTimeoutMs: 1_500,
+        deadlineMs: 5_000,
+        processTimeoutMs: 6_000,
         processKillAfterMs: 30,
       },
     );
@@ -475,7 +595,7 @@ setInterval(() => {}, 1_000);
       () => undefined,
       (error: unknown) => error,
     );
-    await waitForFile(pidPath, 1_000);
+    await waitForFile(pidPath, 5_000);
     pids = JSON.parse(await readFile(pidPath, "utf8")) as typeof pids;
     assert.ok(pids);
     const capturedPids = pids;
@@ -503,18 +623,32 @@ setInterval(() => {}, 1_000);
             resolvePromise(
               new Error("El build temporal no recibió deadline"),
             ),
-          3_000,
+          8_000,
         );
       }),
     ]);
     assert.ok(outcome instanceof Error);
     assert.match(
       outcome.message,
-      /presupuesto de procesos npm.*500 ms/i,
+      /presupuesto total de preparación.*5000 ms/i,
     );
     assert.equal(existsSync(parentTermPath), true);
     await new Promise((resolvePromise) => setTimeout(resolvePromise, 600));
-    assert.equal(existsSync(markerPath), false);
+    const markerContents = existsSync(markerPath)
+      ? await readFile(markerPath, "utf8")
+      : "";
+    let descendantAlive = false;
+    try {
+      process.kill(capturedPids.descendant, 0);
+      descendantAlive = true;
+    } catch {
+      // The expected timeout cleanup has already removed the descendant.
+    }
+    assert.equal(
+      existsSync(markerPath),
+      false,
+      `el descendiente escribió el marker antes de la comprobación: ${markerContents}; elapsed=${Number(markerContents.split(" ").at(-1)) - startedAt}; alive=${descendantAlive}`,
+    );
     assert.throws(() => process.kill(capturedPids.descendant, 0), {
       code: "ESRCH",
     });
@@ -538,6 +672,40 @@ setInterval(() => {}, 1_000);
   }
   assert.deepEqual(await snapshotRepository(source.root), original);
   assert.deepEqual(await temporaryBuildSessions(), sessionsBefore);
+});
+
+test("uses the portable timeout for a deadline-only npm install without a build", async () => {
+  if (process.platform === "win32") return;
+  const source = await createSourceRepoFixture({
+    "package.json": JSON.stringify({
+      name: "portable-install-deadline-fixture",
+      private: true,
+    }),
+  });
+  const fixture = await createPortableNpmFixture(source);
+
+  await runPortableNpmInstall(fixture, 10_000);
+
+  assert.equal(await readFile(fixture.callbackMarkerPath, "utf8"), "callback");
+  assert.equal(await readFile(fixture.npmMarkerPath, "utf8"), '["ci"]');
+  assert.equal(existsSync(fixture.fakeTimeoutMarkerPath), false);
+});
+
+test("keeps a default install direct when no npm deadline is requested", async () => {
+  if (process.platform === "win32") return;
+  const source = await createSourceRepoFixture({
+    "package.json": JSON.stringify({
+      name: "portable-install-default-fixture",
+      private: true,
+    }),
+  });
+  const fixture = await createPortableNpmFixture(source);
+
+  await runPortableNpmInstall(fixture, undefined);
+
+  assert.equal(await readFile(fixture.callbackMarkerPath, "utf8"), "callback");
+  assert.equal(await readFile(fixture.npmMarkerPath, "utf8"), '["ci"]');
+  assert.equal(existsSync(fixture.fakeTimeoutMarkerPath), false);
 });
 
 test("provides the pinned HEAD, main branch, index, and reachable tags without creating .git", async () => {

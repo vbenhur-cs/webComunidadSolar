@@ -196,6 +196,24 @@ function cleanupPhaseTimeout(timeoutMs: number, phaseCount: number): number {
   return Math.max(1, Math.floor((budget - 1) / phaseCount));
 }
 
+function acquisitionTimeoutBudget(
+  timeoutMs: number,
+  phaseCount: number,
+): number {
+  if (!Number.isInteger(phaseCount) || phaseCount <= 0) {
+    throw new Error(
+      "Las fases de adquisición visual deben ser enteros positivos",
+    );
+  }
+  const budget = timeoutMs * phaseCount + 1;
+  if (!Number.isSafeInteger(budget)) {
+    throw new Error(
+      "El presupuesto de adquisición visual excede un entero seguro",
+    );
+  }
+  return budget;
+}
+
 async function withinVisualTimeout<T>(
   stage: string,
   operation: Promise<T>,
@@ -1632,6 +1650,17 @@ export async function runVisualParity(
   const sourceBuildTimeoutMs = visualLifecycleTimeout(
     options.sourceBuildTimeoutMs ?? defaultSourceBuildTimeoutMs,
   );
+  // These factories own sequential bounded stages. The outer owner keeps a
+  // composed deadline so their terminal cleanup can finish before it reports
+  // an acquisition failure.
+  const candidateAcquisitionTimeoutMs = acquisitionTimeoutBudget(
+    lifecycleTimeoutMs,
+    4,
+  );
+  const browserAcquisitionTimeoutMs = acquisitionTimeoutBudget(
+    lifecycleTimeoutMs,
+    3,
+  );
   const assertSource =
     dependencies.assertSourcePristine ?? assertSourcePristine;
   const build = dependencies.buildCandidate ?? buildCandidate;
@@ -1683,7 +1712,7 @@ export async function runVisualParity(
           () => startCandidate(topology, root),
           "cerrar el runtime candidato",
           (candidate) => candidate.dispose(),
-          lifecycleTimeoutMs,
+          candidateAcquisitionTimeoutMs,
           async (candidate) =>
             withVisualResource(
               "iniciar el runtime de referencia",
@@ -1697,7 +1726,7 @@ export async function runVisualParity(
                   () => launchBrowser(),
                   "cerrar el navegador",
                   (browser) => browser.close(),
-                  lifecycleTimeoutMs,
+                  browserAcquisitionTimeoutMs,
                   async (browser) => {
                     const localOrigins = [reference.origin, candidate.origin];
                     const evidence: VisualEvidence[] = [];

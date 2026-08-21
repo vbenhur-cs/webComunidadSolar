@@ -1306,6 +1306,111 @@ test("finishes raw Worker teardown before visual parity returns from candidate c
   assert.ok(events.includes("archive:close"));
 });
 
+test("waits for raw Worker teardown when candidate readiness fails during acquisition", async () => {
+  let tornDown = false;
+  const events: string[] = [];
+  const dependencies = lifecycleDependencies({ events });
+  dependencies.startCandidate = async (topology) =>
+    startCandidateRuntime(topology, 30, {
+      async startWorker() {
+        return {
+          ready: new Promise<void>(() => undefined),
+          async fetch() {
+            return new Response("unused");
+          },
+          async dispose() {
+            await new Promise<void>(() => undefined);
+          },
+          raw: {
+            async teardown() {
+              await new Promise((resolvePromise) =>
+                setTimeout(resolvePromise, 5),
+              );
+              tornDown = true;
+            },
+          },
+        };
+      },
+      async startBridge() {
+        throw new Error("the Worker must become ready before the bridge starts");
+      },
+    });
+
+  await assert.rejects(
+    Promise.race([
+      runVisualParity(
+        {
+          scope: "foundation",
+          allowPending: true,
+          root: "/candidate",
+          lifecycleTimeoutMs: 30,
+        },
+        dependencies,
+      ),
+      new Promise<never>((_resolve, reject) => {
+        setTimeout(
+          () => reject(new Error("El teardown Worker no terminó durante adquisición")),
+          250,
+        );
+      }),
+    ]),
+    /30 ms.*esperar el Worker candidato listo/i,
+  );
+  assert.equal(tornDown, true);
+  assert.ok(events.includes("archive:close"));
+});
+
+test("waits for BrowserServer kill when Chromium connection fails during acquisition", async () => {
+  let killed = false;
+  const events: string[] = [];
+  const dependencies = lifecycleDependencies({ events });
+  dependencies.launchBrowser = () =>
+    launchChromium(30, {
+      chromium: {
+        async launchServer() {
+          return {
+            wsEndpoint() {
+              return "ws://127.0.0.1:40157/playwright";
+            },
+            async close() {},
+            async kill() {
+              await new Promise((resolvePromise) =>
+                setTimeout(resolvePromise, 15),
+              );
+              killed = true;
+            },
+          };
+        },
+        async connect() {
+          return new Promise<never>(() => undefined);
+        },
+      },
+    });
+
+  await assert.rejects(
+    Promise.race([
+      runVisualParity(
+        {
+          scope: "foundation",
+          allowPending: true,
+          root: "/candidate",
+          lifecycleTimeoutMs: 30,
+        },
+        dependencies,
+      ),
+      new Promise<never>((_resolve, reject) => {
+        setTimeout(
+          () => reject(new Error("El kill Chromium no terminó durante adquisición")),
+          250,
+        );
+      }),
+    ]),
+    /30 ms.*conectar Chromium/i,
+  );
+  assert.equal(killed, true);
+  assert.ok(events.includes("archive:close"));
+});
+
 test("terminates a timed-out candidate build process group including a TERM-resistant descendant", async () => {
   if (process.platform === "win32") return;
   const root = await mkdtemp(join(tmpdir(), "visual-command-timeout-"));
