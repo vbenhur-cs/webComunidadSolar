@@ -45,8 +45,8 @@ const controlledEnvironmentKeys = [
   "MANGANAFER_MAXIMUM_PANELS_PER_QUOTE",
 ] as const;
 
-const volatileDataBuild =
-  /(\bdata-build\s*=\s*)(["'])\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:?\d{2})\2/g;
+const volatileIsoTimestamp =
+  /\b\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:?\d{2})\b/g;
 const volatileSitemapLastmod =
   /(<lastmod>\s*)\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:?\d{2})(\s*<\/lastmod>)/g;
 const volatileBuildAsset =
@@ -54,6 +54,7 @@ const volatileBuildAsset =
 const volatileRscModuleId = /\\"[0-9a-f]{12}\\",\[\],\\"/g;
 const volatileDeploymentVersion =
   /\\"deploymentVersion\\":\\"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\"/g;
+const rawTextElements = new Set(["script", "style", "textarea", "title"]);
 
 export type HttpIdentity = (typeof identities)[number];
 
@@ -346,9 +347,205 @@ export function buildCapturePlan(manifest: SourceManifest): CapturePlan {
   };
 }
 
+function isHtmlWhitespace(character: string | undefined): boolean {
+  return (
+    character === " " ||
+    character === "\n" ||
+    character === "\r" ||
+    character === "\t" ||
+    character === "\f"
+  );
+}
+
+function isHtmlTagNameStart(character: string | undefined): boolean {
+  return character !== undefined && /[A-Za-z]/.test(character);
+}
+
+function isHtmlTagNameCharacter(character: string | undefined): boolean {
+  return character !== undefined && /[A-Za-z0-9:._-]/.test(character);
+}
+
+function isHtmlAttributeNameCharacter(character: string | undefined): boolean {
+  return (
+    character !== undefined &&
+    !isHtmlWhitespace(character) &&
+    character !== "=" &&
+    character !== "/" &&
+    character !== ">" &&
+    character !== '"' &&
+    character !== "'"
+  );
+}
+
+interface HtmlStartTag {
+  end: number;
+  name: string;
+}
+
+function readHtmlStartTag(html: string, start: number): HtmlStartTag | null {
+  let cursor = start + 1;
+  if (!isHtmlTagNameStart(html[cursor])) return null;
+  const nameStart = cursor;
+  while (isHtmlTagNameCharacter(html[cursor])) cursor += 1;
+  const name = html.slice(nameStart, cursor).toLowerCase();
+  let quote: string | null = null;
+
+  while (cursor < html.length) {
+    const character = html[cursor];
+    if (quote !== null) {
+      if (character === quote) quote = null;
+      cursor += 1;
+      continue;
+    }
+    if (character === '"' || character === "'") {
+      quote = character;
+      cursor += 1;
+      continue;
+    }
+    if (character === ">") return { end: cursor + 1, name };
+    cursor += 1;
+  }
+  return null;
+}
+
+function normalizeDataBuildInStartTag(tag: string): string {
+  let cursor = 1;
+  while (isHtmlTagNameCharacter(tag[cursor])) cursor += 1;
+  let normalized = tag.slice(0, cursor);
+
+  while (cursor < tag.length) {
+    const whitespaceStart = cursor;
+    while (isHtmlWhitespace(tag[cursor])) cursor += 1;
+    normalized += tag.slice(whitespaceStart, cursor);
+    if (
+      cursor >= tag.length ||
+      tag[cursor] === ">" ||
+      (tag[cursor] === "/" && tag[cursor + 1] === ">")
+    ) {
+      return `${normalized}${tag.slice(cursor)}`;
+    }
+
+    const nameStart = cursor;
+    while (isHtmlAttributeNameCharacter(tag[cursor])) cursor += 1;
+    if (nameStart === cursor) {
+      normalized += tag[cursor];
+      cursor += 1;
+      continue;
+    }
+    const name = tag.slice(nameStart, cursor);
+    normalized += name;
+
+    const beforeEquals = cursor;
+    while (isHtmlWhitespace(tag[cursor])) cursor += 1;
+    normalized += tag.slice(beforeEquals, cursor);
+    if (tag[cursor] !== "=") continue;
+    normalized += "=";
+    cursor += 1;
+
+    const beforeValue = cursor;
+    while (isHtmlWhitespace(tag[cursor])) cursor += 1;
+    normalized += tag.slice(beforeValue, cursor);
+    const normalizeValue = name.toLowerCase() === "data-build";
+    const quote = tag[cursor];
+    if (quote === '"' || quote === "'") {
+      normalized += quote;
+      cursor += 1;
+      const valueStart = cursor;
+      while (cursor < tag.length && tag[cursor] !== quote) cursor += 1;
+      const value = tag.slice(valueStart, cursor);
+      normalized += normalizeValue
+        ? value.replace(volatileIsoTimestamp, "__TIMESTAMP__")
+        : value;
+      if (tag[cursor] === quote) {
+        normalized += quote;
+        cursor += 1;
+      }
+      continue;
+    }
+
+    const valueStart = cursor;
+    while (
+      cursor < tag.length &&
+      !isHtmlWhitespace(tag[cursor]) &&
+      tag[cursor] !== ">" &&
+      !(tag[cursor] === "/" && tag[cursor + 1] === ">")
+    ) {
+      cursor += 1;
+    }
+    const value = tag.slice(valueStart, cursor);
+    normalized += normalizeValue
+      ? value.replace(volatileIsoTimestamp, "__TIMESTAMP__")
+      : value;
+  }
+
+  return normalized;
+}
+
+function rawTextClosingTagStart(
+  lowerHtml: string,
+  start: number,
+  rawTextElement: string,
+): number | null {
+  const prefix = `</${rawTextElement}`;
+  let candidate = lowerHtml.indexOf(prefix, start);
+  while (candidate !== -1) {
+    let cursor = candidate + prefix.length;
+    while (isHtmlWhitespace(lowerHtml[cursor])) cursor += 1;
+    if (lowerHtml[cursor] === ">") return candidate;
+    candidate = lowerHtml.indexOf(prefix, candidate + 1);
+  }
+  return null;
+}
+
+function normalizeDataBuildAttributes(html: string): string {
+  const lowerHtml = html.toLowerCase();
+  let cursor = 0;
+  let normalized = "";
+  let rawTextElement: string | null = null;
+
+  while (cursor < html.length) {
+    if (rawTextElement !== null) {
+      const closingStart = rawTextClosingTagStart(
+        lowerHtml,
+        cursor,
+        rawTextElement,
+      );
+      if (closingStart === null) return `${normalized}${html.slice(cursor)}`;
+      normalized += html.slice(cursor, closingStart);
+      cursor = closingStart;
+      rawTextElement = null;
+      continue;
+    }
+    if (html.startsWith("<!--", cursor)) {
+      const commentEnd = html.indexOf("-->", cursor + 4);
+      const end = commentEnd === -1 ? html.length : commentEnd + 3;
+      normalized += html.slice(cursor, end);
+      cursor = end;
+      continue;
+    }
+    if (html[cursor] !== "<") {
+      normalized += html[cursor];
+      cursor += 1;
+      continue;
+    }
+    const startTag = readHtmlStartTag(html, cursor);
+    if (startTag === null) {
+      normalized += html[cursor];
+      cursor += 1;
+      continue;
+    }
+    normalized += normalizeDataBuildInStartTag(
+      html.slice(cursor, startTag.end),
+    );
+    cursor = startTag.end;
+    if (rawTextElements.has(startTag.name)) rawTextElement = startTag.name;
+  }
+
+  return normalized;
+}
+
 export function normalizeHtml(html: string): string {
-  return html
-    .replace(volatileDataBuild, "$1$2__TIMESTAMP__$2")
+  return normalizeDataBuildAttributes(html)
     .replace(volatileBuildAsset, "/assets/$1-__ASSET_HASH__$2")
     .replace(volatileRscModuleId, '\\"__RSC_MODULE_ID__\\",[],\\"')
     .replace(

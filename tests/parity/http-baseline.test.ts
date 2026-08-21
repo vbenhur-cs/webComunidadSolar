@@ -483,6 +483,34 @@ test("preserves meaningful HTML timestamps outside the data-build attribute", ()
   );
 });
 
+test("normalizes only a real mixed-quote data-build start-tag attribute", () => {
+  const timestamp = "2026-08-21T10:00:00Z";
+  const html = [
+    `<main data-build='${timestamp}' data-label="release ${timestamp}">`,
+    `<span x-data-build="${timestamp}" build-data-build="${timestamp}" data-build-version="${timestamp}">Visible ${timestamp}</span>`,
+    `<!-- <main data-build="${timestamp}">Comment ${timestamp}</main> -->`,
+    `<script>const plain = 'data-build="${timestamp}"'; const markup = "<main data-build='${timestamp}'>";</script>`,
+    `<style>.card::before { content: "data-build='${timestamp}'"; }</style>`,
+    `<textarea><main data-build="${timestamp}">${timestamp}</main></textarea>`,
+    `<title><main data-build="${timestamp}">${timestamp}</main></title>`,
+    "</main>",
+  ].join("");
+
+  assert.equal(
+    normalizeHtml(html),
+    [
+      `<main data-build='__TIMESTAMP__' data-label="release ${timestamp}">`,
+      `<span x-data-build="${timestamp}" build-data-build="${timestamp}" data-build-version="${timestamp}">Visible ${timestamp}</span>`,
+      `<!-- <main data-build="${timestamp}">Comment ${timestamp}</main> -->`,
+      `<script>const plain = 'data-build="${timestamp}"'; const markup = "<main data-build='${timestamp}'>";</script>`,
+      `<style>.card::before { content: "data-build='${timestamp}'"; }</style>`,
+      `<textarea><main data-build="${timestamp}">${timestamp}</main></textarea>`,
+      `<title><main data-build="${timestamp}">${timestamp}</main></title>`,
+      "</main>",
+    ].join(""),
+  );
+});
+
 test("normalizes volatile source-build asset and RSC identifiers", () => {
   const first = String.raw`<link href="/assets/index-B7W9r4T8.css"/><script>import("/assets/index-B0GTT5J1.js")</script><script>self.__VINEXT_RSC_CHUNKS__.push("2:I[\"8c0f216c4604\",[],\"Children\",1]\n0:{\"deploymentVersion\":\"e72eaee0-a3b6-4821-9a2c-36e1e5d7ef52\"}")</script><img src="/comunidad-solar-logo.svg"/><p>Oferta R2-883</p>`;
   const second = String.raw`<link href="/assets/index-C1D2E3F4.css"/><script>import("/assets/index-Z9Y8X7W6.js")</script><script>self.__VINEXT_RSC_CHUNKS__.push("2:I[\"b85b39017127\",[],\"Children\",1]\n0:{\"deploymentVersion\":\"8c511eec-9748-45d4-8fcb-8d988821ecf8\"}")</script><img src="/comunidad-solar-logo.svg"/><p>Oferta R2-883</p>`;
