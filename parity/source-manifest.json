@@ -1,0 +1,3474 @@
+{
+  "schemaVersion": 1,
+  "source": {
+    "repository": "../comunidadsolarweb",
+    "branch": "main",
+    "commit": "68ea294c54dc5e15e20f470fc421a239927565a8"
+  },
+  "generatedAt": "2026-08-21T10:26:33.472Z",
+  "routes": [
+    {
+      "path": "/api/manganafer-interest",
+      "kind": "api",
+      "sourceFile": "app/api/manganafer-interest/route.ts",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/api/manganafer-interest/export",
+      "kind": "api",
+      "sourceFile": "app/api/manganafer-interest/export/route.ts",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": "manganafer",
+      "visualTemplate": null
+    },
+    {
+      "path": "/api/manganafer-quote",
+      "kind": "api",
+      "sourceFile": "app/api/manganafer-quote/route.ts",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/comunidad-solar-evolucion.png",
+      "kind": "asset",
+      "sourceFile": "public/comunidad-solar-evolucion.png",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/comunidad-solar-hero.png",
+      "kind": "asset",
+      "sourceFile": "public/comunidad-solar-hero.png",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/comunidad-solar-logo-option-1.svg",
+      "kind": "asset",
+      "sourceFile": "public/comunidad-solar-logo-option-1.svg",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/comunidad-solar-logo-option-3.svg",
+      "kind": "asset",
+      "sourceFile": "public/comunidad-solar-logo-option-3.svg",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/comunidad-solar-logo.svg",
+      "kind": "asset",
+      "sourceFile": "public/comunidad-solar-logo.svg",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/comunidades-colegio-pueblo-1024x792.png",
+      "kind": "asset",
+      "sourceFile": "public/comunidades-colegio-pueblo-1024x792.png",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/comunidades-hero-v2.png",
+      "kind": "asset",
+      "sourceFile": "public/comunidades-hero-v2.png",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/cubierta-comunidad.png",
+      "kind": "asset",
+      "sourceFile": "public/cubierta-comunidad.png",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/favicon.svg",
+      "kind": "asset",
+      "sourceFile": "public/favicon.svg",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/file.svg",
+      "kind": "asset",
+      "sourceFile": "public/file.svg",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/globe.svg",
+      "kind": "asset",
+      "sourceFile": "public/globe.svg",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/media/antena3-noticias-autoconsumo-remoto-2023.jpg",
+      "kind": "asset",
+      "sourceFile": "public/media/antena3-noticias-autoconsumo-remoto-2023.jpg",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/media/asesor-victor.jpg",
+      "kind": "asset",
+      "sourceFile": "public/media/asesor-victor.jpg",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/media/asesora-gema.png",
+      "kind": "asset",
+      "sourceFile": "public/media/asesora-gema.png",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/media/asesora-irene.png",
+      "kind": "asset",
+      "sourceFile": "public/media/asesora-irene.png",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/media/asesora-laura.png",
+      "kind": "asset",
+      "sourceFile": "public/media/asesora-laura.png",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/media/autoconsumo-remoto-baterias.svg",
+      "kind": "asset",
+      "sourceFile": "public/media/autoconsumo-remoto-baterias.svg",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/media/blog-ceuti-detalle.jpg",
+      "kind": "asset",
+      "sourceFile": "public/media/blog-ceuti-detalle.jpg",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/media/blog-nuevo-baztan-detalle.jpg",
+      "kind": "asset",
+      "sourceFile": "public/media/blog-nuevo-baztan-detalle.jpg",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/media/blog-villalbilla-evento.jpg",
+      "kind": "asset",
+      "sourceFile": "public/media/blog-villalbilla-evento.jpg",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/media/ceuti.jpg",
+      "kind": "asset",
+      "sourceFile": "public/media/ceuti.jpg",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/media/comunero-alfredo-izaskun.png",
+      "kind": "asset",
+      "sourceFile": "public/media/comunero-alfredo-izaskun.png",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/media/comunero-jose-familia.png",
+      "kind": "asset",
+      "sourceFile": "public/media/comunero-jose-familia.png",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/media/comuneros-luis-marisa.png",
+      "kind": "asset",
+      "sourceFile": "public/media/comuneros-luis-marisa.png",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/media/comuneros-nuria-carlos.png",
+      "kind": "asset",
+      "sourceFile": "public/media/comuneros-nuria-carlos.png",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/media/comunidades-energeticas.svg",
+      "kind": "asset",
+      "sourceFile": "public/media/comunidades-energeticas.svg",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/media/comunidades/escurial-marmoles-jimenez.webp",
+      "kind": "asset",
+      "sourceFile": "public/media/comunidades/escurial-marmoles-jimenez.webp",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/media/comunidades/extremadura/almendralejo.webp",
+      "kind": "asset",
+      "sourceFile": "public/media/comunidades/extremadura/almendralejo.webp",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/media/comunidades/extremadura/caceres.webp",
+      "kind": "asset",
+      "sourceFile": "public/media/comunidades/extremadura/caceres.webp",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/media/comunidades/extremadura/coria.webp",
+      "kind": "asset",
+      "sourceFile": "public/media/comunidades/extremadura/coria.webp",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/media/comunidades/extremadura/don-benito.webp",
+      "kind": "asset",
+      "sourceFile": "public/media/comunidades/extremadura/don-benito.webp",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/media/comunidades/extremadura/jerez-de-los-caballeros.webp",
+      "kind": "asset",
+      "sourceFile": "public/media/comunidades/extremadura/jerez-de-los-caballeros.webp",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/media/comunidades/extremadura/merida.webp",
+      "kind": "asset",
+      "sourceFile": "public/media/comunidades/extremadura/merida.webp",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/media/comunidades/extremadura/navalmoral-de-la-mata.webp",
+      "kind": "asset",
+      "sourceFile": "public/media/comunidades/extremadura/navalmoral-de-la-mata.webp",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/media/comunidades/extremadura/plasencia.webp",
+      "kind": "asset",
+      "sourceFile": "public/media/comunidades/extremadura/plasencia.webp",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/media/comunidades/extremadura/villafranca-de-los-barros.webp",
+      "kind": "asset",
+      "sourceFile": "public/media/comunidades/extremadura/villafranca-de-los-barros.webp",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/media/comunidades/extremadura/zafra.webp",
+      "kind": "asset",
+      "sourceFile": "public/media/comunidades/extremadura/zafra.webp",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/media/comunidades/ontinyent-dream-home-textil.webp",
+      "kind": "asset",
+      "sourceFile": "public/media/comunidades/ontinyent-dream-home-textil.webp",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/media/coolfy-logo.png",
+      "kind": "asset",
+      "sourceFile": "public/media/coolfy-logo.png",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/media/cs-medios-2025-poster-antena3.jpg",
+      "kind": "asset",
+      "sourceFile": "public/media/cs-medios-2025-poster-antena3.jpg",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/media/cs-medios-2025-poster.jpg",
+      "kind": "asset",
+      "sourceFile": "public/media/cs-medios-2025-poster.jpg",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/media/damian-villa-por-el-planeta.jpg",
+      "kind": "asset",
+      "sourceFile": "public/media/damian-villa-por-el-planeta.jpg",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/media/evento-solsticio-2022.jpg",
+      "kind": "asset",
+      "sourceFile": "public/media/evento-solsticio-2022.jpg",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/media/evento-solsticio-2023.jpg",
+      "kind": "asset",
+      "sourceFile": "public/media/evento-solsticio-2023.jpg",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/media/evento-solsticio-2024.jpg",
+      "kind": "asset",
+      "sourceFile": "public/media/evento-solsticio-2024.jpg",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/media/evento-solsticio-2025.jpg",
+      "kind": "asset",
+      "sourceFile": "public/media/evento-solsticio-2025.jpg",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/media/evento-visita-parque.jpg",
+      "kind": "asset",
+      "sourceFile": "public/media/evento-visita-parque.jpg",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/media/experiencia-comunero.jpg",
+      "kind": "asset",
+      "sourceFile": "public/media/experiencia-comunero.jpg",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/media/extremadura.jpg",
+      "kind": "asset",
+      "sourceFile": "public/media/extremadura.jpg",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/media/fuente-alamo.jpeg",
+      "kind": "asset",
+      "sourceFile": "public/media/fuente-alamo.jpeg",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/media/hero-operativas-red-de-valor-clean-1024x792.png",
+      "kind": "asset",
+      "sourceFile": "public/media/hero-operativas-red-de-valor-clean-1024x792.png",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/media/historia-adn-comunidad.jpg",
+      "kind": "asset",
+      "sourceFile": "public/media/historia-adn-comunidad.jpg",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/media/historia-comunero-8.png",
+      "kind": "asset",
+      "sourceFile": "public/media/historia-comunero-8.png",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/media/historia-youtube-reqBqJBFQIk.jpg",
+      "kind": "asset",
+      "sourceFile": "public/media/historia-youtube-reqBqJBFQIk.jpg",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/media/home-hero-option-1-spain-connected-1024x792.png",
+      "kind": "asset",
+      "sourceFile": "public/media/home-hero-option-1-spain-connected-1024x792.png",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/media/home-hero-option-3-exact-1024x792.png",
+      "kind": "asset",
+      "sourceFile": "public/media/home-hero-option-3-exact-1024x792.png",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/media/ibeas-de-juarros.jpeg",
+      "kind": "asset",
+      "sourceFile": "public/media/ibeas-de-juarros.jpeg",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/media/kike-saenz.png",
+      "kind": "asset",
+      "sourceFile": "public/media/kike-saenz.png",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/media/las-vegas-mazarron.jpg",
+      "kind": "asset",
+      "sourceFile": "public/media/las-vegas-mazarron.jpg",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/media/liguerzana.jpg",
+      "kind": "asset",
+      "sourceFile": "public/media/liguerzana.jpg",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/media/manganafer-hero-1024x792.png",
+      "kind": "asset",
+      "sourceFile": "public/media/manganafer-hero-1024x792.png",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/media/merida.webp",
+      "kind": "asset",
+      "sourceFile": "public/media/merida.webp",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/media/nuevo-baztan.jpeg",
+      "kind": "asset",
+      "sourceFile": "public/media/nuevo-baztan.jpeg",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/media/premio-goparity.jpg",
+      "kind": "asset",
+      "sourceFile": "public/media/premio-goparity.jpg",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/media/puebla-del-principe.jpg",
+      "kind": "asset",
+      "sourceFile": "public/media/puebla-del-principe.jpg",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/media/radio-cyl.jpg",
+      "kind": "asset",
+      "sourceFile": "public/media/radio-cyl.jpg",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/media/san-adrian-de-juarros.jpg",
+      "kind": "asset",
+      "sourceFile": "public/media/san-adrian-de-juarros.jpg",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/media/santa-cruz-de-paniagua.jpg",
+      "kind": "asset",
+      "sourceFile": "public/media/santa-cruz-de-paniagua.jpg",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/media/sepulveda.webp",
+      "kind": "asset",
+      "sourceFile": "public/media/sepulveda.webp",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/media/solax-x1-ies.png",
+      "kind": "asset",
+      "sourceFile": "public/media/solax-x1-ies.png",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/media/tomas-bensadon.png",
+      "kind": "asset",
+      "sourceFile": "public/media/tomas-bensadon.png",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/media/torrontera.jpg",
+      "kind": "asset",
+      "sourceFile": "public/media/torrontera.jpg",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/media/villalbilla-gregorio-canella-cubierta.jpg",
+      "kind": "asset",
+      "sourceFile": "public/media/villalbilla-gregorio-canella-cubierta.jpg",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/media/villalbilla.jpg",
+      "kind": "asset",
+      "sourceFile": "public/media/villalbilla.jpg",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/media/villaverde-getafe.jpg",
+      "kind": "asset",
+      "sourceFile": "public/media/villaverde-getafe.jpg",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/planta-fotovoltaica-proximidad.png",
+      "kind": "asset",
+      "sourceFile": "public/planta-fotovoltaica-proximidad.png",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/window.svg",
+      "kind": "asset",
+      "sourceFile": "public/window.svg",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/aerotermia-confirmacion-formulario",
+      "kind": "gone",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 410,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/blog/elementor-hf/14157",
+      "kind": "gone",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 410,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/blog/elementor-hf/footer",
+      "kind": "gone",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 410,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/blog/elementor-hf/footer-contacto",
+      "kind": "gone",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 410,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/blog/elementor-hf/header-solo-logo",
+      "kind": "gone",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 410,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/blog/elementor-hf/header-solo-logo-fondo-beige",
+      "kind": "gone",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 410,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/blog/elementor-hf/menu-hidden",
+      "kind": "gone",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 410,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/blog/elementor-hf/menu-principal",
+      "kind": "gone",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 410,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/blog/elementor-hf/menu-reducido-al-maximo",
+      "kind": "gone",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 410,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/blog/elementor-hf/menu-simplificado",
+      "kind": "gone",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 410,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/cargador-de-coche-electrico",
+      "kind": "gone",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 410,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/comunidad-energetica-robregordo",
+      "kind": "gone",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 410,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/cs-wellsport",
+      "kind": "gone",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 410,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/gestionamos-subvenciones",
+      "kind": "gone",
+      "sourceFile": "app/gestionamos-subvenciones/route.ts",
+      "fixtureId": null,
+      "expectedStatus": 410,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/gestionamos-subvenciones-placas-solares",
+      "kind": "gone",
+      "sourceFile": "app/gestionamos-subvenciones-placas-solares/route.ts",
+      "fixtureId": null,
+      "expectedStatus": 410,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/invierte-en-comunidad-solar",
+      "kind": "gone",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 410,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/megapark-serracin",
+      "kind": "gone",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 410,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/prueba-los-belo",
+      "kind": "gone",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 410,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/subvenciones",
+      "kind": "gone",
+      "sourceFile": "app/subvenciones/route.ts",
+      "fixtureId": null,
+      "expectedStatus": 410,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/",
+      "kind": "page",
+      "sourceFile": "app/page.tsx",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": "home"
+    },
+    {
+      "path": "/aerotermia",
+      "kind": "page",
+      "sourceFile": "app/[slug]/page.tsx",
+      "fixtureId": "aerotermia",
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": "generic-page"
+    },
+    {
+      "path": "/autoconsumo-en-mi-tejado",
+      "kind": "page",
+      "sourceFile": "app/[slug]/page.tsx",
+      "fixtureId": "autoconsumo-en-mi-tejado",
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": "generic-page"
+    },
+    {
+      "path": "/autoconsumo-remoto",
+      "kind": "page",
+      "sourceFile": "app/[slug]/page.tsx",
+      "fixtureId": "autoconsumo-remoto",
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": "generic-page"
+    },
+    {
+      "path": "/autoconsumo-remoto/fuente-alamo",
+      "kind": "page",
+      "sourceFile": "app/autoconsumo-remoto/[project]/page.tsx",
+      "fixtureId": "fuente-alamo",
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": "remote-detail"
+    },
+    {
+      "path": "/autoconsumo-remoto/liguerzana",
+      "kind": "page",
+      "sourceFile": "app/autoconsumo-remoto/[project]/page.tsx",
+      "fixtureId": "liguerzana",
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": "remote-detail"
+    },
+    {
+      "path": "/autoconsumo-remoto/torrontera",
+      "kind": "page",
+      "sourceFile": "app/autoconsumo-remoto/[project]/page.tsx",
+      "fixtureId": "torrontera",
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": "remote-detail"
+    },
+    {
+      "path": "/aviso-legal",
+      "kind": "page",
+      "sourceFile": "app/[slug]/page.tsx",
+      "fixtureId": "aviso-legal",
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": "legal-page"
+    },
+    {
+      "path": "/baterias",
+      "kind": "page",
+      "sourceFile": "app/[slug]/page.tsx",
+      "fixtureId": "baterias",
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": "generic-page"
+    },
+    {
+      "path": "/blog",
+      "kind": "page",
+      "sourceFile": "app/[slug]/page.tsx",
+      "fixtureId": "blog",
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": "blog-index"
+    },
+    {
+      "path": "/blog/bautizo-bajo-la-lluvia-en-fuente-alamo",
+      "kind": "page",
+      "sourceFile": "app/blog/[post]/page.tsx",
+      "fixtureId": "bautizo-bajo-la-lluvia-en-fuente-alamo",
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": "blog-detail"
+    },
+    {
+      "path": "/blog/ceuti-encuentro-con-los-vecinos",
+      "kind": "page",
+      "sourceFile": "app/blog/[post]/page.tsx",
+      "fixtureId": "ceuti-encuentro-con-los-vecinos",
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": "blog-detail"
+    },
+    {
+      "path": "/blog/ceuti-termina-su-instalacion",
+      "kind": "page",
+      "sourceFile": "app/blog/[post]/page.tsx",
+      "fixtureId": "ceuti-termina-su-instalacion",
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": "blog-detail"
+    },
+    {
+      "path": "/blog/comuneros-por-el-mundo-jose-luis",
+      "kind": "page",
+      "sourceFile": "app/blog/[post]/page.tsx",
+      "fixtureId": "comuneros-por-el-mundo-jose-luis",
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": "blog-detail"
+    },
+    {
+      "path": "/blog/el-adn-de-comunidad-solar",
+      "kind": "page",
+      "sourceFile": "app/blog/[post]/page.tsx",
+      "fixtureId": "el-adn-de-comunidad-solar",
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": "blog-detail"
+    },
+    {
+      "path": "/blog/encuentro-comunero-en-liguerzana",
+      "kind": "page",
+      "sourceFile": "app/blog/[post]/page.tsx",
+      "fixtureId": "encuentro-comunero-en-liguerzana",
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": "blog-detail"
+    },
+    {
+      "path": "/blog/fuente-alamo-vuelve-a-abrir-sus-puertas",
+      "kind": "page",
+      "sourceFile": "app/blog/[post]/page.tsx",
+      "fixtureId": "fuente-alamo-vuelve-a-abrir-sus-puertas",
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": "blog-detail"
+    },
+    {
+      "path": "/blog/manolo-un-ano-viviendo-con-el-sol",
+      "kind": "page",
+      "sourceFile": "app/blog/[post]/page.tsx",
+      "fixtureId": "manolo-un-ano-viviendo-con-el-sol",
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": "blog-detail"
+    },
+    {
+      "path": "/blog/nace-la-comunidad-de-nuevo-baztan",
+      "kind": "page",
+      "sourceFile": "app/blog/[post]/page.tsx",
+      "fixtureId": "nace-la-comunidad-de-nuevo-baztan",
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": "blog-detail"
+    },
+    {
+      "path": "/blog/nuevo-baztan-abre-la-casa-de-un-comunero",
+      "kind": "page",
+      "sourceFile": "app/blog/[post]/page.tsx",
+      "fixtureId": "nuevo-baztan-abre-la-casa-de-un-comunero",
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": "blog-detail"
+    },
+    {
+      "path": "/blog/premio-comunidad-goparity",
+      "kind": "page",
+      "sourceFile": "app/blog/[post]/page.tsx",
+      "fixtureId": "premio-comunidad-goparity",
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": "blog-detail"
+    },
+    {
+      "path": "/blog/puebla-del-principe-entra-en-construccion",
+      "kind": "page",
+      "sourceFile": "app/blog/[post]/page.tsx",
+      "fixtureId": "puebla-del-principe-entra-en-construccion",
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": "blog-detail"
+    },
+    {
+      "path": "/blog/septimo-aniversario-capsula-del-tiempo",
+      "kind": "page",
+      "sourceFile": "app/blog/[post]/page.tsx",
+      "fixtureId": "septimo-aniversario-capsula-del-tiempo",
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": "blog-detail"
+    },
+    {
+      "path": "/blog/solsticio-2022-puertas-abiertas",
+      "kind": "page",
+      "sourceFile": "app/blog/[post]/page.tsx",
+      "fixtureId": "solsticio-2022-puertas-abiertas",
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": "blog-detail"
+    },
+    {
+      "path": "/blog/solsticio-2023-quinto-aniversario",
+      "kind": "page",
+      "sourceFile": "app/blog/[post]/page.tsx",
+      "fixtureId": "solsticio-2023-quinto-aniversario",
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": "blog-detail"
+    },
+    {
+      "path": "/blog/solsticio-2024-sexto-aniversario",
+      "kind": "page",
+      "sourceFile": "app/blog/[post]/page.tsx",
+      "fixtureId": "solsticio-2024-sexto-aniversario",
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": "blog-detail"
+    },
+    {
+      "path": "/blog/torrontera-ya-esta-en-marcha",
+      "kind": "page",
+      "sourceFile": "app/blog/[post]/page.tsx",
+      "fixtureId": "torrontera-ya-esta-en-marcha",
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": "blog-detail"
+    },
+    {
+      "path": "/blog/villalbilla-dos-colegios-una-comunidad",
+      "kind": "page",
+      "sourceFile": "app/blog/[post]/page.tsx",
+      "fixtureId": "villalbilla-dos-colegios-una-comunidad",
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": "blog-detail"
+    },
+    {
+      "path": "/blog/villalbilla-presenta-su-comunidad",
+      "kind": "page",
+      "sourceFile": "app/blog/[post]/page.tsx",
+      "fixtureId": "villalbilla-presenta-su-comunidad",
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": "blog-detail"
+    },
+    {
+      "path": "/comercializadora-y-tarifas",
+      "kind": "page",
+      "sourceFile": "app/[slug]/page.tsx",
+      "fixtureId": "comercializadora-y-tarifas",
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": "generic-page"
+    },
+    {
+      "path": "/comunidades-energeticas",
+      "kind": "page",
+      "sourceFile": "app/[slug]/page.tsx",
+      "fixtureId": "comunidades-energeticas",
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": "generic-page"
+    },
+    {
+      "path": "/comunidades-energeticas-operativas",
+      "kind": "page",
+      "sourceFile": "app/[slug]/page.tsx",
+      "fixtureId": "comunidades-energeticas-operativas",
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": "generic-page"
+    },
+    {
+      "path": "/comunidades-energeticas/almendralejo",
+      "kind": "page",
+      "sourceFile": "app/comunidades-energeticas/[community]/page.tsx",
+      "fixtureId": "almendralejo",
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": "community-detail"
+    },
+    {
+      "path": "/comunidades-energeticas/caceres",
+      "kind": "page",
+      "sourceFile": "app/comunidades-energeticas/[community]/page.tsx",
+      "fixtureId": "caceres",
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": "community-detail"
+    },
+    {
+      "path": "/comunidades-energeticas/ceuti",
+      "kind": "page",
+      "sourceFile": "app/comunidades-energeticas/[community]/page.tsx",
+      "fixtureId": "ceuti",
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": "community-detail"
+    },
+    {
+      "path": "/comunidades-energeticas/coria",
+      "kind": "page",
+      "sourceFile": "app/comunidades-energeticas/[community]/page.tsx",
+      "fixtureId": "coria",
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": "community-detail"
+    },
+    {
+      "path": "/comunidades-energeticas/don-benito",
+      "kind": "page",
+      "sourceFile": "app/comunidades-energeticas/[community]/page.tsx",
+      "fixtureId": "don-benito",
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": "community-detail"
+    },
+    {
+      "path": "/comunidades-energeticas/escurial",
+      "kind": "page",
+      "sourceFile": "app/comunidades-energeticas/[community]/page.tsx",
+      "fixtureId": "escurial",
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": "community-detail"
+    },
+    {
+      "path": "/comunidades-energeticas/extremadura",
+      "kind": "page",
+      "sourceFile": "app/comunidades-energeticas/[community]/page.tsx",
+      "fixtureId": "extremadura",
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": "community-detail"
+    },
+    {
+      "path": "/comunidades-energeticas/ibeas-de-juarros",
+      "kind": "page",
+      "sourceFile": "app/comunidades-energeticas/[community]/page.tsx",
+      "fixtureId": "ibeas-de-juarros",
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": "community-detail"
+    },
+    {
+      "path": "/comunidades-energeticas/jerez-de-los-caballeros",
+      "kind": "page",
+      "sourceFile": "app/comunidades-energeticas/[community]/page.tsx",
+      "fixtureId": "jerez-de-los-caballeros",
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": "community-detail"
+    },
+    {
+      "path": "/comunidades-energeticas/manganafer",
+      "kind": "page",
+      "sourceFile": "app/comunidades-energeticas/manganafer/page.tsx",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": "manganafer"
+    },
+    {
+      "path": "/comunidades-energeticas/merida",
+      "kind": "page",
+      "sourceFile": "app/comunidades-energeticas/[community]/page.tsx",
+      "fixtureId": "merida",
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": "community-detail"
+    },
+    {
+      "path": "/comunidades-energeticas/navalmoral-de-la-mata",
+      "kind": "page",
+      "sourceFile": "app/comunidades-energeticas/[community]/page.tsx",
+      "fixtureId": "navalmoral-de-la-mata",
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": "community-detail"
+    },
+    {
+      "path": "/comunidades-energeticas/nuevo-baztan",
+      "kind": "page",
+      "sourceFile": "app/comunidades-energeticas/[community]/page.tsx",
+      "fixtureId": "nuevo-baztan",
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": "community-detail"
+    },
+    {
+      "path": "/comunidades-energeticas/ontinyent",
+      "kind": "page",
+      "sourceFile": "app/comunidades-energeticas/[community]/page.tsx",
+      "fixtureId": "ontinyent",
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": "community-detail"
+    },
+    {
+      "path": "/comunidades-energeticas/plasencia",
+      "kind": "page",
+      "sourceFile": "app/comunidades-energeticas/[community]/page.tsx",
+      "fixtureId": "plasencia",
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": "community-detail"
+    },
+    {
+      "path": "/comunidades-energeticas/san-adrian-de-juarros",
+      "kind": "page",
+      "sourceFile": "app/comunidades-energeticas/[community]/page.tsx",
+      "fixtureId": "san-adrian-de-juarros",
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": "community-detail"
+    },
+    {
+      "path": "/comunidades-energeticas/santa-cruz-de-paniagua",
+      "kind": "page",
+      "sourceFile": "app/comunidades-energeticas/[community]/page.tsx",
+      "fixtureId": "santa-cruz-de-paniagua",
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": "community-detail"
+    },
+    {
+      "path": "/comunidades-energeticas/sepulveda",
+      "kind": "page",
+      "sourceFile": "app/comunidades-energeticas/[community]/page.tsx",
+      "fixtureId": "sepulveda",
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": "community-detail"
+    },
+    {
+      "path": "/comunidades-energeticas/villafranca-de-los-barros",
+      "kind": "page",
+      "sourceFile": "app/comunidades-energeticas/[community]/page.tsx",
+      "fixtureId": "villafranca-de-los-barros",
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": "community-detail"
+    },
+    {
+      "path": "/comunidades-energeticas/villalbilla",
+      "kind": "page",
+      "sourceFile": "app/comunidades-energeticas/[community]/page.tsx",
+      "fixtureId": "villalbilla",
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": "community-detail"
+    },
+    {
+      "path": "/comunidades-energeticas/villaverde-getafe",
+      "kind": "page",
+      "sourceFile": "app/comunidades-energeticas/[community]/page.tsx",
+      "fixtureId": "villaverde-getafe",
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": "community-detail"
+    },
+    {
+      "path": "/comunidades-energeticas/zafra",
+      "kind": "page",
+      "sourceFile": "app/comunidades-energeticas/[community]/page.tsx",
+      "fixtureId": "zafra",
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": "community-detail"
+    },
+    {
+      "path": "/contacto",
+      "kind": "page",
+      "sourceFile": "app/[slug]/page.tsx",
+      "fixtureId": "contacto",
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": "generic-page"
+    },
+    {
+      "path": "/cookies",
+      "kind": "page",
+      "sourceFile": "app/[slug]/page.tsx",
+      "fixtureId": "cookies",
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": "legal-page"
+    },
+    {
+      "path": "/eventos",
+      "kind": "page",
+      "sourceFile": "app/[slug]/page.tsx",
+      "fixtureId": "eventos",
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": "generic-page"
+    },
+    {
+      "path": "/mantenimiento",
+      "kind": "page",
+      "sourceFile": "app/[slug]/page.tsx",
+      "fixtureId": "mantenimiento",
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": "generic-page"
+    },
+    {
+      "path": "/nosotros",
+      "kind": "page",
+      "sourceFile": "app/[slug]/page.tsx",
+      "fixtureId": "nosotros",
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": "generic-page"
+    },
+    {
+      "path": "/politica-privacidad",
+      "kind": "page",
+      "sourceFile": "app/[slug]/page.tsx",
+      "fixtureId": "politica-privacidad",
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": "legal-page"
+    },
+    {
+      "path": "/rentabiliza-tu-activo",
+      "kind": "page",
+      "sourceFile": "app/[slug]/page.tsx",
+      "fixtureId": "rentabiliza-tu-activo",
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": "generic-page"
+    },
+    {
+      "path": "/robots.txt",
+      "kind": "page",
+      "sourceFile": "app/robots.ts",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/sitemap.xml",
+      "kind": "page",
+      "sourceFile": "app/sitemap.ts",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/soy-comunero",
+      "kind": "page",
+      "sourceFile": "app/[slug]/page.tsx",
+      "fixtureId": "soy-comunero",
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": "generic-page"
+    },
+    {
+      "path": "/terminos-y-condiciones",
+      "kind": "page",
+      "sourceFile": "app/[slug]/page.tsx",
+      "fixtureId": "terminos-y-condiciones",
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": null,
+      "visualTemplate": "legal-page"
+    },
+    {
+      "path": "/guia-equipo",
+      "kind": "private-page",
+      "sourceFile": "app/guia-equipo/page.tsx",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": "equipo",
+      "visualTemplate": "team-guide"
+    },
+    {
+      "path": "/guia-equipo-nueva-web-comunidad-solar.md",
+      "kind": "private-page",
+      "sourceFile": "app/guia-equipo-nueva-web-comunidad-solar.md/route.ts",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": "equipo",
+      "visualTemplate": null
+    },
+    {
+      "path": "/manganafer/interesados",
+      "kind": "private-page",
+      "sourceFile": "app/manganafer/interesados/page.tsx",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": "manganafer",
+      "visualTemplate": "manganafer-interests"
+    },
+    {
+      "path": "/socios",
+      "kind": "private-page",
+      "sourceFile": "app/socios/page.tsx",
+      "fixtureId": null,
+      "expectedStatus": 200,
+      "expectedLocation": null,
+      "privateArea": "socios",
+      "visualTemplate": "socios"
+    },
+    {
+      "path": "/a-remoto",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/autoconsumo-remoto",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/aerotermia-comunidad-solarcoolfy",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/aerotermia",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/anfitrion-solar",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/rentabiliza-tu-activo#cubierta",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/anfitrion-solar-v2",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/rentabiliza-tu-activo#cubierta",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/apagon-energetico",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/baterias#preguntas",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/app-asistente-energetico",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/soy-comunero",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/arv2",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/autoconsumo-remoto",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/autoconsumo-en-mi-tejado-v2",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/autoconsumo-en-mi-tejado",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/autoconsumo-remoto-con-baterias",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/autoconsumo-remoto",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/autoconsumo-remoto-con-baterias-calculadora",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/autoconsumo-remoto",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/autoconsumo-remoto-con-baterias-v2",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/autoconsumo-remoto",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/autoconsumo-remoto-megapark",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/autoconsumo-remoto",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/autoconsumo-remoto-portal-renovables",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/autoconsumo-remoto",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/autoconsumo-remoto-v2",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/autoconsumo-remoto",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/autoconsumo-remoto/b2b-formulario",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/rentabiliza-tu-activo#solicitar-estudio",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/autoconsumo-remoto/b2c-calculadora",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/autoconsumo-remoto",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/autoconsumo-remoto/b2c-formulario",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/autoconsumo-remoto",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/autoconsumo-remoto/pisuerga",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/autoconsumo-remoto/liguerzana",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/blog/aerotermia-la-revolucion-energetica-para-una-vida-sostenible",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/aerotermia#encaje",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/blog/ahorro-energetico",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/comercializadora-y-tarifas",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/blog/autoconsumo-colectivo-y-comunidades-energeticas",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/comunidades-energeticas",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/blog/autoconsumo-remoto-baterias-independencia-energetica",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/autoconsumo-remoto",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/blog/autoconsumo-remoto-de-comunidad-solar",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/autoconsumo-remoto",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/blog/baterias-solucion-cargas-criticas-cortes-energia",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/baterias#preguntas",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/blog/category/aerotermia",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/aerotermia",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/blog/category/autoconsumo-en-casa",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/autoconsumo-en-mi-tejado",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/blog/category/autoconsumo-remoto",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/autoconsumo-remoto",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/blog/category/baterias",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/baterias",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/blog/category/comunidades-energeticas",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/comunidades-energeticas",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/blog/category/sin-categoria",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/blog",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/blog/como-comunidades-energeticas-reducir-costos",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/comunidades-energeticas",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/blog/como-crear-comunidad-energetica-area",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/rentabiliza-tu-activo",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/blog/consejos-mantenimiento-paneles-solares",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/mantenimiento",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/blog/cuando-ampliar-instalacion-placas-solares",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/autoconsumo-en-mi-tejado#como-lo-hacemos",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/blog/elegir-bateria-luna2000-huawei",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/baterias#como-elegir",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/blog/elegir-mejores-placas-solares",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/autoconsumo-en-mi-tejado#como-lo-hacemos",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/blog/energia-solar-merece-pena-instalar-baterias",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/baterias",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/blog/guia-instalar-paneles-solares",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/autoconsumo-en-mi-tejado",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/blog/instalar-paneles-solares-aumenta-valor-propiedad",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/autoconsumo-en-mi-tejado",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/blog/mitos-realidades-placas-solares",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/autoconsumo-en-mi-tejado#preguntas",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/blog/novedad-comunidad-energetica-nuevo-baztan",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/blog/nace-la-comunidad-de-nuevo-baztan",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/blog/paneles-solares-energia-solar-sostenible",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/autoconsumo-en-mi-tejado",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/blog/que-hacer-excedentes-paneles-solares",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/comercializadora-y-tarifas#monedero",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/blog/que-son-comunidades-energeticas",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/comunidades-energeticas",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/blog/tipos-baterias-placas-solares",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/baterias#como-elegir",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/blog/ventajas-autoconsumo-remoto-energia-solar",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/autoconsumo-remoto",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/blog/ventajas-comunidades-energeticas",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/comunidades-energeticas",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/calcula-tu-ahorro",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/autoconsumo-remoto",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/ce-ceuti",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/comunidades-energeticas/ceuti",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/ce-sepulveda",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/comunidades-energeticas/sepulveda",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/ce-villalbilla-test",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/comunidades-energeticas/villalbilla",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/ce-villalbilla-v2",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/comunidades-energeticas/villalbilla",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/compra-grupo-aerotermia",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/aerotermia",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/comunidad-energetica-de-mi-edificio",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/comunidades-energeticas",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/comunidad-energetica-de-mi-pueblo",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/comunidades-energeticas",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/comunidad-energetica-extremadura",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/comunidades-energeticas/extremadura",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/comunidad-energetica-ibeas-de-juarros",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/comunidades-energeticas/ibeas-de-juarros",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/comunidad-energetica-ibeas-de-juarros-v2",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/comunidades-energeticas/ibeas-de-juarros",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/comunidad-energetica-nuevo-baztan",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/comunidades-energeticas/nuevo-baztan",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/comunidad-energetica-nuevo-baztan-v2",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/comunidades-energeticas/nuevo-baztan",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/comunidad-energetica-ontinyent",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/comunidades-energeticas/ontinyent",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/comunidad-energetica-san-adrian-de-juarros",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/comunidades-energeticas/san-adrian-de-juarros",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/comunidad-energetica-san-adrian-de-juarros-v2",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/comunidades-energeticas/san-adrian-de-juarros",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/comunidad-energetica-villalbilla-madrid",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/comunidades-energeticas/villalbilla",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/comunidad-energetica-villaverde",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/comunidades-energeticas/villaverde-getafe",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/comunidades-energeticas-v2",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/comunidades-energeticas",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/cs-en-los-medios-de-comunicacion",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/#medios",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/el-toro-tv",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/#pruebas",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/home-2",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/instala-con-nosotros",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/rentabiliza-tu-activo",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/mantenimiento-placas-solares",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/mantenimiento",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/mapa-con-resenas",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/#opiniones",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/megapark-fuente-alamo",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/autoconsumo-remoto/fuente-alamo",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/megapark-las-vegas",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/autoconsumo-remoto/torrontera",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/megapark-pisuerga",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/autoconsumo-remoto/liguerzana",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/megapark-talavera-eolico",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/autoconsumo-remoto",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/mensaje-a-descendientes",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/blog/septimo-aniversario-capsula-del-tiempo",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/mision",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/nosotros#mision",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/mision-2",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/nosotros#mision",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/nuestra-mision",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/nosotros#mision",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/nuestro-plan",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/nosotros#nuestro-plan",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/oferta-baterias-ecoflow-powerocean-con-instalacion-fotovoltaica",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/baterias",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/oferta-baterias-huawei",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/baterias",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/oferta-baterias-solax-x1-ies",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/baterias#solax-x1-ies",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/pack-ahorro-energetico-autoconsumo-baterias-b2b",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/autoconsumo-remoto",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/pack-ahorro-energetico-autoconsumo-baterias-pack_ar",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/autoconsumo-remoto",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/pack-ahorro-energetico-autoconsumo-baterias-pack_ar_canadian_lp",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/autoconsumo-remoto",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/pack-ahorro-energetico-b2b-crealsa",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/autoconsumo-remoto",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/partners-y-empleo",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/nosotros",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/preguntas-frecuentes",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/contacto",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/preguntas-frecuentes-app",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/soy-comunero",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/programa-de-referidos-csp",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/soy-comunero",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/proyecto-torrontera",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/autoconsumo-remoto/torrontera",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/proyecto-torrontera-configurador",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/autoconsumo-remoto/torrontera",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/prueba-autoconsumo-remoto",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/autoconsumo-remoto",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/prueba-tejados-en-red",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/rentabiliza-tu-activo",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/que-es-autoconsumo-remoto-como-funciona",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/autoconsumo-remoto",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/remoto",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/autoconsumo-remoto",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/reserva-megapark-talavera-eolico",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/autoconsumo-remoto",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/respaldo-sin-placas",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/baterias#preguntas",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/santa-cruz-de-paniagua",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/comunidades-energeticas/santa-cruz-de-paniagua",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/tarifas",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/comercializadora-y-tarifas",
+      "privateArea": null,
+      "visualTemplate": null
+    },
+    {
+      "path": "/vimart-gt-autoconsumo-remoto-con-baterias",
+      "kind": "redirect",
+      "sourceFile": "app/legacy-routes.ts",
+      "fixtureId": null,
+      "expectedStatus": 308,
+      "expectedLocation": "/autoconsumo-remoto",
+      "privateArea": null,
+      "visualTemplate": null
+    }
+  ],
+  "sourceFiles": [
+    {
+      "path": ".env.example",
+      "sha256": "361ff4a3814fe9a5b6117fbb63c4fe58cf4fa1ea271322b77bad59532020baa3",
+      "bytes": 465
+    },
+    {
+      "path": ".gitignore",
+      "sha256": "42b7801ee5159c7b5a1ad13c23b13d850255e3b8ca25fc527b29d629a4aeb35e",
+      "bytes": 512
+    },
+    {
+      "path": ".npmrc",
+      "sha256": "494e64a8818b6158e89321250500ad5ad018e33ad5cfea06a1cacd2cf4da75fa",
+      "bytes": 76
+    },
+    {
+      "path": ".openai/hosting.json",
+      "sha256": "c73b94a2098496ee34d0148ecd846db4c623dbfce3f7d2161d75228f3de02153",
+      "bytes": 91
+    },
+    {
+      "path": "AGENTS.md",
+      "sha256": "911fd170d8faee04ea32d0582f13f97a2fb31738ab860fb3bba0cab0c6e37eba",
+      "bytes": 1094
+    },
+    {
+      "path": "README.md",
+      "sha256": "70ef40d45f8c381c87651db8828a2b085bfe3522eebccef2e074fc93a68716d9",
+      "bytes": 5436
+    },
+    {
+      "path": "app/[slug]/page.tsx",
+      "sha256": "386d0e1ea5c86387d40f620359293f1d208f351eae6c8cdca0792123868368df",
+      "bytes": 6941
+    },
+    {
+      "path": "app/api/manganafer-interest/export/route.ts",
+      "sha256": "811b38ef115bf8b763dd4039879c7170d89675208b9415fdd37cdfbc49c0d8ca",
+      "bytes": 2148
+    },
+    {
+      "path": "app/api/manganafer-interest/route.ts",
+      "sha256": "ea88ddaf2e1547f46f2be808e8e6680a8df44742db53b0753a3646f15b616225",
+      "bytes": 5620
+    },
+    {
+      "path": "app/api/manganafer-quote/route.ts",
+      "sha256": "6915adc9a3a3239a1ce00132f351d4bc5fd04a20117151cabac60bb26b45d5f8",
+      "bytes": 13281
+    },
+    {
+      "path": "app/autoconsumo-remoto/[project]/page.tsx",
+      "sha256": "d6990be6e0a4c14b3356a03ba25d20daf2ba16a8090e3ee3c65eed5fb36b5a6c",
+      "bytes": 2077
+    },
+    {
+      "path": "app/blog-data.ts",
+      "sha256": "adf588b60a98f0d32fcfc34ffc8ca33a94f7d09e9de1fd722a7a3eff608c57cb",
+      "bytes": 28304
+    },
+    {
+      "path": "app/blog/[post]/page.tsx",
+      "sha256": "0d20d730281dac523577e57fffe9912b8b112a88078ab697e24ef9b6fe6ae4c5",
+      "bytes": 1357
+    },
+    {
+      "path": "app/chatgpt-auth.ts",
+      "sha256": "17a965f8948b21510cdf8ecbd70c5fdf58100e10970463f6a8fd2cc4795f8044",
+      "bytes": 2404
+    },
+    {
+      "path": "app/community-data.ts",
+      "sha256": "c61d327b5c8f336cbada97146afee6cfe08fc73e75cb4507fbf4655dc2fe2468",
+      "bytes": 52972
+    },
+    {
+      "path": "app/comunidades-energeticas/[community]/page.tsx",
+      "sha256": "b2e858e490ce33a5fdecac58a5258de3a1b4b6b9b0a3ff13b423f3b24ccce1bf",
+      "bytes": 1562
+    },
+    {
+      "path": "app/comunidades-energeticas/manganafer/manganafer-landing.tsx",
+      "sha256": "1ec11b5546e7376817a6418111f75663fed4089df1a7abae62e5b0624cb23fbc",
+      "bytes": 41107
+    },
+    {
+      "path": "app/comunidades-energeticas/manganafer/page.tsx",
+      "sha256": "9a4c5f2483f901e09fdc7730eb541fe87d122955e7d0f8c5f8fa89784e9b4486",
+      "bytes": 1409
+    },
+    {
+      "path": "app/consent-manager.tsx",
+      "sha256": "527bf8565971bdd491aa2757ba02c01162a5ca395feb8ccb1783322839331031",
+      "bytes": 7865
+    },
+    {
+      "path": "app/events-data.ts",
+      "sha256": "36ee27c5f39229dd546949262d4d9609834129e880ee8e49b58ecd09309386aa",
+      "bytes": 3601
+    },
+    {
+      "path": "app/gestionamos-subvenciones-placas-solares/route.ts",
+      "sha256": "abdd339ea7989ca97534de45b7a11bdc62a497cc24ba5da5e7947f0b5a07149f",
+      "bytes": 123
+    },
+    {
+      "path": "app/gestionamos-subvenciones/route.ts",
+      "sha256": "abdd339ea7989ca97534de45b7a11bdc62a497cc24ba5da5e7947f0b5a07149f",
+      "bytes": 123
+    },
+    {
+      "path": "app/globals.css",
+      "sha256": "3a3e6c96604ba3d635cc8dbcb2eaa0639f261f03962da6e88a4c42c58f3e05c8",
+      "bytes": 485081
+    },
+    {
+      "path": "app/guia-equipo-nueva-web-comunidad-solar.md/route.ts",
+      "sha256": "78ee8d1d4663f1c6641cd1a49d7e5e830942d19f5aea89d7a87013a5ab6c97f1",
+      "bytes": 1336
+    },
+    {
+      "path": "app/guia-equipo/page.tsx",
+      "sha256": "112359943e8c93caefae172c4cb68e864431b56d4b893933883717abbb32d9cd",
+      "bytes": 1503
+    },
+    {
+      "path": "app/guide-content.md",
+      "sha256": "21bc7b3087231dff5dc6ca5521404fba042ebd8987952d3ee35f50f84b2c5aef",
+      "bytes": 87516
+    },
+    {
+      "path": "app/guide-runtime.ts",
+      "sha256": "a1c1ef532e4dfa8ed5a43020ccb877d7b096cd25918bba25e59a4c99ecdd892c",
+      "bytes": 1147
+    },
+    {
+      "path": "app/layout.tsx",
+      "sha256": "f0f1cb364236d95c88485e196f0e7aef1719ee7d247fa9a0143a522e9f749d2b",
+      "bytes": 2125
+    },
+    {
+      "path": "app/legacy-routes.ts",
+      "sha256": "d5daefb7774b8f0c6ddfa81fd29138ebb073ebb49e0715a6b311c052d292cff2",
+      "bytes": 19895
+    },
+    {
+      "path": "app/legal-content.ts",
+      "sha256": "9072478d561cb64278e1a45fbdd5608eb44bd661d0c6a00a5053120b2d65a7d7",
+      "bytes": 56478
+    },
+    {
+      "path": "app/legal-page.tsx",
+      "sha256": "09bb875eee65b946958b1b3c2242ed77bd54d72abb5efdb3e5cc0066ce64f6ae",
+      "bytes": 2409
+    },
+    {
+      "path": "app/manganafer-quote-config.ts",
+      "sha256": "15d8a45e397446cae30b2ec6c8a564ea8672e037fc07f25087e98c5417b53c0c",
+      "bytes": 2863
+    },
+    {
+      "path": "app/manganafer/interesados/page.tsx",
+      "sha256": "f34bc1de8a0ad4b7455a9e73654b638e67b471a102eb1ed167f361a69c26aa62",
+      "bytes": 8398
+    },
+    {
+      "path": "app/page.tsx",
+      "sha256": "17583a9f8a0c2b986096e37a9b15864e8d7f49aa4d16d9f369a6573ea510cab5",
+      "bytes": 227
+    },
+    {
+      "path": "app/private-access-page.tsx",
+      "sha256": "abdd0bbaf07b9657ee16c2c1d221c632adb12c7dda35195aa45eb5e3303c3ad0",
+      "bytes": 4216
+    },
+    {
+      "path": "app/private-area-auth.ts",
+      "sha256": "988140b0cbb12676299c7b8668462bd0c52582ff5d0f62a0e67a51a2e1f4691c",
+      "bytes": 880
+    },
+    {
+      "path": "app/raw.d.ts",
+      "sha256": "4b5327e610ba84c0413093c2f7e54d4e7dbf3039037c47b503197ad77dd03896",
+      "bytes": 81
+    },
+    {
+      "path": "app/remote-project-data.ts",
+      "sha256": "3e0887c124f4d84bc453c8d1d438bda79669d8f7805cb782c54db851af7c1d53",
+      "bytes": 11429
+    },
+    {
+      "path": "app/retired-service.ts",
+      "sha256": "9d917fcb89d985fd29c8ecb487c6e2b549fa5b4ae88447b8ec37e9546548823d",
+      "bytes": 304
+    },
+    {
+      "path": "app/robots.ts",
+      "sha256": "569d93ac74ac9b4dc0020c40e424a7b0611bcbbe1623c1120f529e28b9ac7d90",
+      "bytes": 619
+    },
+    {
+      "path": "app/site.tsx",
+      "sha256": "fd9088ab961fe034ebcf1e1ef6d5855f046e5f0c632d97a8edf9239044d9e624",
+      "bytes": 412877
+    },
+    {
+      "path": "app/sitemap.ts",
+      "sha256": "d3c95bfb86b5dd388a16431cafda563975ae53eccde92d7fc1b607d08e41eabb",
+      "bytes": 1574
+    },
+    {
+      "path": "app/socios/page.tsx",
+      "sha256": "a1da2c01565b2e1a4bf611c21512bac91fc4c0d341dad3813ade6ff118791a9e",
+      "bytes": 19999
+    },
+    {
+      "path": "app/socios/partner-data.ts",
+      "sha256": "8c7e0b4f1bb20cea3c5e92a64fab96433fd5ddfedcbf6257ef79028755f75de2",
+      "bytes": 9305
+    },
+    {
+      "path": "app/subvenciones/route.ts",
+      "sha256": "abdd339ea7989ca97534de45b7a11bdc62a497cc24ba5da5e7947f0b5a07149f",
+      "bytes": 123
+    },
+    {
+      "path": "app/team-guide-page.tsx",
+      "sha256": "e9f4d2542cd90ce95c1c6e7c904d52fb57c3d71512d75a2116aea526d30640f6",
+      "bytes": 10354
+    },
+    {
+      "path": "app/trust-data.ts",
+      "sha256": "1f71189a0a442d61dfe36bd7ccd4bee99de24c62bdbf4f742a7bcbd1e8a3a399",
+      "bytes": 4253
+    },
+    {
+      "path": "build/sites-vite-plugin.ts",
+      "sha256": "81b7cbfaeb970611572256aba0e313425beb3809f6426f63750696c15d9c756b",
+      "bytes": 1254
+    },
+    {
+      "path": "db/index.ts",
+      "sha256": "84ec4f9b5dd5acd27de6be4185d903746a30f97dbbff4e313d6095e4ac42af04",
+      "bytes": 2320
+    },
+    {
+      "path": "db/schema.ts",
+      "sha256": "38a6170011accf357452bd1c9a7815ccca8d34b7467acd20c345a4bb09eed29b",
+      "bytes": 1548
+    },
+    {
+      "path": "drizzle.config.ts",
+      "sha256": "af081f7384aaeb0082cf422e29f139d137ca2f6a57c69b2c37b9fb1f8479867b",
+      "bytes": 148
+    },
+    {
+      "path": "drizzle/0000_fat_wolfsbane.sql",
+      "sha256": "5060bd0a809f287e4d4dd09c82735ef2c3d004b212b41eb5cdfe00abdcaf5c76",
+      "bytes": 1119
+    },
+    {
+      "path": "drizzle/meta/0000_snapshot.json",
+      "sha256": "ef1f98bc4303ffb6f34fa531385dc83c62e05cfe26d20dd0ac346054ea1a3a0b",
+      "bytes": 4830
+    },
+    {
+      "path": "drizzle/meta/_journal.json",
+      "sha256": "03b914667ef246f619f3f00e0e530c270ffbd69acd20de9e41acef3fe00dbbe8",
+      "bytes": 203
+    },
+    {
+      "path": "eslint.config.mjs",
+      "sha256": "870f1adccecf3051cbcd9fd307cef51d7633cf510979c181a81f4b1797273493",
+      "bytes": 465
+    },
+    {
+      "path": "examples/d1/app/api/notes/route.ts",
+      "sha256": "a3d4a74fd53b7bf53e2df41f169d9d9d44a8b22aeb6d92f4e754956079af8909",
+      "bytes": 1700
+    },
+    {
+      "path": "examples/d1/db/schema.ts",
+      "sha256": "d89eabd95716ce404f5f7ca2a254220435be8ddce7c899d7ef461ff22ec80454",
+      "bytes": 370
+    },
+    {
+      "path": "next.config.ts",
+      "sha256": "2a36f51ac99c7166ef52f9bee93446289d7bc98faf07914a79fcaae029f82edd",
+      "bytes": 892
+    },
+    {
+      "path": "package-lock.json",
+      "sha256": "283dbdf55081ff6e460baff80764f39f722f13a0720e1a5fa13153ea877051a5",
+      "bytes": 380145
+    },
+    {
+      "path": "package.json",
+      "sha256": "16ce7ab8585d8e1f8ec40747aa11d907bdf86dfad8461903a39879aef0895ffe",
+      "bytes": 1489
+    },
+    {
+      "path": "postcss.config.mjs",
+      "sha256": "dfac7ac2d86d326a0e5adb024e7943c181393ed17a5fcb8f0315b24c7da6ddde",
+      "bytes": 94
+    },
+    {
+      "path": "scripts/build-verified.sh",
+      "sha256": "4fac88182d4daceade992456b1b545cb97a806a4b9ec031bd1007a89c5322007",
+      "bytes": 895
+    },
+    {
+      "path": "scripts/check-team-guide.mjs",
+      "sha256": "6adf95ed260aa7cac76e3c448f59ba21d4c23b3e6ea057a4ac208c455071915a",
+      "bytes": 758
+    },
+    {
+      "path": "scripts/install-ci.sh",
+      "sha256": "c86541a04dec39f982eb6b103b60e3b376c518e84816b7876635877fb4c8569f",
+      "bytes": 6430
+    },
+    {
+      "path": "scripts/sites-env.sh",
+      "sha256": "df86ebfc27d2f00860036658e933ac0ddd7b5f6879aa5d51218f0863c7e1fb60",
+      "bytes": 1530
+    },
+    {
+      "path": "scripts/team-guide-fingerprint.mjs",
+      "sha256": "4aade92353a37a54b200451811cb8bcd3a2781ac0da2fd818974ce127a0877ff",
+      "bytes": 2017
+    },
+    {
+      "path": "scripts/update-team-guide.mjs",
+      "sha256": "804d10d773d5cc8ee6e5625c8d6dddf8888cd3a40dd39e48458a24181d5b04a5",
+      "bytes": 1973
+    },
+    {
+      "path": "scripts/validate-artifact.sh",
+      "sha256": "826354a781d909a664342b6a6f1a3155529e21f757dc163befa937420c713c2b",
+      "bytes": 1220
+    },
+    {
+      "path": "tests/rendered-html.test.mjs",
+      "sha256": "ed798267fb785fa06207f77bc7a4527436dab57bcb74c42fbb19d2f253eb9f69",
+      "bytes": 82119
+    },
+    {
+      "path": "tsconfig.json",
+      "sha256": "be18523b23b78b6e1a876ddd107d330f0168bddf09d751b57e0b5edce69c66f3",
+      "bytes": 666
+    },
+    {
+      "path": "vite.config.ts",
+      "sha256": "43e5f02f727ca043f08ebf34789f330580a7a0cb90f426c92f4a454d066988fc",
+      "bytes": 1807
+    },
+    {
+      "path": "worker/index.ts",
+      "sha256": "4518858a954df3956f654d110534527107218739134787182fdf21aa8f516d7c",
+      "bytes": 2552
+    }
+  ],
+  "assets": [
+    {
+      "path": "public/comunidad-solar-evolucion.png",
+      "sha256": "636e51005755c2427aaa16ade4bfa7ecd30c1559d0dbba04ee731ad40748ac8c",
+      "bytes": 2585744
+    },
+    {
+      "path": "public/comunidad-solar-hero.png",
+      "sha256": "20b99ed37b0b6731773fa5ff989f14b43b2d05c0350893277a498fcacf8d4f6c",
+      "bytes": 1489558
+    },
+    {
+      "path": "public/comunidad-solar-logo-option-1.svg",
+      "sha256": "062480e6b90fe3359c92aa2f0657b536058d4d97448ce62f8694abe534b4e57b",
+      "bytes": 784
+    },
+    {
+      "path": "public/comunidad-solar-logo-option-3.svg",
+      "sha256": "baac7e7a6180c4b8172e8dc5e2df2a0c0e6009a01a455a1af4e77b396c728899",
+      "bytes": 1320
+    },
+    {
+      "path": "public/comunidad-solar-logo.svg",
+      "sha256": "402be99eefa59f25e6a3e917a8faff272020d398499fa18a0a4693e64d712ad8",
+      "bytes": 11409
+    },
+    {
+      "path": "public/comunidades-colegio-pueblo-1024x792.png",
+      "sha256": "e684b9e7e80a6a261ed1c4e8f21c6785d2f1c265dedfb53ab4c65c03372e1932",
+      "bytes": 1284859
+    },
+    {
+      "path": "public/comunidades-hero-v2.png",
+      "sha256": "bb83fbf8da996bcabf899d3a08328eb6b90a9fff6e9a26b1434efaaac83ea598",
+      "bytes": 1630795
+    },
+    {
+      "path": "public/cubierta-comunidad.png",
+      "sha256": "794325bf575397e4143c0e331b88c4ca1a40157bbef82ad7a320ec9a6b8a25d9",
+      "bytes": 1350745
+    },
+    {
+      "path": "public/favicon.svg",
+      "sha256": "e6d2e59b7b5bbb0342e0fb496dfc262decbfe4426bbb7b047aec8d467d1dc6f7",
+      "bytes": 712
+    },
+    {
+      "path": "public/file.svg",
+      "sha256": "2b67812c325c199a02536cdbeea0c593a72f707d323b72ee3e08dbab06753bd4",
+      "bytes": 391
+    },
+    {
+      "path": "public/globe.svg",
+      "sha256": "b614b9bf183925957661ac851498fe1d8029fd43a62fbfed86f9e2624a57e7cf",
+      "bytes": 1035
+    },
+    {
+      "path": "public/media/antena3-noticias-autoconsumo-remoto-2023.jpg",
+      "sha256": "570291942f62eb06357ae4345afc6b12dd5364542be65e1db65f4cbe3723ab08",
+      "bytes": 81736
+    },
+    {
+      "path": "public/media/asesor-victor.jpg",
+      "sha256": "5cca0191b9069ed75536da53f1c48618b5542c0d434cd61299b7c209cf008fa0",
+      "bytes": 166162
+    },
+    {
+      "path": "public/media/asesora-gema.png",
+      "sha256": "e24e5df97b3cc534812ec5d34f1d8e161f87740be966393bf0804691ead2d70b",
+      "bytes": 493845
+    },
+    {
+      "path": "public/media/asesora-irene.png",
+      "sha256": "8a2b6886a968de84f6570be0945c122c77551f5c49597f70079c98960f3d9404",
+      "bytes": 424334
+    },
+    {
+      "path": "public/media/asesora-laura.png",
+      "sha256": "fae1551f4262769ead3d76f9e23b01e1458fe2cb2255a888fb9a39611723f732",
+      "bytes": 351808
+    },
+    {
+      "path": "public/media/autoconsumo-remoto-baterias.svg",
+      "sha256": "85f3e2c24b422b04f26b15ea4562a6e93a8698ad239d78a2e33aa4a5633c1d1e",
+      "bytes": 31324
+    },
+    {
+      "path": "public/media/blog-ceuti-detalle.jpg",
+      "sha256": "20172c582c78969b2147309f290e1e2d0afd9c7cdc26e2866e84cdd08f7b2900",
+      "bytes": 6201721
+    },
+    {
+      "path": "public/media/blog-nuevo-baztan-detalle.jpg",
+      "sha256": "2ff1ba2c925e65047b73b15e8afeade317c4a4b95baf0b2cd7a58f93b74c7766",
+      "bytes": 331033
+    },
+    {
+      "path": "public/media/blog-villalbilla-evento.jpg",
+      "sha256": "c640a5fe1b80932af8959a3957fd4af0653388b5f50d068876d201316df08692",
+      "bytes": 297591
+    },
+    {
+      "path": "public/media/ceuti.jpg",
+      "sha256": "17d3c31d01329166d9a5826b728a6453c5adf78e5208851dfce017acf0b8614c",
+      "bytes": 83612
+    },
+    {
+      "path": "public/media/comunero-alfredo-izaskun.png",
+      "sha256": "663a92a1d685f04d066e27674ffa06acb51e4d5cb8e925c9eace60dbd8309930",
+      "bytes": 716738
+    },
+    {
+      "path": "public/media/comunero-jose-familia.png",
+      "sha256": "fc6d9f4d0d915ed6d7b39d0745d8fd42e68fabbf4f0a461f25f5a2e5efe238a0",
+      "bytes": 978492
+    },
+    {
+      "path": "public/media/comuneros-luis-marisa.png",
+      "sha256": "8056afbde49599ff3d1fa6a7809f9437635de3c821b56043dbd3f34122e3ff65",
+      "bytes": 802695
+    },
+    {
+      "path": "public/media/comuneros-nuria-carlos.png",
+      "sha256": "765aa217d43c9e3c4ae699789b14f0a9d6fcacef140161591b28cce15e9c8c57",
+      "bytes": 802036
+    },
+    {
+      "path": "public/media/comunidades-energeticas.svg",
+      "sha256": "ec2c7aac556019cf5b080fde75344155226d56c2262f49c8151e759a55cc953e",
+      "bytes": 35568
+    },
+    {
+      "path": "public/media/comunidades/escurial-marmoles-jimenez.webp",
+      "sha256": "44fb0a2293db79b62e3d8e0d16a7dc167afe1a0892916254f6c1716b08859a3e",
+      "bytes": 170052
+    },
+    {
+      "path": "public/media/comunidades/extremadura/almendralejo.webp",
+      "sha256": "09a6e2d4f5a8a89173b6cfe7012982bdc0d42c9a7e933515b56a29ffcd532555",
+      "bytes": 96476
+    },
+    {
+      "path": "public/media/comunidades/extremadura/caceres.webp",
+      "sha256": "bdf1c84edb2f5637f275986fce2589af31ec7f2b1fca00d45f9c1a09c0acfb43",
+      "bytes": 65510
+    },
+    {
+      "path": "public/media/comunidades/extremadura/coria.webp",
+      "sha256": "5d1fda5ada5ab7ef4567739f35ef3282cf5d001e40f88c3e1fbed3504f81f58e",
+      "bytes": 101952
+    },
+    {
+      "path": "public/media/comunidades/extremadura/don-benito.webp",
+      "sha256": "9102f0bc524e9c3d17e3929cf9021d494099ee366453f853ba2f26794b502c9e",
+      "bytes": 82018
+    },
+    {
+      "path": "public/media/comunidades/extremadura/jerez-de-los-caballeros.webp",
+      "sha256": "39763b4aef94c0d4ba18b2233b9775fdccfb8a1bed8d17f05a165158f2d62deb",
+      "bytes": 64794
+    },
+    {
+      "path": "public/media/comunidades/extremadura/merida.webp",
+      "sha256": "49219114798f81ff60a74cebc1e8bcbe253f732cfcbd585667852122428cef82",
+      "bytes": 44714
+    },
+    {
+      "path": "public/media/comunidades/extremadura/navalmoral-de-la-mata.webp",
+      "sha256": "5d697945c2e0c2c2f658798ecb97d66e04c82ab2531b6d26dc44ff8f27ebd792",
+      "bytes": 41684
+    },
+    {
+      "path": "public/media/comunidades/extremadura/plasencia.webp",
+      "sha256": "76153e2862a2b775fce558fa1667ce1045c600ac728f574a7030bbfc1c443191",
+      "bytes": 73296
+    },
+    {
+      "path": "public/media/comunidades/extremadura/villafranca-de-los-barros.webp",
+      "sha256": "11e7c13f26cad704a635c9a7ec4d496d020619509a670aea50d2e3d51183041e",
+      "bytes": 30980
+    },
+    {
+      "path": "public/media/comunidades/extremadura/zafra.webp",
+      "sha256": "eddcba4c337b42424d5b0f25f3bd90cbf07226a4a4965cf3f59eb007b10e311b",
+      "bytes": 121614
+    },
+    {
+      "path": "public/media/comunidades/ontinyent-dream-home-textil.webp",
+      "sha256": "7e1510774b05e49c85b1300949c0a4cf0c3f5fe73fb9be599446451d63074aab",
+      "bytes": 47394
+    },
+    {
+      "path": "public/media/coolfy-logo.png",
+      "sha256": "110e8cb3b6b23d20d9ca6bcea923b2636f68bd06d4bc03585b333458bd3631be",
+      "bytes": 24546
+    },
+    {
+      "path": "public/media/cs-medios-2025-poster-antena3.jpg",
+      "sha256": "7171acc06d49ec1c67fd9a1e76efc9d3509129448c8ed7670f0cd1d3b430c536",
+      "bytes": 82468
+    },
+    {
+      "path": "public/media/cs-medios-2025-poster.jpg",
+      "sha256": "aae68046ce5aadc607711a256eb6e7940bb4830618804c05aa2289038f6b7e95",
+      "bytes": 73134
+    },
+    {
+      "path": "public/media/damian-villa-por-el-planeta.jpg",
+      "sha256": "5300f563be4ddce05f724e67d7cb701876f7907d6b7a3f0eb854b284380c756a",
+      "bytes": 215279
+    },
+    {
+      "path": "public/media/evento-solsticio-2022.jpg",
+      "sha256": "f347fafafc31d471e1d19a06742f9a4a123670cfaee6148c855de6c8297f9855",
+      "bytes": 18737
+    },
+    {
+      "path": "public/media/evento-solsticio-2023.jpg",
+      "sha256": "a405fa4e7ab68915ef68b2d2f2c6da7709f286272a4e824b40e1c23dacac00e2",
+      "bytes": 6402
+    },
+    {
+      "path": "public/media/evento-solsticio-2024.jpg",
+      "sha256": "a405fa4e7ab68915ef68b2d2f2c6da7709f286272a4e824b40e1c23dacac00e2",
+      "bytes": 6402
+    },
+    {
+      "path": "public/media/evento-solsticio-2025.jpg",
+      "sha256": "1862889569c4943ba58ac6d5d3f9afd1ab4ec75150773fa6c4ff7473b1185b52",
+      "bytes": 45609
+    },
+    {
+      "path": "public/media/evento-visita-parque.jpg",
+      "sha256": "1862889569c4943ba58ac6d5d3f9afd1ab4ec75150773fa6c4ff7473b1185b52",
+      "bytes": 45609
+    },
+    {
+      "path": "public/media/experiencia-comunero.jpg",
+      "sha256": "01bb79933fdb73c9bf02007515606a3b2c50b678d72f739fcac2a8758f3f6acb",
+      "bytes": 542072
+    },
+    {
+      "path": "public/media/extremadura.jpg",
+      "sha256": "f3cd10d12c330db89ac04dbdb977c25942acbca51bc07b57e4e3aed42f349d48",
+      "bytes": 108163
+    },
+    {
+      "path": "public/media/fuente-alamo.jpeg",
+      "sha256": "a4075cedeeeea90a1caa0a4e7b5945aadd635c177b13d63162d6be1f112e3080",
+      "bytes": 83915
+    },
+    {
+      "path": "public/media/hero-operativas-red-de-valor-clean-1024x792.png",
+      "sha256": "86566339a97e192e1f771d85aad7791ac34470f4c47e3710231ec711e0759f77",
+      "bytes": 1583551
+    },
+    {
+      "path": "public/media/historia-adn-comunidad.jpg",
+      "sha256": "355f0a72711a6f9d3d01fc45e325997aeac02cd156ea285108e391e1eae24b58",
+      "bytes": 926328
+    },
+    {
+      "path": "public/media/historia-comunero-8.png",
+      "sha256": "9b9b27a33856a762d9dc2f28957c3e5265461cb8075a47723d754d259ecc3f86",
+      "bytes": 1329141
+    },
+    {
+      "path": "public/media/historia-youtube-reqBqJBFQIk.jpg",
+      "sha256": "5b131ca14aa96311d3432b0062c7443d3b0e6346ec279bd376a75f0a76bcd5d7",
+      "bytes": 195
+    },
+    {
+      "path": "public/media/home-hero-option-1-spain-connected-1024x792.png",
+      "sha256": "6656d09452a4bcab46e44b9aea319c38d5b17140b6e2e2052fac976d5a392744",
+      "bytes": 1312031
+    },
+    {
+      "path": "public/media/home-hero-option-3-exact-1024x792.png",
+      "sha256": "fecda26bcae6273caabf1110f191c99d688d98afdd8631885fc9cfe2431e182f",
+      "bytes": 1359605
+    },
+    {
+      "path": "public/media/ibeas-de-juarros.jpeg",
+      "sha256": "aee17c25c062f64ac8d7ccded5f58652a39494f56f968576aca1b9dab2650206",
+      "bytes": 94260
+    },
+    {
+      "path": "public/media/kike-saenz.png",
+      "sha256": "b6e278011d53d01907adf17fb97069e24e493d4a6a1396f14b3704706b1809d6",
+      "bytes": 488915
+    },
+    {
+      "path": "public/media/las-vegas-mazarron.jpg",
+      "sha256": "20a3862cfbab2ef954cee4d13864e7dc14be077c4393364d4f2facfaf44b8bb9",
+      "bytes": 207557
+    },
+    {
+      "path": "public/media/liguerzana.jpg",
+      "sha256": "4153e3459273af0fd5c9d3d310b6ea9d68650199f81d8b820c961e0df72640de",
+      "bytes": 855437
+    },
+    {
+      "path": "public/media/manganafer-hero-1024x792.png",
+      "sha256": "55569b2e22c4d8c986433775e37d65eee00d373153aa19e40db2fa5088e21633",
+      "bytes": 1377796
+    },
+    {
+      "path": "public/media/merida.webp",
+      "sha256": "3575a7048d9f5bef49a21fab8ce352ae6f3c260e57e2144a6205a28e8c771bdf",
+      "bytes": 136468
+    },
+    {
+      "path": "public/media/nuevo-baztan.jpeg",
+      "sha256": "3be6ace18a0ca7f3ab2b14017a1bb8445bff84a667ad63df586de6acd0b89541",
+      "bytes": 291763
+    },
+    {
+      "path": "public/media/premio-goparity.jpg",
+      "sha256": "e1a9b61497db476fa6f8d78cfd179ac462d817b4ea5735cce20da35479c6560d",
+      "bytes": 4515606
+    },
+    {
+      "path": "public/media/puebla-del-principe.jpg",
+      "sha256": "c583e9d8b99cfa27b7bdee6ecb16555809f8a8954180ef9c0d85791abdd821d5",
+      "bytes": 1675548
+    },
+    {
+      "path": "public/media/radio-cyl.jpg",
+      "sha256": "7e4b3fd218d095616163bc39edcbe93dda076f960c49d44e0198eb2a05d90342",
+      "bytes": 12053
+    },
+    {
+      "path": "public/media/san-adrian-de-juarros.jpg",
+      "sha256": "2757e3c15215720ca62f03e12c42c3de1067a8d94b03d867e2bcca96fec987d7",
+      "bytes": 135911
+    },
+    {
+      "path": "public/media/santa-cruz-de-paniagua.jpg",
+      "sha256": "6945f3a29faf6de4ae2ab17e4f0a331c458426e8b689b1aa45d73b8a9debf329",
+      "bytes": 81859
+    },
+    {
+      "path": "public/media/sepulveda.webp",
+      "sha256": "3575a7048d9f5bef49a21fab8ce352ae6f3c260e57e2144a6205a28e8c771bdf",
+      "bytes": 136468
+    },
+    {
+      "path": "public/media/solax-x1-ies.png",
+      "sha256": "ee95ee778d7fca2663d1f429c8e903a340e653ac954f52b0e436b6ee116501a6",
+      "bytes": 47710
+    },
+    {
+      "path": "public/media/tomas-bensadon.png",
+      "sha256": "6a54281b980bb0651461b82a5d9077dbc5e6b43b9a8d2d4e669a9f06fd6eef9a",
+      "bytes": 80657
+    },
+    {
+      "path": "public/media/torrontera.jpg",
+      "sha256": "b7e80d78faaa58b7fba2e4534863b8607d874589d011c736dfa9ad4aeef86037",
+      "bytes": 98222
+    },
+    {
+      "path": "public/media/villalbilla-gregorio-canella-cubierta.jpg",
+      "sha256": "aadba2787e43e03c08a1839e15b7514f3f490fd75fe7ccc1cf031d9ae6d9d3fa",
+      "bytes": 379305
+    },
+    {
+      "path": "public/media/villalbilla.jpg",
+      "sha256": "c88268a6f194291f382e88d49705064d9bc828c12e5171fab9521fc5f97e33de",
+      "bytes": 95921
+    },
+    {
+      "path": "public/media/villaverde-getafe.jpg",
+      "sha256": "1ea32ce520235af0eb247f3ccf991ef9bc21bc63cc85600b5f0e8da54b1039fc",
+      "bytes": 102841
+    },
+    {
+      "path": "public/planta-fotovoltaica-proximidad.png",
+      "sha256": "e23950c319deaa1d1ea84d19dc8e1d15556b966ab00f689eccbec1dd984b7af0",
+      "bytes": 1467566
+    },
+    {
+      "path": "public/window.svg",
+      "sha256": "644768c4aaeb4767bce293344eeb0c125fb804a94d801440424072202d85e3a1",
+      "bytes": 385
+    }
+  ],
+  "wordpressAudit": {
+    "total": 122,
+    "unclassified": []
+  }
+}
