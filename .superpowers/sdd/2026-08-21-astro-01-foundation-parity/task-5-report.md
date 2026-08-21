@@ -214,3 +214,62 @@ HTTP_PARITY_OK scope=foundation contracts=225 verified=122 pending=149 ... dispo
 No routing or workerd behavior changed in this round. No blocking concern
 remains; as before, the local Wrangler `unstable_startWorker` API is pinned and
 covered by the emitted-artifact smoke rather than trusted through a mock.
+
+## Round 2 — semantic candidate mode and Unicode-safe raw-text scanning
+
+### Review fixes delivered
+
+- `runFoundationParity` now narrows every foundation contract to the captured
+  discriminant before reading body fields, then passes the expected
+  `bodyComparison` into the candidate capture. A semantic expected contract
+  therefore captures semantically too: an intentionally different expected
+  hash does not create a false mode or hash diff when its public HTML semantics
+  match. The prior pure comparator mode-mismatch regression remains in place.
+- Raw-text closing-tag discovery no longer calls `toLowerCase()` on an entire
+  HTML document and then reuses its indices against the original. It instead
+  compares ASCII code units case-insensitively at original-document offsets.
+  This is length-preserving and prevents U+0130 (`İ`) expansion from skipping
+  visible text or later `data-build` attributes after `script`/`style` content.
+  Both `htmlSemantics` and `normalizeDataBuildAttributes` share the corrected
+  scanner.
+- The atomic matrix implementation (Round 1 H2), schema v2 baseline,
+  routing/workerd entries, and route matrix were intentionally left unchanged.
+
+### TDD evidence
+
+New regressions were added before production changes and the focused command
+was observed RED:
+
+```bash
+npm run test:unit -- tests/parity/http-baseline.test.ts tests/parity/http-compare.test.ts
+```
+
+It had **36 pass / 3 fail**. The injected candidate parity fixture returned
+exactly `bodyComparison expected=semantic actual=exact` despite identical HTML
+semantics and a deliberately different expected hash. With ten U+0130 code
+points before a raw `<script>`, `htmlSemantics` produced
+`İ… script tail`, omitting `later script text`; `normalizeHtml` left the first
+following `data-build="2026-08-21T00:00:00Z"` unnormalized. The tests cover
+both `script` and `style` paths.
+
+After propagating the expected mode and replacing whole-document lowercasing
+with the ASCII/original-offset matcher, the focused suite was **39/39 pass**,
+including the emitted local-workerd smoke. The full unit suite was **58/58
+pass**.
+
+### Round 2 verification and concerns
+
+- `npm run format:check`, `npm run lint`, `npm run check`, and `npm run build`:
+  pass. Astro reports 0 errors and 0 warnings; the existing TypeScript-ESLint
+  deprecation remains a hint only.
+- `npm run source:check`: `SOURCE_OK
+  68ea294c54dc5e15e20f470fc421a239927565a8 clean`.
+- `npm run parity:manifest -- --check`: `SOURCE_MANIFEST_OK 271`.
+- Fresh archive-only `npx tsx scripts/capture-http-baseline.ts --check`:
+  `HTTP_BASELINE_OK 311 81`; no `--write` or baseline regeneration occurred.
+- Real `npm run parity:http -- --scope foundation`: **225** contracts,
+  **122 verified**, **149 pending**, and `disposed=true` through the generated
+  Wrangler/workerd topology.
+
+No blocking concern remains. The only reported diagnostic is the repository's
+pre-existing TypeScript-ESLint deprecation hint.

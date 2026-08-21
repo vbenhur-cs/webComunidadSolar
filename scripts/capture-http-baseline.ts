@@ -509,35 +509,49 @@ function normalizeDataBuildInStartTag(tag: string): string {
   return normalized;
 }
 
+function matchesAsciiCaseInsensitiveAt(
+  value: string,
+  start: number,
+  expected: string,
+): boolean {
+  // Raw-text closing offsets index the original document. Fold ASCII one code
+  // unit at a time so Unicode case mappings can never expand that index space.
+  if (start + expected.length > value.length) return false;
+  for (let offset = 0; offset < expected.length; offset += 1) {
+    const actualCode = value.charCodeAt(start + offset);
+    const normalizedActual =
+      actualCode >= 0x41 && actualCode <= 0x5a ? actualCode + 0x20 : actualCode;
+    if (normalizedActual !== expected.charCodeAt(offset)) return false;
+  }
+  return true;
+}
+
 function rawTextClosingTagStart(
-  lowerHtml: string,
+  html: string,
   start: number,
   rawTextElement: string,
 ): number | null {
   const prefix = `</${rawTextElement}`;
-  let candidate = lowerHtml.indexOf(prefix, start);
+  let candidate = html.indexOf("<", start);
   while (candidate !== -1) {
-    let cursor = candidate + prefix.length;
-    while (isHtmlWhitespace(lowerHtml[cursor])) cursor += 1;
-    if (lowerHtml[cursor] === ">") return candidate;
-    candidate = lowerHtml.indexOf(prefix, candidate + 1);
+    if (matchesAsciiCaseInsensitiveAt(html, candidate, prefix)) {
+      let cursor = candidate + prefix.length;
+      while (isHtmlWhitespace(html[cursor])) cursor += 1;
+      if (html[cursor] === ">") return candidate;
+    }
+    candidate = html.indexOf("<", candidate + 1);
   }
   return null;
 }
 
 function normalizeDataBuildAttributes(html: string): string {
-  const lowerHtml = html.toLowerCase();
   let cursor = 0;
   let normalized = "";
   let rawTextElement: string | null = null;
 
   while (cursor < html.length) {
     if (rawTextElement !== null) {
-      const closingStart = rawTextClosingTagStart(
-        lowerHtml,
-        cursor,
-        rawTextElement,
-      );
+      const closingStart = rawTextClosingTagStart(html, cursor, rawTextElement);
       if (closingStart === null) return `${normalized}${html.slice(cursor)}`;
       normalized += html.slice(cursor, closingStart);
       cursor = closingStart;
@@ -700,17 +714,12 @@ export function htmlSemantics(html: string): HtmlSemantics {
   const canonical: string[] = [];
   const robots: string[] = [];
   const textNodes: string[] = [];
-  const lowerHtml = html.toLowerCase();
   let cursor = 0;
   let rawTextElement: "script" | "style" | null = null;
 
   while (cursor < html.length) {
     if (rawTextElement !== null) {
-      const closingStart = rawTextClosingTagStart(
-        lowerHtml,
-        cursor,
-        rawTextElement,
-      );
+      const closingStart = rawTextClosingTagStart(html, cursor, rawTextElement);
       if (closingStart === null) break;
       cursor = closeTagEnd(html, closingStart);
       rawTextElement = null;

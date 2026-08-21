@@ -20,6 +20,7 @@ import {
   assertHttpBaselineCoverage,
   buildCapturePlan,
   captureHttpContract,
+  htmlSemantics,
   normalizeHtml,
   resetHttpBaselineArtifacts,
   serializeHttpBaseline,
@@ -699,6 +700,37 @@ test("captures ordered public HTML semantics before persisting its artifact", as
     contract.normalizedHtmlPath ?? "",
     /^\.artifacts\/http-baseline\//,
   );
+});
+
+test("preserves later public text after U+0130 before raw script and style tags", () => {
+  const expandingPrefix = "İ".repeat(10);
+
+  for (const rawTag of ["script", "style"] as const) {
+    assert.deepEqual(
+      htmlSemantics(
+        `${expandingPrefix}<${rawTag}>hidden ${rawTag}</${rawTag}><p>later ${rawTag} text</p><p>${rawTag} tail</p>`,
+      ),
+      {
+        canonical: [],
+        robots: [],
+        normalizedText: `${expandingPrefix} later ${rawTag} text ${rawTag} tail`,
+      },
+    );
+  }
+});
+
+test("normalizes later data-build attributes after U+0130 before raw tags", () => {
+  const expandingPrefix = "İ".repeat(10);
+  const timestamp = "2026-08-21T00:00:00Z";
+
+  for (const rawTag of ["script", "style"] as const) {
+    const html = `${expandingPrefix}<${rawTag}>hidden ${rawTag}</${rawTag}><p data-build="${timestamp}">later ${rawTag} text</p><p data-build="${timestamp}">${rawTag} tail</p>`;
+
+    assert.equal(
+      normalizeHtml(html),
+      `${expandingPrefix}<${rawTag}>hidden ${rawTag}</${rawTag}><p data-build="__TIMESTAMP__">later ${rawTag} text</p><p data-build="__TIMESTAMP__">${rawTag} tail</p>`,
+    );
+  }
 });
 
 test("records gone text and API error shapes without storing private success bodies", async () => {

@@ -372,6 +372,49 @@ test("disposes a supplied runtime even when a foundation request fails", async (
   assert.equal(disposed, 1);
 });
 
+test("preserves semantic expected mode through injected candidate capture", async () => {
+  const root = await mkdtemp(join(tmpdir(), "parity-http-semantic-candidate-"));
+  let disposed = 0;
+  const expected = htmlContract({
+    routeKey: "gone:/subvenciones|GET|anonymous|default",
+    status: 410,
+    bodyComparison: "semantic",
+    bodySha256: "f".repeat(64),
+  });
+
+  try {
+    const result = await runFoundationParity(
+      { contracts: [expected] },
+      {
+        fetch: async () =>
+          new Response(
+            [
+              "<!doctype html>",
+              '<link rel="canonical" href="https://comunidadsolar.es/">',
+              '<meta name="robots" content="index,follow">',
+              "<main>Comunidad Solar</main>",
+            ].join(""),
+            {
+              status: 410,
+              headers: { "content-type": "text/html; charset=utf-8" },
+            },
+          ),
+        dispose: async () => {
+          disposed += 1;
+        },
+      },
+      { root },
+    );
+
+    assert.deepEqual(result.diffs, []);
+    assert.equal(result.checkedContracts, 1);
+    assert.deepEqual([...result.verifiedRouteKeys], ["gone:/subvenciones"]);
+    assert.equal(disposed, 1);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("builds once and records only proven foundation rows with injected local dependencies", async () => {
   let builds = 0;
   let disposed = 0;

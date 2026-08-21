@@ -344,11 +344,17 @@ export async function runFoundationParity(
 
   try {
     for (const expected of contracts) {
+      if (expected.bodyCapture !== "captured") {
+        throw new Error(
+          `Contrato foundation sin body capturado: ${expected.routeKey}`,
+        );
+      }
       const response = await runtime.fetch(
         requestForFoundationContract(expected),
       );
       const actual = await captureHttpContract(expected.routeKey, response, {
         root: options.root,
+        bodyComparison: expected.bodyComparison,
         artifactNamespace: "candidate",
       });
       const contractDiffs = compareHttpContract(expected, actual);
