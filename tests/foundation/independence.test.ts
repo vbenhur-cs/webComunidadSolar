@@ -174,6 +174,27 @@ test("source scanning detects forbidden references without following symlinks", 
   ]);
 });
 
+test("source scanning skips binary public assets and detects backtick runtime imports", async () => {
+  const fixture = await createRepository();
+  const scanRoot = join(fixture.cleanupRoot, "scan");
+  const publicRoot = join(scanRoot, "public");
+  const runtimePath = join(scanRoot, "runtime.ts");
+
+  await mkdir(publicRoot, { recursive: true });
+  await writeFile(
+    join(publicRoot, "logo.bin"),
+    Buffer.concat([Buffer.from([0, 255, 0]), Buffer.from('import "next"')]),
+  );
+  await writeFile(runtimePath, "await import(`vinext`);\n");
+
+  const violations = await findSourceCheckoutReferences([
+    publicRoot,
+    runtimePath,
+  ]);
+
+  assert.deepEqual(violations, ["runtime.ts: vinext"]);
+});
+
 test("independent verifier archives a Git tree and plans all checks", async () => {
   const fixture = await createRepository();
 
@@ -437,9 +458,15 @@ test("archive commands remove source and module inheritance from their environme
     join(tmpdir(), "independence-environment-"),
   );
   const marker = join(cleanupRoot, "environment.json");
+  const preloadMarker = join(cleanupRoot, "preload-ran.txt");
+  const preload = join(cleanupRoot, "forbidden-preload.cjs");
+  await writeFile(
+    preload,
+    `require("node:fs").writeFileSync(${JSON.stringify(preloadMarker)}, "loaded");\n`,
+  );
   const fixture = await createRepository({
     check: `node -e ${JSON.stringify(
-      `require("node:fs").writeFileSync(${JSON.stringify(marker)}, JSON.stringify({ source: process.env.COMUNIDADSOLAR_SOURCE_ROOT ?? null, gitDir: process.env.GIT_DIR ?? null, gitWorkTree: process.env.GIT_WORK_TREE ?? null, nodePath: process.env.NODE_PATH ?? null, safe: process.env.INDEPENDENCE_SAFE ?? null }))`,
+      `require("node:fs").writeFileSync(${JSON.stringify(marker)}, JSON.stringify({ source: process.env.COMUNIDADSOLAR_SOURCE_ROOT ?? null, gitDir: process.env.GIT_DIR ?? null, gitWorkTree: process.env.GIT_WORK_TREE ?? null, nodePath: process.env.NODE_PATH ?? null, nodeOptions: process.env.NODE_OPTIONS ?? null, safe: process.env.INDEPENDENCE_SAFE ?? null }))`,
     )}`,
   });
 
@@ -455,6 +482,7 @@ test("archive commands remove source and module inheritance from their environme
           GIT_DIR: "/forbidden/git",
           GIT_WORK_TREE: "/forbidden/worktree",
           NODE_PATH: "/forbidden/modules",
+          NODE_OPTIONS: `--require=${preload}`,
           INDEPENDENCE_SAFE: "kept",
         },
       },
@@ -464,8 +492,10 @@ test("archive commands remove source and module inheritance from their environme
       gitDir: null,
       gitWorkTree: null,
       nodePath: null,
+      nodeOptions: null,
       safe: "kept",
     });
+    assert.equal(await pathExists(preloadMarker), false);
   } finally {
     await rm(cleanupRoot, { recursive: true, force: true });
   }

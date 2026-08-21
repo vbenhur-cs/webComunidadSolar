@@ -85,10 +85,21 @@ async function lstatIfPresent(path: string) {
   }
 }
 
+function isBinaryPublicAsset(contents: Buffer): boolean {
+  if (contents.includes(0)) return true;
+  try {
+    new TextDecoder("utf-8", { fatal: true }).decode(contents);
+    return false;
+  } catch {
+    return true;
+  }
+}
+
 async function scanSourceEntry(
   path: string,
   displayPath: string,
   violations: Set<string>,
+  skipBinaryPublicAssets: boolean,
 ): Promise<void> {
   const metadata = await lstatIfPresent(path);
   if (metadata === undefined) return;
@@ -110,6 +121,7 @@ async function scanSourceEntry(
             ? `${portableDisplayPath}/${entry.name}`
             : entry.name,
           violations,
+          skipBinaryPublicAssets,
         ),
       ),
     );
@@ -122,14 +134,16 @@ async function scanSourceEntry(
     violations.add(`${portableDisplayPath}: path`);
   }
 
-  const contents = await readFile(path, "utf8");
-  if (/\bcomunidadsolarweb\b/i.test(contents)) {
+  const contents = await readFile(path);
+  if (skipBinaryPublicAssets && isBinaryPublicAsset(contents)) return;
+  const text = contents.toString("utf8");
+  if (/\bcomunidadsolarweb\b/i.test(text)) {
     violations.add(`${portableDisplayPath}: comunidadsolarweb`);
   }
-  if (/["']next(?:\/[^"']*)?["']/i.test(contents)) {
+  if (/["'\x60]next(?:\/[^"'\x60]*)?["'\x60]/i.test(text)) {
     violations.add(`${portableDisplayPath}: next`);
   }
-  if (/["']vinext(?:\/[^"']*)?["']/i.test(contents)) {
+  if (/["'\x60]vinext(?:\/[^"'\x60]*)?["'\x60]/i.test(text)) {
     violations.add(`${portableDisplayPath}: vinext`);
   }
 }
@@ -150,6 +164,7 @@ export async function findSourceCheckoutReferences(
       resolvedPath,
       metadata.isDirectory() ? "" : basename(inputPath),
       violations,
+      basename(resolvedPath) === "public",
     );
   }
   return [...violations].sort(compareLexically);
@@ -426,6 +441,7 @@ function sanitizeChildEnvironment(
   delete sanitized.GIT_DIR;
   delete sanitized.GIT_WORK_TREE;
   delete sanitized.NODE_PATH;
+  delete sanitized.NODE_OPTIONS;
   return sanitized;
 }
 
