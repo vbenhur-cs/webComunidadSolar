@@ -1,13 +1,16 @@
 import { spawn } from "node:child_process";
-import { access, readFile, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { access, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isDeepStrictEqual } from "node:util";
 
 import {
   captureHttpContract,
+  type BodyComparison,
   type CapturedHttpContract,
   type DeferredHttpContract,
+  type HtmlSemantics,
   type HttpBaseline,
   type HttpContract,
   type JsonShape,
@@ -71,6 +74,18 @@ export interface HttpParityDependencies {
     root: string,
   ): Promise<FoundationRuntime>;
   writeMatrix?(entries: RouteMatrixEntry[]): Promise<void>;
+  matrixFileSystem?: MatrixFileSystem;
+}
+
+export interface MatrixFileSystem {
+  writeFile(
+    path: string,
+    contents: string,
+    options?: { flag?: string },
+  ): Promise<void>;
+  rename(source: string, destination: string): Promise<void>;
+  rm(path: string, options?: { force?: boolean }): Promise<void>;
+  randomUUID(): string;
 }
 
 interface ParsedHttpRouteKey {
@@ -151,6 +166,33 @@ function diffValue(
     : [{ routeKey, field, expected, actual }];
 }
 
+function compareHtmlSemantics(
+  routeKey: string,
+  expected: HtmlSemantics | null,
+  actual: HtmlSemantics | null,
+): HttpDiff[] {
+  return [
+    ...diffValue(
+      routeKey,
+      "canonical",
+      expected?.canonical ?? null,
+      actual?.canonical ?? null,
+    ),
+    ...diffValue(
+      routeKey,
+      "robots",
+      expected?.robots ?? null,
+      actual?.robots ?? null,
+    ),
+    ...diffValue(
+      routeKey,
+      "normalizedText",
+      expected?.normalizedText ?? null,
+      actual?.normalizedText ?? null,
+    ),
+  ];
+}
+
 /**
  * Compares the captured contract fields without ever reading body fields from a
  * suppressed private-success contract. The discriminant is checked before any
@@ -184,9 +226,22 @@ export function compareHttpContract(
     ...diffs,
     ...diffValue(
       routeKey,
-      "bodySha256",
-      expected.bodySha256,
-      actual.bodySha256,
+      "bodyComparison",
+      expected.bodyComparison,
+      actual.bodyComparison,
+    ),
+    ...(expected.bodyComparison === "exact"
+      ? diffValue(
+          routeKey,
+          "bodySha256",
+          expected.bodySha256,
+          actual.bodySha256,
+        )
+      : []),
+    ...compareHtmlSemantics(
+      routeKey,
+      expected.htmlSemantics,
+      actual.htmlSemantics,
     ),
     ...diffValue(routeKey, "bodyText", expected.bodyText, actual.bodyText),
     ...diffValue(
@@ -294,6 +349,7 @@ export async function runFoundationParity(
       );
       const actual = await captureHttpContract(expected.routeKey, response, {
         root: options.root,
+        artifactNamespace: "candidate",
       });
       const contractDiffs = compareHttpContract(expected, actual);
       diffs.push(...contractDiffs);
@@ -322,15 +378,41 @@ function asHeaders(value: unknown, routeKey: string): Record<string, string> {
   return Object.fromEntries(headers) as Record<string, string>;
 }
 
+function asBodyComparison(value: unknown): BodyComparison {
+  if (value === "exact" || value === "semantic") return value;
+  throw new Error("bodyComparison HTTP desconocido");
+}
+
+function asHtmlSemantics(value: unknown): HtmlSemantics | null {
+  if (value === null) return null;
+  if (
+    !isRecord(value) ||
+    !Array.isArray(value.canonical) ||
+    !Array.isArray(value.robots) ||
+    typeof value.normalizedText !== "string" ||
+    value.canonical.some((entry) => typeof entry !== "string") ||
+    value.robots.some((entry) => typeof entry !== "string")
+  ) {
+    throw new Error("Semántica HTML HTTP inválida");
+  }
+  return {
+    canonical: [...value.canonical] as string[],
+    robots: [...value.robots] as string[],
+    normalizedText: value.normalizedText,
+  };
+}
+
 function asCapturedContract(value: JsonRecord): CapturedHttpContract {
   const routeKey = value.routeKey;
   if (
     typeof routeKey !== "string" ||
     typeof value.status !== "number" ||
     value.bodyCapture !== "captured" ||
+    !("bodyComparison" in value) ||
     typeof value.bodySha256 !== "string" ||
     (value.normalizedHtmlPath !== null &&
       typeof value.normalizedHtmlPath !== "string") ||
+    !("htmlSemantics" in value) ||
     (value.bodyText !== null && typeof value.bodyText !== "string") ||
     !("bodyJsonShape" in value)
   ) {
@@ -341,8 +423,10 @@ function asCapturedContract(value: JsonRecord): CapturedHttpContract {
     status: value.status,
     headers: asHeaders(value.headers, routeKey),
     bodyCapture: "captured",
+    bodyComparison: asBodyComparison(value.bodyComparison),
     bodySha256: value.bodySha256,
     normalizedHtmlPath: value.normalizedHtmlPath,
+    htmlSemantics: asHtmlSemantics(value.htmlSemantics),
     bodyText: value.bodyText,
     bodyJsonShape: value.bodyJsonShape as JsonShape | null,
   };
@@ -358,8 +442,10 @@ function asSuppressedContract(value: JsonRecord): SuppressedHttpContract {
     throw new Error("Contrato HTTP suppressed inválido");
   }
   for (const bodyField of [
+    "bodyComparison",
     "bodySha256",
     "normalizedHtmlPath",
+    "htmlSemantics",
     "bodyText",
     "bodyJsonShape",
   ]) {
@@ -417,14 +503,14 @@ function asSourceRef(value: unknown): SourceRef {
 function parseHttpBaseline(value: unknown): HttpBaseline {
   if (
     !isRecord(value) ||
-    value.schemaVersion !== 1 ||
+    value.schemaVersion !== 2 ||
     !Array.isArray(value.contracts) ||
     !Array.isArray(value.deferred)
   ) {
     throw new Error("parity/http-contracts.json inválido");
   }
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     source: asSourceRef(value.source),
     contracts: value.contracts.map(asHttpContract),
     deferred: value.deferred.map(asDeferredContract),
@@ -464,14 +550,44 @@ async function readMatrixFromDisk(root: string): Promise<RouteMatrixEntry[]> {
   );
 }
 
-async function writeMatrixToDisk(
+const defaultMatrixFileSystem: MatrixFileSystem = {
+  writeFile: async (path, contents, options) =>
+    writeFile(path, contents, options),
+  rename,
+  rm: async (path, options) => rm(path, options),
+  randomUUID,
+};
+
+export async function writeMatrixToDisk(
   root: string,
   entries: RouteMatrixEntry[],
+  fileSystem: MatrixFileSystem = defaultMatrixFileSystem,
 ): Promise<void> {
-  await writeFile(
-    join(root, "parity", "route-matrix.json"),
-    serializeRouteMatrix(entries),
+  const destination = join(root, "parity", "route-matrix.json");
+  const temporary = join(
+    dirname(destination),
+    `.route-matrix-${fileSystem.randomUUID()}.tmp`,
   );
+  let cleanupTemporary = false;
+  try {
+    try {
+      await fileSystem.writeFile(temporary, serializeRouteMatrix(entries), {
+        flag: "wx",
+      });
+      cleanupTemporary = true;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") {
+        cleanupTemporary = true;
+      }
+      throw error;
+    }
+    await fileSystem.rename(temporary, destination);
+    cleanupTemporary = false;
+  } finally {
+    if (cleanupTemporary) {
+      await fileSystem.rm(temporary, { force: true });
+    }
+  }
 }
 
 export async function resolveDeploymentTopology(
@@ -596,7 +712,8 @@ export async function runHttpParity(
   const startRuntime = dependencies.startRuntime ?? startBuiltWorker;
   const writeMatrix =
     dependencies.writeMatrix ??
-    (async (entries: RouteMatrixEntry[]) => writeMatrixToDisk(root, entries));
+    (async (entries: RouteMatrixEntry[]) =>
+      writeMatrixToDisk(root, entries, dependencies.matrixFileSystem));
 
   await build(root);
   const [topology, baseline, matrix] = await Promise.all([

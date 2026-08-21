@@ -112,3 +112,105 @@ No blocking concern remains.  `unstable_startWorker` is explicitly an unstable
 Wrangler API, but it is exercised against the pinned project Wrangler version
 (`4.125.0`) in the required smoke rather than being assumed through a mocked or
 direct-import path.
+
+## Round 1 — HTTP semantic contracts and atomic matrix persistence
+
+### Review fixes delivered
+
+- Bumped `parity/http-contracts.json` and the typed/parser contracts to schema
+  **v2**.  Each of its 308 captured, non-private responses now declares
+  `bodyComparison: "exact"`; the three `suppressed-private-success` contracts
+  have no body, artifact, comparison, or semantic field.
+- Captured HTML responses now persist public
+  `htmlSemantics: { canonical, robots, normalizedText }` before an artifact is
+  written. Canonical `<link>` `href`s and `<meta name="robots">` contents
+  retain duplicate document order. Attribute/tag case, quote style and order
+  are accepted. Text excludes comments, `script`, and `style`, then joins text
+  nodes and collapses whitespace. Common semicolon-terminated named entities
+  (`amp`, `apos`, `gt`, `lt`, `nbsp`, `quot`) plus numeric code points are
+  decoded; unknown entities stay literal deterministically.
+- `compareHttpContract` remains pure and reports separate `bodyComparison`,
+  `canonical`, `robots`, and `normalizedText` diffs. It compares
+  `bodySha256` only when the expected contract is `exact`; a comparison-mode
+  mismatch still reports independently. Its discriminant guard returns before
+  reading any private body, artifact, or semantic value.
+- Candidate captures use `.artifacts/http-candidate`; expected captures remain
+  `.artifacts/http-baseline`, and the test proves a candidate cannot overwrite
+  a same-route baseline artifact. `artifactNamespace: null` remains the
+  no-write option.
+- Replaced direct matrix writes with a same-directory UUID temp file created
+  using `wx`, followed by `rename`. The temp file is removed in `finally` after
+  a write or rename failure; an existing collision is not removed or
+  overwritten. The filesystem operations are injectable for deterministic
+  on-disk failure tests.
+
+### TDD evidence
+
+The new focused regressions were first run against the Round 0 implementation:
+
+```bash
+npm run test:unit -- tests/parity/http-baseline.test.ts tests/parity/http-compare.test.ts
+```
+
+The RED run had **29 pass / 5 fail**: captured HTML lacked
+`bodyComparison`; candidate artifacts still resolved to
+`.artifacts/http-baseline`; the comparator omitted `bodyComparison`,
+`canonical`, `robots`, and `normalizedText`; semantic expected mode still
+produced a hash diff; and the injected rename failure never reached a rename
+operation because matrix persistence was a direct write.
+
+After schema, extraction, comparator, namespace, and atomic-write changes, the
+final focused suite was **36/36 pass**, including the real emitted-workerd
+smoke. It covers ordered/multiple canonical and robots values, mixed attribute
+case/order/quotes, entity normalization, script/style/comment exclusion,
+semantic and exact comparison modes, suppressed-response no-read/no-leak
+safety, candidate artifact isolation, and on-disk write/rename failure plus
+temp-collision behavior.
+
+### Regenerated baseline, privacy, and runtime evidence
+
+`npx tsx scripts/capture-http-baseline.ts --write` regenerated the archive-only
+source capture with:
+
+```text
+HTTP_BASELINE_WRITTEN 311 81
+```
+
+A genuinely fresh subsequent check passed:
+
+```text
+HTTP_BASELINE_OK 311 81
+```
+
+The baseline audit reports schema v2, 311 contracts, 81 deferred, 308 captured
+(`exact`: 308; `semantic`: 0), 72 HTML semantic objects, three suppressed
+private contracts, zero private body/semantic fields, zero non-HTML semantic
+objects, and no missing comparison modes. The route matrix remains 122
+`verified` and 149 `pending`, including the home/later-phase families; no
+`.route-matrix-*.tmp` residue remains.
+
+The real CLI smoke remained the generated Wrangler chain
+`.wrangler/deploy/config.json -> dist/server/wrangler.json ->
+dist/server/entry.mjs`, executes only through local workerd, and passed:
+
+```text
+HTTP_PARITY_OK scope=foundation contracts=225 verified=122 pending=149 ... disposed=true
+```
+
+### Round 1 verification and concerns
+
+- Focused Task 4/5 tests: **36/36** pass.
+- Full unit suite: **55/55** pass.
+- `npm run format:check`, `npm run lint`, `npm run check`, and `npm run build`:
+  pass. Astro reports 0 errors and 0 warnings; the repository's existing
+  TypeScript-ESLint deprecation is a hint only.
+- `npm run source:check`: `SOURCE_OK
+  68ea294c54dc5e15e20f470fc421a239927565a8 clean`.
+- `npm run parity:manifest -- --check`: `SOURCE_MANIFEST_OK 271`.
+- `npm run parity:http -- --scope foundation`: pass with the counts above.
+- `git diff --check` and final source/worktree status are repeated immediately
+  before the Round 1 commit.
+
+No routing or workerd behavior changed in this round. No blocking concern
+remains; as before, the local Wrangler `unstable_startWorker` API is pinned and
+covered by the emitted-artifact smoke rather than trusted through a mock.

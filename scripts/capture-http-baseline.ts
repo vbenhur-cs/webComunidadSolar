@@ -58,13 +58,30 @@ const rawTextElements = new Set(["script", "style", "textarea", "title"]);
 
 export type HttpIdentity = (typeof identities)[number];
 
+/**
+ * Exact captures compare the normalized body hash. Semantic captures retain
+ * the public HTML semantics but intentionally do not make the hash a parity
+ * requirement.
+ */
+export type BodyComparison = "exact" | "semantic";
+
+export interface HtmlSemantics {
+  canonical: string[];
+  robots: string[];
+  normalizedText: string;
+}
+
+export type HttpArtifactNamespace = "baseline" | "candidate";
+
 export interface CapturedHttpContract {
   routeKey: string;
   status: number;
   headers: Record<string, string>;
   bodyCapture: "captured";
+  bodyComparison: BodyComparison;
   bodySha256: string;
   normalizedHtmlPath: string | null;
+  htmlSemantics: HtmlSemantics | null;
   bodyText: string | null;
   bodyJsonShape: JsonShape | null;
 }
@@ -94,7 +111,7 @@ export interface DeferredHttpContract {
 }
 
 export interface HttpBaseline {
-  schemaVersion: 1;
+  schemaVersion: 2;
   source: SourceRef;
   contracts: HttpContract[];
   deferred: DeferredHttpContract[];
@@ -120,6 +137,13 @@ export interface CaptureHttpBaselineOptions {
   root?: string;
   sourceRoot?: string;
   logRoot?: string;
+}
+
+export interface CaptureHttpContractOptions {
+  root?: string;
+  suppressBody?: boolean;
+  bodyComparison?: BodyComparison;
+  artifactNamespace?: HttpArtifactNamespace | null;
 }
 
 interface SourceWorker {
@@ -558,6 +582,201 @@ export function normalizeHtml(html: string): string {
     );
 }
 
+interface HtmlAttribute {
+  name: string;
+  value: string | null;
+}
+
+const htmlEntityValues: Record<string, string> = {
+  amp: "&",
+  apos: "'",
+  gt: ">",
+  lt: "<",
+  nbsp: "\u00a0",
+  quot: '"',
+};
+
+function decodeHtmlEntities(value: string): string {
+  return value.replace(
+    /&(#x[0-9a-f]+|#\d+|[a-z][a-z0-9]+);/gi,
+    (entity, token) => {
+      const normalized = token.toLowerCase();
+      if (normalized.startsWith("#x")) {
+        const codePoint = Number.parseInt(normalized.slice(2), 16);
+        try {
+          return String.fromCodePoint(codePoint);
+        } catch {
+          return entity;
+        }
+      }
+      if (normalized.startsWith("#")) {
+        const codePoint = Number.parseInt(normalized.slice(1), 10);
+        try {
+          return String.fromCodePoint(codePoint);
+        } catch {
+          return entity;
+        }
+      }
+      return htmlEntityValues[normalized] ?? entity;
+    },
+  );
+}
+
+function attributesFromStartTag(tag: string): HtmlAttribute[] {
+  const attributes: HtmlAttribute[] = [];
+  let cursor = 1;
+  while (isHtmlTagNameCharacter(tag[cursor])) cursor += 1;
+
+  while (cursor < tag.length) {
+    while (isHtmlWhitespace(tag[cursor])) cursor += 1;
+    if (
+      cursor >= tag.length ||
+      tag[cursor] === ">" ||
+      (tag[cursor] === "/" && tag[cursor + 1] === ">")
+    ) {
+      break;
+    }
+
+    const nameStart = cursor;
+    while (isHtmlAttributeNameCharacter(tag[cursor])) cursor += 1;
+    if (nameStart === cursor) {
+      cursor += 1;
+      continue;
+    }
+
+    const name = tag.slice(nameStart, cursor).toLowerCase();
+    while (isHtmlWhitespace(tag[cursor])) cursor += 1;
+    let value: string | null = null;
+    if (tag[cursor] === "=") {
+      cursor += 1;
+      while (isHtmlWhitespace(tag[cursor])) cursor += 1;
+      const quote = tag[cursor];
+      if (quote === '"' || quote === "'") {
+        cursor += 1;
+        const valueStart = cursor;
+        while (cursor < tag.length && tag[cursor] !== quote) cursor += 1;
+        value = tag.slice(valueStart, cursor);
+        if (tag[cursor] === quote) cursor += 1;
+      } else {
+        const valueStart = cursor;
+        while (
+          cursor < tag.length &&
+          !isHtmlWhitespace(tag[cursor]) &&
+          tag[cursor] !== ">" &&
+          !(tag[cursor] === "/" && tag[cursor + 1] === ">")
+        ) {
+          cursor += 1;
+        }
+        value = tag.slice(valueStart, cursor);
+      }
+    }
+    attributes.push({ name, value });
+  }
+
+  return attributes;
+}
+
+function attributeValue(
+  attributes: HtmlAttribute[],
+  name: string,
+): string | null {
+  const attribute = attributes.find((entry) => entry.name === name);
+  return attribute?.value === null || attribute === undefined
+    ? null
+    : decodeHtmlEntities(attribute.value);
+}
+
+function closeTagEnd(html: string, start: number): number {
+  const end = html.indexOf(">", start + 2);
+  return end === -1 ? html.length : end + 1;
+}
+
+/**
+ * Extracts only public, document-order HTML semantics. Entity references with
+ * a semicolon are decoded for the common named forms plus numeric code points;
+ * unknown references remain literal so the output stays deterministic.
+ */
+export function htmlSemantics(html: string): HtmlSemantics {
+  const canonical: string[] = [];
+  const robots: string[] = [];
+  const textNodes: string[] = [];
+  const lowerHtml = html.toLowerCase();
+  let cursor = 0;
+  let rawTextElement: "script" | "style" | null = null;
+
+  while (cursor < html.length) {
+    if (rawTextElement !== null) {
+      const closingStart = rawTextClosingTagStart(
+        lowerHtml,
+        cursor,
+        rawTextElement,
+      );
+      if (closingStart === null) break;
+      cursor = closeTagEnd(html, closingStart);
+      rawTextElement = null;
+      continue;
+    }
+
+    if (html.startsWith("<!--", cursor)) {
+      const commentEnd = html.indexOf("-->", cursor + 4);
+      cursor = commentEnd === -1 ? html.length : commentEnd + 3;
+      continue;
+    }
+
+    if (html[cursor] !== "<") {
+      const nextTag = html.indexOf("<", cursor);
+      const end = nextTag === -1 ? html.length : nextTag;
+      textNodes.push(html.slice(cursor, end));
+      cursor = end;
+      continue;
+    }
+
+    const startTag = readHtmlStartTag(html, cursor);
+    if (startTag === null) {
+      if (html.startsWith("</", cursor) || html.startsWith("<!", cursor)) {
+        cursor = closeTagEnd(html, cursor);
+      } else {
+        textNodes.push("<");
+        cursor += 1;
+      }
+      continue;
+    }
+
+    const attributes = attributesFromStartTag(html.slice(cursor, startTag.end));
+    if (startTag.name === "link") {
+      const rel = attributeValue(attributes, "rel");
+      const href = attributeValue(attributes, "href");
+      if (
+        href !== null &&
+        rel?.split(/\s+/).some((token) => token.toLowerCase() === "canonical")
+      ) {
+        canonical.push(href);
+      }
+    }
+    if (startTag.name === "meta") {
+      const name = attributeValue(attributes, "name");
+      const content = attributeValue(attributes, "content");
+      if (name?.toLowerCase() === "robots" && content !== null) {
+        robots.push(content);
+      }
+    }
+    cursor = startTag.end;
+    if (startTag.name === "script" || startTag.name === "style") {
+      rawTextElement = startTag.name;
+    }
+  }
+
+  return {
+    canonical,
+    robots,
+    normalizedText: textNodes
+      .map(decodeHtmlEntities)
+      .join(" ")
+      .replace(/\s+/g, " ")
+      .trim(),
+  };
+}
+
 function normalizeXml(routeKeyValue: string, xml: string): string {
   if (routeKeyValue !== "page:/sitemap.xml|GET|anonymous|default") {
     return xml;
@@ -639,8 +858,11 @@ function artifactFileName(routeKeyValue: string): string {
   return `${readable || "response"}-${hash}.html`;
 }
 
-function httpArtifactRoot(root: string): string {
-  return resolve(root, ".artifacts", "http-baseline");
+function httpArtifactRoot(
+  root: string,
+  namespace: HttpArtifactNamespace = "baseline",
+): string {
+  return resolve(root, ".artifacts", `http-${namespace}`);
 }
 
 export async function resetHttpBaselineArtifacts(root: string): Promise<void> {
@@ -669,7 +891,7 @@ function compareCaptureRequest(
 export async function captureHttpContract(
   routeKeyValue: string,
   response: Response,
-  options: { root?: string; suppressBody?: boolean } = {},
+  options: CaptureHttpContractOptions = {},
 ): Promise<HttpContract> {
   const root = resolve(options.root ?? process.cwd());
   const headers = selectedHeaders(response.headers);
@@ -694,10 +916,14 @@ export async function captureHttpContract(
     : xml
       ? normalizeXml(routeKeyValue, body)
       : body;
+  const extractedHtmlSemantics = html ? htmlSemantics(normalizedBody) : null;
   let normalizedHtmlPath: string | null = null;
 
-  if (html) {
-    const artifactRoot = httpArtifactRoot(root);
+  if (html && options.artifactNamespace !== null) {
+    const artifactRoot = httpArtifactRoot(
+      root,
+      options.artifactNamespace ?? "baseline",
+    );
     const destination = resolve(artifactRoot, artifactFileName(routeKeyValue));
     await mkdir(artifactRoot, { recursive: true });
     await writeFile(destination, normalizedBody);
@@ -709,8 +935,10 @@ export async function captureHttpContract(
     status: response.status,
     headers,
     bodyCapture: "captured",
+    bodyComparison: options.bodyComparison ?? "exact",
     bodySha256: createHash("sha256").update(normalizedBody).digest("hex"),
     normalizedHtmlPath,
+    htmlSemantics: extractedHtmlSemantics,
     bodyText: response.status >= 400 && !html && !json ? body : null,
     bodyJsonShape: json ? jsonShape(body) : null,
   };
@@ -730,7 +958,7 @@ export function assertHttpBaselineCoverage(
   const plan = buildCapturePlan(manifest);
   assert.equal(
     baseline.schemaVersion,
-    1,
+    2,
     "La versión del baseline HTTP no es compatible",
   );
   assertManifestSource(manifest, baseline.source);
@@ -851,8 +1079,10 @@ export function assertHttpBaselineCoverage(
         );
       }
       for (const sensitiveField of [
+        "bodyComparison",
         "bodySha256",
         "normalizedHtmlPath",
+        "htmlSemantics",
         "bodyText",
         "bodyJsonShape",
       ]) {
@@ -873,6 +1103,39 @@ export function assertHttpBaselineCoverage(
     if (request.privateArea !== null && request.identity === "allowed") {
       throw new Error(
         `La respuesta privada autorizada debe suprimir su body: ${contract.routeKey}`,
+      );
+    }
+    if (
+      (capturedContract.bodyComparison !== "exact" &&
+        capturedContract.bodyComparison !== "semantic") ||
+      !Object.hasOwn(capturedContract, "bodyComparison")
+    ) {
+      throw new Error(
+        `El modo de comparación HTTP no es válido para ${contract.routeKey}`,
+      );
+    }
+    const isHtml =
+      capturedContract.headers["content-type"]
+        ?.toLowerCase()
+        .includes("text/html") ?? false;
+    if (isHtml) {
+      const semantics = capturedContract.htmlSemantics;
+      if (
+        semantics === null ||
+        typeof semantics !== "object" ||
+        !Array.isArray(semantics.canonical) ||
+        !Array.isArray(semantics.robots) ||
+        typeof semantics.normalizedText !== "string" ||
+        semantics.canonical.some((value) => typeof value !== "string") ||
+        semantics.robots.some((value) => typeof value !== "string")
+      ) {
+        throw new Error(
+          `La semántica HTML no es válida para ${contract.routeKey}`,
+        );
+      }
+    } else if (capturedContract.htmlSemantics !== null) {
+      throw new Error(
+        `La semántica HTML debe ser null para ${contract.routeKey}`,
       );
     }
     if (
@@ -1129,7 +1392,7 @@ async function createBaseline(
   );
 
   const baseline: HttpBaseline = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     source,
     contracts,
     deferred: plan.deferred,

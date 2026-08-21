@@ -1,12 +1,19 @@
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  mkdtemp,
+  mkdir,
+  readFile,
+  readdir,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import type {
-  HttpBaseline,
-  HttpContract,
+import {
+  type HttpBaseline,
+  type HttpContract,
 } from "../../scripts/capture-http-baseline.ts";
 import type { RouteMatrixEntry } from "../../scripts/lib/route-inventory.ts";
 import {
@@ -16,6 +23,7 @@ import {
   runHttpParity,
   runFoundationParity,
   selectFoundationContracts,
+  writeMatrixToDisk,
 } from "../../scripts/parity-http.ts";
 
 function capturedContract(
@@ -30,17 +38,52 @@ function capturedContract(
       "x-robots-tag": "noindex",
     },
     bodyCapture: "captured",
+    bodyComparison: "exact",
     bodySha256: "a".repeat(64),
     normalizedHtmlPath: null,
+    htmlSemantics: null,
     bodyText: "Esta página ya no forma parte del catálogo de Comunidad Solar.",
     bodyJsonShape: null,
     ...overrides,
   };
 }
 
+type BodyComparison = "exact" | "semantic";
+
+interface HtmlSemanticsFixture {
+  canonical: string[];
+  robots: string[];
+  normalizedText: string;
+}
+
+type HtmlContractFixture = Extract<HttpContract, { bodyCapture: "captured" }> & {
+  bodyComparison: BodyComparison;
+  htmlSemantics: HtmlSemanticsFixture;
+};
+
+function htmlContract(
+  overrides: Partial<HtmlContractFixture> = {},
+): HtmlContractFixture {
+  return {
+    ...capturedContract({
+      routeKey: "page:/|GET|anonymous|default",
+      status: 200,
+      headers: { "content-type": "text/html; charset=utf-8" },
+      bodyText: null,
+    }),
+    bodyComparison: "exact",
+    htmlSemantics: {
+      canonical: ["https://comunidadsolar.es/"],
+      robots: ["index,follow"],
+      normalizedText: "Comunidad Solar",
+    },
+    ...overrides,
+  };
+}
+
 function baselineFixture(contracts: HttpContract[]): HttpBaseline {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     source: {
       repository: "../comunidadsolarweb",
       branch: "main",
@@ -120,6 +163,75 @@ test("reports status, selected headers, exact body hash, and public text diffs",
   ]);
 });
 
+test("reports body mode and each public HTML semantic field", () => {
+  const expected = htmlContract();
+  const actual = htmlContract({
+    bodyComparison: "semantic",
+    bodySha256: "b".repeat(64),
+    htmlSemantics: {
+      canonical: ["https://comunidadsolar.es/nosotros"],
+      robots: ["noindex"],
+      normalizedText: "Comunidad Solar cooperativa",
+    },
+  });
+
+  assert.deepEqual(
+    compareHttpContract(expected as HttpContract, actual as HttpContract),
+    [
+      {
+        routeKey: "page:/|GET|anonymous|default",
+        field: "bodyComparison",
+        expected: "exact",
+        actual: "semantic",
+      },
+      {
+        routeKey: "page:/|GET|anonymous|default",
+        field: "bodySha256",
+        expected: "a".repeat(64),
+        actual: "b".repeat(64),
+      },
+      {
+        routeKey: "page:/|GET|anonymous|default",
+        field: "canonical",
+        expected: ["https://comunidadsolar.es/"],
+        actual: ["https://comunidadsolar.es/nosotros"],
+      },
+      {
+        routeKey: "page:/|GET|anonymous|default",
+        field: "robots",
+        expected: ["index,follow"],
+        actual: ["noindex"],
+      },
+      {
+        routeKey: "page:/|GET|anonymous|default",
+        field: "normalizedText",
+        expected: "Comunidad Solar",
+        actual: "Comunidad Solar cooperativa",
+      },
+    ],
+  );
+});
+
+test("does not diff an exact body hash when the expected body mode is semantic", () => {
+  const expected = htmlContract({ bodyComparison: "semantic" });
+  const actual = htmlContract({
+    bodyComparison: "exact",
+    bodySha256: "b".repeat(64),
+  });
+
+  assert.deepEqual(
+    compareHttpContract(expected as HttpContract, actual as HttpContract),
+    [
+      {
+        routeKey: "page:/|GET|anonymous|default",
+        field: "bodyComparison",
+        expected: "semantic",
+        actual: "exact",
+      },
+    ],
+  );
+});
+
 test("does not expose body fields when a private success contract is suppressed", () => {
   const expected: HttpContract = {
     routeKey: "private-page:/socios|GET|allowed|default",
@@ -132,11 +244,21 @@ test("does not expose body fields when a private success contract is suppressed"
     status: 500,
     headers: expected.headers,
     bodyCapture: "captured",
+    bodyComparison: "exact",
     bodySha256: "b".repeat(64),
     normalizedHtmlPath: ".artifacts/http-baseline/private-response.html",
+    htmlSemantics: null,
     bodyText: "contenido privado que nunca debe aparecer en un diff",
     bodyJsonShape: null,
   };
+  Object.assign(actual as object, {
+    bodyComparison: "exact",
+    htmlSemantics: {
+      canonical: ["https://private.example.test/"],
+      robots: ["noindex"],
+      normalizedText: "contenido privado que nunca debe aparecer en un diff",
+    },
+  });
 
   const diffs = compareHttpContract(expected, actual);
 
@@ -156,6 +278,7 @@ test("does not expose body fields when a private success contract is suppressed"
   ]);
   assert.equal(JSON.stringify(diffs).includes("contenido privado"), false);
   assert.equal(JSON.stringify(diffs).includes("private-response.html"), false);
+  assert.equal(JSON.stringify(diffs).includes("private.example.test"), false);
 });
 
 test("selects only the approved redirect and gone contract families", () => {
@@ -307,6 +430,146 @@ test("builds once and records only proven foundation rows with injected local de
     written?.find((entry) => entry.path === "/subvenciones")?.status,
     "verified",
   );
+});
+
+test("keeps a real matrix unchanged and removes its temp file when rename fails", async () => {
+  const root = await mkdtemp(join(tmpdir(), "parity-http-atomic-matrix-"));
+  try {
+    const parityRoot = join(root, "parity");
+    const matrixPath = join(parityRoot, "route-matrix.json");
+    const original = `${JSON.stringify([matrixEntry("gone", "/subvenciones")], null, 2)}\n`;
+    await mkdir(parityRoot, { recursive: true });
+    await writeFile(matrixPath, original);
+
+    let failure: unknown;
+    try {
+      await runHttpParity(
+        { scope: "foundation", root },
+        {
+          build: async () => {},
+          resolveTopology: async () => ({
+            deployConfigPath: join(root, ".wrangler", "deploy", "config.json"),
+            wranglerConfigPath: join(root, "dist", "server", "wrangler.json"),
+            entryPath: join(root, "dist", "server", "entry.mjs"),
+          }),
+          readBaseline: async () =>
+            baselineFixture([
+              capturedContract({
+                bodySha256:
+                  "768adae9570892d48afde2a6c2171d824b3c5a513501e61a9b7c5750f4a685c4",
+              }),
+            ]),
+          startRuntime: async () => ({
+            fetch: async () =>
+              new Response(
+                "Esta página ya no forma parte del catálogo de Comunidad Solar.",
+                {
+                  status: 410,
+                  headers: {
+                    "cache-control": "public, max-age=3600",
+                    "content-type": "text/plain; charset=utf-8",
+                    "x-robots-tag": "noindex",
+                  },
+                },
+              ),
+            dispose: async () => {},
+          }),
+          matrixFileSystem: {
+            writeFile: async (path, contents, options) =>
+              writeFile(path, contents, options),
+            rename: async () => {
+              throw new Error("simulated matrix rename failure");
+            },
+            rm: async (path, options) => rm(path, options),
+            randomUUID: () => "matrix-test-uuid",
+          },
+        },
+      );
+    } catch (error) {
+      failure = error;
+    }
+
+    assert.ok(failure instanceof Error);
+    assert.match(failure.message, /simulated matrix rename failure/);
+    assert.equal(await readFile(matrixPath, "utf8"), original);
+    assert.deepEqual(
+      (await readdir(parityRoot)).filter((entry) => entry.includes("matrix-test-uuid")),
+      [],
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("keeps a real matrix unchanged and removes its temp file when writing fails", async () => {
+  const root = await mkdtemp(join(tmpdir(), "parity-http-write-failure-"));
+  try {
+    const parityRoot = join(root, "parity");
+    const matrixPath = join(parityRoot, "route-matrix.json");
+    const original = `${JSON.stringify([matrixEntry("gone", "/subvenciones")], null, 2)}\n`;
+    await mkdir(parityRoot, { recursive: true });
+    await writeFile(matrixPath, original);
+
+    let renameCalls = 0;
+    await assert.rejects(
+      writeMatrixToDisk(root, [matrixEntry("redirect", "/mision")], {
+        writeFile: async (path, contents, options) => {
+          await writeFile(path, contents, options);
+          throw new Error("simulated matrix write failure");
+        },
+        rename: async () => {
+          renameCalls += 1;
+        },
+        rm,
+        randomUUID: () => "matrix-write-failure-uuid",
+      }),
+      /simulated matrix write failure/,
+    );
+
+    assert.equal(renameCalls, 0);
+    assert.equal(await readFile(matrixPath, "utf8"), original);
+    assert.deepEqual(
+      (await readdir(parityRoot)).filter((entry) =>
+        entry.includes("matrix-write-failure-uuid"),
+      ),
+      [],
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("does not overwrite a colliding matrix temp file", async () => {
+  const root = await mkdtemp(join(tmpdir(), "parity-http-temp-collision-"));
+  try {
+    const parityRoot = join(root, "parity");
+    const matrixPath = join(parityRoot, "route-matrix.json");
+    const temporary = join(parityRoot, ".route-matrix-collision.tmp");
+    const original = `${JSON.stringify([matrixEntry("gone", "/subvenciones")], null, 2)}\n`;
+    await mkdir(parityRoot, { recursive: true });
+    await writeFile(matrixPath, original);
+    await writeFile(temporary, "another writer's temporary matrix\n");
+
+    await assert.rejects(
+      writeMatrixToDisk(root, [matrixEntry("redirect", "/mision")], {
+        writeFile,
+        rename: async () => {
+          assert.fail("rename must not run after an exclusive-create collision");
+        },
+        rm,
+        randomUUID: () => "collision",
+      }),
+      (error: Error & { code?: unknown }) => error.code === "EEXIST",
+    );
+
+    assert.equal(await readFile(matrixPath, "utf8"), original);
+    assert.equal(
+      await readFile(temporary, "utf8"),
+      "another writer's temporary matrix\n",
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test(

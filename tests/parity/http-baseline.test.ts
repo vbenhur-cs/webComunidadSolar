@@ -196,7 +196,7 @@ function manifestFixture(): SourceManifest {
 function validBaselineFixture(manifest = manifestFixture()): HttpBaseline {
   const plan = buildCapturePlan(manifest);
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     source: { ...manifest.source },
     contracts: plan.requests.map((request) => {
       const route = manifest.routes.find((entry) => entry.path === request.path);
@@ -218,8 +218,10 @@ function validBaselineFixture(manifest = manifestFixture()): HttpBaseline {
       return {
         ...common,
         bodyCapture: "captured" as const,
+        bodyComparison: "exact" as const,
         bodySha256: "a".repeat(64),
         normalizedHtmlPath: null,
+        htmlSemantics: null,
         bodyText: null,
         bodyJsonShape: null,
       };
@@ -659,6 +661,46 @@ test("captures allowlisted headers and a normalized HTML artifact", async () => 
   );
 });
 
+test("captures ordered public HTML semantics before persisting its artifact", async () => {
+  const root = await mkdtemp(join(tmpdir(), "http-baseline-semantics-"));
+  cleanupRoots.push(root);
+  const contract = await captureHttpContract(
+    "page:/|GET|anonymous|default",
+    new Response(
+      [
+        "<!-- hidden comment -->",
+        '<LINK href="https://comunidadsolar.es/?a=1&amp;b=2" data-x="1" REL=\'canonical\'>',
+        '<link REL="stylesheet canonical" href=\'/nosotros?x=1&amp;y=2\'>',
+        '<META CONTENT="noindex, nofollow" NAME=robots>',
+        '<meta name="ROBOTS" content=\'noarchive &amp; nosnippet\'>',
+        "<main> Comunidad <strong>Solar&nbsp;S. Coop.</strong><script>oculto</script><style>.hidden {}</style><p>&amp; energía</p></main>",
+      ].join(""),
+      { headers: { "content-type": "text/html; charset=utf-8" } },
+    ),
+    { root },
+  );
+
+  if (contract.bodyCapture !== "captured") assert.fail("expected captured HTML contract");
+  const semanticContract = contract as typeof contract & {
+    bodyComparison?: unknown;
+    htmlSemantics?: unknown;
+  };
+
+  assert.equal(semanticContract.bodyComparison, "exact");
+  assert.deepEqual(semanticContract.htmlSemantics, {
+    canonical: [
+      "https://comunidadsolar.es/?a=1&b=2",
+      "/nosotros?x=1&y=2",
+    ],
+    robots: ["noindex, nofollow", "noarchive & nosnippet"],
+    normalizedText: "Comunidad Solar S. Coop. & energía",
+  });
+  assert.match(
+    contract.normalizedHtmlPath ?? "",
+    /^\.artifacts\/http-baseline\//,
+  );
+});
+
 test("records gone text and API error shapes without storing private success bodies", async () => {
   const gone = await captureHttpContract(
     "gone:/subvenciones|GET|anonymous|default",
@@ -702,22 +744,33 @@ test("records gone text and API error shapes without storing private success bod
   assert.equal(Object.hasOwn(privateSuccess, "normalizedHtmlPath"), false);
   assert.equal(Object.hasOwn(privateSuccess, "bodyText"), false);
   assert.equal(Object.hasOwn(privateSuccess, "bodyJsonShape"), false);
+  assert.equal(Object.hasOwn(privateSuccess, "bodyComparison"), false);
+  assert.equal(Object.hasOwn(privateSuccess, "htmlSemantics"), false);
 });
 
 test("suppresses every body field and artifact for an allowed private success", async () => {
   const root = await mkdtemp(join(tmpdir(), "http-baseline-private-contract-"));
   cleanupRoots.push(root);
   const routeKey = "private-page:/socios|GET|allowed|default";
-
-  const contract = await captureHttpContract(
-    routeKey,
-    new Response("<main>Contenido privado que no debe persistirse</main>", {
+  const response = new Response(
+    "<main>Contenido privado que no debe persistirse</main>",
+    {
       headers: {
         "cache-control": "no-store",
         "content-type": "text/html; charset=utf-8",
       },
-    }),
-    { root, suppressBody: true } as { root?: string },
+    },
+  );
+  Object.defineProperty(response, "text", {
+    value: async () => {
+      throw new Error("a suppressed private response must not be read");
+    },
+  });
+
+  const contract = await captureHttpContract(
+    routeKey,
+    response,
+    { root, suppressBody: true },
   );
 
   assert.deepEqual(contract, {
@@ -730,6 +783,39 @@ test("suppresses every body field and artifact for an allowed private success", 
     bodyCapture: "suppressed-private-success",
   });
   assert.equal(existsSync(join(root, ".artifacts", "http-baseline")), false);
+});
+
+test("writes candidate HTML artifacts outside the immutable baseline namespace", async () => {
+  const root = await mkdtemp(join(tmpdir(), "http-baseline-candidate-artifacts-"));
+  cleanupRoots.push(root);
+  const routeKey = "page:/|GET|anonymous|default";
+  const baseline = await captureHttpContract(
+    routeKey,
+    new Response("<main>Baseline public text</main>", {
+      headers: { "content-type": "text/html; charset=utf-8" },
+    }),
+    { root },
+  );
+  const candidate = await captureHttpContract(
+    routeKey,
+    new Response("<main>Candidate public text</main>", {
+      headers: { "content-type": "text/html; charset=utf-8" },
+    }),
+    { root, artifactNamespace: "candidate" },
+  );
+
+  if (baseline.bodyCapture !== "captured") assert.fail("expected baseline HTML capture");
+  if (candidate.bodyCapture !== "captured") assert.fail("expected candidate HTML capture");
+  assert.match(baseline.normalizedHtmlPath ?? "", /^\.artifacts\/http-baseline\//);
+  assert.match(candidate.normalizedHtmlPath ?? "", /^\.artifacts\/http-candidate\//);
+  assert.equal(
+    await readFile(join(root, baseline.normalizedHtmlPath ?? ""), "utf8"),
+    "<main>Baseline public text</main>",
+  );
+  assert.equal(
+    await readFile(join(root, candidate.normalizedHtmlPath ?? ""), "utf8"),
+    "<main>Candidate public text</main>",
+  );
 });
 
 test("clears residual private artifacts before regenerating public artifacts", async () => {
@@ -840,6 +926,31 @@ test("rejects malformed captured values, source, and deferral details during cov
   assert.throws(
     () => assertHttpBaselineCoverage(manifest, invalidHash),
     /hash/i,
+  );
+
+  const missingBodyComparison = structuredClone(baseline);
+  const missingModeContract = missingBodyComparison.contracts[capturedIndex];
+  if (missingModeContract.bodyCapture !== "captured") {
+    assert.fail("expected captured contract");
+  }
+  delete (missingModeContract as { bodyComparison?: unknown }).bodyComparison;
+  assert.throws(
+    () => assertHttpBaselineCoverage(manifest, missingBodyComparison),
+    /modo de comparación/i,
+  );
+
+  const missingHtmlSemantics = structuredClone(baseline);
+  const missingSemanticsContract = missingHtmlSemantics.contracts[capturedIndex];
+  if (missingSemanticsContract.bodyCapture !== "captured") {
+    assert.fail("expected captured contract");
+  }
+  missingSemanticsContract.headers = {
+    "content-type": "text/html; charset=utf-8",
+  };
+  missingSemanticsContract.htmlSemantics = null;
+  assert.throws(
+    () => assertHttpBaselineCoverage(manifest, missingHtmlSemantics),
+    /semántica HTML/i,
   );
 
   const invalidHeader = structuredClone(baseline);
