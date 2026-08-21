@@ -9,3 +9,4 @@ dist/
 .source-work/
 .artifacts/
 .change-state/
+**/.source-copy-*.tmp
