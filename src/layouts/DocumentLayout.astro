@@ -1,0 +1,72 @@
+---
+import {
+  absoluteCanonical,
+  completeSiteMeta,
+  documentTitle,
+  socialMetadata,
+  siteUrl,
+  type SiteMeta,
+} from "../lib/seo/metadata";
+import "../styles/reference.css";
+
+interface Props {
+  meta?: Partial<SiteMeta>;
+}
+
+const metadata = completeSiteMeta(Astro.props.meta);
+const title = documentTitle(metadata.title);
+const canonical = absoluteCanonical(metadata.canonical);
+const description = metadata.description;
+const social = socialMetadata(metadata);
+const robots = `${metadata.robots.index ? "index" : "noindex"}, ${metadata.robots.follow ? "follow" : "nofollow"}`;
+const socialImage = new URL("/comunidad-solar-hero.png", siteUrl).href;
+const icon = new URL("/comunidad-solar-logo.svg", siteUrl).href;
+---
+
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="application-name" content="Comunidad Solar" />
+    <meta name="author" content="Comunidad Solar" />
+    <link rel="author" href={siteUrl} />
+    <meta name="creator" content="Comunidad Solar" />
+    <meta name="publisher" content="Comunidad Solar" />
+    <meta name="category" content="energía" />
+    {description && <meta name="description" content={description} />}
+    <meta name="robots" content={robots} />
+    <meta
+      name="googlebot"
+      content={`${robots}, max-image-preview:large, max-snippet:-1, max-video-preview:-1`}
+    />
+    <title>{title}</title>
+    {canonical && <link rel="canonical" href={canonical} />}
+    <link rel="icon" href={icon} />
+    <link rel="shortcut icon" href={icon} />
+    {
+      metadata.openGraph && (
+        <>
+          <meta property="og:type" content="website" />
+          <meta property="og:locale" content="es_ES" />
+          <meta property="og:site_name" content="Comunidad Solar" />
+          <meta property="og:title" content={social.title} />
+          <meta property="og:description" content={social.description} />
+          <meta property="og:url" content={social.url} />
+          <meta property="og:image" content={socialImage} />
+          <meta
+            property="og:image:alt"
+            content="Comunidad Solar, energía renovable cerca de las personas"
+          />
+          <meta name="twitter:card" content="summary_large_image" />
+          <meta name="twitter:title" content={social.title} />
+          <meta name="twitter:description" content={social.description} />
+          <meta name="twitter:image" content={socialImage} />
+        </>
+      )
+    }
+  </head>
+  <body>
+    <slot />
+  </body>
+</html>

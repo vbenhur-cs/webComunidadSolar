@@ -1,0 +1,26 @@
+---
+import { ConsentManager } from "../components/islands/ConsentManager";
+import { HeaderIsland } from "../components/site/HeaderIsland";
+import Footer from "../components/site/Footer.astro";
+import type { SiteMeta } from "../lib/seo/metadata";
+import type { HeaderPageKey } from "../lib/site/page-registry";
+import DocumentLayout from "./DocumentLayout.astro";
+
+interface Props {
+  page: HeaderPageKey;
+  meta?: Partial<SiteMeta>;
+}
+
+const { page, meta = {} } = Astro.props;
+---
+
+<DocumentLayout {meta}>
+  <div class="site-root">
+    <HeaderIsland client:load {page} />
+    <div id="contenido-principal" tabindex="-1">
+      <slot />
+    </div>
+    <Footer />
+    <ConsentManager client:idle />
+  </div>
+</DocumentLayout>

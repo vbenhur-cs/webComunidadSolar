@@ -9,4 +9,6 @@ dist/
 .source-work/
 .artifacts/
 .change-state/
+test-results/
+playwright-report/
 **/.source-copy-*.tmp

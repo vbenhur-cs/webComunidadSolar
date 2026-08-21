@@ -1,0 +1,98 @@
+---
+import ButtonLink from "./ButtonLink.astro";
+
+interface HeroAction {
+  href: string;
+  label: string;
+  analyticsEvent?: string;
+  ariaControls?: string;
+}
+
+interface ImageCredit {
+  href: string;
+  label: string;
+  license?: string;
+}
+
+interface Props {
+  tone: "green" | "yellow" | "blue" | "cream";
+  eyebrow: string;
+  title: string;
+  lead: string;
+  primary?: HeroAction;
+  secondary?: HeroAction;
+  image?: string;
+  imageAlt?: string;
+  imageCredit?: ImageCredit;
+}
+
+const {
+  tone,
+  eyebrow,
+  title,
+  lead,
+  primary,
+  secondary,
+  image,
+  imageAlt,
+  imageCredit,
+} = Astro.props;
+---
+
+<section class={`page-hero page-hero-${tone}`}>
+  <div class="shell page-hero-grid">
+    <div class="page-hero-copy">
+      <p class="eyebrow">{eyebrow}</p>
+      <h1>{title}</h1>
+      <p class="page-hero-lead">{lead}</p>
+      {
+        (primary || secondary) && (
+          <div class="hero-actions">
+            {primary && (
+              <ButtonLink
+                href={primary.href}
+                analyticsEvent={primary.analyticsEvent}
+                ariaControls={primary.ariaControls}
+              >
+                {primary.label}
+              </ButtonLink>
+            )}
+            {secondary && (
+              <ButtonLink
+                href={secondary.href}
+                kind="secondary"
+                analyticsEvent={secondary.analyticsEvent}
+                ariaControls={secondary.ariaControls}
+              >
+                {secondary.label}
+              </ButtonLink>
+            )}
+          </div>
+        )
+      }
+    </div>
+    <div class="page-hero-visual">
+      {
+        image ? (
+          <>
+            <img src={image} alt={imageAlt ?? ""} />
+            {imageCredit && (
+              <a
+                class="image-credit"
+                href={imageCredit.href}
+                target="_blank"
+                rel="noreferrer"
+                aria-label={`Crédito de la imagen: ${imageCredit.label}${imageCredit.license ? `, ${imageCredit.license}` : ""}`}
+              >
+                {imageCredit.label}
+                {imageCredit.license && ` · ${imageCredit.license}`}
+              </a>
+            )}
+          </>
+        ) : (
+          <slot />
+        )
+      }
+    </div>
+  </div>
+</section>

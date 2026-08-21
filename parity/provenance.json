@@ -607,5 +607,12 @@
     "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
     "sha256": "3a3e6c96604ba3d635cc8dbcb2eaa0639f261f03962da6e88a4c42c58f3e05c8",
     "bytes": 485081
+  },
+  {
+    "sourcePath": "tests/rendered-html.test.mjs",
+    "destination": "tests/contracts/rendered-html.contract.mjs",
+    "sourceCommit": "68ea294c54dc5e15e20f470fc421a239927565a8",
+    "sha256": "ed798267fb785fa06207f77bc7a4527436dab57bcb74c42fbb19d2f253eb9f69",
+    "bytes": 82119
   }
 ]

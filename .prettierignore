@@ -6,3 +6,11 @@ changes/
 worker-configuration.d.ts
 src/styles/reference.css
 src/content/**/*.md
+src/content/blog-data.ts
+src/content/community-data.ts
+src/content/events-data.ts
+src/content/legal-content.ts
+src/content/partner-data.ts
+src/content/remote-project-data.ts
+src/content/trust-data.ts
+tests/contracts/rendered-html.contract.mjs

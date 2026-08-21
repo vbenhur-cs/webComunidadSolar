@@ -1,0 +1,20 @@
+---
+interface Props {
+  href: string;
+  kind?: "primary" | "secondary" | "ghost";
+  analyticsEvent?: string;
+  ariaControls?: string;
+}
+
+const { href, kind = "primary", analyticsEvent, ariaControls } = Astro.props;
+---
+
+<a
+  class={`button button-${kind}`}
+  href={href}
+  data-analytics-event={analyticsEvent}
+  aria-controls={ariaControls}
+>
+  <span><slot /></span>
+  <span aria-hidden="true">↗</span>
+</a>

@@ -1,0 +1,78 @@
+---
+import { cnmcRegistryUrl, legalLinks } from "../../content/trust-data";
+
+const whatsappSupport = "https://wa.me/34611195869";
+const helpCenter = "https://ayuda.comunidadsolar.es/portal/en-gb/home";
+---
+
+<footer class="site-footer">
+  <div class="shell footer-grid">
+    <div class="footer-brand">
+      <img src="/comunidad-solar-logo.svg" alt="Comunidad Solar" />
+      <p>
+        Energía producida cerca, almacenada con inteligencia y accesible para
+        todos.
+      </p>
+    </div>
+    <div>
+      <p class="footer-title">Soluciones</p>
+      <a href="/comunidades-energeticas">Comunidades energéticas</a>
+      <a href="/autoconsumo-remoto">Autoconsumo remoto</a>
+      <a href="/rentabiliza-tu-activo">Rentabiliza tu activo</a>
+      <a href="/autoconsumo-en-mi-tejado">Instalación fotovoltaica</a>
+      <a href="/baterias">Baterías</a>
+    </div>
+    <div>
+      <p class="footer-title">Tu hogar</p>
+      <a href="/aerotermia">Aerotermia</a>
+      <a href="/mantenimiento">Mantenimiento</a>
+      <a href="/comercializadora-y-tarifas">Comercializadora y tarifas</a>
+    </div>
+    <div>
+      <p class="footer-title">Hablemos</p>
+      <a href="/contacto">Contacto</a>
+      <a href="/soy-comunero">Soy comunero</a>
+      <a href="/blog">Blog</a>
+      <a href="/eventos">Eventos</a>
+      <a href="tel:+34900802812">900 802 812</a>
+      <a href={whatsappSupport}>WhatsApp · 611 195 869</a>
+      <a href={helpCenter}>Centro de Ayuda</a>
+      <a href="mailto:info@comunidad.solar">info@comunidad.solar</a>
+      <small class="footer-hours">Lunes a viernes · 9:00–18:00</small>
+    </div>
+  </div>
+  <div class="shell footer-credentials">
+    <div>
+      <strong>Comunidad Solar Power, S.L.</strong>
+      <span>CIF B88223144 · C/ Cólquide 17 · 28231 Las Rozas de Madrid</span>
+    </div>
+    <div>
+      <strong>Comercializadora Eléctrica Comunidad Solar, S.L.</strong>
+      <span>NIF B67571802</span>
+      <a href={cnmcRegistryUrl}>
+        Inscrita en el censo de la CNMC · R2-883 <span aria-hidden="true"
+          >↗</span
+        >
+      </a>
+    </div>
+  </div>
+  <div class="shell footer-bottom">
+    <div>
+      <span>© 2026 Comunidad Solar</span>
+      <span>La energía de las personas.</span>
+    </div>
+    <nav class="footer-legal-links" aria-label="Información legal">
+      <a href={legalLinks.privacy}>Privacidad</a>
+      <a href={legalLinks.cookies}>Cookies</a>
+      <a href={legalLinks.legal}>Aviso legal</a>
+      <a href={legalLinks.terms}>Términos y condiciones</a>
+      <button type="button" data-cookie-settings>Configurar cookies</button>
+    </nav>
+  </div>
+</footer>
+
+<script>
+  import { bindCookieSettings } from "../../scripts/cookie-settings";
+
+  bindCookieSettings();
+</script>

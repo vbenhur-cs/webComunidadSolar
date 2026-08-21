@@ -1,0 +1,9 @@
+---
+interface Props {
+  tone?: "light" | "green" | "yellow" | "blue" | "dark";
+}
+
+const { tone = "light" } = Astro.props;
+---
+
+<span class={`pill pill-${tone}`}><slot /></span>
