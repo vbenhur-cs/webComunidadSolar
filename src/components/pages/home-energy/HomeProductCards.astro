@@ -1,0 +1,25 @@
+---
+interface Item {
+  number: string;
+  title: string;
+  copy: string;
+}
+
+interface Props {
+  items: Item[];
+}
+
+const { items } = Astro.props;
+---
+
+<div class="home-product-card-grid">
+  {
+    items.map((item) => (
+      <article>
+        <span>{item.number}</span>
+        <h3>{item.title}</h3>
+        <p>{item.copy}</p>
+      </article>
+    ))
+  }
+</div>

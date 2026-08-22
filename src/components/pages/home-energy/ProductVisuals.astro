@@ -1,0 +1,467 @@
+---
+import { cnmcRegistryUrl } from "../../../content/trust-data";
+
+interface Props {
+  kind:
+    | "solar"
+    | "battery"
+    | "aerothermal"
+    | "maintenance"
+    | "commercializer"
+    | "bill-example";
+}
+
+const { kind } = Astro.props;
+const solaxX1IesImage = "/media/solax-x1-ies.png";
+const coolfyLogo = "/media/coolfy-logo.png";
+---
+
+{
+  kind === "solar" && (
+    <div
+      class="home-system-visual solar-home-visual"
+      role="img"
+      aria-label="Una instalación se diseña a partir del consumo, el tejado y los hábitos de la vivienda"
+    >
+      <div class="home-system-status">
+        <i aria-hidden="true" />
+        <span>Proyecto solar a medida</span>
+      </div>
+      <div class="solar-home-scene" aria-hidden="true">
+        <div class="solar-home-sun" />
+        <div class="solar-home-house">
+          <div class="solar-home-roof">
+            {Array.from({ length: 6 }).map(() => (
+              <i />
+            ))}
+          </div>
+          <span class="solar-home-window" />
+          <span class="solar-home-door" />
+        </div>
+        <div class="solar-home-meter">
+          <span>DISEÑO</span>
+          <strong>Tu medida</strong>
+          <small>No el máximo que cabe</small>
+        </div>
+      </div>
+      <div class="home-system-factors">
+        <span>
+          <strong>01</strong>Tu factura
+        </span>
+        <span>
+          <strong>02</strong>Tu tejado
+        </span>
+        <span>
+          <strong>03</strong>Tus hábitos
+        </span>
+      </div>
+    </div>
+  )
+}
+
+{
+  kind === "battery" && (
+    <div
+      class="home-system-visual battery-home-visual"
+      role="img"
+      aria-label="La batería doméstica SolaX X1-IES puede cargarse con paneles solares o desde la red y alimentar los circuitos de respaldo configurados"
+    >
+      <div class="home-system-status">
+        <i aria-hidden="true" />
+        <span>SolaX X1-IES · con o sin placas</span>
+      </div>
+      <div class="battery-offer-visual" aria-hidden="true">
+        <div class="battery-offer-inputs">
+          <article>
+            <span>CON PANELES</span>
+            <strong>Excedentes solares</strong>
+            <small>Guardas parte de lo que produces y no consumes.</small>
+          </article>
+          <article>
+            <span>SIN PANELES</span>
+            <strong>Energía de la red</strong>
+            <small>Programas la carga en las horas que elijas.</small>
+          </article>
+        </div>
+        <i class="battery-offer-arrow">→</i>
+        <div class="battery-product-unit">
+          <img src={solaxX1IesImage} alt="" />
+          <div>
+            <strong>SolaX X1-IES</strong>
+            <span>5 kW + 5,1 kWh</span>
+          </div>
+        </div>
+      </div>
+      <div class="home-system-factors">
+        <span>
+          <strong>5 kW</strong>Inversor híbrido
+        </span>
+        <span>
+          <strong>5,1 kWh</strong>Capacidad nominal
+        </span>
+        <span>
+          <strong>Backup</strong>Respaldo configurado
+        </span>
+      </div>
+    </div>
+  )
+}
+
+{
+  kind === "aerothermal" && (
+    <div
+      class="home-system-visual aerothermal-home-visual"
+      role="img"
+      aria-label="Coolfy, instalador Premium y partner oficial de Comunidad Solar, diseña e instala la solución de aerotermia para calefacción, refrigeración y agua caliente"
+    >
+      <div class="home-system-status">
+        <i aria-hidden="true" />
+        <span>Coolfy · partner oficial</span>
+      </div>
+      <div class="aerothermal-home-flow" aria-hidden="true">
+        <div class="aerothermal-source">
+          <>
+            <span>AIRE</span>
+            <strong>Exterior</strong>
+            <i>≈</i>
+          </>
+        </div>
+        <span class="aerothermal-flow-arrow">→</span>
+        <div class="aerothermal-pump">
+          <img class="aerothermal-pump-logo" src={coolfyLogo} alt="" />
+          <strong>Diseña e instala</strong>
+          <small>De principio a fin</small>
+        </div>
+      </div>
+      <div class="aerothermal-outputs">
+        <span>
+          <strong>Calor</strong>Calefacción
+        </span>
+        <span>
+          <strong>Frío</strong>Refrigeración
+        </span>
+        <span>
+          <strong>ACS</strong>Agua caliente
+        </span>
+      </div>
+    </div>
+  )
+}
+
+{
+  kind === "maintenance" && (
+    <div
+      class="maintenance-hero-visual"
+      role="img"
+      aria-label="Comunidad Solar recomienda el mantenimiento y Solaico lo presupuesta, contrata y presta directamente"
+    >
+      <div class="maintenance-visual-status">
+        <>
+          <i aria-hidden="true" />
+          <span>Mantenimiento fotovoltaico</span>
+        </>
+      </div>
+      <div class="maintenance-visual-flow">
+        <article>
+          <>
+            <span>01</span>
+            <strong>Comunidad Solar</strong>
+            <small>Selecciona y recomienda</small>
+          </>
+        </article>
+        <i aria-hidden="true">→</i>
+        <article>
+          <>
+            <span>02</span>
+            <strong>Solaico</strong>
+            <small>Presupuesta, contrata y presta</small>
+          </>
+        </article>
+      </div>
+      <div class="maintenance-visual-cadence">
+        <span>
+          <strong>Mensual</strong>Seguimiento
+        </span>
+        <span>
+          <strong>Anual</strong>Revisión presencial
+        </span>
+        <span>
+          <strong>Directo</strong>Contrato con Solaico
+        </span>
+      </div>
+    </div>
+  )
+}
+
+{
+  kind === "commercializer" && (
+    <div
+      class="tariff-hero-visual"
+      role="group"
+      aria-label="Megapark acompaña al Autoconsumo Remoto y a las Comunidades Energéticas; Megahome se contrata con una instalación de Comunidad Solar o con un código de invitación"
+    >
+      <div class="tariff-source-grid">
+        <article>
+          <>
+            <span>01 · REMOTO O COMUNIDAD ENERGÉTICA</span>
+            <strong>Te corresponde Megapark</strong>
+            <small>
+              La tarifa acompaña a tu producto energético. No se contrata por
+              separado.
+            </small>
+          </>
+        </article>
+        <article>
+          <>
+            <span>02 · INSTALACIÓN O INVITACIÓN</span>
+            <strong>Puedes contratar Megahome</strong>
+            <small>
+              Con una instalación nuestra o un código de Remoto o Comunidad
+              Energética.
+            </small>
+          </>
+        </article>
+      </div>
+      <i aria-hidden="true">↓</i>
+      <article class="tariff-invoice-node">
+        <>
+          <span>DOS VÍAS DE ACCESO · UNA COMUNIDAD</span>
+          <strong>Tu suministro entiende tu energía</strong>
+          <small>
+            Producción propia, energía de red y saldos aparecen de forma
+            comprensible.
+          </small>
+        </>
+      </article>
+      <a
+        class="tariff-registry-chip"
+        href={cnmcRegistryUrl}
+        target="_blank"
+        rel="noreferrer"
+      >
+        Inscrita en el censo de la CNMC · R2-883{" "}
+        <span aria-hidden="true">↗</span>
+      </a>
+    </div>
+  )
+}
+
+{
+  kind === "bill-example" && (
+    <article
+      class="tariff-bill-example"
+      data-bill-example="true"
+      aria-label="Ejemplo visual de una factura Megapark de Comunidad Solar"
+    >
+      <header class="tariff-bill-example-header">
+        <span class="tariff-bill-receipt" aria-hidden="true">
+          <>
+            <i />
+            <i />
+            <i />
+          </>
+        </span>
+        <div>
+          <>
+            <span>EJEMPLO VISUAL · TARIFA MEGAPARK</span>
+            <strong>Tu factura de la luz con Comunidad Solar</strong>
+            <small>Un mes de consumo explicado de forma sencilla</small>
+          </>
+        </div>
+        <div class="tariff-bill-example-total">
+          <>
+            <span>Total del ejemplo</span>
+            <strong>45,07 €</strong>
+          </>
+        </div>
+      </header>
+      <div class="tariff-bill-example-body">
+        <section class="tariff-bill-energy">
+          <div class="tariff-bill-example-title">
+            <>
+              <div>
+                <>
+                  <span>DE DÓNDE SALE TU ENERGÍA</span>
+                  <strong>Tu día, en tres colores.</strong>
+                </>
+              </div>
+              <small>00 h → 24 h</small>
+            </>
+          </div>
+          <div
+            class="tariff-bill-timeline"
+            aria-label="Durante las horas sin producción utilizas energía de red; durante las horas de producción utilizas la energía de tu proyecto a cero euros el kilovatio hora; la producción no utilizada se remunera cuando lo establecen las condiciones del producto"
+          >
+            <div class="tariff-bill-timeline-track">
+              <span class="tariff-bill-timeline-grid">
+                <>
+                  <strong>Red</strong>
+                  <small>Cuando tu producción no llega</small>
+                </>
+              </span>
+              <span class="tariff-bill-timeline-own">
+                <>
+                  <strong>Tu producción · 0 €/kWh</strong>
+                  <small>La energía de tu proyecto que utilizas</small>
+                </>
+              </span>
+              <span class="tariff-bill-timeline-grid">
+                <>
+                  <strong>Red</strong>
+                  <small>Cuando vuelve a hacer falta</small>
+                </>
+              </span>
+              <span class="tariff-bill-timeline-surplus">
+                Producción no utilizada
+              </span>
+            </div>
+            <div class="tariff-bill-timeline-hours" aria-hidden="true">
+              <>
+                <span>00 h</span>
+                <span>08 h</span>
+                <span>14 h</span>
+                <span>19 h</span>
+                <span>24 h</span>
+              </>
+            </div>
+          </div>
+          <div class="tariff-bill-energy-summary">
+            <div class="is-own">
+              <>
+                <span>Tu producción utilizada</span>
+                <strong>196 kWh</strong>
+                <small>Componente de energía a 0 €/kWh</small>
+              </>
+            </div>
+            <div class="is-grid">
+              <>
+                <span>Energía de la red</span>
+                <strong>152 kWh</strong>
+                <small>Se factura al precio aplicable</small>
+              </>
+            </div>
+            <div class="is-surplus">
+              <>
+                <span>Producción no utilizada</span>
+                <strong>158 kWh</strong>
+                <small>Se remunera según tu contrato*</small>
+              </>
+            </div>
+          </div>
+          <div class="tariff-bill-key">
+            <>
+              <strong>La idea importante</strong>
+              <p>
+                El 0 €/kWh se aplica a la energía de tu proyecto que utilizas.
+                La factura sigue incluyendo la energía que necesitas de la red y
+                los demás conceptos del suministro.
+              </p>
+            </>
+          </div>
+        </section>
+        <section class="tariff-bill-breakdown">
+          <div class="tariff-bill-example-title">
+            <>
+              <div>
+                <>
+                  <span>CÓMO SE FORMA EL TOTAL</span>
+                  <strong>El desglose de la factura.</strong>
+                </>
+              </div>
+              <small>Importes ilustrativos</small>
+            </>
+          </div>
+          <div class="tariff-bill-lines">
+            <div class="is-own">
+              <>
+                <span>
+                  <>
+                    <strong>Tu producción utilizada</strong>
+                    <small>196 kWh × 0,00 €/kWh</small>
+                  </>
+                </span>
+                <strong>0,00 €</strong>
+              </>
+            </div>
+            <div class="is-grid">
+              <>
+                <span>
+                  <>
+                    <strong>Energía de la red</strong>
+                    <small>152 kWh × 0,17 €/kWh</small>
+                  </>
+                </span>
+                <strong>25,84 €</strong>
+              </>
+            </div>
+            <div class="is-surplus is-credit">
+              <>
+                <span>
+                  <>
+                    <strong>Energía no utilizada remunerada*</strong>
+                    <small>Venta horaria neta · importe ilustrativo</small>
+                  </>
+                </span>
+                <strong>−15,80 €</strong>
+              </>
+            </div>
+            <div class="tariff-bill-subtotal">
+              <>
+                <span>Valor de la energía</span>
+                <strong>10,04 €</strong>
+              </>
+            </div>
+            <div>
+              <>
+                <span>
+                  <>
+                    <strong>Resto de conceptos</strong>
+                    <small>
+                      Potencia, peajes, cargos, contador e impuestos
+                    </small>
+                  </>
+                </span>
+                <strong>32,03 €</strong>
+              </>
+            </div>
+            <div>
+              <>
+                <span>
+                  <>
+                    <strong>Cuota Megapark</strong>
+                    <small>Cuota mensual de la comercializadora</small>
+                  </>
+                </span>
+                <strong>3,00 €</strong>
+              </>
+            </div>
+            <div class="tariff-bill-final-total">
+              <>
+                <span>
+                  <>
+                    <small>TOTAL DE TU FACTURA</small>
+                    <strong>Un único total, con cada concepto visible</strong>
+                  </>
+                </span>
+                <strong>45,07 €</strong>
+              </>
+            </div>
+          </div>
+        </section>
+      </div>
+      <footer class="tariff-bill-example-note">
+        <>
+          <strong>
+            Ejemplo ilustrativo, no una oferta ni una previsión de ahorro.
+          </strong>
+          <span>
+            Los importes reales dependen de tu consumo, producción, precio de
+            mercado, conceptos regulados, impuestos y contrato. *La remuneración
+            de la energía no utilizada se aplica cuando corresponde según las
+            condiciones de tu producto.
+          </span>
+        </>
+      </footer>
+    </article>
+  )
+}

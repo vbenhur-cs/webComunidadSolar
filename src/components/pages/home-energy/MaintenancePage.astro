@@ -1,0 +1,287 @@
+---
+import PageHero from "../../site/PageHero.astro";
+import Pill from "../../site/Pill.astro";
+import SectionHeading from "../../site/SectionHeading.astro";
+import FaqList from "./FaqList.astro";
+import ProductVisuals from "./ProductVisuals.astro";
+
+const solaicoMaintenancePage = "https://solaico.com/mantenimiento-solar/";
+const solaicoMaintenanceEmail =
+  "mailto:info@solaico.com?subject=Solicitud%20de%20mantenimiento%20fotovoltaico%20desde%20Comunidad%20Solar";
+const solaicoMaintenancePhone = "tel:+34965339644";
+const maintenanceFaqs = [
+  {
+    question: "¿La garantía ya cubre el mantenimiento?",
+    answer:
+      "No son lo mismo. La garantía responde ante determinados defectos o averías según sus propias condiciones. El mantenimiento preventivo revisa periódicamente la instalación, ayuda a detectar anomalías y permite actuar antes de que una incidencia pase inadvertida.",
+  },
+  {
+    question: "¿Puedo contratarlo si mi garantía ya ha terminado?",
+    answer:
+      "Sí. Cuando la garantía ha finalizado resulta especialmente importante disponer de un seguimiento estructurado, porque las posibles incidencias ya no cuentan con la misma cobertura contractual.",
+  },
+  {
+    question: "¿Quién presta y factura el servicio?",
+    answer:
+      "Solaico, cuya razón social es UNIÓN COMPOSITES, S.L. La propuesta, el contrato, la prestación técnica y la facturación se realizan directamente entre Solaico y tú. Comunidad Solar recomienda el servicio, pero no lo presta ni lo factura.",
+  },
+  {
+    question: "¿Las reparaciones y las piezas están incluidas?",
+    answer:
+      "Solo se consideran incluidas las actuaciones que aparezcan expresamente en la propuesta y el contrato de Solaico. Si una revisión detecta la necesidad de una reparación, una pieza o un trabajo extraordinario, Solaico te indicará el diagnóstico y las condiciones aplicables.",
+  },
+  {
+    question: "¿Cuánto cuesta?",
+    answer:
+      "Solaico confirma el precio según la potencia, el número de módulos y las necesidades de la instalación. Así recibes una propuesta vigente y ajustada al alcance real antes de contratar.",
+  },
+];
+---
+
+<main class="maintenance-page">
+  <PageHero
+    tone="green"
+    eyebrow="Mantenimiento recomendado por Comunidad Solar"
+    title="Tu instalación está hecha para durar. Ayúdala a seguir rindiendo."
+    lead="Una instalación solar trabaja cada día y necesita revisiones periódicas. Por eso recomendamos el servicio de Solaico: una empresa especializada que lo presupuesta, contrata y presta directamente."
+    primary={{
+      href: solaicoMaintenanceEmail,
+      label: "Solicitar información a Solaico",
+    }}
+    secondary={{ href: "#incluye", label: "Ver qué incluye" }}
+    ><ProductVisuals kind="maintenance" /></PageHero
+  >
+
+  <section
+    class="maintenance-transparency"
+    aria-label="Responsabilidades del servicio de mantenimiento"
+  >
+    <div class="shell maintenance-transparency-grid">
+      <div>
+        <span>COMUNIDAD SOLAR</span><strong
+          >Recomienda y sigue cerca de sus comuneros.</strong
+        ><p>
+          Hemos analizado la necesidad y seleccionado una solución de confianza.
+          Podemos orientarte hacia el canal adecuado, pero no somos quienes
+          prestan ni facturan el mantenimiento.
+        </p>
+      </div><div>
+        <span>SOLAICO · UNIÓN COMPOSITES, S.L.</span><strong
+          >Presupuesta, contrata y realiza el servicio.</strong
+        ><p>
+          Solaico confirma el alcance, formaliza contigo el contrato y asume
+          directamente las actuaciones técnicas incluidas.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section maintenance-why-section">
+    <div class="shell">
+      <SectionHeading
+        eyebrow="Instalar es solo el principio"
+        title="Cuidar la instalación ayuda a proteger su rendimiento."
+        copy="Los paneles, el inversor, el cableado y las protecciones están expuestos al uso, al clima y a la suciedad. Una revisión periódica permite comprobar su estado y detectar señales que no siempre son visibles en el día a día."
+      /><div class="maintenance-benefit-grid">
+        <article>
+          <span>01</span><h3>Seguir el rendimiento.</h3><p>
+            Revisar la producción con una cadencia definida ayuda a identificar
+            comportamientos anómalos.
+          </p>
+        </article><article>
+          <span>02</span><h3>Detectar antes.</h3><p>
+            Encontrar una incidencia a tiempo puede evitar que permanezca
+            semanas o meses reduciendo la producción.
+          </p>
+        </article><article>
+          <span>03</span><h3>Cuidar los equipos.</h3><p>
+            La inspección y la limpieza básica contribuyen a conservar la
+            instalación en buenas condiciones de funcionamiento.
+          </p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="section maintenance-warranty-section" id="garantia">
+    <div class="shell">
+      <SectionHeading
+        eyebrow="Garantía y mantenimiento"
+        title="Dos protecciones diferentes. Dos momentos distintos."
+        copy="La garantía actúa ante una incidencia cubierta por sus condiciones. El mantenimiento busca revisar, prevenir y detectar. Tener una no convierte en innecesaria la otra."
+      /><div class="maintenance-warranty-grid">
+        <article class="maintenance-warranty-card warranty-active">
+          <div>
+            <Pill tone="green">Mi instalación sigue en garantía</Pill><h3>
+              La garantía responde. El mantenimiento se anticipa.
+            </h3><p>
+              El mantenimiento no sustituye ni amplía la garantía, pero puede
+              ayudar a detectar y documentar anomalías antes de que afecten
+              durante más tiempo a tu producción.
+            </p>
+          </div><ul>
+            <li>Revisión periódica del comportamiento.</li><li>
+              Detección preventiva de posibles incidencias.
+            </li><li>Apoyo para identificar el canal técnico adecuado.</li>
+          </ul><small
+            >La cobertura efectiva depende siempre de las condiciones de tu
+            garantía original.</small
+          >
+        </article><article class="maintenance-warranty-card warranty-ended">
+          <div>
+            <Pill tone="yellow">Mi garantía ya ha terminado</Pill><h3>
+              El seguimiento cobra todavía más importancia.
+            </h3><p>
+              Sin la misma cobertura frente a posibles averías, una rutina de
+              mantenimiento permite comprobar el estado de la instalación y
+              reaccionar con mayor información.
+            </p>
+          </div><ul>
+            <li>Seguimiento estructurado después de la garantía.</li><li>
+              Revisión presencial con una cadencia definida.
+            </li><li>
+              Detección temprana para decidir la actuación necesaria.
+            </li>
+          </ul><small
+            >Cualquier reparación o trabajo adicional se confirma antes de
+            realizarse.</small
+          >
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="section maintenance-included-section" id="incluye">
+    <div class="shell">
+      <SectionHeading
+        eyebrow="Qué incluye el servicio recomendado"
+        title="Seguimiento digital y una revisión real sobre el terreno."
+        copy="Este es el alcance base comunicado para instalaciones residenciales. Solaico confirmará en su propuesta las condiciones concretas aplicables a tu instalación."
+      /><div class="maintenance-service-grid">
+        {
+          [
+            {
+              number: "01",
+              cadence: "Cada mes",
+              title: "Seguimiento mediante la app",
+              copy: "Revisión mensual del rendimiento para detectar posibles desviaciones.",
+            },
+            {
+              number: "02",
+              cadence: "Ante una incidencia",
+              title: "Gestión de incidencias",
+              copy: "Valoración por teléfono y actuación presencial dentro del alcance de la visita anual.",
+            },
+            {
+              number: "03",
+              cadence: "1 al año",
+              title: "Soporte técnico telefónico",
+              copy: "Una llamada anual incluida para resolver una duda o valorar una incidencia técnica.",
+            },
+            {
+              number: "04",
+              cadence: "1 al año",
+              title: "Revisión presencial",
+              copy: "Visita al domicilio para comprobar in situ el estado general de la instalación.",
+            },
+            {
+              number: "05",
+              cadence: "En la visita anual",
+              title: "Limpieza básica de módulos",
+              copy: "Limpieza básica incluida durante la revisión presencial anual.",
+            },
+          ].map((service) => (
+            <article>
+              <>
+                <div>
+                  <>
+                    <span>{service.number}</span>
+                    <small>{service.cadence}</small>
+                  </>
+                </div>
+                <h3>{service.title}</h3>
+                <p>{service.copy}</p>
+              </>
+            </article>
+          ))
+        }
+      </div><p class="maintenance-scope-note">
+        Reparaciones, piezas, desplazamientos o trabajos extraordinarios solo
+        están incluidos cuando así figure expresamente en la propuesta y el
+        contrato de Solaico.
+      </p>
+    </div>
+  </section>
+
+  <section class="section maintenance-process-section" id="contratar">
+    <div class="shell maintenance-process-layout">
+      <div>
+        <SectionHeading
+          eyebrow="Cómo empezar"
+          title="Hablas desde el principio con quien hará el trabajo."
+          copy="No te hacemos pasar por una contratación intermedia. Solaico revisa tu caso, confirma el alcance y formaliza directamente contigo."
+        /><ol class="maintenance-process-list">
+          {
+            [
+              [
+                "Solicitas información",
+                "Indicas los datos básicos de tu instalación y tu necesidad.",
+              ],
+              [
+                "Solaico revisa el caso",
+                "Confirma encaje, alcance, precio y condiciones vigentes.",
+              ],
+              [
+                "Contratas directamente",
+                "El contrato y la facturación se formalizan con Solaico.",
+              ],
+              [
+                "Comienza el seguimiento",
+                "Se activa la operativa incluida en tu propuesta.",
+              ],
+            ].map(([title, copy], index) => (
+              <li>
+                <>
+                  <span>{String(index + 1).padStart(2, "0")}</span>
+                  <div>
+                    <>
+                      <h3>{title}</h3>
+                      <p>{copy}</p>
+                    </>
+                  </div>
+                </>
+              </li>
+            ))
+          }
+        </ol>
+      </div><aside class="maintenance-direct-card">
+        <span>CONTRATACIÓN DIRECTA</span><h2>
+          Solicita tu propuesta a Solaico.
+        </h2><p>
+          Recibirás el precio y el alcance aplicables a tu instalación antes de
+          tomar una decisión.
+        </p><a class="button button-primary" href={solaicoMaintenanceEmail}
+          ><span>Escribir a Solaico</span><span aria-hidden="true">↗</span></a
+        ><a class="maintenance-direct-phone" href={solaicoMaintenancePhone}
+          ><span>O llamar directamente</span><strong>965 339 644</strong></a
+        ><a
+          class="maintenance-direct-site"
+          href={solaicoMaintenancePage}
+          target="_blank"
+          rel="noreferrer"
+          >Conocer a Solaico <span aria-hidden="true">↗</span></a
+        ><small
+          >Prestador y parte contractual: Solaico · UNIÓN COMPOSITES, S.L.</small
+        >
+      </aside>
+    </div>
+  </section>
+  <section class="section faq-section">
+    <div class="shell faq-grid">
+      <SectionHeading
+        eyebrow="Preguntas frecuentes"
+        title="Antes de contratar, que quede claro quién hace qué."
+      /><FaqList items={maintenanceFaqs} />
+    </div>
+  </section>
+</main>

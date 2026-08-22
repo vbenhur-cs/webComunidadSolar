@@ -1,0 +1,25 @@
+---
+interface Fact {
+  value: string;
+  label: string;
+  note?: string;
+}
+
+interface Props {
+  facts: Fact[];
+}
+
+const { facts } = Astro.props;
+---
+
+<div class="fact-strip">
+  {
+    facts.map((fact) => (
+      <div class="fact-item">
+        <strong>{fact.value}</strong>
+        <span>{fact.label}</span>
+        {fact.note && <small>{fact.note}</small>}
+      </div>
+    ))
+  }
+</div>

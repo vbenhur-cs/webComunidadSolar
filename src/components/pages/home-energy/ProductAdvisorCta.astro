@@ -1,0 +1,52 @@
+---
+import ButtonLink from "../../site/ButtonLink.astro";
+
+interface Props {
+  eyebrow: string;
+  title: string;
+  copy: string;
+  href: string;
+  label: string;
+  analyticsEvent?: string;
+}
+
+const { eyebrow, title, copy, href, label, analyticsEvent } = Astro.props;
+const advisors = [
+  { name: "Víctor Romero", image: "/media/asesor-victor.jpg" },
+  { name: "Gema Hidalgo", image: "/media/asesora-gema.png" },
+  { name: "Laura Varella", image: "/media/asesora-laura.png" },
+  { name: "Irene Andrés", image: "/media/asesora-irene.png" },
+];
+---
+
+<section class="product-advisor-section" id="estudio">
+  <div class="shell product-advisor-card">
+    <div
+      class="advisor-portraits advisor-portraits-compact"
+      aria-label="Asesores energéticos de Comunidad Solar"
+    >
+      {
+        advisors.map((advisor) => (
+          <figure>
+            <img
+              src={advisor.image}
+              alt={`${advisor.name}, del equipo de asesores energéticos de Comunidad Solar`}
+              loading="lazy"
+            />
+          </figure>
+        ))
+      }
+    </div>
+    <div>
+      <span>{eyebrow}</span>
+      <h2>{title}</h2>
+      <p>{copy}</p>
+    </div>
+    <div class="product-advisor-actions">
+      <ButtonLink href={href} analyticsEvent={analyticsEvent}
+        >{label}</ButtonLink
+      >
+      <a href="tel:+34900802812">O llámanos al <strong>900 802 812</strong></a>
+    </div>
+  </div>
+</section>

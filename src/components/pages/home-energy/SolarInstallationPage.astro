@@ -1,0 +1,318 @@
+---
+import ButtonLink from "../../site/ButtonLink.astro";
+import PageHero from "../../site/PageHero.astro";
+import SectionHeading from "../../site/SectionHeading.astro";
+import TrustBand from "../../site/TrustBand.astro";
+import FactStrip from "./FactStrip.astro";
+import FaqList from "./FaqList.astro";
+import HomeProductCards from "./HomeProductCards.astro";
+import ProductAdvisorCta from "./ProductAdvisorCta.astro";
+import ProductVisuals from "./ProductVisuals.astro";
+import Steps from "./Steps.astro";
+
+const advisorBooking = "https://comunidadsolar.zohobookings.eu/";
+const faqs = [
+  {
+    question: "¿Cuántos paneles necesito?",
+    answer:
+      "No se decide solo por el espacio disponible. Analizamos tu consumo anual, cuándo utilizas la energía, la orientación, las sombras y posibles consumos futuros. La propuesta indica la potencia recomendada, la producción estimada y por qué ese tamaño encaja contigo.",
+  },
+  {
+    question: "¿La batería debe instalarse desde el principio?",
+    answer:
+      "No siempre hay que instalarla, pero sí conviene estudiarla desde el principio. Si consumes buena parte de la energía mientras hay sol, una instalación sin batería puede ser la opción más sensata. Dejamos claro qué excedentes se esperan, cuánto podría aprovechar una batería y si conviene incorporarla ahora o preparar el sistema para añadirla después.",
+  },
+  {
+    question: "¿Qué ocurre si mi tejado no es adecuado?",
+    answer:
+      "Te lo diremos antes de avanzar. Si la orientación, las sombras, el espacio o la situación del inmueble no permiten una solución razonable, comprobaremos si puedes recibir energía de una comunidad cercana o valorar Autoconsumo Remoto.",
+  },
+  {
+    question: "¿Qué incluye la propuesta?",
+    answer:
+      "Detalla equipos, estructura, protecciones, montaje, ingeniería, legalización, puesta en marcha y cualquier trabajo especial identificado. Las tasas, obras o medios auxiliares que no estén incluidos deben aparecer separados antes de contratar.",
+  },
+  {
+    question: "¿Cuánto tarda la instalación?",
+    answer:
+      "El calendario se confirma después de validar la vivienda y el alcance. El montaje suele ser la parte más rápida; licencias, materiales, trabajos especiales y trámites con administración o distribuidora pueden variar según cada caso.",
+  },
+  {
+    question: "¿Qué garantías tiene?",
+    answer:
+      "Cada elemento puede tener una cobertura distinta: producto, rendimiento del panel, inversor, batería y trabajos de instalación. La propuesta identifica los equipos y las garantías vigentes aplicables, sin agruparlas bajo una promesa genérica.",
+  },
+  {
+    question: "¿Puedo compensar los excedentes?",
+    answer:
+      "Cuando la instalación y el suministro cumplen los requisitos, la energía que no utilizas puede compensarse según tu modalidad y contrato de electricidad. Legalizamos la instalación para que el proceso pueda activarse, pero el valor final depende de las condiciones de tu comercializadora.",
+  },
+  {
+    question: "¿Hay ayudas o deducciones disponibles?",
+    answer:
+      "Dependen del municipio, la comunidad autónoma, la vivienda, los certificados y la fecha de la actuación. Si existe una opción aplicable la valoraremos, pero la instalación debe tener sentido por sí misma y nunca presentamos una ayuda condicionada como dinero garantizado.",
+  },
+];
+---
+
+<main class="home-product-page solar-product-page">
+  <PageHero
+    tone="yellow"
+    eyebrow="Instalación fotovoltaica en tu tejado"
+    title="Tu instalación empieza por entender cómo utilizas la energía."
+    lead="Analizamos tu factura y tu vivienda, comparamos el resultado con y sin batería y dimensionamos un sistema proporcionado. Después coordinamos el montaje, la legalización y la puesta en marcha con instaladores especializados seleccionados."
+    primary={{ href: advisorBooking, label: "Solicitar mi estudio solar" }}
+    secondary={{ href: "#como-lo-hacemos", label: "Ver cómo trabajamos" }}
+  >
+    <ProductVisuals kind="solar" />
+  </PageHero>
+
+  <FactStrip
+    facts={[
+      { value: "A medida", label: "Diseño según consumo y tejado" },
+      { value: "Completa", label: "Instalación y legalización" },
+      { value: "Siempre", label: "Batería valorada en el diseño" },
+      { value: "Clara", label: "Equipos, alcance y garantías" },
+    ]}
+  />
+
+  <section class="section home-product-purpose">
+    <div class="shell">
+      <SectionHeading
+        eyebrow="Diseñar antes de vender"
+        title="No se trata de llenar el tejado. Se trata de acertar con la instalación."
+        copy="Una instalación sobredimensionada puede producir muchos excedentes que valen menos que la energía que utilizas en casa; una demasiado pequeña deja ahorro sin aprovechar. Buscamos el equilibrio entre inversión, producción, almacenamiento y energía realmente utilizada."
+      />
+      <HomeProductCards
+        items={[
+          {
+            number: "01",
+            title: "Partimos de tu consumo.",
+            copy: "La factura y tus hábitos nos dicen cuánta energía necesitas y en qué horas puede cubrirla el sol.",
+          },
+          {
+            number: "02",
+            title: "Validamos el tejado.",
+            copy: "Orientación, sombras, espacio, estructura y recorridos eléctricos condicionan la solución real.",
+          },
+          {
+            number: "03",
+            title: "Comparamos con y sin batería.",
+            copy: "Te mostramos cuánta energía aprovecharías en cada opción y si compensa instalarla ahora o preparar el sistema.",
+          },
+        ]}
+      />
+    </div>
+  </section>
+
+  <section
+    class="section solar-battery-section"
+    id="bateria-desde-el-principio"
+  >
+    <div class="shell solar-battery-grid">
+      <div class="solar-battery-copy">
+        <SectionHeading
+          eyebrow="La decisión que cambia el sistema"
+          title="La batería no siempre se instala. Pero siempre se valora desde el principio."
+          copy="Los paneles producen sobre todo durante el día; muchas viviendas consumen más al volver a casa. Analizar el almacenamiento desde el diseño permite saber si merece la pena trasladar parte de esa energía a la tarde y la noche."
+        />
+        <p>
+          Si los números no salen, te recomendaremos una instalación sin batería
+          o preparada para añadirla después. Si encaja, diseñar paneles,
+          inversor y batería juntos evita incompatibilidades y trabajos
+          duplicados.
+        </p>
+        <ButtonLink href="/baterias#solax-x1-ies" kind="secondary"
+          >Ver la oferta de batería doméstica</ButtonLink
+        >
+      </div>
+      <div class="solar-battery-reasons">
+        {
+          [
+            [
+              "01",
+              "Utilizas más energía propia",
+              "Guardas una parte de la producción diurna para consumirla cuando ya no hay sol.",
+            ],
+            [
+              "02",
+              "Reduces excedentes de menor valor",
+              "La energía aprovechada en casa suele aportar más valor que la energía vertida a la red.",
+            ],
+            [
+              "03",
+              "Evitas incompatibilidades",
+              "El inversor, las protecciones y el espacio quedan dimensionados para el sistema completo.",
+            ],
+            [
+              "04",
+              "Puedes preparar respaldo",
+              "Si lo necesitas, definimos desde el inicio qué circuitos esenciales deberían mantenerse durante un corte.",
+            ],
+          ].map(([number, title, copy]) => (
+            <article>
+              <>
+                <span>{number}</span>
+                <div>
+                  <>
+                    <h3>{title}</h3>
+                    <p>{copy}</p>
+                  </>
+                </div>
+              </>
+            </article>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+
+  <section class="section product-diagnosis-section">
+    <div class="shell product-diagnosis-grid">
+      <div>
+        <SectionHeading
+          eyebrow="Qué recibirás"
+          title="Una propuesta que puedas entender y comparar."
+          copy="Antes de decidir sabrás qué se instalará, qué producción estimamos y de dónde sale el ahorro orientativo."
+        />
+        <div class="product-diagnosis-note">
+          <span>LA PREGUNTA CORRECTA</span><strong
+            >¿Qué sistema aprovecha mejor mi consumo durante los próximos años?</strong
+          >
+        </div>
+      </div>
+      <div class="product-checklist">
+        {
+          [
+            [
+              "Potencia y paneles",
+              "Dimensionamiento recomendado y plano básico de la instalación.",
+            ],
+            [
+              "Producción estimada",
+              "Previsión anual basada en ubicación, orientación y sombras conocidas.",
+            ],
+            [
+              "Ahorro orientativo",
+              "Consumo directo, excedentes previstos y supuestos utilizados.",
+            ],
+            [
+              "Inversión completa",
+              "Equipos, montaje, trámites, impuestos y posibles extras separados.",
+            ],
+            [
+              "Opciones de evolución",
+              "Batería y consumos futuros cuando aportan valor real.",
+            ],
+          ].map(([title, copy], index) => (
+            <article>
+              <>
+                <span>{String(index + 1).padStart(2, "0")}</span>
+                <div>
+                  <>
+                    <h3>{title}</h3>
+                    <p>{copy}</p>
+                  </>
+                </div>
+              </>
+            </article>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+
+  <section class="section home-product-process" id="como-lo-hacemos">
+    <div class="shell">
+      <SectionHeading
+        eyebrow="De tu factura a tu propia energía"
+        title="Un recorrido sencillo, con una decisión técnica antes de cada compromiso."
+        copy="Comunidad Solar diseña y coordina el proyecto. La ejecución se realiza con instaladores especializados seleccionados y el alcance contractual queda identificado en tu propuesta."
+      />
+      <Steps
+        items={[
+          {
+            title: "Factura y vivienda",
+            copy: "Nos cuentas dónde vives, cómo es el tejado y compartes una factura reciente.",
+          },
+          {
+            title: "Estudio y propuesta",
+            copy: "Dimensionamos la instalación y te presentamos inversión, producción y ahorro orientativo.",
+          },
+          {
+            title: "Validación técnica",
+            copy: "Comprobamos sobre el terreno medidas, sombras, estructura, cuadro y recorridos.",
+          },
+          {
+            title: "Instalación y alta",
+            copy: "Montamos, probamos, legalizamos y te explicamos cómo utilizar y seguir tu sistema.",
+          },
+        ]}
+      />
+    </div>
+  </section>
+
+  <section class="section product-system-section">
+    <div class="shell">
+      <SectionHeading
+        eyebrow="Una instalación, varias posibilidades"
+        title="Paneles, batería y consumos futuros deben hablar entre sí."
+        copy="La fotovoltaica es la base, pero el estudio contempla desde el primer día cómo encajan el almacenamiento y otros consumos futuros. Solo incorporamos cada elemento cuando mejora el resultado o responde a una necesidad concreta."
+      />
+      <div class="product-system-grid">
+        <article class="product-system-featured">
+          <span>BASE DEL SISTEMA</span><h3>
+            Paneles, inversor y protecciones.
+          </h3><p>
+            Seleccionamos equipos compatibles entre sí y adecuados a la
+            potencia, el tejado y las condiciones eléctricas de la vivienda.
+          </p><strong>Producción propia durante las horas solares</strong>
+        </article>
+        <a href="/baterias#solax-x1-ies"
+          ><span>PARTE DEL ESTUDIO</span><h3>Batería.</h3><p>
+            Comparamos el resultado con y sin almacenamiento y, si encaja,
+            diseñamos un sistema compatible con tus paneles y tu objetivo de
+            respaldo.
+          </p><strong
+            >Ver batería doméstica y oferta <span aria-hidden="true">↗</span
+            ></strong
+          ></a
+        >
+      </div>
+    </div>
+  </section>
+
+  <section class="product-integrity-band">
+    <div class="shell product-integrity-grid">
+      <div>
+        <span>TRANSPARENCIA ANTES QUE ESLOGANES</span><h2>
+          No prometemos una factura a cero.
+        </h2>
+      </div><p>
+        El resultado depende de la radiación, el tejado, tus hábitos, el precio
+        de la energía y cómo se valoren los excedentes. Te enseñamos los
+        supuestos para que puedas valorar el proyecto sin “ahorros garantizados”
+        ni ayudas presentadas como seguras.
+      </p>
+    </div>
+  </section>
+
+  <TrustBand compact />
+
+  <section class="section faq-section" id="preguntas">
+    <div class="shell faq-grid">
+      <SectionHeading
+        eyebrow="Preguntas frecuentes"
+        title="Lo importante antes de poner paneles en casa."
+      /><FaqList items={faqs} />
+    </div>
+  </section>
+
+  <ProductAdvisorCta
+    eyebrow="Tu estudio solar"
+    title="Empecemos por tu factura y tu tejado."
+    copy="Con esa información podemos preparar una primera propuesta y decirte con honestidad si la instalación tiene sentido o si otra solución encaja mejor."
+    href={advisorBooking}
+    label="Solicitar mi estudio solar"
+  />
+</main>

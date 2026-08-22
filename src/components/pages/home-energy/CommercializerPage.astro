@@ -1,0 +1,314 @@
+---
+import ButtonLink from "../../site/ButtonLink.astro";
+import HumanHelp from "../../site/HumanHelp.astro";
+import PageHero from "../../site/PageHero.astro";
+import Pill from "../../site/Pill.astro";
+import SectionHeading from "../../site/SectionHeading.astro";
+import TrustBand from "../../site/TrustBand.astro";
+import FaqList from "./FaqList.astro";
+import ProductVisuals from "./ProductVisuals.astro";
+import Steps from "./Steps.astro";
+import { cnmcRegistryUrl } from "../../../content/trust-data";
+
+const megaparkInformationForm =
+  "https://forms.zohopublic.eu/comunidadsolar/form/Solicitarinscripcinsincompromisolistadeespera2/formperma/W2P0ThJSOGwxznpXQyEXmyF1gLZXILVvpwnMrn2JHms";
+const megahomeSignup =
+  "https://calculadora-autoconsumo-remoto.comunidadsolar.es/contratar/megahome/initial";
+const ingebauPage = "https://ingebau.com/";
+const tariffFaqs = [
+  {
+    question: "¿Puede contratar estas tarifas cualquier persona?",
+    answer:
+      "No. Megapark acompaña a quienes contratan Autoconsumo Remoto o una Comunidad Energética y no se ofrece de forma aislada. Megahome sí puede contratarse si tu instalación fotovoltaica fue realizada por Comunidad Solar o si has recibido un código de invitación de un comunero de Remoto o Comunidad Energética.",
+  },
+  {
+    question: "¿Qué diferencia hay entre Megapark y Megahome?",
+    answer:
+      "La diferencia principal es cómo se accede. Megapark forma parte de Remoto o Comunidad Energética: no se contrata como una tarifa independiente. Megahome es una contratación voluntaria para clientes con una instalación hecha por nosotros y para invitados que dispongan de un código válido.",
+  },
+  {
+    question: "¿Cómo consigo la tarifa Megapark?",
+    answer:
+      "Primero debes contratar Autoconsumo Remoto o incorporarte a una Comunidad Energética de Comunidad Solar. Nuestro equipo te informa sobre esas soluciones y, si formalizas una de ellas, Megapark acompaña al suministro correspondiente.",
+  },
+  {
+    question: "¿Cómo contrato Megahome?",
+    answer:
+      "El alta comienza validando el mismo email que utilizaste al contratar tu instalación. Si accedes como invitado, selecciona «Tengo un código» e introduce el código recibido de un comunero de Autoconsumo Remoto o Comunidad Energética.",
+  },
+  {
+    question: "¿Qué significa que la energía de red se factura a coste?",
+    answer:
+      "Significa que Comunidad Solar no añade un margen comercial al precio de la energía que compra para cubrir lo que te falta. La factura sí incluye el coste de mercado, los ajustes y todos los conceptos regulados o aplicables al suministro.",
+  },
+  {
+    question: "¿Qué significa la energía a 0 €/kWh en Megapark?",
+    answer:
+      "La producción que te corresponde del proyecto se refleja a 0 €/kWh en el término de energía, de acuerdo con tu contrato. No significa que toda la factura sea cero: siguen existiendo la energía adicional de red y los costes regulados, impuestos y servicios que correspondan.",
+  },
+  {
+    question: "¿Cómo funciona el monedero virtual?",
+    answer:
+      "En Megahome, el valor reconocido a tus excedentes se convierte en saldo económico y pasa al mes siguiente si no lo utilizas. El monedero guarda euros para descontar en futuras facturas, no electricidad ni kilovatios hora.",
+  },
+  {
+    question: "¿Cambiar de comercializadora corta la luz?",
+    answer:
+      "No. El suministro físico y la distribuidora siguen siendo los mismos. El cambio es administrativo y se hace efectivo cuando la distribuidora completa la tramitación; no requiere obras ni una interrupción del suministro.",
+  },
+  {
+    question: "¿Qué ocurre si tengo derecho al bono social?",
+    answer:
+      "Consúltanos antes de cambiar. El bono social eléctrico exige estar acogido al PVPC con una comercializadora de referencia, por lo que un cambio de comercializadora puede afectar a ese derecho.",
+  },
+  {
+    question: "¿Dónde consulto mis facturas y mi energía?",
+    answer:
+      "En la app Comunidad Solar puedes consultar producción, consumo, facturas, contratos y documentos. Si necesitas ayuda, entra identificado en Atención al Comunero para que podamos conservar el historial de tu consulta.",
+  },
+  {
+    question: "¿La energía es renovable?",
+    answer:
+      "La producción de los activos de Comunidad Solar procede de fuentes renovables. La energía comprada a la red se acompaña de las garantías de origen que correspondan al suministro y al periodo contratado.",
+  },
+];
+---
+
+<main>
+  <PageHero
+    tone="blue"
+    eyebrow="La comercializadora de Comunidad Solar"
+    title="La comercializadora que conecta tu suministro con Comunidad Solar."
+    lead="No es una comercializadora abierta a cualquiera. Megapark acompaña a quienes contratan Remoto o una Comunidad Energética. Megahome puede contratarse con una instalación hecha por nosotros o con la invitación de un comunero de Remoto o Comunidad Energética."
+    primary={{ href: "#tarifas", label: "Ver cómo puedo acceder" }}
+    secondary={{ href: "#simulador", label: "Ver cómo es la factura" }}
+    ><ProductVisuals kind="commercializer" /></PageHero
+  >
+  <TrustBand compact />
+
+  <section class="section tariff-role-section" id="para-quien">
+    <div class="shell">
+      <SectionHeading
+        eyebrow="Un acceso reservado"
+        title="Dos tarifas con dos recorridos claramente distintos."
+        copy="Megapark no es un producto independiente: llega con Remoto o Comunidad Energética. Megahome sí se contrata de forma voluntaria cuando tienes una instalación nuestra o cuando un comunero te invita."
+      /><Steps
+        items={[
+          {
+            title: "Contratas Remoto o Comunidad Energética",
+            copy: "Megapark acompaña a tu producto y permite reflejar su energía en el suministro.",
+          },
+          {
+            title: "Instalamos tus paneles",
+            copy: "Puedes contratar Megahome con el email utilizado en tu instalación.",
+          },
+          {
+            title: "Un comunero te invita",
+            copy: "El código de un cliente de Remoto o Comunidad Energética abre el alta de Megahome.",
+          },
+          {
+            title: "Gestionas tu suministro",
+            copy: "Producción, consumo, facturas, contratos y documentos quedan reunidos en la app.",
+          },
+        ]}
+      /><div class="tariff-responsibility-grid">
+        <article>
+          <span>MEGAPARK · LIGADA A TU PRODUCTO</span><strong
+            >No encontrarás un botón para contratarla sola.</strong
+          ><p>
+            Primero eliges Autoconsumo Remoto o una Comunidad Energética.
+            Nuestro equipo te informa de la solución, la disponibilidad y el
+            recorrido completo.
+          </p>
+        </article><article>
+          <span>MEGAHOME · CONTRATACIÓN VOLUNTARIA</span><strong
+            >Tu instalación o un código validan el acceso.</strong
+          ><p>
+            Si instalamos tus paneles, validamos tu email. Si te invita un
+            comunero de Remoto o Comunidad Energética, validamos el código antes
+            de continuar con la contratación.
+          </p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="section tariff-bill-section" id="simulador">
+    <div class="shell">
+      <SectionHeading
+        eyebrow="Una factura explicada"
+        title="Así se ve tu energía en la factura."
+        copy="Un único ejemplo visual para entender qué energía llega de tu proyecto, qué parte necesitas de la red y cómo se forma el total. No tienes que calcular ni configurar nada."
+      /><ProductVisuals kind="bill-example" />
+    </div>
+  </section>
+
+  <section class="section tariff-plans-section" id="tarifas">
+    <div class="shell">
+      <SectionHeading
+        eyebrow="Nuestras tarifas"
+        title="Primero identifica qué recorrido te corresponde."
+        copy="Megapark forma parte de Remoto y Comunidades Energéticas. Megahome puede contratarse con una instalación realizada por nosotros o con un código de invitación."
+      /><div class="tariff-plan-grid">
+        <article class="tariff-plan-card tariff-plan-card-remote">
+          <Pill tone="blue">Remoto o Comunidad Energética</Pill><div
+            class="tariff-plan-price"
+          >
+            <strong>3 €</strong><span>al mes</span>
+          </div><h3>Tarifa Megapark.</h3><p>
+            No se contrata por separado. Acompaña a quienes formalizan
+            Autoconsumo Remoto o se incorporan a una Comunidad Energética de
+            Comunidad Solar.
+          </p><ul>
+            <li>
+              Tu producción coincidente a 0 €/kWh en el componente de energía.
+            </li><li>Energía de red sin margen comercial añadido.</li><li>
+              Condiciones de producción y mantenimiento definidas en tu
+              producto.
+            </li>
+          </ul><ButtonLink
+            href={megaparkInformationForm}
+            kind="secondary"
+            analyticsEvent="megapark_information_open"
+            >Solicitar información</ButtonLink
+          ><small class="tariff-plan-access-note"
+            >Este formulario no contrata Megapark: nuestro equipo te informa
+            primero sobre Remoto o Comunidad Energética.</small
+          >
+        </article><article class="tariff-plan-card tariff-plan-card-home">
+          <Pill tone="yellow">Contratación disponible</Pill><div
+            class="tariff-plan-price"
+          >
+            <strong>5 €</strong><span>al mes</span>
+          </div><h3>Tarifa Megahome.</h3><p>
+            Puedes contratarla si Comunidad Solar realizó tu instalación
+            fotovoltaica o si te invita un comunero de Autoconsumo Remoto o
+            Comunidad Energética mediante un código.
+          </p><ul>
+            <li>Energía de red sin margen comercial añadido.</li><li>
+              El 100 % del saldo reconocido a tus excedentes pasa al monedero.
+            </li><li>
+              El saldo que no utilizas continúa disponible el mes siguiente.
+            </li>
+          </ul><ButtonLink
+            href={megahomeSignup}
+            analyticsEvent="megahome_signup_open">Contratar Megahome</ButtonLink
+          ><small class="tariff-plan-access-note"
+            >El alta valida tu email o te permite elegir «Tengo un código».</small
+          >
+        </article>
+      </div><p class="tariff-plans-note">
+        Megapark no se contrata como una tarifa aislada. Las condiciones exactas
+        de producción, compensación, mantenimiento y costes son las de tu oferta
+        y tu contrato. El 0 €/kWh se refiere al término de energía procedente de
+        tu producción, no al total de la factura. <time datetime="2026-07-26"
+          >Información revisada el 26 de julio de 2026.</time
+        >
+      </p>
+    </div>
+  </section>
+
+  <section class="section wallet-section" id="monedero">
+    <div class="shell wallet-layout">
+      <div class="wallet-copy">
+        <Pill tone="yellow">Monedero virtual</Pill><h2>
+          El valor de tus excedentes no desaparece al terminar el mes.
+        </h2><p>
+          Con Megahome, el 100 % del saldo reconocido a la energía que viertes a
+          la red se guarda para descontarlo en tus siguientes facturas. Si no lo
+          utilizas entero, continúa disponible.
+        </p><div class="wallet-priority-note">
+          <strong
+            >Tu energía siempre vale más cuando la aprovechas directamente.</strong
+          ><span
+            >Por eso te ayudamos a consumir durante las horas solares antes de
+            enviar energía como excedente.</span
+          >
+        </div>
+      </div><div class="wallet-flow">
+        <article>
+          <span>01</span><strong>Generas y no consumes</strong><small
+            >La energía sale como excedente.</small
+          >
+        </article><i aria-hidden="true">→</i><article>
+          <span>02</span><strong>Calculamos su valor</strong><small
+            >Según las condiciones de Megahome.</small
+          >
+        </article><i aria-hidden="true">→</i><article>
+          <span>03</span><strong>Lo guardas para otro mes</strong><small
+            >El saldo se aplica a futuras facturas.</small
+          >
+        </article>
+      </div><p class="wallet-clarification">
+        El monedero guarda saldo económico, no kilovatios hora. El 100 % se
+        refiere al saldo que resulte de la valoración prevista en tu tarifa y
+        contrato, no al precio final al que compras energía de la red.
+      </p>
+    </div>
+  </section>
+
+  <section class="section switching-section">
+    <div class="shell switching-grid">
+      <div class="switching-copy">
+        <p class="eyebrow">Unidos por el mejor precio posible</p><h2>
+          Una comercializadora que trabaja para la comunidad.
+        </h2><p>
+          Al sumar la producción y el consumo de miles de comuneros, ganamos
+          capacidad para gestionar mejor nuestras compras y ventas de energía.
+          El objetivo no es venderte más kilovatios, sino depender cada vez
+          menos del mercado.
+        </p><ol>
+          <li>
+            <span>01</span><div>
+              <strong>Compramos juntos.</strong><small
+                >La escala de la comunidad nos da más capacidad de negociación.</small
+              >
+            </div>
+          </li><li>
+            <span>02</span><div>
+              <strong>Gestionamos con conocimiento experto.</strong><small
+                >Optimizamos las compras y ventas con el apoyo de Ingebau.</small
+              >
+            </div>
+          </li><li>
+            <span>03</span><div>
+              <strong>Construimos la siguiente etapa.</strong><small
+                >Más generación renovable, almacenamiento y mejor
+                aprovechamiento de los excedentes.</small
+              >
+            </div>
+          </li>
+        </ol><a
+          class="switching-partner-link"
+          href={ingebauPage}
+          target="_blank"
+          rel="noreferrer"
+          >Conocer a Ingebau <span aria-hidden="true">↗</span></a
+        >
+      </div><aside class="switching-registry-card">
+        <span>REGISTRO OFICIAL</span><strong>R2-883</strong><h3>
+          Comercializadora Eléctrica Comunidad Solar, S.L.
+        </h3><p>
+          NIF B67571802 · C/ Cólquide 17 · 28231 Las Rozas de Madrid. Inscrita
+          en el censo de comercializadoras de electricidad de la CNMC desde el
+          16 de julio de 2021.
+        </p><a href={cnmcRegistryUrl} target="_blank" rel="noreferrer"
+          >Consultar el censo oficial <span aria-hidden="true">↗</span></a
+        ><small
+          >La inscripción acredita que la sociedad figura en el censo; no supone
+          un aval comercial de la CNMC.</small
+        >
+      </aside>
+    </div>
+  </section>
+  <section class="section faq-section">
+    <div class="shell faq-grid">
+      <SectionHeading
+        eyebrow="Antes de unirte"
+        title="Todo lo importante, explicado con claridad."
+        copy="Tu oferta y tu contrato contienen las condiciones exactas de tu tarifa. Aquí tienes las respuestas para saber si nuestra comercializadora es para ti."
+      /><FaqList items={tariffFaqs} />
+    </div>
+  </section>
+  <HumanHelp compact context="commercializer" />
+</main>

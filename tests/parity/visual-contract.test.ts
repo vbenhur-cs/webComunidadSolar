@@ -27,10 +27,12 @@ import {
   dispatchSourceRuntimeRequest,
   formatVisualParitySummary,
   launchChromium,
+  parseVisualArguments,
   readVisualFixtures,
   runVisualParity,
   runVisualCommand,
   selectFoundationVisualRoutes,
+  selectVisualRoutes,
   sourceAssetFetcher,
   startCandidateRuntime,
   writeVisualReports,
@@ -365,7 +367,7 @@ test("keeps selectors missing on both sides as deterministic non-matched evidenc
   );
 });
 
-test("declares the three fixed capture viewports and home structural selectors", () => {
+test("declares the three fixed capture viewports and structural selectors for home and generic pages", () => {
   assert.deepEqual(VISUAL_VIEWPORTS, [
     { name: "desktop", width: 1440, height: 900 },
     { name: "tablet", width: 768, height: 1024 },
@@ -380,6 +382,12 @@ test("declares the three fixed capture viewports and home structural selectors",
     serviceWorkers: "block",
   });
   assert.deepEqual(templateSelectors.home, ["body", "header", "main", "footer"]);
+  assert.deepEqual(templateSelectors["generic-page"], [
+    "body",
+    "header",
+    "main",
+    "footer",
+  ]);
 });
 
 test("serves exact archive assets before the source worker and delegates absent paths", async () => {
@@ -2476,6 +2484,63 @@ test("selects only the pending home smoke, produces three pending results, and n
   assert.ok(events.includes("reference:dispose"));
   assert.ok(events.includes("candidate:dispose"));
   assert.ok(events.includes("browser:dispose"));
+});
+
+test("selects exactly the requested pending visual routes and rejects an ambiguous route CLI", () => {
+  const matrix = [
+    ...foundationMatrix(),
+    {
+      path: "/baterias",
+      kind: "page" as const,
+      sourceFile: "app/[slug]/page.tsx",
+      fixtureId: "baterias",
+      expectedStatus: 200,
+      expectedLocation: null,
+      privateArea: null,
+      visualTemplate: "generic-page",
+      status: "pending",
+    },
+    {
+      path: "/mantenimiento",
+      kind: "page" as const,
+      sourceFile: "app/[slug]/page.tsx",
+      fixtureId: "mantenimiento",
+      expectedStatus: 200,
+      expectedLocation: null,
+      privateArea: null,
+      visualTemplate: "generic-page",
+      status: "pending",
+    },
+  ];
+
+  assert.deepEqual(
+    selectVisualRoutes(matrix, ["/mantenimiento", "/baterias"]),
+    [matrix[2], matrix[3]],
+  );
+  assert.deepEqual(
+    parseVisualArguments([
+      "--routes",
+      "/mantenimiento,/baterias",
+      "--allow-pending",
+    ]),
+    {
+      scope: "foundation",
+      routes: ["/mantenimiento", "/baterias"],
+      allowPending: true,
+    },
+  );
+  assert.throws(
+    () => selectVisualRoutes(matrix, ["/baterias", "/baterias"]),
+    /duplicada/i,
+  );
+  assert.throws(
+    () => selectVisualRoutes(matrix, ["/ausente"]),
+    /no declarada/i,
+  );
+  assert.throws(
+    () => parseVisualArguments(["--scope", "foundation", "--routes", "/baterias"]),
+    /no se pueden combinar/i,
+  );
 });
 
 test("rejects pending foundation output without --allow-pending", async () => {

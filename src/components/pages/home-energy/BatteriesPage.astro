@@ -1,0 +1,363 @@
+---
+import ButtonLink from "../../site/ButtonLink.astro";
+import PageHero from "../../site/PageHero.astro";
+import Pill from "../../site/Pill.astro";
+import SectionHeading from "../../site/SectionHeading.astro";
+import TrustBand from "../../site/TrustBand.astro";
+import FactStrip from "./FactStrip.astro";
+import FaqList from "./FaqList.astro";
+import HomeProductCards from "./HomeProductCards.astro";
+import ProductAdvisorCta from "./ProductAdvisorCta.astro";
+import ProductVisuals from "./ProductVisuals.astro";
+import Steps from "./Steps.astro";
+
+const batteryCalculator = "https://calculadorabaterias.comunidadsolar.es/";
+const solaxX1IesImage = "/media/solax-x1-ies.png";
+const solaxX1IesDatasheet =
+  "https://www.solaxpower.com/uploads/file/solax-x1-ies-datasheet-en.pdf";
+const faqs = [
+  {
+    question: "¿Puedo añadir una batería a mis placas actuales?",
+    answer:
+      "En muchos casos sí, pero primero hay que comprobar el inversor, el esquema eléctrico, si la instalación es monofásica o trifásica y la solución de comunicación y control. Una batería compatible en catálogo no garantiza por sí sola que pueda integrarse sin cambios.",
+  },
+  {
+    question: "¿Puedo instalar esta batería si no tengo paneles solares?",
+    answer:
+      "Sí. La oferta doméstica SolaX X1-IES también puede estudiarse para una vivienda sin placas. En ese caso la carga se programa desde la red en las horas elegidas y la energía se utiliza después. El posible ahorro depende de tu tarifa, la diferencia de precios, las pérdidas del sistema y tus hábitos; el respaldo se dimensiona aparte para los circuitos previstos.",
+  },
+  {
+    question: "¿Una batería mantiene la casa encendida durante un corte?",
+    answer:
+      "Solo si el sistema incorpora respaldo compatible y está correctamente configurado. También influyen el estado de carga, la potencia disponible y qué circuitos se hayan seleccionado. Una batería destinada únicamente a aumentar el autoconsumo puede desconectarse cuando falla la red.",
+  },
+  {
+    question: "¿El respaldo alimenta toda la vivienda?",
+    answer:
+      "Puede diseñarse para cargas esenciales o, si la potencia y la instalación lo permiten, para un alcance mayor. En la propuesta indicamos qué circuitos quedan respaldados y qué consumos simultáneos admite el sistema; no damos una autonomía genérica sin conocer tus equipos.",
+  },
+  {
+    question: "¿Qué capacidad necesito?",
+    answer:
+      "La capacidad útil en kWh se calcula con tus excedentes, el consumo de tarde y noche y el objetivo de respaldo. La potencia en kW determina cuántos equipos puede alimentar a la vez. Ambas cifras importan y deben dimensionarse juntas.",
+  },
+  {
+    question: "¿La batería hará que mi factura sea cero?",
+    answer:
+      "No necesariamente. Puede reducir la energía comprada a la red, pero siguen existiendo consumos, pérdidas, potencia contratada, peajes, impuestos y otros conceptos. El ahorro depende de cómo se cargue, se descargue y se utilice cada día.",
+  },
+  {
+    question: "¿Cuánto dura una batería?",
+    answer:
+      "La capacidad disminuye gradualmente con el tiempo y el uso. SolaX declara más de 6.000 ciclos para esta batería bajo sus condiciones de ensayo, pero la vida real depende de temperatura, profundidad de descarga y utilización. La propuesta identifica el equipo exacto y las garantías vigentes del inversor, la batería y los accesorios.",
+  },
+  {
+    question: "¿Hay que legalizarla?",
+    answer:
+      "La actuación y su configuración deben quedar integradas correctamente en la documentación eléctrica de la instalación. El alcance de la propuesta indica las adaptaciones, puesta en marcha y trámites incluidos para tu caso.",
+  },
+];
+---
+
+<main class="home-product-page battery-product-page">
+  <PageHero
+    tone="green"
+    eyebrow="Batería doméstica SolaX X1-IES"
+    title="Una batería para tu hogar, tengas o no placas solares."
+    lead="Con paneles, guarda parte de tus excedentes para utilizarlos más tarde. Sin paneles, puede cargar desde la red en las horas que elijas. En ambos casos estudiamos ahorro, potencia y respaldo antes de proponerte la solución."
+    primary={{
+      href: batteryCalculator,
+      label: "Calcular y comprar mi batería",
+      analyticsEvent: "battery_calculator_open",
+    }}
+    secondary={{ href: "#solax-x1-ies", label: "Ver el pack y el precio" }}
+    ><ProductVisuals kind="battery" /></PageHero
+  >
+
+  <FactStrip
+    facts={[
+      { value: "Con o sin", label: "Paneles solares" },
+      { value: "4.799 €", label: "Pack al contado · IVA incluido" },
+      { value: "5 kW + 5,1 kWh", label: "Inversor híbrido y batería" },
+      { value: "Backup", label: "Respaldo de circuitos previstos" },
+    ]}
+  />
+
+  <section class="section solax-offer-section" id="solax-x1-ies">
+    <div class="shell solax-offer-grid">
+      <div class="solax-offer-product">
+        <span>OFERTA DOMÉSTICA ACTUAL</span><div class="solax-offer-image">
+          <img
+            src={solaxX1IesImage}
+            alt="Sistema doméstico de batería SolaX X1-IES"
+          />
+        </div><div class="solax-offer-badges">
+          <strong>Monofásico</strong><strong>Todo en uno</strong><strong
+            >Ampliable</strong
+          >
+        </div>
+      </div>
+      <div class="solax-offer-copy">
+        <SectionHeading
+          eyebrow="Un pack completo, no solo una batería"
+          title="SolaX X1-IES de 5 kW con 5,1 kWh de capacidad nominal."
+          copy="La oferta reúne el equipo, el respaldo y los trabajos necesarios para dejar el sistema instalado y legalizado. Primero comprobamos que la vivienda sea compatible y qué circuitos quieres proteger."
+        />
+        <ul class="solax-offer-includes">
+          <li>
+            <span>01</span><p>
+              <strong>Inversor híbrido SolaX de 5 kW</strong> y sistema de gestión
+              de batería.
+            </p>
+          </li>
+          <li>
+            <span>02</span><p>
+              <strong>Batería LFP de 5,1 kWh nominales</strong>, con 4,6 kWh
+              útiles según la ficha del fabricante.
+            </p>
+          </li>
+          <li>
+            <span>03</span><p>
+              <strong>Sistema de respaldo</strong> configurado para las cargas y la
+              potencia definidas en el estudio.
+            </p>
+          </li>
+          <li>
+            <span>04</span><p>
+              <strong>Instalación, puesta en marcha y legalización</strong> incluidas
+              dentro del alcance confirmado.
+            </p>
+          </li>
+        </ul>
+        <div class="solax-offer-pricing">
+          <article>
+            <span>PAGO AL CONTADO</span><strong>4.799 €</strong><small
+              >IVA incluido · 50 % antes y 50 % al finalizar la instalación.</small
+            >
+          </article><article>
+            <span>FINANCIACIÓN</span><strong>Desde 49 €/mes*</strong><small
+              >550 € de entrada · 120 meses · interés anunciado del 6,99 %.</small
+            >
+          </article>
+        </div>
+        <div class="solax-offer-actions">
+          <ButtonLink
+            href={batteryCalculator}
+            analyticsEvent="battery_calculator_open"
+            >Calcular y comprar mi batería</ButtonLink
+          ><a
+            class="text-link"
+            href={solaxX1IesDatasheet}
+            target="_blank"
+            rel="noreferrer"
+            >Ver ficha técnica oficial <span aria-hidden="true">↗</span></a
+          >
+        </div>
+        <p class="solax-finance-note">
+          *Ejemplo sujeto a aprobación. Antes de contratar recibirás las
+          condiciones completas de financiación —incluidos TIN, TAE, comisiones
+          e importe total adeudado— y una propuesta que confirme compatibilidad,
+          alcance de obra y posibles extras.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section home-product-purpose">
+    <div class="shell">
+      <SectionHeading
+        eyebrow="Dos formas de utilizarla"
+        title="Funciona con paneles. Y también sin ellos."
+        copy="La procedencia de la carga cambia, pero la lógica es la misma: guardar energía para utilizarla en otro momento. El estudio separa el valor económico del respaldo para que sepas qué estás comprando."
+      /><div class="battery-goal-grid">
+        <article>
+          <Pill tone="green">Con paneles solares</Pill><h3>
+            Guarda de día. Utiliza tu energía cuando ya no hay sol.
+          </h3><p>
+            La batería absorbe parte de los excedentes de tu instalación y los
+            entrega más tarde, aumentando la proporción de energía solar que
+            realmente aprovechas en casa.
+          </p><ul>
+            <li>Se dimensiona con excedentes y consumo nocturno.</li><li>
+              Prioriza ciclos útiles, no capacidad sin utilizar.
+            </li><li>Comprobamos la integración con tu inversor actual.</li>
+          </ul>
+        </article><article>
+          <Pill tone="yellow">Sin paneles solares</Pill><h3>
+            Carga desde la red. Utiliza la energía en otro horario.
+          </h3><p>
+            Puedes programar la batería para cargar en las horas elegidas de tu
+            tarifa y utilizar después esa energía. No necesitas instalar placas
+            para contratar el pack doméstico.
+          </p><ul>
+            <li>Analizamos tarifa, consumo y diferencia entre periodos.</li><li>
+              El ahorro se calcula después de pérdidas y costes.
+            </li><li>El respaldo se configura para los circuitos previstos.</li>
+          </ul>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="section product-diagnosis-section" id="como-elegir">
+    <div class="shell product-diagnosis-grid">
+      <div>
+        <SectionHeading
+          eyebrow="La oferta es concreta; tu caso es particular"
+          title="El pack de partida es de 5,1 kWh. El estudio confirma si es el adecuado."
+          copy="Dos viviendas con el mismo consumo pueden necesitar capacidades, potencias o circuitos de respaldo distintos. Por eso comprobamos el sistema completo antes de cerrar la propuesta."
+        /><div class="product-diagnosis-note product-diagnosis-note-dark">
+          <span>CAPACIDAD ≠ POTENCIA</span><strong
+            >Los kWh indican cuánta energía guarda. Los kW, cuánto puede
+            entregar a la vez.</strong
+          >
+        </div>
+      </div><div class="product-checklist">
+        {
+          [
+            [
+              "Con placas o sin ellas",
+              "De dónde se cargará la batería y qué objetivo económico debe cumplir.",
+            ],
+            [
+              "Tu consumo y tu tarifa",
+              "Cuándo utilizas energía, qué pagas y qué diferencia existe entre periodos.",
+            ],
+            [
+              "La instalación eléctrica",
+              "Fases, cuadro, protecciones, espacio, recorridos y, si existen, paneles e inversor.",
+            ],
+            [
+              "El respaldo que esperas",
+              "Circuitos esenciales, potencia simultánea y autonomía objetivo.",
+            ],
+            [
+              "El alcance de la obra",
+              "Ubicación, cableado, equipos, legalización y cualquier trabajo adicional.",
+            ],
+          ].map(([title, copy], index) => (
+            <article>
+              <>
+                <span>{String(index + 1).padStart(2, "0")}</span>
+                <div>
+                  <>
+                    <h3>{title}</h3>
+                    <p>{copy}</p>
+                  </>
+                </div>
+              </>
+            </article>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+
+  <section class="section battery-scenarios-section">
+    <div class="shell">
+      <SectionHeading
+        eyebrow="Tres puntos de partida"
+        title="Puedes empezar desde cualquiera de estas situaciones."
+        copy="La misma oferta necesita un estudio diferente si integramos placas existentes, diseñamos todo desde cero o instalamos la batería sin paneles."
+      /><HomeProductCards
+        items={[
+          {
+            number: "01",
+            title: "Ya tengo placas.",
+            copy: "Comprobamos compatibilidad, excedentes y si conviene adaptar, sustituir o mantener el inversor.",
+          },
+          {
+            number: "02",
+            title: "Quiero placas y batería.",
+            copy: "Diseñamos ambos elementos como un único sistema para evitar incompatibilidades y costes duplicados.",
+          },
+          {
+            number: "03",
+            title: "Quiero batería sin placas.",
+            copy: "Programamos la carga desde la red y analizamos por separado el posible ahorro y el respaldo de cargas esenciales.",
+          },
+        ]}
+      />
+    </div>
+  </section>
+
+  <section class="section home-product-process">
+    <div class="shell">
+      <SectionHeading
+        eyebrow="De la calculadora a la puesta en marcha"
+        title="Una oferta directa, con comprobación antes de comprometerte."
+        copy="La calculadora inicia el análisis. La propuesta final confirma que el pack encaja, qué incluye exactamente y qué ocurrirá durante la instalación."
+      /><Steps
+        items={[
+          {
+            title: "Calculadora",
+            copy: "Indicas si tienes placas, compartes tus datos de consumo y eliges si buscas ahorro, respaldo o ambos.",
+          },
+          {
+            title: "Estudio",
+            copy: "Revisamos tarifa, fases, cuadro, espacio y, cuando existe, la instalación fotovoltaica.",
+          },
+          {
+            title: "Propuesta",
+            copy: "Recibes equipos, capacidad útil, potencia, circuitos de respaldo, alcance de obra, precio y condiciones.",
+          },
+          {
+            title: "Reserva e instalación",
+            copy: "Solo después de aceptar la propuesta confirmas la reserva de 100 €. Instalamos, legalizamos, configuramos y probamos el sistema.",
+          },
+        ]}
+      />
+    </div>
+  </section>
+
+  <section class="product-integrity-band product-integrity-battery">
+    <div class="shell product-integrity-grid">
+      <div>
+        <span>RESPALDO, EXPLICADO DE VERDAD</span><h2>
+          Una batería no convierte automáticamente tu casa en una isla.
+        </h2>
+      </div><p>
+        Durante un corte, el sistema debe aislarse de la red y alimentar
+        únicamente las cargas previstas. Te diremos qué seguirá funcionando,
+        durante cuánto tiempo se estima y qué condiciones deben cumplirse, en
+        lugar de prometer “energía siempre”.
+      </p>
+    </div>
+  </section>
+
+  <section class="section product-cross-sell">
+    <div class="shell product-cross-sell-card">
+      <div>
+        <span>¿QUIERES AÑADIR PANELES?</span><h2>
+          No necesitas placas para empezar. Si las quieres, diseñamos el
+          conjunto.
+        </h2><p>
+          Comparamos placas solas, placas con batería o una instalación
+          preparada para ampliar después. Así puedes decidir con el ahorro y la
+          inversión de cada escenario delante.
+        </p>
+      </div><ButtonLink
+        href="/autoconsumo-en-mi-tejado#bateria-desde-el-principio"
+        kind="secondary">Comparar placas y batería</ButtonLink
+      >
+    </div>
+  </section>
+
+  <TrustBand compact />
+  <section class="section faq-section" id="preguntas">
+    <div class="shell faq-grid">
+      <SectionHeading
+        eyebrow="Preguntas frecuentes"
+        title="Antes de elegir capacidad, potencia o respaldo."
+      /><FaqList items={faqs} />
+    </div>
+  </section>
+  <ProductAdvisorCta
+    eyebrow="Tu batería, con placas o sin ellas"
+    title="Calcula tu caso y recibe una propuesta personalizada."
+    copy="En unos minutos recogemos la información necesaria para estimar capacidad, potencia, posible ahorro y respaldo. Después confirmamos el pack, el alcance y el precio."
+    href={batteryCalculator}
+    label="Calcular y comprar mi batería"
+    analyticsEvent="battery_calculator_open"
+  />
+</main>

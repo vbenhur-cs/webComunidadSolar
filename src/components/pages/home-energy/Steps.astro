@@ -1,0 +1,24 @@
+---
+interface Step {
+  title: string;
+  copy: string;
+}
+
+interface Props {
+  items: Step[];
+}
+
+const { items } = Astro.props;
+---
+
+<div class="steps-grid">
+  {
+    items.map((item, index) => (
+      <article class="step-card">
+        <span>{String(index + 1).padStart(2, "0")}</span>
+        <h3>{item.title}</h3>
+        <p>{item.copy}</p>
+      </article>
+    ))
+  }
+</div>

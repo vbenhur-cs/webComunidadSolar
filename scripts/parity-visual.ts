@@ -86,6 +86,8 @@ export interface VisualParityResult {
 export interface RunVisualParityOptions {
   scope: "foundation";
   allowPending: boolean;
+  /** An exact, fail-closed subset of matrix paths to capture. */
+  routes?: string[];
   root?: string;
   lifecycleTimeoutMs?: number;
   sourceBuildTimeoutMs?: number;
@@ -542,6 +544,55 @@ export function selectFoundationVisualRoutes(
     );
   }
   return [...home].sort((left, right) =>
+    compareText(routeKey(left), routeKey(right)),
+  );
+}
+
+function assertVisualRoutePath(path: string): void {
+  if (
+    !path.startsWith("/") ||
+    path.includes("\\") ||
+    path.includes("\0") ||
+    path.split("/").includes("..") ||
+    path.trim() !== path
+  ) {
+    throw new Error(`Ruta visual inválida: ${path}`);
+  }
+}
+
+/**
+ * Selects only explicitly requested page routes. This is intentionally
+ * fail-closed: a typo, duplicate, non-page, or a row without a visual
+ * template must never broaden a visual capture to a different route set.
+ */
+export function selectVisualRoutes(
+  matrix: RouteMatrixEntry[],
+  requestedPaths: readonly string[],
+): RouteMatrixEntry[] {
+  if (requestedPaths.length === 0) {
+    throw new Error("--routes visual debe declarar al menos una ruta");
+  }
+  const seen = new Set<string>();
+  const selected = requestedPaths.map((path) => {
+    assertVisualRoutePath(path);
+    if (seen.has(path)) {
+      throw new Error(`Ruta visual duplicada: ${path}`);
+    }
+    seen.add(path);
+    const matches = matrix.filter((entry) => entry.path === path);
+    if (matches.length !== 1) {
+      throw new Error(`Ruta visual no declarada exactamente una vez: ${path}`);
+    }
+    const [route] = matches;
+    if (route.kind !== "page") {
+      throw new Error(`Ruta visual no es una página: ${path}`);
+    }
+    if (typeof route.visualTemplate !== "string" || !route.visualTemplate) {
+      throw new Error(`La ruta visual no declara template: ${path}`);
+    }
+    return route;
+  });
+  return selected.sort((left, right) =>
     compareText(routeKey(left), routeKey(right)),
   );
 }
@@ -1697,7 +1748,10 @@ export async function runVisualParity(
       Promise.all([readMatrix(root), readFixtures(root)]),
       lifecycleTimeoutMs,
     );
-    const routes = selectFoundationVisualRoutes(matrix);
+    const routes =
+      options.routes === undefined
+        ? selectFoundationVisualRoutes(matrix)
+        : selectVisualRoutes(matrix, options.routes);
     await build(root);
     const topology = await withinVisualTimeout(
       "resolver la topología del candidato visual",
@@ -1850,23 +1904,52 @@ export function formatVisualParitySummary(result: VisualParityResult): string {
   return `VISUAL_PARITY_MATCHED ${common}`;
 }
 
-function parseArguments(args: string[]): RunVisualParityOptions {
-  if (
-    args.length === 3 &&
-    args[0] === "--scope" &&
-    args[1] === "foundation" &&
-    args[2] === "--allow-pending"
-  ) {
-    return { scope: "foundation", allowPending: true };
+export function parseVisualArguments(args: string[]): RunVisualParityOptions {
+  let scope: "foundation" | undefined;
+  let routes: string[] | undefined;
+  let allowPending = false;
+  for (let index = 0; index < args.length; index += 1) {
+    const argument = args[index];
+    if (argument === "--allow-pending") {
+      if (allowPending) throw new Error("--allow-pending visual está repetido");
+      allowPending = true;
+      continue;
+    }
+    if (argument === "--scope") {
+      if (scope !== undefined || args[index + 1] !== "foundation") {
+        throw new Error("El scope visual debe ser foundation una sola vez");
+      }
+      scope = "foundation";
+      index += 1;
+      continue;
+    }
+    if (argument === "--routes") {
+      const value = args[index + 1];
+      if (routes !== undefined || value === undefined) {
+        throw new Error("--routes visual debe aparecer una sola vez con rutas");
+      }
+      routes = value.split(",");
+      if (routes.some((path) => path.length === 0)) {
+        throw new Error("--routes visual no admite rutas vacías");
+      }
+      index += 1;
+      continue;
+    }
+    throw new Error(`Argumento visual desconocido: ${argument}`);
   }
-  if (args.length === 2 && args[0] === "--scope" && args[1] === "foundation") {
-    return { scope: "foundation", allowPending: false };
+  if (scope !== undefined && routes !== undefined) {
+    throw new Error("--scope y --routes visual no se pueden combinar");
   }
-  throw new Error("Uso: parity-visual.ts --scope foundation [--allow-pending]");
+  if (scope === undefined && routes === undefined) {
+    throw new Error(
+      "Uso: parity-visual.ts --scope foundation [--allow-pending] | --routes /ruta,/ruta [--allow-pending]",
+    );
+  }
+  return { scope: "foundation", routes, allowPending };
 }
 
 async function main(args: string[]): Promise<void> {
-  const result = await runVisualParity(parseArguments(args));
+  const result = await runVisualParity(parseVisualArguments(args));
   process.stdout.write(`${formatVisualParitySummary(result)}\n`);
 }
 

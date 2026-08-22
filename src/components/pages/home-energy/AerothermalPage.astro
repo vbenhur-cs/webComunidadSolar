@@ -1,0 +1,360 @@
+---
+import ButtonLink from "../../site/ButtonLink.astro";
+import PageHero from "../../site/PageHero.astro";
+import SectionHeading from "../../site/SectionHeading.astro";
+import TrustBand from "../../site/TrustBand.astro";
+import FactStrip from "./FactStrip.astro";
+import FaqList from "./FaqList.astro";
+import HomeProductCards from "./HomeProductCards.astro";
+import ProductVisuals from "./ProductVisuals.astro";
+import Steps from "./Steps.astro";
+
+const coolfyLogo = "/media/coolfy-logo.png";
+const coolfyAerothermalForm = "https://www.coolfy.net/quiero-aerotermia-ya";
+const coolfyAerothermalPage = "https://www.coolfy.net/aerotermia";
+const coolfyAerothermalPhone = "tel:+34623603851";
+const faqs = [
+  {
+    question: "¿Quién se ocupa del estudio y de la instalación?",
+    answer:
+      "Coolfy, nuestro instalador Premium y partner oficial de aerotermia, coordina el proceso: estudio y dimensionado, presupuesto, visita técnica, suministro e instalación, puesta en marcha, gestión de las ayudas aplicables y servicio posventa, siempre de acuerdo con el alcance aprobado en tu propuesta.",
+  },
+  {
+    question: "¿La aerotermia funciona con mis radiadores actuales?",
+    answer:
+      "Depende del tamaño de los radiadores, la temperatura de impulsión que necesitan, el aislamiento y la demanda de la vivienda. Algunos sistemas existentes pueden aprovecharse; otros requieren emisores de baja temperatura, radiadores adaptados o una solución diferente.",
+  },
+  {
+    question: "¿También sirve para refrigerar?",
+    answer:
+      "Sí, cuando la bomba de calor y los emisores están preparados. Los fancoils y ciertos sistemas de suelo refrescante pueden proporcionar refrigeración; los radiadores convencionales no realizan esa función.",
+  },
+  {
+    question: "¿Puede producir agua caliente sanitaria?",
+    answer:
+      "Sí. Una instalación puede integrar calefacción, refrigeración y ACS, o resolver solo parte de esas necesidades. El depósito, la potencia y la configuración se dimensionan según el número de personas y el uso de la vivienda.",
+  },
+  {
+    question: "¿Cuánta electricidad consume?",
+    answer:
+      "Depende de la demanda térmica, el clima, el aislamiento y la temperatura a la que debe trabajar el sistema. Por eso no aplicamos un porcentaje de ahorro universal: comparamos tu consumo actual con una estimación específica para la vivienda.",
+  },
+  {
+    question: "¿Necesita obras?",
+    answer:
+      "Normalmente hay que instalar una unidad exterior, un módulo interior o depósito, conexiones hidráulicas y eléctricas y adaptar los emisores cuando sea necesario. El alcance puede ir desde una sustitución contenida hasta una reforma más amplia.",
+  },
+  {
+    question: "¿Dónde se coloca y cuánto ruido hace?",
+    answer:
+      "La unidad exterior necesita espacio, ventilación, accesibilidad y una ubicación que respete distancias y molestias acústicas. La visita técnica comprueba el emplazamiento antes de cerrar el equipo y el presupuesto.",
+  },
+  {
+    question: "¿Combina bien con placas solares?",
+    answer:
+      "Sí. La aerotermia electrifica calefacción y agua caliente, y una instalación fotovoltaica puede cubrir parte de ese consumo. Para aprovechar la combinación hay que coordinar potencias, horarios, control y, si existe, almacenamiento.",
+  },
+  {
+    question: "¿Existen ayudas, deducciones o CAE?",
+    answer:
+      "Pueden existir incentivos sujetos a la actuación, la vivienda, el sistema sustituido, el ahorro acreditado y la normativa vigente. Solo los incorporamos cuando se han comprobado; nunca descontamos de entrada una ayuda o un CAE como si fuera un ingreso garantizado.",
+  },
+];
+---
+
+<main class="home-product-page aerothermal-product-page">
+  <PageHero
+    tone="blue"
+    eyebrow="Aerotermia con Comunidad Solar + Coolfy"
+    title="Calefacción, refrigeración y agua caliente desde un único sistema."
+    lead="Coolfy es nuestro instalador Premium y partner oficial de aerotermia. Su equipo estudia tu vivienda y se ocupa del proceso contratado de principio a fin: propuesta, visita, instalación, puesta en marcha y acompañamiento."
+    primary={{
+      href: coolfyAerothermalForm,
+      label: "Solicitar estudio con Coolfy",
+    }}
+    secondary={{ href: "#partner-coolfy", label: "Conocer a nuestro partner" }}
+    ><ProductVisuals kind="aerothermal" /></PageHero
+  >
+  <FactStrip
+    facts={[
+      { value: "Calor", label: "Calefacción en invierno" },
+      { value: "Frío", label: "Refrigeración si el sistema lo permite" },
+      { value: "ACS", label: "Agua caliente sanitaria" },
+      { value: "1 sistema", label: "Diseñado para toda la vivienda" },
+    ]}
+  />
+
+  <section class="section coolfy-partner-section" id="partner-coolfy">
+    <div class="shell coolfy-partner-grid">
+      <div class="coolfy-partner-brand">
+        <div class="coolfy-partner-logo">
+          <img src={coolfyLogo} alt="Coolfy" />
+        </div><span>Instalador Premium</span><strong
+          >Partner oficial de Comunidad Solar</strong
+        ><p>
+          Hemos elegido a un especialista en climatización para que tu proyecto
+          tenga un responsable técnico de principio a fin.
+        </p><a href={coolfyAerothermalPage}
+          >Conocer más sobre Coolfy <span aria-hidden="true">↗</span></a
+        >
+      </div><div class="coolfy-partner-copy">
+        <SectionHeading
+          eyebrow="Tu aerotermia, instalada por Coolfy"
+          title="El equipo que se ocupa de todo el proceso contratado."
+          copy="Comunidad Solar selecciona y recomienda a Coolfy como su partner oficial. A partir de tu solicitud, su equipo técnico estudia el caso, prepara la propuesta y coordina contigo cada fase hasta la puesta en marcha y el servicio posventa."
+        /><div class="coolfy-partner-services">
+          {
+            [
+              [
+                "01",
+                "Estudio y dimensionado",
+                "Vivienda, aislamiento, consumos, emisores y potencia necesaria.",
+              ],
+              [
+                "02",
+                "Visita y presupuesto",
+                "Validación técnica, alcance claro y propuesta adaptada a tu casa.",
+              ],
+              [
+                "03",
+                "Instalación y puesta en marcha",
+                "Suministro, montaje, configuración y control final del sistema.",
+              ],
+              [
+                "04",
+                "Ayudas y posventa",
+                "Gestión de los incentivos aplicables y acompañamiento posterior.",
+              ],
+            ].map(([number, title, copy]) => (
+              <article>
+                <>
+                  <span>{number}</span>
+                  <div>
+                    <>
+                      <h3>{title}</h3>
+                      <p>{copy}</p>
+                    </>
+                  </div>
+                </>
+              </article>
+            ))
+          }
+        </div><ButtonLink href={coolfyAerothermalForm}
+          >Solicitar mi estudio con Coolfy</ButtonLink
+        >
+      </div>
+    </div>
+  </section>
+
+  <section class="section home-product-purpose" id="encaje">
+    <div class="shell">
+      <SectionHeading
+        eyebrow="La vivienda manda"
+        title="La aerotermia no empieza por elegir una máquina."
+        copy="El rendimiento depende de cuánto calor necesita la casa y a qué temperatura deben trabajar sus emisores. Analizamos el conjunto antes de recomendar el equipo."
+      /><HomeProductCards
+        items={[
+          {
+            number: "01",
+            title: "Aislamiento y clima.",
+            copy: "La demanda térmica cambia con la envolvente, la orientación, la localidad y el uso real de la vivienda.",
+          },
+          {
+            number: "02",
+            title: "Sistema actual.",
+            copy: "Caldera, radiadores, suelo radiante, fancoils y ACS determinan qué puede conservarse o adaptarse.",
+          },
+          {
+            number: "03",
+            title: "Espacio y potencia.",
+            copy: "Ubicación exterior, depósito, cuadro eléctrico, ruido y recorridos condicionan el proyecto final.",
+          },
+        ]}
+      />
+    </div>
+  </section>
+
+  <section class="section aerothermal-emitters-section">
+    <div class="shell">
+      <SectionHeading
+        eyebrow="Cómo llega el confort a cada estancia"
+        title="El emisor es tan importante como la bomba de calor."
+        copy="No todos los sistemas trabajan a la misma temperatura ni ofrecen las mismas funciones. La propuesta debe explicar qué se mantiene, qué se adapta y qué resultado puedes esperar."
+      /><div class="aerothermal-emitter-grid">
+        <article>
+          <span>BAJA TEMPERATURA</span><h3>Suelo radiante.</h3><p>
+            Reparte el calor de forma uniforme y trabaja con temperaturas de
+            agua bajas. Encaja especialmente bien en obra nueva o reformas donde
+            el suelo puede intervenirse.
+          </p><strong>Calefacción · posible suelo refrescante</strong>
+        </article><article>
+          <span>CALEFACCIÓN Y FRÍO</span><h3>Fancoils.</h3><p>
+            Utilizan agua para calentar o enfriar aire y permiten cubrir ambas
+            temporadas. Hay que estudiar distribución, desagües, ruido y control
+            por zonas.
+          </p><strong>Calefacción · refrigeración</strong>
+        </article><article>
+          <span>ESTUDIAR COMPATIBILIDAD</span><h3>Radiadores.</h3><p>
+            Pueden conservarse cuando cubren la demanda a una temperatura
+            adecuada. Si necesitan trabajar muy calientes, el rendimiento puede
+            empeorar o exigir adaptaciones.
+          </p><strong>La visita técnica decide</strong>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="section product-diagnosis-section">
+    <div class="shell product-diagnosis-grid">
+      <div>
+        <SectionHeading
+          eyebrow="Tu estudio térmico"
+          title="Comparamos la situación actual con el sistema propuesto."
+          copy="El ahorro no sale de un porcentaje genérico. Depende del combustible que sustituyes, la energía que necesita la casa y cómo se utilizará la nueva instalación."
+        /><div class="product-diagnosis-note product-diagnosis-note-blue">
+          <span>LA CLAVE</span><strong
+            >Cuanto menor sea la temperatura de trabajo necesaria, mejor puede
+            rendir la bomba de calor.</strong
+          >
+        </div>
+      </div><div class="product-checklist">
+        {
+          [
+            [
+              "Demanda de la vivienda",
+              "Superficie, aislamiento, clima, orientación y ocupación habitual.",
+            ],
+            [
+              "Sistema que sustituyes",
+              "Combustible, consumos, antigüedad y costes reales de calefacción y ACS.",
+            ],
+            [
+              "Emisores y temperaturas",
+              "Suelo, radiadores o fancoils y adaptaciones que serían necesarias.",
+            ],
+            [
+              "Espacios disponibles",
+              "Unidad exterior, módulo interior, acumulación, cuadro y recorridos.",
+            ],
+            [
+              "Resultado esperado",
+              "Confort, consumo estimado, inversión y posibilidades de combinar con solar.",
+            ],
+          ].map(([title, copy], index) => (
+            <article>
+              <>
+                <span>{String(index + 1).padStart(2, "0")}</span>
+                <div>
+                  <>
+                    <h3>{title}</h3>
+                    <p>{copy}</p>
+                  </>
+                </div>
+              </>
+            </article>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+
+  <section class="section home-product-process">
+    <div class="shell">
+      <SectionHeading
+        eyebrow="De principio a fin, con Coolfy"
+        title="Un único equipo técnico coordina todo el proceso."
+        copy="La primera orientación sirve para comprobar el encaje. Después, Coolfy confirma en la visita la potencia, los equipos, los trabajos y el presupuesto definitivo antes de instalar."
+      /><Steps
+        items={[
+          {
+            title: "Datos de la vivienda",
+            copy: "Coolfy recoge ubicación, superficie, sistema actual, emisores y consumos disponibles.",
+          },
+          {
+            title: "Preestudio",
+            copy: "Su equipo valora el encaje, las configuraciones posibles y una primera estimación de inversión.",
+          },
+          {
+            title: "Visita técnica",
+            copy: "Coolfy comprueba espacios, potencias, hidráulica, electricidad, ruido y trabajos necesarios.",
+          },
+          {
+            title: "Instalación y acompañamiento",
+            copy: "Instala, pone en marcha, configura el sistema y continúa a tu lado con el servicio posventa.",
+          },
+        ]}
+      />
+    </div>
+  </section>
+
+  <section class="section aerothermal-solar-section">
+    <div class="shell aerothermal-solar-grid">
+      <div>
+        <span>ELECTRIFICAR + PRODUCIR</span><h2>
+          Aerotermia y fotovoltaica pueden diseñarse como un solo sistema.
+        </h2><p>
+          Al sustituir combustibles por una bomba de calor, aumenta el consumo
+          eléctrico de la vivienda. Los paneles pueden cubrir parte de esa
+          energía y el control horario ayuda a acercar consumo y producción.
+        </p><ButtonLink href="/autoconsumo-en-mi-tejado" kind="secondary"
+          >Ver instalación fotovoltaica</ButtonLink
+        >
+      </div><div class="aerothermal-solar-balance" aria-hidden="true">
+        <article><span>01</span><strong>El sol produce</strong></article><i>+</i
+        ><article><span>02</span><strong>La bomba aprovecha</strong></article><i
+          >=</i
+        ><article><span>03</span><strong>La casa gana confort</strong></article>
+      </div>
+    </div>
+  </section>
+  <section class="product-integrity-band product-integrity-aerothermal">
+    <div class="shell product-integrity-grid">
+      <div>
+        <span>EFICIENCIA SIN PROMESAS UNIVERSALES</span><h2>
+          La misma máquina no rinde igual en todas las casas.
+        </h2>
+      </div><p>
+        El clima, el aislamiento y la temperatura de impulsión cambian el
+        consumo real. Por eso no publicamos un ahorro fijo ni descontamos ayudas
+        como si estuvieran concedidas: primero estudiamos la vivienda y hacemos
+        visibles los supuestos.
+      </p>
+    </div>
+  </section>
+  <TrustBand compact />
+  <section class="section faq-section" id="preguntas">
+    <div class="shell faq-grid">
+      <SectionHeading
+        eyebrow="Preguntas frecuentes"
+        title="Lo que conviene comprobar antes de cambiar de sistema."
+      /><FaqList items={faqs} />
+    </div>
+  </section>
+  <section class="coolfy-cta-section" id="estudio">
+    <div class="shell coolfy-cta-card">
+      <div class="coolfy-cta-logo">
+        <img src={coolfyLogo} alt="Coolfy" /><span
+          >Partner oficial de Comunidad Solar</span
+        >
+      </div><div>
+        <span>TU ESTUDIO DE AEROTERMIA</span><h2>
+          Cuéntale a Coolfy cómo es tu casa.
+        </h2><p>
+          Su equipo comprobará si la aerotermia encaja, qué configuración merece
+          la pena estudiar y qué necesita para preparar tu propuesta.
+        </p>
+      </div><div class="coolfy-cta-actions">
+        <a
+          class="button button-primary"
+          href={coolfyAerothermalForm}
+          data-analytics-event="coolfy_aerothermal_open"
+          ><span>Solicitar estudio con Coolfy</span><span aria-hidden="true"
+            >↗</span
+          ></a
+        ><a href={coolfyAerothermalPhone}
+          >O habla con Coolfy en el <strong>623 603 851</strong></a
+        >
+      </div>
+    </div>
+  </section>
+</main>

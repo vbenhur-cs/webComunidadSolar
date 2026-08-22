@@ -1108,7 +1108,7 @@
     "expectedLocation": null,
     "privateArea": null,
     "visualTemplate": "generic-page",
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/autoconsumo-en-mi-tejado",
@@ -1119,7 +1119,7 @@
     "expectedLocation": null,
     "privateArea": null,
     "visualTemplate": "generic-page",
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/autoconsumo-remoto",
@@ -1185,7 +1185,7 @@
     "expectedLocation": null,
     "privateArea": null,
     "visualTemplate": "generic-page",
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/blog",
@@ -1416,7 +1416,7 @@
     "expectedLocation": null,
     "privateArea": null,
     "visualTemplate": "generic-page",
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/comunidades-energeticas",
@@ -1724,7 +1724,7 @@
     "expectedLocation": null,
     "privateArea": null,
     "visualTemplate": "generic-page",
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/nosotros",
