@@ -27,7 +27,7 @@ import { isPhase2PublicRoute } from "../src/lib/site/public-route-closure.ts";
 const foundationKinds = new Set(["gone", "redirect"]);
 const localWorkerOrigin = "http://localhost";
 
-export type HttpParityScope = "foundation" | "public";
+export type HttpParityScope = "foundation" | "routing" | "public";
 
 export interface HttpDiff {
   routeKey: string;
@@ -935,7 +935,11 @@ export async function runHttpParity(
   options: RunHttpParityOptions,
   dependencies: HttpParityDependencies = {},
 ): Promise<HttpParityResult> {
-  if (options.scope !== "foundation" && options.scope !== "public") {
+  if (
+    options.scope !== "foundation" &&
+    options.scope !== "routing" &&
+    options.scope !== "public"
+  ) {
     throw new Error(`Scope HTTP no soportado: ${options.scope}`);
   }
   const root = resolve(options.root ?? process.cwd());
@@ -958,15 +962,17 @@ export async function runHttpParity(
   ]);
   const runtime = await startRuntime(topology, root);
   const parity =
-    options.scope === "foundation"
+    options.scope === "foundation" || options.scope === "routing"
       ? await runFoundationParity(baseline, runtime, { root })
       : await runPublicParity(baseline, matrix, runtime, { root });
   const updatedMatrix =
     options.scope === "foundation"
       ? applyFoundationMatrixResults(matrix, parity.verifiedRouteKeys)
-      : applyPublicMatrixResults(matrix, parity.verifiedRouteKeys);
+      : options.scope === "public"
+        ? applyPublicMatrixResults(matrix, parity.verifiedRouteKeys)
+        : matrix;
 
-  if (parity.diffs.length === 0) {
+  if (options.scope !== "routing" && parity.diffs.length === 0) {
     await writeMatrix(updatedMatrix);
   }
 
@@ -1000,11 +1006,11 @@ export function parseHttpParityArguments(args: string[]): RunHttpParityOptions {
   if (
     args.length === 2 &&
     args[0] === "--scope" &&
-    (args[1] === "foundation" || args[1] === "public")
+    (args[1] === "foundation" || args[1] === "routing" || args[1] === "public")
   ) {
     return { scope: args[1] };
   }
-  throw new Error("Uso: parity-http.ts --scope foundation|public");
+  throw new Error("Uso: parity-http.ts --scope foundation|routing|public");
 }
 
 async function main(args: string[]): Promise<void> {

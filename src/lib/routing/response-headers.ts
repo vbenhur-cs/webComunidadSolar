@@ -19,7 +19,7 @@ export function normalizeAstroStaticHtmlResponse(response: Response): Response {
   const headers = new Headers(response.headers);
   headers.delete("cache-control");
 
-  return new Response(response.body, {
+  return new Response(response.clone().body, {
     headers,
     status: response.status,
     statusText: response.statusText,
@@ -47,7 +47,7 @@ export function normalizeWorkerResponse(
 
   const headers = new Headers(htmlNormalized.headers);
   headers.set("content-type", "text/plain");
-  return new Response(htmlNormalized.body, {
+  return new Response(htmlNormalized.clone().body, {
     headers,
     status: htmlNormalized.status,
     statusText: htmlNormalized.statusText,

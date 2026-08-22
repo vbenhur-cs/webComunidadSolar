@@ -700,6 +700,57 @@ test("builds once and records only proven foundation rows with injected local de
   );
 });
 
+test("runs routing contracts without promoting the route matrix", async () => {
+  const body = "Esta página ya no forma parte del catálogo de Comunidad Solar.";
+  const matrix = [matrixEntry("gone", "/subvenciones")];
+  let matrixWrites = 0;
+
+  assert.deepEqual(parseHttpParityArguments(["--scope", "routing"]), {
+    scope: "routing",
+  });
+
+  const result = await runHttpParity(
+    { scope: "routing", root: process.cwd() },
+    {
+      build: async () => {},
+      resolveTopology: async () => ({
+        deployConfigPath: "/fixture/.wrangler/deploy/config.json",
+        wranglerConfigPath: "/fixture/dist/server/wrangler.json",
+        entryPath: "/fixture/dist/server/entry.mjs",
+      }),
+      readBaseline: async () =>
+        baselineFixture([
+          capturedContract({
+            bodySha256: createHash("sha256").update(body).digest("hex"),
+          }),
+        ]),
+      readMatrix: async () => matrix,
+      startRuntime: async () => ({
+        fetch: async () =>
+          new Response(body, {
+            status: 410,
+            headers: {
+              "cache-control": "public, max-age=3600",
+              "content-type": "text/plain; charset=utf-8",
+              "x-robots-tag": "noindex",
+            },
+          }),
+        dispose: async () => {},
+      }),
+      writeMatrix: async () => {
+        matrixWrites += 1;
+      },
+    },
+  );
+
+  assert.equal(result.scope, "routing");
+  assert.equal(result.checkedContracts, 1);
+  assert.deepEqual(result.diffs, []);
+  assert.equal(result.verifiedRoutes, 0);
+  assert.equal(result.pendingRoutes, 1);
+  assert.equal(matrixWrites, 0);
+});
+
 test("keeps a real matrix unchanged and removes its temp file when rename fails", async () => {
   const root = await mkdtemp(join(tmpdir(), "parity-http-atomic-matrix-"));
   try {

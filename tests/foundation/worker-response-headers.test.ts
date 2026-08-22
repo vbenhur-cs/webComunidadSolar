@@ -75,6 +75,20 @@ test("normalizes the robots content type only on the exact static route", () => 
   );
 });
 
+test("keeps a robots source response readable while normalizing its content type", async () => {
+  const original = new Response("User-Agent: *\n", {
+    headers: { "content-type": "text/plain; charset=utf-8" },
+  });
+  const normalized = normalizeWorkerResponse(
+    new Request("https://comunidadsolar.es/robots.txt"),
+    original,
+  );
+
+  assert.equal(normalized.headers.get("content-type"), "text/plain");
+  assert.equal(await normalized.text(), "User-Agent: *\n");
+  assert.equal(await original.text(), "User-Agent: *\n");
+});
+
 test("routes static assets through the Worker before Assets applies its response defaults", async () => {
   const config = await readFile(
     new URL("../../wrangler.jsonc", import.meta.url),
