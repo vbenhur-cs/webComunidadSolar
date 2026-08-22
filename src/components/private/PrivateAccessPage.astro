@@ -1,0 +1,117 @@
+---
+import { HeaderIsland } from "../site/HeaderIsland";
+import Footer from "../site/Footer.astro";
+import type {
+  PrivateAccessDecision,
+  PrivateArea,
+} from "../../lib/auth/private-area";
+import { signInPath, signOutPath } from "../../lib/auth/private-area";
+
+type PrivateAccessState = Exclude<PrivateAccessDecision["state"], "allowed">;
+
+interface Props {
+  area: PrivateArea;
+  returnTo: string;
+  state: PrivateAccessState;
+  userEmail?: string;
+}
+
+const { area, returnTo, state, userEmail } = Astro.props;
+
+const areaContent: Record<
+  PrivateArea,
+  { eyebrow: string; title: string; copy: string }
+> = {
+  socios: {
+    eyebrow: "Acceso privado",
+    title: "Área de socios fundadores",
+    copy: "Información estratégica, próximos hitos y documentación reservada a los socios fundadores de Comunidad Solar Power.",
+  },
+  equipo: {
+    eyebrow: "Acceso interno",
+    title: "Manual del equipo",
+    copy: "Estrategia, decisiones e instrucciones de implementación reservadas al equipo autorizado.",
+  },
+  manganafer: {
+    eyebrow: "Acceso interno",
+    title: "Interesados en Manganáfer",
+    copy: "Base de datos privada de vecinos, negocios y propietarios de cubiertas que han solicitado información sobre el proyecto.",
+  },
+};
+
+const content = areaContent[area];
+const requestAccessHref = `mailto:info@comunidad.solar?subject=${encodeURIComponent(
+  `Solicitud de acceso · ${content.title}`,
+)}&body=${encodeURIComponent(
+  `Hola,\n\nQuiero solicitar acceso a ${content.title}.\n\nCuenta utilizada: ${userEmail ?? ""}\n\nGracias.`,
+)}`;
+
+const page =
+  area === "socios" ? "socios" : area === "equipo" ? "guia" : "comunidades";
+const signInHref = signInPath(returnTo);
+const signOutHref = signOutPath(returnTo);
+---
+
+<div class="site-root private-access-root">
+  <HeaderIsland client:load {page} />
+  <main id="contenido-principal" class="private-access-page" tabindex="-1">
+    <div class="shell private-access-shell">
+      <section class="private-access-card">
+        <div class="private-access-mark" aria-hidden="true">
+          <span></span>
+          <span></span>
+          <span></span>
+        </div>
+        <p class="eyebrow">{content.eyebrow}</p>
+        <h1>{content.title}</h1>
+        <p class="private-access-lead">{content.copy}</p>
+        {
+          state === "anonymous" ? (
+            <>
+              <p class="private-access-explanation">
+                Identifícate con una cuenta de ChatGPT que utilice el mismo
+                correo que Comunidad Solar tiene registrado para ti. La web solo
+                recibirá tu identidad y nunca almacenará tu contraseña.
+              </p>
+              <a
+                href={signInHref}
+                class="button button-primary private-access-button"
+              >
+                Identificarme con ChatGPT <span aria-hidden="true">→</span>
+              </a>
+            </>
+          ) : (
+            <>
+              <div class="private-access-warning" role="status">
+                <strong>
+                  {state === "unconfigured"
+                    ? "El acceso todavía no está activado."
+                    : "Esta cuenta no figura entre las autorizadas."}
+                </strong>
+                <span>
+                  {userEmail
+                    ? `Has entrado como ${userEmail}.`
+                    : "No hemos podido validar esta cuenta."}
+                </span>
+              </div>
+              <div class="private-access-actions">
+                <a href={requestAccessHref} class="button button-primary">
+                  Solicitar acceso <span aria-hidden="true">→</span>
+                </a>
+                <a href={signOutHref} class="button button-secondary">
+                  Cambiar de cuenta <span aria-hidden="true">→</span>
+                </a>
+              </div>
+            </>
+          )
+        }
+        <div class="private-access-trust">
+          <span>Acceso individual</span>
+          <span>Autorización por correo</span>
+          <span>Contenido no indexado</span>
+        </div>
+      </section>
+    </div>
+  </main>
+  <Footer />
+</div>
