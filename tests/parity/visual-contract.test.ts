@@ -32,6 +32,7 @@ import {
   runVisualParity,
   runVisualCommand,
   selectFoundationVisualRoutes,
+  selectPublicVisualRoutes,
   selectVisualRoutes,
   sourceAssetFetcher,
   startCandidateRuntime,
@@ -400,7 +401,7 @@ test("declares structural selectors for the remote and editorial templates", () 
   assert.deepEqual(templateSelectors["remote-detail"], [
     "body",
     "header",
-    "main.remote-commercial-page, main.remote-project-page",
+    "main.remote-commercial-page, main.remote-project-page, main",
     "footer",
   ]);
   assert.deepEqual(templateSelectors["blog-index"], [
@@ -413,6 +414,13 @@ test("declares structural selectors for the remote and editorial templates", () 
     "body",
     "header",
     "main.blog-detail",
+    "footer",
+  ]);
+  assert.deepEqual(templateSelectors["legal-page"], [
+    "body",
+    "header",
+    "main",
+    "main .legal-document",
     "footer",
   ]);
 });
@@ -2404,10 +2412,39 @@ function foundationMatrix(): RouteMatrixEntry[] {
   ];
 }
 
+function publicVisualMatrix(): RouteMatrixEntry[] {
+  return [
+    ...foundationMatrix(),
+    {
+      path: "/comunidades-energeticas/manganafer",
+      kind: "page",
+      sourceFile: "app/manganafer/page.tsx",
+      fixtureId: null,
+      expectedStatus: 200,
+      expectedLocation: null,
+      privateArea: null,
+      visualTemplate: "manganafer",
+      status: "pending",
+    },
+    {
+      path: "/socios",
+      kind: "private-page",
+      sourceFile: "app/socios/page.tsx",
+      fixtureId: null,
+      expectedStatus: 200,
+      expectedLocation: null,
+      privateArea: "socios",
+      visualTemplate: "private",
+      status: "pending",
+    },
+  ];
+}
+
 function lifecycleDependencies(options: {
   failCapture?: boolean;
   failReport?: boolean;
   hangDispose?: "browser" | "candidate" | "reference";
+  matrix?: RouteMatrixEntry[];
   events: string[];
 }): VisualParityDependencies {
   const dispose = (name: string) => async () => {
@@ -2426,7 +2463,7 @@ function lifecycleDependencies(options: {
       wranglerConfigPath: "/candidate/dist/server/wrangler.json",
       entryPath: "/candidate/dist/server/entry.mjs",
     }),
-    readMatrix: async () => foundationMatrix(),
+    readMatrix: async () => options.matrix ?? foundationMatrix(),
     startCandidate: async () => ({
       origin: "http://127.0.0.1:40127",
       dispose: dispose("candidate"),
@@ -2456,8 +2493,8 @@ function lifecycleDependencies(options: {
       },
       close: dispose("browser"),
     }),
-    capture: async ({ side, viewport }: VisualCaptureInput) => {
-      options.events.push(`capture:${side}:${viewport.name}`);
+    capture: async ({ route, side, viewport }: VisualCaptureInput) => {
+      options.events.push(`capture:${route.path}:${side}:${viewport.name}`);
       if (options.failCapture && side === "candidate" && viewport.name === "desktop") {
         throw new Error("capture exploded");
       }
@@ -2511,6 +2548,26 @@ test("selects only the pending home smoke, produces three pending results, and n
   assert.ok(events.includes("reference:dispose"));
   assert.ok(events.includes("candidate:dispose"));
   assert.ok(events.includes("browser:dispose"));
+});
+
+test("selects and captures every non-deferred public visual page scope", async () => {
+  const matrix = publicVisualMatrix();
+  assert.deepEqual(selectPublicVisualRoutes(matrix), [matrix[0], matrix[1]]);
+  assert.deepEqual(parseVisualArguments(["--scope", "public", "--allow-pending"]), {
+    scope: "public",
+    routes: undefined,
+    allowPending: true,
+  });
+
+  const events: string[] = [];
+  const result = await runVisualParity(
+    { scope: "public", allowPending: true, root: "/candidate" },
+    lifecycleDependencies({ events, matrix }),
+  );
+  assert.equal(result.scope, "public");
+  assert.equal(result.summary.routes, 2);
+  assert.equal(result.results.length, 6);
+  assert.equal(events.some((event) => event.includes("manganafer")), false);
 });
 
 test("selects exactly the requested pending visual routes and rejects an ambiguous route CLI", () => {

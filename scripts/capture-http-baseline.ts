@@ -4,6 +4,7 @@ import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { relative, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
+import { isPhase2PublicRoute } from "../src/lib/site/public-route-closure.ts";
 import type {
   PrivateArea,
   RouteContract,
@@ -144,6 +145,28 @@ export interface CaptureHttpContractOptions {
   suppressBody?: boolean;
   bodyComparison?: BodyComparison;
   artifactNamespace?: HttpArtifactNamespace | null;
+}
+
+/**
+ * HTML emitted by the source and Astro differs in framework serialization
+ * (comments, attributes and payloads) while retaining public document
+ * semantics. This policy is intentionally route- and media-type-scoped:
+ * redirects, gone/text/XML responses, assets and deferred/private routes stay
+ * byte-exact or deferred.
+ */
+export function bodyComparisonForCapturedResponse(
+  request: Pick<CaptureRequest, "routeKey" | "path">,
+  response: Pick<Response, "headers">,
+): BodyComparison {
+  const separator = request.routeKey.indexOf(":");
+  if (separator <= 0) return "exact";
+
+  return isPhase2PublicRoute({
+    kind: request.routeKey.slice(0, separator),
+    path: request.path,
+  }) && isHtmlResponse(response)
+    ? "semantic"
+    : "exact";
 }
 
 interface SourceWorker {
@@ -807,7 +830,7 @@ function selectedHeaders(headers: Headers): Record<string, string> {
   );
 }
 
-function isHtmlResponse(response: Response): boolean {
+function isHtmlResponse(response: Pick<Response, "headers">): boolean {
   return (
     response.headers.get("content-type")?.toLowerCase().includes("text/html") ??
     false
@@ -1381,6 +1404,10 @@ async function createBaseline(
           contracts.push(
             await captureHttpContract(request.routeKey, response, {
               root,
+              bodyComparison: bodyComparisonForCapturedResponse(
+                request,
+                response,
+              ),
               suppressBody:
                 request.privateArea !== null &&
                 request.identity === "allowed" &&

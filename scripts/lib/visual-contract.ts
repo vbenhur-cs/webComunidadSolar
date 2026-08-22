@@ -202,11 +202,12 @@ export const templateSelectors: Readonly<Record<string, readonly string[]>> = {
   "remote-detail": [
     "body",
     "header",
-    "main.remote-commercial-page, main.remote-project-page",
+    "main.remote-commercial-page, main.remote-project-page, main",
     "footer",
   ],
   "blog-index": ["body", "header", "main.blog-page", "footer"],
   "blog-detail": ["body", "header", "main.blog-detail", "footer"],
+  "legal-page": ["body", "header", "main", "main .legal-document", "footer"],
 };
 
 function compareText(left: string, right: string): number {

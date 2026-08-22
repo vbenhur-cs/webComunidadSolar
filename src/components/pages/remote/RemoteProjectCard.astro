@@ -6,9 +6,6 @@ interface Props {
 }
 
 const { project } = Astro.props;
-const location = project.province
-  ? `${project.location}, ${project.province}`
-  : project.location;
 ---
 
 <article class="remote-project-card">
@@ -20,7 +17,11 @@ const location = project.province
     >
   </div>
   <div class="remote-project-card-meta">
-    <span>{project.technology}</span><span>{location}</span>
+    <span>{project.technology}</span><span
+      >{project.location}<Fragment set:html="<!-- -->" />{
+        project.province ? `, ${project.province}` : ""
+      }</span
+    >
   </div>
   <div
     class={`remote-project-availability remote-project-availability-${project.availabilityTone}`}

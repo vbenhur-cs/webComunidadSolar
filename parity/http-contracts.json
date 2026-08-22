@@ -425,7 +425,7 @@
         "content-type": "text/html; charset=utf-8"
       },
       "bodyCapture": "captured",
-      "bodyComparison": "exact",
+      "bodyComparison": "semantic",
       "bodySha256": "56491059697d7a3e2958903b90481fb0b27d1b0e2c2f08709921df4379f352b8",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_aerotermia_GET_anonymous_default-6c7ea77f2362.html",
       "htmlSemantics": {
@@ -447,7 +447,7 @@
         "content-type": "text/html; charset=utf-8"
       },
       "bodyCapture": "captured",
-      "bodyComparison": "exact",
+      "bodyComparison": "semantic",
       "bodySha256": "d222fad184661f6e3a2e1ce3092f57356bfffaa7a150e2bf8cbebc5025176d54",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_autoconsumo_en_mi_tejado_GET_anonymous_default-71370999f1c0.html",
       "htmlSemantics": {
@@ -469,7 +469,7 @@
         "content-type": "text/html; charset=utf-8"
       },
       "bodyCapture": "captured",
-      "bodyComparison": "exact",
+      "bodyComparison": "semantic",
       "bodySha256": "cc7b25c1304490893688d6ea1a201ec1890dbc2de1bee8f2f5f716760391c3a5",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_autoconsumo_remoto_fuente_alamo_GET_anonymous_default-ec8b580fc5e6.html",
       "htmlSemantics": {
@@ -491,7 +491,7 @@
         "content-type": "text/html; charset=utf-8"
       },
       "bodyCapture": "captured",
-      "bodyComparison": "exact",
+      "bodyComparison": "semantic",
       "bodySha256": "6c1eb0fb724ff0a80b745441dd690ae7c4302273894028d9569ac1a9411e4639",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_autoconsumo_remoto_liguerzana_GET_anonymous_default-49aa26a8c483.html",
       "htmlSemantics": {
@@ -513,7 +513,7 @@
         "content-type": "text/html; charset=utf-8"
       },
       "bodyCapture": "captured",
-      "bodyComparison": "exact",
+      "bodyComparison": "semantic",
       "bodySha256": "d7bfe5e7c40ffeaf2abb5b580c34cd74f11ff19dc9f9b7b5946e947a66f02fde",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_autoconsumo_remoto_torrontera_GET_anonymous_default-43314d4cfba5.html",
       "htmlSemantics": {
@@ -535,7 +535,7 @@
         "content-type": "text/html; charset=utf-8"
       },
       "bodyCapture": "captured",
-      "bodyComparison": "exact",
+      "bodyComparison": "semantic",
       "bodySha256": "6c5b38bd8d5a9fe020b7b5d65a91f20bdcbce34084d0b49bddb99f2a2b4b2752",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_autoconsumo_remoto_GET_anonymous_default-40287187a230.html",
       "htmlSemantics": {
@@ -557,7 +557,7 @@
         "content-type": "text/html; charset=utf-8"
       },
       "bodyCapture": "captured",
-      "bodyComparison": "exact",
+      "bodyComparison": "semantic",
       "bodySha256": "c7d2fbbd12286d9c1e4abb06fc01eba42482c46cf86dcd3e30078c2cf0d8603c",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_aviso_legal_GET_anonymous_default-c27c13bac8a6.html",
       "htmlSemantics": {
@@ -577,7 +577,7 @@
         "content-type": "text/html; charset=utf-8"
       },
       "bodyCapture": "captured",
-      "bodyComparison": "exact",
+      "bodyComparison": "semantic",
       "bodySha256": "e5fd038382a9114804e878ec9c46675582701fd7800900342257c514229c5d56",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_baterias_GET_anonymous_default-ebafc0944ec8.html",
       "htmlSemantics": {
@@ -599,7 +599,7 @@
         "content-type": "text/html; charset=utf-8"
       },
       "bodyCapture": "captured",
-      "bodyComparison": "exact",
+      "bodyComparison": "semantic",
       "bodySha256": "8046cd15f1264bdaf0c6f07788f7d91c03452086ced0e9ca7a906600cff2c251",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_blog_bautizo_bajo_la_lluvia_en_fuente_alamo_GET_anonymous_default-e115a67a6630.html",
       "htmlSemantics": {
@@ -621,7 +621,7 @@
         "content-type": "text/html; charset=utf-8"
       },
       "bodyCapture": "captured",
-      "bodyComparison": "exact",
+      "bodyComparison": "semantic",
       "bodySha256": "9a4feae7076f4c8b0615ca527ba358bde7d2d0eb1b765ba3bd6de5fdd949f5db",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_blog_ceuti_encuentro_con_los_vecinos_GET_anonymous_default-1fa7c1c0db2f.html",
       "htmlSemantics": {
@@ -643,7 +643,7 @@
         "content-type": "text/html; charset=utf-8"
       },
       "bodyCapture": "captured",
-      "bodyComparison": "exact",
+      "bodyComparison": "semantic",
       "bodySha256": "b4ae1ad54ecbe7d96a9ac2120b682d0ed651dde6550ec99a6b1eb3c142aca2c6",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_blog_ceuti_termina_su_instalacion_GET_anonymous_default-60183327ee0c.html",
       "htmlSemantics": {
@@ -665,7 +665,7 @@
         "content-type": "text/html; charset=utf-8"
       },
       "bodyCapture": "captured",
-      "bodyComparison": "exact",
+      "bodyComparison": "semantic",
       "bodySha256": "7dbdf63cf00fe5f646f73451850d770d3ba6c6f8c2fe8619538a509ba28f7f67",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_blog_comuneros_por_el_mundo_jose_luis_GET_anonymous_default-57ffd7238f51.html",
       "htmlSemantics": {
@@ -687,7 +687,7 @@
         "content-type": "text/html; charset=utf-8"
       },
       "bodyCapture": "captured",
-      "bodyComparison": "exact",
+      "bodyComparison": "semantic",
       "bodySha256": "4cd06c1307e7f21baa754b249df08fef8a5bedb0eaaaaa2493de4de2a3b6c7b6",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_blog_el_adn_de_comunidad_solar_GET_anonymous_default-5481bcd0ea86.html",
       "htmlSemantics": {
@@ -709,7 +709,7 @@
         "content-type": "text/html; charset=utf-8"
       },
       "bodyCapture": "captured",
-      "bodyComparison": "exact",
+      "bodyComparison": "semantic",
       "bodySha256": "b8b84c10fb4e1838521845fb7e5159c60cc0b594f1b89e0a94aec9cf0b6cb44b",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_blog_encuentro_comunero_en_liguerzana_GET_anonymous_default-7fb2105d89ca.html",
       "htmlSemantics": {
@@ -731,7 +731,7 @@
         "content-type": "text/html; charset=utf-8"
       },
       "bodyCapture": "captured",
-      "bodyComparison": "exact",
+      "bodyComparison": "semantic",
       "bodySha256": "230c716d9f7ec38b35d1d7df917944e1bbc4b5bdcbd3bece9326ff52e87c5719",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_blog_fuente_alamo_vuelve_a_abrir_sus_puertas_GET_anonymous_default-73871c53e3e6.html",
       "htmlSemantics": {
@@ -753,7 +753,7 @@
         "content-type": "text/html; charset=utf-8"
       },
       "bodyCapture": "captured",
-      "bodyComparison": "exact",
+      "bodyComparison": "semantic",
       "bodySha256": "12331c5dd8bd51162be35d56b89936aecb63cf9572c620363cb4ffb72f5d67ae",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_blog_manolo_un_ano_viviendo_con_el_sol_GET_anonymous_default-8f98098eb8fb.html",
       "htmlSemantics": {
@@ -775,7 +775,7 @@
         "content-type": "text/html; charset=utf-8"
       },
       "bodyCapture": "captured",
-      "bodyComparison": "exact",
+      "bodyComparison": "semantic",
       "bodySha256": "193f022881e5412bdbd32969e1d269ef4b0ad37b6c9d3a0f41862e1fffce74a7",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_blog_nace_la_comunidad_de_nuevo_baztan_GET_anonymous_default-4483dfaf8b5d.html",
       "htmlSemantics": {
@@ -797,7 +797,7 @@
         "content-type": "text/html; charset=utf-8"
       },
       "bodyCapture": "captured",
-      "bodyComparison": "exact",
+      "bodyComparison": "semantic",
       "bodySha256": "4fb7b1d10030033940637dc603ee30194d4b4793b48ac02e77f8eb8e9c72f328",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_blog_nuevo_baztan_abre_la_casa_de_un_comunero_GET_anonymous_default-f1ca74a46cbf.html",
       "htmlSemantics": {
@@ -819,7 +819,7 @@
         "content-type": "text/html; charset=utf-8"
       },
       "bodyCapture": "captured",
-      "bodyComparison": "exact",
+      "bodyComparison": "semantic",
       "bodySha256": "e30b9cf7dfed48c693c7bc2b361793ee22b828f922ff53fb4a0240eebad506d4",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_blog_premio_comunidad_goparity_GET_anonymous_default-10d5fdf9faf3.html",
       "htmlSemantics": {
@@ -841,7 +841,7 @@
         "content-type": "text/html; charset=utf-8"
       },
       "bodyCapture": "captured",
-      "bodyComparison": "exact",
+      "bodyComparison": "semantic",
       "bodySha256": "976c0d446af1919d5c05ecf9bc5f89c3646178c9211b483d1dc9c93f622a46b7",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_blog_puebla_del_principe_entra_en_construccion_GET_anonymous_default-80552815e67b.html",
       "htmlSemantics": {
@@ -863,7 +863,7 @@
         "content-type": "text/html; charset=utf-8"
       },
       "bodyCapture": "captured",
-      "bodyComparison": "exact",
+      "bodyComparison": "semantic",
       "bodySha256": "5a53d1eccc88d212b6d5946a60724fa76a2398b958db5068bd986f85ef7ab95a",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_blog_septimo_aniversario_capsula_del_tiempo_GET_anonymous_default-6e2b0ee8fbbf.html",
       "htmlSemantics": {
@@ -885,7 +885,7 @@
         "content-type": "text/html; charset=utf-8"
       },
       "bodyCapture": "captured",
-      "bodyComparison": "exact",
+      "bodyComparison": "semantic",
       "bodySha256": "5ad73e6ffeda4b1007559c8e371bd9f0f55ee3578d6526786965cc62acf56bdd",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_blog_solsticio_2022_puertas_abiertas_GET_anonymous_default-2c81004d4b2e.html",
       "htmlSemantics": {
@@ -907,7 +907,7 @@
         "content-type": "text/html; charset=utf-8"
       },
       "bodyCapture": "captured",
-      "bodyComparison": "exact",
+      "bodyComparison": "semantic",
       "bodySha256": "015d31b58e6f55a9b3bad606332cdbc90c9ea67728111046243b3b0b8ebdea50",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_blog_solsticio_2023_quinto_aniversario_GET_anonymous_default-09dd862b5ea3.html",
       "htmlSemantics": {
@@ -929,7 +929,7 @@
         "content-type": "text/html; charset=utf-8"
       },
       "bodyCapture": "captured",
-      "bodyComparison": "exact",
+      "bodyComparison": "semantic",
       "bodySha256": "000c76c479cfc35606e4f8bf0adc8e25dae295af39066b19ec6bd3977e69e9ff",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_blog_solsticio_2024_sexto_aniversario_GET_anonymous_default-1fac9023b4f2.html",
       "htmlSemantics": {
@@ -951,7 +951,7 @@
         "content-type": "text/html; charset=utf-8"
       },
       "bodyCapture": "captured",
-      "bodyComparison": "exact",
+      "bodyComparison": "semantic",
       "bodySha256": "f1b2c39972fda31b0421f51955bf8246820a85f7607a094624a46f99ebd56c18",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_blog_torrontera_ya_esta_en_marcha_GET_anonymous_default-dec6c2bc06c0.html",
       "htmlSemantics": {
@@ -973,7 +973,7 @@
         "content-type": "text/html; charset=utf-8"
       },
       "bodyCapture": "captured",
-      "bodyComparison": "exact",
+      "bodyComparison": "semantic",
       "bodySha256": "3be176bca3be4c0f8d5ef9adae40f5209e98a567db952c0f8a5cffdc54f935b4",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_blog_villalbilla_dos_colegios_una_comunidad_GET_anonymous_default-895fca2c9db6.html",
       "htmlSemantics": {
@@ -995,7 +995,7 @@
         "content-type": "text/html; charset=utf-8"
       },
       "bodyCapture": "captured",
-      "bodyComparison": "exact",
+      "bodyComparison": "semantic",
       "bodySha256": "efb3740ae0778273b86aa615178d55fbf5ecbd6e4e267ab7b6366eb1f36f7df2",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_blog_villalbilla_presenta_su_comunidad_GET_anonymous_default-3a3d39ab5e53.html",
       "htmlSemantics": {
@@ -1017,7 +1017,7 @@
         "content-type": "text/html; charset=utf-8"
       },
       "bodyCapture": "captured",
-      "bodyComparison": "exact",
+      "bodyComparison": "semantic",
       "bodySha256": "5a36cfcb164ba92fa05a0715cb35772d966da0d851f2ddf1eb4450a1fe580efb",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_blog_GET_anonymous_default-c873dd644542.html",
       "htmlSemantics": {
@@ -1039,7 +1039,7 @@
         "content-type": "text/html; charset=utf-8"
       },
       "bodyCapture": "captured",
-      "bodyComparison": "exact",
+      "bodyComparison": "semantic",
       "bodySha256": "e6ea8b61f32e8f29fd9fb7a78fc4cba4899fbf6d3d1086dd9b250c6f83463b15",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_comercializadora_y_tarifas_GET_anonymous_default-9d51148301a5.html",
       "htmlSemantics": {
@@ -1061,7 +1061,7 @@
         "content-type": "text/html; charset=utf-8"
       },
       "bodyCapture": "captured",
-      "bodyComparison": "exact",
+      "bodyComparison": "semantic",
       "bodySha256": "370a2687ab6c8dddf647494c317d42293cd744d6280017e2438d5993b212a016",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_comunidades_energeticas_operativas_GET_anonymous_default-15ca9b6b38d6.html",
       "htmlSemantics": {
@@ -1083,7 +1083,7 @@
         "content-type": "text/html; charset=utf-8"
       },
       "bodyCapture": "captured",
-      "bodyComparison": "exact",
+      "bodyComparison": "semantic",
       "bodySha256": "3b221bdc76755a11845d9e1b7f18e8007d1db1761fcce9ab930de0b30c37bba0",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_comunidades_energeticas_almendralejo_GET_anonymous_default-5d9402b8554d.html",
       "htmlSemantics": {
@@ -1105,7 +1105,7 @@
         "content-type": "text/html; charset=utf-8"
       },
       "bodyCapture": "captured",
-      "bodyComparison": "exact",
+      "bodyComparison": "semantic",
       "bodySha256": "fe23600a4284a61c947a8c48e99e009094d9c734dee93445a9ee1db1fce061bf",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_comunidades_energeticas_caceres_GET_anonymous_default-ee884197c189.html",
       "htmlSemantics": {
@@ -1127,7 +1127,7 @@
         "content-type": "text/html; charset=utf-8"
       },
       "bodyCapture": "captured",
-      "bodyComparison": "exact",
+      "bodyComparison": "semantic",
       "bodySha256": "669e78992a1960c166a839df2d51b7bbcd6eec045537021d21631e0507ea739f",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_comunidades_energeticas_ceuti_GET_anonymous_default-d7ec056bfb7d.html",
       "htmlSemantics": {
@@ -1149,7 +1149,7 @@
         "content-type": "text/html; charset=utf-8"
       },
       "bodyCapture": "captured",
-      "bodyComparison": "exact",
+      "bodyComparison": "semantic",
       "bodySha256": "44c3ce439a42dfea550b5c05d56cb4206021df98769b7169fe87317ed54068b6",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_comunidades_energeticas_coria_GET_anonymous_default-b879e322e440.html",
       "htmlSemantics": {
@@ -1171,7 +1171,7 @@
         "content-type": "text/html; charset=utf-8"
       },
       "bodyCapture": "captured",
-      "bodyComparison": "exact",
+      "bodyComparison": "semantic",
       "bodySha256": "4e903c087646a811f617e1bf712ad6a8b54cf929036aaa1e60d71aebfde6fc6e",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_comunidades_energeticas_don_benito_GET_anonymous_default-36df6db7f38d.html",
       "htmlSemantics": {
@@ -1193,7 +1193,7 @@
         "content-type": "text/html; charset=utf-8"
       },
       "bodyCapture": "captured",
-      "bodyComparison": "exact",
+      "bodyComparison": "semantic",
       "bodySha256": "758cf353fcf08accc842a9c94369b0549b2af7c4324d61a5e153d60674096e2d",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_comunidades_energeticas_escurial_GET_anonymous_default-e060ff0bc952.html",
       "htmlSemantics": {
@@ -1215,7 +1215,7 @@
         "content-type": "text/html; charset=utf-8"
       },
       "bodyCapture": "captured",
-      "bodyComparison": "exact",
+      "bodyComparison": "semantic",
       "bodySha256": "64bfdf212bab520009c3c0849c311337841682d16fd69c8a65bfbc2050e77f0a",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_comunidades_energeticas_extremadura_GET_anonymous_default-f2562d3adb94.html",
       "htmlSemantics": {
@@ -1237,7 +1237,7 @@
         "content-type": "text/html; charset=utf-8"
       },
       "bodyCapture": "captured",
-      "bodyComparison": "exact",
+      "bodyComparison": "semantic",
       "bodySha256": "f5194b3ba03678b966e4eea65530da8acabb8aef9b73431a43817a8dc5377786",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_comunidades_energeticas_ibeas_de_juarros_GET_anonymous_default-afb590b53d8e.html",
       "htmlSemantics": {
@@ -1259,7 +1259,7 @@
         "content-type": "text/html; charset=utf-8"
       },
       "bodyCapture": "captured",
-      "bodyComparison": "exact",
+      "bodyComparison": "semantic",
       "bodySha256": "8c3354f78e9e691dfc25b5491565aed3e9036f6285aebc4f7a903736ec3125f3",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_comunidades_energeticas_jerez_de_los_caballeros_GET_anonymous_default-526f95948823.html",
       "htmlSemantics": {
@@ -1303,7 +1303,7 @@
         "content-type": "text/html; charset=utf-8"
       },
       "bodyCapture": "captured",
-      "bodyComparison": "exact",
+      "bodyComparison": "semantic",
       "bodySha256": "01e86e5e3f089f22a2afea261056711c07a1b43e82f484bbf1f69f00af8ce0d2",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_comunidades_energeticas_merida_GET_anonymous_default-668bdee08599.html",
       "htmlSemantics": {
@@ -1325,7 +1325,7 @@
         "content-type": "text/html; charset=utf-8"
       },
       "bodyCapture": "captured",
-      "bodyComparison": "exact",
+      "bodyComparison": "semantic",
       "bodySha256": "94bbd11c3a1d48938fb78d7eddbcf9c5b2960f00e9e5cd181aa06c814d9a0188",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_comunidades_energeticas_navalmoral_de_la_mata_GET_anonymous_default-0315b08a725e.html",
       "htmlSemantics": {
@@ -1347,7 +1347,7 @@
         "content-type": "text/html; charset=utf-8"
       },
       "bodyCapture": "captured",
-      "bodyComparison": "exact",
+      "bodyComparison": "semantic",
       "bodySha256": "b45f69a0abec5c7af31ea8d65720d61b6e4decdc1e87cb8e7800a05e156d4977",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_comunidades_energeticas_nuevo_baztan_GET_anonymous_default-f663d5b79c1e.html",
       "htmlSemantics": {
@@ -1369,7 +1369,7 @@
         "content-type": "text/html; charset=utf-8"
       },
       "bodyCapture": "captured",
-      "bodyComparison": "exact",
+      "bodyComparison": "semantic",
       "bodySha256": "aae089d9b196dcff23b50962dd0568d504492696fa229f6cdfef0675ecf098e4",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_comunidades_energeticas_ontinyent_GET_anonymous_default-2c03ad10ce07.html",
       "htmlSemantics": {
@@ -1391,7 +1391,7 @@
         "content-type": "text/html; charset=utf-8"
       },
       "bodyCapture": "captured",
-      "bodyComparison": "exact",
+      "bodyComparison": "semantic",
       "bodySha256": "c113b7d200a7d24f43e096417990ba752d4efc8d9b7991cde5ec062bba176344",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_comunidades_energeticas_plasencia_GET_anonymous_default-2850e68bb1a7.html",
       "htmlSemantics": {
@@ -1413,7 +1413,7 @@
         "content-type": "text/html; charset=utf-8"
       },
       "bodyCapture": "captured",
-      "bodyComparison": "exact",
+      "bodyComparison": "semantic",
       "bodySha256": "b948bc814fb341e177906ab9f43e57019c545d412a026f8f8a8fe0c09871b65e",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_comunidades_energeticas_san_adrian_de_juarros_GET_anonymous_default-67da871d6fee.html",
       "htmlSemantics": {
@@ -1435,7 +1435,7 @@
         "content-type": "text/html; charset=utf-8"
       },
       "bodyCapture": "captured",
-      "bodyComparison": "exact",
+      "bodyComparison": "semantic",
       "bodySha256": "7f2d858b5e95dd85e88231d0a2adb8102c121ff7749ad0d11053981026af2c29",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_comunidades_energeticas_santa_cruz_de_paniagua_GET_anonymous_default-e955712915bf.html",
       "htmlSemantics": {
@@ -1457,7 +1457,7 @@
         "content-type": "text/html; charset=utf-8"
       },
       "bodyCapture": "captured",
-      "bodyComparison": "exact",
+      "bodyComparison": "semantic",
       "bodySha256": "46c638f76e4721d9b3649b1924602b00a0cb9025416a608b98a94afa4ae67ca1",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_comunidades_energeticas_sepulveda_GET_anonymous_default-c45f832440b0.html",
       "htmlSemantics": {
@@ -1479,7 +1479,7 @@
         "content-type": "text/html; charset=utf-8"
       },
       "bodyCapture": "captured",
-      "bodyComparison": "exact",
+      "bodyComparison": "semantic",
       "bodySha256": "2b4d252f8d65ecc8d83bf6f78ee11ea9d9415bc02252ebeb9bcf9272d81c5ba0",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_comunidades_energeticas_villafranca_de_los_barros_GET_anonymous_default-460333e04f67.html",
       "htmlSemantics": {
@@ -1501,7 +1501,7 @@
         "content-type": "text/html; charset=utf-8"
       },
       "bodyCapture": "captured",
-      "bodyComparison": "exact",
+      "bodyComparison": "semantic",
       "bodySha256": "a2b5d6b4b5772b59467cfa5902b49316a3b61724f971079b82bf316c68041b5b",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_comunidades_energeticas_villalbilla_GET_anonymous_default-90f4b873e1d5.html",
       "htmlSemantics": {
@@ -1523,7 +1523,7 @@
         "content-type": "text/html; charset=utf-8"
       },
       "bodyCapture": "captured",
-      "bodyComparison": "exact",
+      "bodyComparison": "semantic",
       "bodySha256": "9038e2bd35071efc6db5ce5222058bdec1b639240038d7442b7fdb756f8609b0",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_comunidades_energeticas_villaverde_getafe_GET_anonymous_default-e01a2025aacf.html",
       "htmlSemantics": {
@@ -1545,7 +1545,7 @@
         "content-type": "text/html; charset=utf-8"
       },
       "bodyCapture": "captured",
-      "bodyComparison": "exact",
+      "bodyComparison": "semantic",
       "bodySha256": "fe913dc9a019f32ac32dc0757a9f9b5f2ec35c56a32de1af8eca4283a0116aa4",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_comunidades_energeticas_zafra_GET_anonymous_default-7e5edca4a055.html",
       "htmlSemantics": {
@@ -1567,7 +1567,7 @@
         "content-type": "text/html; charset=utf-8"
       },
       "bodyCapture": "captured",
-      "bodyComparison": "exact",
+      "bodyComparison": "semantic",
       "bodySha256": "ac20b9df374c38567f893f4c1c0d6bcb64f375d7ec7063ff451053564d5bf266",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_comunidades_energeticas_GET_anonymous_default-36e14f59ba90.html",
       "htmlSemantics": {
@@ -1589,7 +1589,7 @@
         "content-type": "text/html; charset=utf-8"
       },
       "bodyCapture": "captured",
-      "bodyComparison": "exact",
+      "bodyComparison": "semantic",
       "bodySha256": "4aeb84d3a64f8b18a462745cf68cdda49ef5d0c131a6f4bb2865394bf04c4628",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_contacto_GET_anonymous_default-cc8b6d97847d.html",
       "htmlSemantics": {
@@ -1611,7 +1611,7 @@
         "content-type": "text/html; charset=utf-8"
       },
       "bodyCapture": "captured",
-      "bodyComparison": "exact",
+      "bodyComparison": "semantic",
       "bodySha256": "bfeb23f5f3c5186d91b788da1a874a95eaa204c10133089184844113314a3f85",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_cookies_GET_anonymous_default-5103cd18ad8c.html",
       "htmlSemantics": {
@@ -1631,7 +1631,7 @@
         "content-type": "text/html; charset=utf-8"
       },
       "bodyCapture": "captured",
-      "bodyComparison": "exact",
+      "bodyComparison": "semantic",
       "bodySha256": "4607328ceee0bdc8153cf1f9bf939a60e4f8781116a71da4b652eda1f40ce218",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_eventos_GET_anonymous_default-e99305dd1506.html",
       "htmlSemantics": {
@@ -1653,7 +1653,7 @@
         "content-type": "text/html; charset=utf-8"
       },
       "bodyCapture": "captured",
-      "bodyComparison": "exact",
+      "bodyComparison": "semantic",
       "bodySha256": "b1a79aacf5e16c8ca720acd15e83ebb1ba4cd825371e740c184c87fea82adaad",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_mantenimiento_GET_anonymous_default-4ea5ea27ed52.html",
       "htmlSemantics": {
@@ -1675,7 +1675,7 @@
         "content-type": "text/html; charset=utf-8"
       },
       "bodyCapture": "captured",
-      "bodyComparison": "exact",
+      "bodyComparison": "semantic",
       "bodySha256": "fccb7908ca83d90e8305730678c3a51dbf6af49de57d2dfa7541f8f694a2fb9e",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_nosotros_GET_anonymous_default-0182cd310369.html",
       "htmlSemantics": {
@@ -1697,7 +1697,7 @@
         "content-type": "text/html; charset=utf-8"
       },
       "bodyCapture": "captured",
-      "bodyComparison": "exact",
+      "bodyComparison": "semantic",
       "bodySha256": "276ffc5663259ef42c76a2a890d450b20a623172c74b6f9a7ea1a92ba6f85324",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_politica_privacidad_GET_anonymous_default-9ab1988f7fdd.html",
       "htmlSemantics": {
@@ -1717,7 +1717,7 @@
         "content-type": "text/html; charset=utf-8"
       },
       "bodyCapture": "captured",
-      "bodyComparison": "exact",
+      "bodyComparison": "semantic",
       "bodySha256": "9ccc3801f066faea87a27b48506b0f4e7217b857590ec8d5631988290775328d",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_rentabiliza_tu_activo_GET_anonymous_default-fdbf039f928d.html",
       "htmlSemantics": {
@@ -1769,7 +1769,7 @@
         "content-type": "text/html; charset=utf-8"
       },
       "bodyCapture": "captured",
-      "bodyComparison": "exact",
+      "bodyComparison": "semantic",
       "bodySha256": "71a9633281a09598704dcd392a784669fd4599eb19be5c54c149124c91ec0586",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_soy_comunero_GET_anonymous_default-0af006b3298c.html",
       "htmlSemantics": {
@@ -1791,7 +1791,7 @@
         "content-type": "text/html; charset=utf-8"
       },
       "bodyCapture": "captured",
-      "bodyComparison": "exact",
+      "bodyComparison": "semantic",
       "bodySha256": "c048a0faeb0da24daed7c519f8cce5901ea47c43741846221e636564353be4b3",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_terminos_y_condiciones_GET_anonymous_default-9587098f9665.html",
       "htmlSemantics": {
@@ -1811,7 +1811,7 @@
         "content-type": "text/html; charset=utf-8"
       },
       "bodyCapture": "captured",
-      "bodyComparison": "exact",
+      "bodyComparison": "semantic",
       "bodySha256": "7a6a9e834941d4d0c0fd3cc58e58f0cfe379c027cd8125c24b6d1cc4bf635e3d",
       "normalizedHtmlPath": ".artifacts/http-baseline/page_GET_anonymous_default-191b4661bae3.html",
       "htmlSemantics": {

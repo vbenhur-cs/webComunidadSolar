@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import {
   mkdtemp,
   mkdir,
@@ -15,14 +16,22 @@ import {
   type HttpBaseline,
   type HttpContract,
 } from "../../scripts/capture-http-baseline.ts";
-import type { RouteMatrixEntry } from "../../scripts/lib/route-inventory.ts";
+import type {
+  RouteMatrixEntry,
+  SourceManifest,
+} from "../../scripts/lib/route-inventory.ts";
 import {
   applyFoundationMatrixResults,
+  applyPublicMatrixResults,
   compareHttpContract,
+  parseHttpParityArguments,
   resolveDeploymentTopology,
   runHttpParity,
   runFoundationParity,
+  runPublicParity,
+  runPublicAssetParity,
   selectFoundationContracts,
+  selectPublicContracts,
   writeMatrixToDisk,
 } from "../../scripts/parity-http.ts";
 
@@ -329,6 +338,198 @@ test("marks only foundation routes verified and leaves the home pending", () => 
   assert.equal(updated.find((entry) => entry.kind === "api")?.status, "pending");
 });
 
+test("selects and promotes only declared Phase 2 public HTTP contracts", async () => {
+  const page = capturedContract({
+    routeKey: "page:/aviso-legal|GET|anonymous|default",
+    status: 200,
+    headers: { "content-type": "text/plain; charset=utf-8" },
+    bodySha256: createHash("sha256").update("legal public").digest("hex"),
+    bodyText: null,
+  });
+  const redirect = capturedContract({
+    routeKey: "redirect:/mision|GET|anonymous|default",
+    status: 308,
+  });
+  const gone = capturedContract();
+  const privatePage: HttpContract = {
+    routeKey: "private-page:/socios|GET|allowed|default",
+    status: 200,
+    headers: {},
+    bodyCapture: "suppressed-private-success",
+  };
+  const api = capturedContract({
+    routeKey: "api:/api/manganafer-interest|GET|anonymous|default",
+    status: 200,
+  });
+  const deferred = capturedContract({
+    routeKey:
+      "page:/comunidades-energeticas/manganafer|GET|anonymous|default",
+    status: 200,
+  });
+  const baseline = baselineFixture([page, redirect, gone, privatePage, api, deferred]);
+  const matrix = [
+    matrixEntry("page", "/aviso-legal"),
+    matrixEntry("redirect", "/mision"),
+    matrixEntry("gone", "/subvenciones"),
+    matrixEntry("private-page", "/socios"),
+    matrixEntry("api", "/api/manganafer-interest"),
+    matrixEntry("page", "/comunidades-energeticas/manganafer"),
+    matrixEntry("asset", "/media/frozen.png"),
+  ];
+
+  assert.deepEqual(
+    selectPublicContracts(baseline, matrix).map((contract) => contract.routeKey),
+    [page.routeKey, redirect.routeKey, gone.routeKey],
+  );
+  assert.deepEqual(
+    applyPublicMatrixResults(
+      matrix,
+      new Set(["page:/aviso-legal", "redirect:/mision", "gone:/subvenciones"]),
+    ).map((entry) => [entry.kind, entry.path, entry.status]),
+    [
+      ["page", "/aviso-legal", "verified"],
+      ["redirect", "/mision", "verified"],
+      ["gone", "/subvenciones", "verified"],
+      ["private-page", "/socios", "pending"],
+      ["api", "/api/manganafer-interest", "pending"],
+      ["page", "/comunidades-energeticas/manganafer", "pending"],
+      ["asset", "/media/frozen.png", "pending"],
+    ],
+  );
+  assert.deepEqual(parseHttpParityArguments(["--scope", "public"]), {
+    scope: "public",
+  });
+
+  const root = await mkdtemp(join(tmpdir(), "parity-http-public-contract-"));
+  try {
+    await mkdir(join(root, "parity"), { recursive: true });
+    await writeFile(join(root, "parity", "source-manifest.json"), '{"assets":[]}');
+    let written: RouteMatrixEntry[] | undefined;
+    const result = await runHttpParity(
+      { scope: "public", root },
+      {
+        build: async () => {},
+        resolveTopology: async () => ({
+          deployConfigPath: "/fixture/.wrangler/deploy/config.json",
+          wranglerConfigPath: "/fixture/dist/server/wrangler.json",
+          entryPath: "/fixture/dist/server/entry.mjs",
+        }),
+        readBaseline: async () => baselineFixture([page]),
+        readMatrix: async () => [matrix[0]],
+        startRuntime: async () => ({
+          fetch: async () =>
+            new Response("legal public", {
+              status: 200,
+              headers: { "content-type": "text/plain; charset=utf-8" },
+            }),
+          dispose: async () => {},
+        }),
+        writeMatrix: async (entries) => {
+          written = entries;
+        },
+      },
+    );
+    assert.equal(result.scope, "public");
+    assert.equal(result.checkedContracts, 1);
+    assert.equal(written?.[0].status, "verified");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("verifies Phase 2 public assets against manifest hash, bytes, and media type", async () => {
+  const body = Buffer.from("frozen asset bytes", "utf8");
+  const matrix = [
+    {
+      ...matrixEntry("asset", "/media/frozen.png"),
+      sourceFile: "public/media/frozen.png",
+    },
+    matrixEntry("private-page", "/socios"),
+    matrixEntry("page", "/comunidades-energeticas/manganafer"),
+  ];
+  const manifest = {
+    assets: [
+      {
+        path: "public/media/frozen.png",
+        sha256: createHash("sha256").update(body).digest("hex"),
+        bytes: body.byteLength,
+        mediaType: "image/png",
+      },
+    ],
+  } as Pick<SourceManifest, "assets">;
+
+  const matched = await runPublicAssetParity(matrix, manifest, {
+    fetch: async () =>
+      new Response(body, { headers: { "content-type": "image/png" } }),
+    dispose: async () => {},
+  });
+  assert.equal(matched.checkedAssets, 1);
+  assert.deepEqual(matched.diffs, []);
+  assert.deepEqual([...matched.verifiedRouteKeys], ["asset:/media/frozen.png"]);
+
+  const mismatched = await runPublicAssetParity(matrix, manifest, {
+    fetch: async () =>
+      new Response("wrong", {
+        headers: { "content-type": "application/octet-stream" },
+      }),
+    dispose: async () => {},
+  });
+  assert.deepEqual(
+    mismatched.diffs.map((diff) => diff.field),
+    ["bytes", "sha256", "mediaType"],
+  );
+  assert.deepEqual([...mismatched.verifiedRouteKeys], []);
+
+  await assert.rejects(
+    runPublicAssetParity(
+      matrix,
+      {
+        assets: [
+          ...manifest.assets,
+          {
+            path: "public/media/unmapped.webp",
+            sha256: "f".repeat(64),
+            bytes: 1,
+            mediaType: "image/webp",
+          },
+        ],
+      },
+      {
+        fetch: async () => new Response("unused"),
+        dispose: async () => {},
+      },
+    ),
+    /sin fila de matriz/i,
+  );
+  await assert.rejects(
+    runPublicAssetParity(
+      [{ ...matrix[0], expectedStatus: 404 }, ...matrix.slice(1)],
+      manifest,
+      {
+        fetch: async () => new Response("unused"),
+        dispose: async () => {},
+      },
+    ),
+    /status 200/i,
+  );
+});
+
+test("fails closed when a non-private public HTTP contract has no matrix row", () => {
+  assert.throws(
+    () =>
+      selectPublicContracts(
+        baselineFixture([
+          capturedContract({
+            routeKey: "page:/not-in-matrix|GET|anonymous|default",
+            status: 200,
+          }),
+        ]),
+        [],
+      ),
+    /no declarad[oa].*matriz/i,
+  );
+});
+
 test("resolves the generated deploy config and its configured entry module", async () => {
   const root = await mkdtemp(join(tmpdir(), "parity-http-topology-"));
   try {
@@ -370,6 +571,30 @@ test("disposes a supplied runtime even when a foundation request fails", async (
     /fixture worker failed/,
   );
   assert.equal(disposed, 1);
+});
+
+test("disposes a public runtime when its asset manifest cannot be read", async () => {
+  const root = await mkdtemp(join(tmpdir(), "parity-http-public-manifest-"));
+  let disposed = 0;
+  try {
+    await assert.rejects(
+      runPublicParity(
+        baselineFixture([]),
+        [],
+        {
+          fetch: async () => new Response("unused"),
+          dispose: async () => {
+            disposed += 1;
+          },
+        },
+        { root },
+      ),
+      /source-manifest\.json/,
+    );
+    assert.equal(disposed, 1);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test("preserves semantic expected mode through injected candidate capture", async () => {
@@ -623,8 +848,8 @@ test(
 
     assert.deepEqual(result.diffs, []);
     assert.equal(result.checkedContracts, 225);
-    assert.equal(result.verifiedRoutes, 180);
-    assert.equal(result.pendingRoutes, 91);
+    assert.equal(result.verifiedRoutes, 263);
+    assert.equal(result.pendingRoutes, 8);
     assert.equal(result.runtimeDisposed, true);
     assert.match(
       result.topology.deployConfigPath,

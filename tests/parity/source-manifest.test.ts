@@ -208,7 +208,13 @@ test("builds the same source manifest from an injected memory source", async () 
       path: "public/logo.svg",
       sha256: "54e453435420c5897976760c98a79083ca79a9af46c8abc9f4dd5097d5e59d80",
       bytes: 15,
+      mediaType: "image/svg+xml",
     },
+  );
+  assert.equal(
+    manifest.assets.find((asset) => asset.path === "public/media/card.webp")
+      ?.mediaType,
+    "image/webp",
   );
   assert.deepEqual(manifest.wordpressAudit, { total: 122, unclassified: [] });
 });

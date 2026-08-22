@@ -11,6 +11,10 @@ import {
   closePreviewPool,
   requestPreview,
 } from "../helpers/preview-pool.ts";
+import {
+  isPhase3DeferredPublicRoute,
+  requireExactPhase3DeferredPublicRoutes,
+} from "../../src/lib/site/public-route-closure.ts";
 
 const contractScopes = JSON.parse(
   readFileSync(new URL("./contract-scope.json", import.meta.url), "utf8"),
@@ -1035,8 +1039,13 @@ contractTest("every community page uses local image files that exist", async () 
   const checkedImages = new Set();
 
   assert.equal(sitemap.status, 200);
+  requireExactPhase3DeferredPublicRoutes(
+    communityPaths,
+    "community image contract sitemap",
+  );
 
   for (const path of communityPaths) {
+    if (isPhase3DeferredPublicRoute(path)) continue;
     const response = await renderPath(path);
     const html = await response.text();
     const imagePaths = [
@@ -1859,6 +1868,11 @@ contractTest("keeps every published route and internal link valid", async () => 
   ].map((match) => match[1]);
   const rendered = new Map();
 
+  requireExactPhase3DeferredPublicRoutes(
+    publishedUrls.map((url) => new URL(url).pathname),
+    "published link contract sitemap",
+  );
+
   async function getRendered(path) {
     if (!rendered.has(path)) {
       const response = await renderPath(path);
@@ -1872,6 +1886,7 @@ contractTest("keeps every published route and internal link valid", async () => 
 
   for (const pageUrl of publishedUrls) {
     const page = new URL(pageUrl);
+    if (isPhase3DeferredPublicRoute(page.pathname)) continue;
     const current = await getRendered(`${page.pathname}${page.search}`);
 
     assert.equal(
@@ -1889,6 +1904,7 @@ contractTest("keeps every published route and internal link valid", async () => 
       const target = new URL(href, page);
 
       const targetPath = `${target.pathname}${target.search}`;
+      if (isPhase3DeferredPublicRoute(target.pathname)) continue;
       const destination = await getRendered(targetPath);
 
       assert.equal(

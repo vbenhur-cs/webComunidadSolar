@@ -4,7 +4,7 @@ import FactStrip from "../home-energy/FactStrip.astro";
 import PageHero from "../../site/PageHero.astro";
 import Pill from "../../site/Pill.astro";
 import SectionHeading from "../../site/SectionHeading.astro";
-import RemoteProjectClosing from "./RemoteProjectClosing.astro";
+import GenericRemoteProjectClosing from "./GenericRemoteProjectClosing.astro";
 
 interface Props {
   project: RemoteProject;
@@ -15,9 +15,7 @@ const remoteCalculator = "https://presupuesto-ar.comunidadsolar.es";
 const memberApp = "https://comunidad-solar.clever.gy/login";
 const communityPortal = "https://ayuda.comunidadsolar.es/portal/en-gb/signin";
 const isAvailable = project.availabilityTone === "available";
-const location = project.province
-  ? `${project.location}, ${project.province}`
-  : project.location;
+const projectLocationSuffix = project.province ? `, ${project.province}` : "";
 ---
 
 <main>
@@ -61,11 +59,13 @@ const location = project.province
         <div class="project-status-badges">
           <span
             class={`project-status-pill project-status-${project.statusTone}`}
-            >Activo · {project.status}</span
+            >Activo · <Fragment set:html="<!-- -->" />{project.status}</span
           >
           <span
             class={`project-availability-pill project-availability-${project.availabilityTone}`}
-            >Disponibilidad comercial · {project.availability}</span
+            >Disponibilidad comercial · <Fragment set:html="<!-- -->" />{
+              project.availability
+            }</span
           >
         </div>
         <p class="eyebrow">Situación del proyecto</p>
@@ -77,7 +77,13 @@ const location = project.province
               >{project.reviewedAt}</strong
             >
           </div>
-          <div><span>Ubicación</span><strong>{location}</strong></div>
+          <div>
+            <span>Ubicación</span><strong
+              >{project.location}<Fragment set:html="<!-- -->" />{
+                projectLocationSuffix
+              }</strong
+            >
+          </div>
           <div>
             <span>Tecnología</span><strong>{project.technology}</strong>
           </div>
@@ -155,5 +161,5 @@ const location = project.province
       </div>
     </div>
   </section>
-  <RemoteProjectClosing {project} />
+  <GenericRemoteProjectClosing {project} />
 </main>

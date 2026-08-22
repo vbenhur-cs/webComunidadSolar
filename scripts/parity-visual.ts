@@ -56,6 +56,9 @@ import {
   type TemporarySourceBuild,
   type TemporarySourceOptions,
 } from "./lib/temporary-source-build.ts";
+import { isPhase2PublicRoute } from "../src/lib/site/public-route-closure.ts";
+
+export type VisualParityScope = "foundation" | "public";
 
 export interface VisualRuntime {
   origin: string;
@@ -77,14 +80,14 @@ export interface VisualParitySummary {
 }
 
 export interface VisualParityResult {
-  scope: "foundation";
+  scope: VisualParityScope;
   results: VisualComparison[];
   summary: VisualParitySummary;
   artifacts: VisualArtifactPaths;
 }
 
 export interface RunVisualParityOptions {
-  scope: "foundation";
+  scope: VisualParityScope;
   allowPending: boolean;
   /** An exact, fail-closed subset of matrix paths to capture. */
   routes?: string[];
@@ -105,7 +108,7 @@ export interface VisualCaptureInput {
 
 export interface VisualReportInput {
   root: string;
-  scope: "foundation";
+  scope: VisualParityScope;
   results: VisualComparison[];
   evidence: VisualEvidence[];
 }
@@ -480,7 +483,7 @@ function routeArtifactSegment(path: string): string {
 
 function artifactFiles(
   root: string,
-  scope: "foundation",
+  scope: VisualParityScope,
   route: RouteMatrixEntry,
   viewport: ViewportContract,
 ): {
@@ -544,6 +547,25 @@ export function selectFoundationVisualRoutes(
     );
   }
   return [...home].sort((left, right) =>
+    compareText(routeKey(left), routeKey(right)),
+  );
+}
+
+/** Selects all currently-owned public page templates, excluding Phase 3. */
+export function selectPublicVisualRoutes(
+  matrix: RouteMatrixEntry[],
+): RouteMatrixEntry[] {
+  const routes = matrix.filter(
+    (entry) =>
+      entry.kind === "page" &&
+      typeof entry.visualTemplate === "string" &&
+      entry.visualTemplate.length > 0 &&
+      isPhase2PublicRoute(entry),
+  );
+  if (routes.length === 0) {
+    throw new Error("Public visual no contiene páginas capturables");
+  }
+  return [...routes].sort((left, right) =>
     compareText(routeKey(left), routeKey(right)),
   );
 }
@@ -1415,7 +1437,7 @@ function serializableResult(result: VisualComparison): VisualResult & {
 }
 
 function reportHtml(
-  scope: "foundation",
+  scope: VisualParityScope,
   results: VisualComparison[],
   summary: VisualParitySummary,
 ): string {
@@ -1693,7 +1715,7 @@ export async function runVisualParity(
   options: RunVisualParityOptions,
   dependencies: VisualParityDependencies = {},
 ): Promise<VisualParityResult> {
-  if (options.scope !== "foundation") {
+  if (options.scope !== "foundation" && options.scope !== "public") {
     throw new Error(`Scope visual no soportado: ${options.scope}`);
   }
   const root = resolve(options.root ?? process.cwd());
@@ -1750,7 +1772,9 @@ export async function runVisualParity(
     );
     const routes =
       options.routes === undefined
-        ? selectFoundationVisualRoutes(matrix)
+        ? options.scope === "foundation"
+          ? selectFoundationVisualRoutes(matrix)
+          : selectPublicVisualRoutes(matrix)
         : selectVisualRoutes(matrix, options.routes);
     await build(root);
     const topology = await withinVisualTimeout(
@@ -1905,7 +1929,7 @@ export function formatVisualParitySummary(result: VisualParityResult): string {
 }
 
 export function parseVisualArguments(args: string[]): RunVisualParityOptions {
-  let scope: "foundation" | undefined;
+  let scope: VisualParityScope | undefined;
   let routes: string[] | undefined;
   let allowPending = false;
   for (let index = 0; index < args.length; index += 1) {
@@ -1916,10 +1940,16 @@ export function parseVisualArguments(args: string[]): RunVisualParityOptions {
       continue;
     }
     if (argument === "--scope") {
-      if (scope !== undefined || args[index + 1] !== "foundation") {
-        throw new Error("El scope visual debe ser foundation una sola vez");
+      const value = args[index + 1];
+      if (
+        scope !== undefined ||
+        (value !== "foundation" && value !== "public")
+      ) {
+        throw new Error(
+          "El scope visual debe ser foundation o public una sola vez",
+        );
       }
-      scope = "foundation";
+      scope = value;
       index += 1;
       continue;
     }
@@ -1942,10 +1972,10 @@ export function parseVisualArguments(args: string[]): RunVisualParityOptions {
   }
   if (scope === undefined && routes === undefined) {
     throw new Error(
-      "Uso: parity-visual.ts --scope foundation [--allow-pending] | --routes /ruta,/ruta [--allow-pending]",
+      "Uso: parity-visual.ts --scope foundation|public [--allow-pending] | --routes /ruta,/ruta [--allow-pending]",
     );
   }
-  return { scope: "foundation", routes, allowPending };
+  return { scope: scope ?? "foundation", routes, allowPending };
 }
 
 async function main(args: string[]): Promise<void> {

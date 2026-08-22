@@ -168,7 +168,10 @@ import SectionHeading from "../../site/SectionHeading.astro";
             ],
           ].map(([title, copy], index) => (
             <article>
-              <span>0{index + 1}</span>
+              <span>
+                0<Fragment set:html="<!-- -->" />
+                {index + 1}
+              </span>
               <h3>{title}</h3>
               <p>{copy}</p>
             </article>
@@ -225,7 +228,10 @@ import SectionHeading from "../../site/SectionHeading.astro";
             ],
           ].map(([title, copy], index) => (
             <article>
-              <span>0{index + 1}</span>
+              <span>
+                0<Fragment set:html="<!-- -->" />
+                {index + 1}
+              </span>
               <h3>{title}</h3>
               <p>{copy}</p>
             </article>

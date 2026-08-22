@@ -15,14 +15,17 @@ import MemberPage from "../components/pages/member/MemberPage.astro";
 import ContactPage from "../components/pages/contact/ContactPage.astro";
 import AssetsPage from "../components/pages/assets/AssetsPage.astro";
 import OperationalAssetsPage from "../components/pages/assets/OperationalAssetsPage.astro";
+import LegalPage from "../components/pages/legal/LegalPage.astro";
 import SiteLayout from "../layouts/SiteLayout.astro";
 import { getLegacyRedirect } from "../lib/routing/legacy";
 import {
   isCorePageKey,
+  isLegalPageKey,
   pageRegistry,
   staticSlugPaths,
   type CorePageKey,
   type HeaderPageKey,
+  type LegalPageKey,
 } from "../lib/site/page-registry";
 
 export function getStaticPaths() {
@@ -44,7 +47,10 @@ const match = slug
     ).find(([, entry]) => entry.path === `/${slug}`)
   : undefined;
 if (match === undefined || !isCorePageKey(match[0])) {
-  return new Response(null, { status: 404 });
+  return new Response("Not Found", {
+    status: 404,
+    headers: { "content-type": "text/plain;charset=UTF-8" },
+  });
 }
 
 const [page, entry] = match;
@@ -64,7 +70,13 @@ const components = {
   activos: AssetsPage,
   activoConectado: OperationalAssetsPage,
 } as const;
-const Component = components[page as CorePageKey];
+const legalDocumentKey = isLegalPageKey(page as CorePageKey)
+  ? (page as LegalPageKey)
+  : undefined;
+const Component =
+  legalDocumentKey === undefined
+    ? components[page as Exclude<CorePageKey, LegalPageKey>]
+    : undefined;
 ---
 
 <SiteLayout
@@ -72,8 +84,17 @@ const Component = components[page as CorePageKey];
   meta={{
     title: entry.title ?? null,
     description: entry.description ?? null,
-    canonical: entry.path,
+    canonical: legalDocumentKey === undefined ? entry.path : null,
+    ...(legalDocumentKey !== undefined
+      ? { robots: { index: false, follow: page === "privacy" } }
+      : {}),
   }}
 >
-  <Component />
+  {
+    legalDocumentKey ? (
+      <LegalPage documentKey={legalDocumentKey} />
+    ) : (
+      Component && <Component />
+    )
+  }
 </SiteLayout>

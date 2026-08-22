@@ -18,6 +18,7 @@ import type { SourceManifest } from "../../scripts/lib/route-inventory.ts";
 import {
   assertHttpBaselinesMatch,
   assertHttpBaselineCoverage,
+  bodyComparisonForCapturedResponse,
   buildCapturePlan,
   captureHttpContract,
   htmlSemantics,
@@ -1018,6 +1019,80 @@ test("captures ordered public HTML semantics before persisting its artifact", as
   assert.match(
     contract.normalizedHtmlPath ?? "",
     /^\.artifacts\/http-baseline\//,
+  );
+});
+
+test("uses semantic comparison only for captured Phase 2 public HTML", () => {
+  const html = new Response("<main>contenido</main>", {
+    headers: { "content-type": "text/html; charset=utf-8" },
+  });
+  const exactCases = [
+    {
+      routeKey:
+        "page:/comunidades-energeticas/manganafer|GET|anonymous|default",
+      path: "/comunidades-energeticas/manganafer",
+      response: html,
+    },
+    {
+      routeKey: "private-page:/socios|GET|anonymous|default",
+      path: "/socios",
+      response: html,
+    },
+    {
+      routeKey: "page:/sitemap.xml|GET|anonymous|default",
+      path: "/sitemap.xml",
+      response: new Response("<urlset/>", {
+        headers: { "content-type": "application/xml" },
+      }),
+    },
+    {
+      routeKey: "page:/robots.txt|GET|anonymous|default",
+      path: "/robots.txt",
+      response: new Response("User-Agent: *", {
+        headers: { "content-type": "text/plain" },
+      }),
+    },
+    {
+      routeKey: "redirect:/mision|GET|anonymous|default",
+      path: "/mision",
+      response: new Response(null, { status: 308 }),
+    },
+    {
+      routeKey: "gone:/subvenciones|GET|anonymous|default",
+      path: "/subvenciones",
+      response: new Response("retirada", {
+        status: 410,
+        headers: { "content-type": "text/plain; charset=utf-8" },
+      }),
+    },
+    {
+      routeKey: "asset:/favicon.svg|GET|anonymous|default",
+      path: "/favicon.svg",
+      response: new Response("<svg/>", {
+        headers: { "content-type": "image/svg+xml" },
+      }),
+    },
+  ] as const;
+
+  assert.equal(
+    bodyComparisonForCapturedResponse(
+      { routeKey: "page:/nosotros|GET|anonymous|default", path: "/nosotros" },
+      html,
+    ),
+    "semantic",
+  );
+  for (const request of exactCases) {
+    assert.equal(bodyComparisonForCapturedResponse(request, request.response), "exact");
+  }
+
+  const plan = buildCapturePlan(manifestFixture());
+  assert.equal(
+    plan.requests.some((request) => request.routeKey.startsWith("asset:")),
+    false,
+  );
+  assert.equal(
+    plan.deferred.some((request) => request.routeKey.startsWith("asset:")),
+    true,
   );
 });
 

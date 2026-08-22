@@ -113,10 +113,30 @@ export const pageRegistry: Record<HeaderPageKey, PageRegistryEntry> = {
     description:
       "Servicio de mantenimiento fotovoltaico recomendado por Comunidad Solar, prestado y contratado directamente con Solaico.",
   },
-  privacy: { path: "/politica-privacidad" },
-  cookies: { path: "/cookies" },
-  legal: { path: "/aviso-legal" },
-  terms: { path: "/terminos-y-condiciones" },
+  privacy: {
+    path: "/politica-privacidad",
+    title: "Política de privacidad",
+    description:
+      "Revisa nuestra política de privacidad sobre la recopilación y el consentimiento del uso de tus datos en nuestra web",
+  },
+  cookies: {
+    path: "/cookies",
+    title: "Política de cookies",
+    description:
+      "Esta página web usa cookies. Las cookies de este sitio web se usan para personalizar el contenido y los anuncios y analizar el tráfico.",
+  },
+  legal: {
+    path: "/aviso-legal",
+    title: "Aviso legal",
+    description:
+      "Revisa nuestro aviso legal sobre la descripción de la actividad, el uso de nuestra web y los servicios ofertados.",
+  },
+  terms: {
+    path: "/terminos-y-condiciones",
+    title: "Términos y condiciones",
+    description:
+      "Estos son nuestros términos y condiciones para el uso de nuestro sitio web y la compra de productos a través del sitio web.",
+  },
   socios: { path: "/socios" },
   guia: { path: "/guia-equipo" },
 };
@@ -135,7 +155,13 @@ export type CorePageKey =
   | "comunero"
   | "contacto"
   | "activos"
-  | "activoConectado";
+  | "activoConectado"
+  | "privacy"
+  | "cookies"
+  | "legal"
+  | "terms";
+
+export type LegalPageKey = "privacy" | "cookies" | "legal" | "terms";
 
 /** Native Astro page keys implemented so far; later tasks extend this map. */
 export const corePageComponents: Record<CorePageKey, string> = {
@@ -153,6 +179,10 @@ export const corePageComponents: Record<CorePageKey, string> = {
   contacto: "ContactPage",
   activos: "AssetsPage",
   activoConectado: "OperationalAssetsPage",
+  privacy: "LegalPage",
+  cookies: "LegalPage",
+  legal: "LegalPage",
+  terms: "LegalPage",
 };
 
 export const staticSlugPaths = Object.keys(corePageComponents)
@@ -161,6 +191,12 @@ export const staticSlugPaths = Object.keys(corePageComponents)
 
 export function isCorePageKey(key: HeaderPageKey): key is CorePageKey {
   return Object.hasOwn(corePageComponents, key);
+}
+
+export function isLegalPageKey(key: CorePageKey): key is LegalPageKey {
+  return (
+    key === "privacy" || key === "cookies" || key === "legal" || key === "terms"
+  );
 }
 
 export function isCurrentPageLink(page: HeaderPageKey, href: string): boolean {

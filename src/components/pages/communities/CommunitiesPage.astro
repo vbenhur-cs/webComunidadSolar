@@ -173,7 +173,9 @@ const formatCommunityInteger = (value: number) =>
             aria-label="Distancia máxima legal de hasta cinco kilómetros"
           >
             <span>Distancia máxima legal</span>
-            <strong>{proximityRadiusLabel}*</strong>
+            <strong
+              >{proximityRadiusLabel}<Fragment set:html="<!-- -->" />*</strong
+            >
           </div>
           <img
             src={communityDiagram}

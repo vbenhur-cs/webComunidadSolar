@@ -24,6 +24,7 @@
     "parity:manifest": "tsx scripts/capture-source-manifest.ts",
     "parity:http": "tsx scripts/parity-http.ts",
     "parity:visual": "tsx scripts/parity-visual.ts",
+    "verify:links": "tsx scripts/verify-links.ts",
     "verify:independent": "tsx scripts/verify-independent.ts"
   },
   "dependencies": {

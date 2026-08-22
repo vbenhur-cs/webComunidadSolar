@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { access, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -19,11 +19,15 @@ import {
 import {
   serializeRouteMatrix,
   type RouteMatrixEntry,
+  type SourceManifest,
 } from "./lib/route-inventory.ts";
 import type { SourceRef } from "./lib/source-reference.ts";
+import { isPhase2PublicRoute } from "../src/lib/site/public-route-closure.ts";
 
 const foundationKinds = new Set(["gone", "redirect"]);
 const localWorkerOrigin = "http://localhost";
+
+export type HttpParityScope = "foundation" | "public";
 
 export interface HttpDiff {
   routeKey: string;
@@ -49,8 +53,14 @@ export interface FoundationParityResult {
   verifiedRouteKeys: ReadonlySet<string>;
 }
 
+export interface PublicAssetParityResult {
+  checkedAssets: number;
+  diffs: HttpDiff[];
+  verifiedRouteKeys: ReadonlySet<string>;
+}
+
 export interface HttpParityResult {
-  scope: "foundation";
+  scope: HttpParityScope;
   topology: DeploymentTopology;
   checkedContracts: number;
   verifiedRoutes: number;
@@ -60,7 +70,7 @@ export interface HttpParityResult {
 }
 
 export interface RunHttpParityOptions {
-  scope: "foundation";
+  scope: HttpParityScope;
   root?: string;
 }
 
@@ -261,6 +271,31 @@ export function selectFoundationContracts(
   );
 }
 
+/**
+ * Public parity is declared by the route matrix, rather than inferred from a
+ * URL shape. That keeps private/API routes and the explicit Phase 3 deferment
+ * out of the public gate, while refusing an unmapped public baseline route.
+ */
+export function selectPublicContracts(
+  baseline: Pick<HttpBaseline, "contracts">,
+  matrix: RouteMatrixEntry[],
+): HttpContract[] {
+  const matrixByRouteKey = new Map(
+    matrix.map((entry) => [routeMatrixKey(entry), entry]),
+  );
+  return baseline.contracts.filter((contract) => {
+    const parsed = parseHttpRouteKey(contract.routeKey);
+    const route = matrixByRouteKey.get(`${parsed.kind}:${parsed.path}`);
+    if (route === undefined) {
+      if (parsed.kind === "api" || parsed.kind === "private-page") return false;
+      throw new Error(
+        `Contrato HTTP público no declarado en la matriz: ${contract.routeKey}`,
+      );
+    }
+    return isPhase2PublicRoute(route);
+  });
+}
+
 function routeMatrixKey(
   entry: Pick<RouteMatrixEntry, "kind" | "path">,
 ): string {
@@ -274,6 +309,19 @@ export function applyFoundationMatrixResults(
   return matrix.map((entry) => {
     const key = routeMatrixKey(entry);
     if (!foundationKinds.has(entry.kind) || !verifiedRouteKeys.has(key)) {
+      return { ...entry };
+    }
+    return { ...entry, status: "verified" };
+  });
+}
+
+export function applyPublicMatrixResults(
+  matrix: RouteMatrixEntry[],
+  verifiedRouteKeys: ReadonlySet<string>,
+): RouteMatrixEntry[] {
+  return matrix.map((entry) => {
+    const key = routeMatrixKey(entry);
+    if (!isPhase2PublicRoute(entry) || !verifiedRouteKeys.has(key)) {
       return { ...entry };
     }
     return { ...entry, status: "verified" };
@@ -316,12 +364,13 @@ function parseHttpRouteKey(routeKey: string): ParsedHttpRouteKey {
   };
 }
 
-function requestForFoundationContract(contract: HttpContract): Request {
+function requestForHttpContract(
+  contract: HttpContract,
+  scope: HttpParityScope,
+): Request {
   const parsed = parseHttpRouteKey(contract.routeKey);
-  if (!foundationKinds.has(parsed.kind) || parsed.method !== "GET") {
-    throw new Error(
-      `Contrato fuera del scope foundation: ${contract.routeKey}`,
-    );
+  if (parsed.method !== "GET") {
+    throw new Error(`Contrato fuera del scope ${scope}: ${contract.routeKey}`);
   }
   return new Request(`${localWorkerOrigin}${parsed.path}${parsed.search}`, {
     method: parsed.method,
@@ -338,7 +387,49 @@ export async function runFoundationParity(
   runtime: FoundationRuntime,
   options: { root?: string } = {},
 ): Promise<FoundationParityResult> {
-  const contracts = selectFoundationContracts(baseline);
+  return runContractParity(
+    selectFoundationContracts(baseline),
+    runtime,
+    "foundation",
+    options,
+  );
+}
+
+export async function runPublicParity(
+  baseline: Pick<HttpBaseline, "contracts">,
+  matrix: RouteMatrixEntry[],
+  runtime: FoundationRuntime,
+  options: { root?: string } = {},
+): Promise<FoundationParityResult> {
+  const root = resolve(options.root ?? process.cwd());
+  try {
+    const manifest = await readPublicAssetManifest(root);
+    const contracts = await runContractParity(
+      selectPublicContracts(baseline, matrix),
+      runtime,
+      "public",
+      { root, dispose: false },
+    );
+    const assets = await runPublicAssetParity(matrix, manifest, runtime);
+    return {
+      checkedContracts: contracts.checkedContracts + assets.checkedAssets,
+      diffs: [...contracts.diffs, ...assets.diffs],
+      verifiedRouteKeys: new Set([
+        ...contracts.verifiedRouteKeys,
+        ...assets.verifiedRouteKeys,
+      ]),
+    };
+  } finally {
+    await runtime.dispose();
+  }
+}
+
+async function runContractParity(
+  contracts: HttpContract[],
+  runtime: FoundationRuntime,
+  scope: HttpParityScope,
+  options: { root?: string; dispose?: boolean },
+): Promise<FoundationParityResult> {
   const diffs: HttpDiff[] = [];
   const failedRouteKeys = new Set<string>();
 
@@ -346,11 +437,11 @@ export async function runFoundationParity(
     for (const expected of contracts) {
       if (expected.bodyCapture !== "captured") {
         throw new Error(
-          `Contrato foundation sin body capturado: ${expected.routeKey}`,
+          `Contrato ${scope} sin body capturado: ${expected.routeKey}`,
         );
       }
       const response = await runtime.fetch(
-        requestForFoundationContract(expected),
+        requestForHttpContract(expected, scope),
       );
       const actual = await captureHttpContract(expected.routeKey, response, {
         root: options.root,
@@ -364,13 +455,151 @@ export async function runFoundationParity(
       }
     }
   } finally {
-    await runtime.dispose();
+    if (options.dispose !== false) await runtime.dispose();
   }
 
   const verifiedRouteKeys = new Set(
     contracts.map(contractRouteKey).filter((key) => !failedRouteKeys.has(key)),
   );
   return { checkedContracts: contracts.length, diffs, verifiedRouteKeys };
+}
+
+function asPublicAssetManifest(value: unknown): Pick<SourceManifest, "assets"> {
+  if (!isRecord(value) || !Array.isArray(value.assets)) {
+    throw new Error("parity/source-manifest.json no contiene assets públicos");
+  }
+  const assets = value.assets.map((asset, index) => {
+    if (
+      !isRecord(asset) ||
+      typeof asset.path !== "string" ||
+      !asset.path.startsWith("public/") ||
+      typeof asset.sha256 !== "string" ||
+      !/^[a-f0-9]{64}$/.test(asset.sha256) ||
+      typeof asset.bytes !== "number" ||
+      !Number.isInteger(asset.bytes) ||
+      asset.bytes < 0 ||
+      typeof asset.mediaType !== "string" ||
+      !asset.mediaType.startsWith("image/")
+    ) {
+      throw new Error(`Asset de manifest inválido en índice ${index}`);
+    }
+    return {
+      path: asset.path,
+      sha256: asset.sha256,
+      bytes: asset.bytes,
+      mediaType: asset.mediaType,
+    };
+  });
+  return { assets };
+}
+
+async function readPublicAssetManifest(
+  root: string,
+): Promise<Pick<SourceManifest, "assets">> {
+  return asPublicAssetManifest(
+    JSON.parse(
+      await readFile(join(root, "parity", "source-manifest.json"), "utf8"),
+    ),
+  );
+}
+
+export async function runPublicAssetParity(
+  matrix: RouteMatrixEntry[],
+  manifest: Pick<SourceManifest, "assets">,
+  runtime: FoundationRuntime,
+): Promise<PublicAssetParityResult> {
+  const expectedBySourcePath = new Map(
+    manifest.assets.map((asset) => [asset.path, asset]),
+  );
+  if (expectedBySourcePath.size !== manifest.assets.length) {
+    throw new Error("parity/source-manifest.json duplica assets públicos");
+  }
+  const assets = matrix.filter(
+    (entry) => entry.kind === "asset" && isPhase2PublicRoute(entry),
+  );
+  const matrixAssetsBySourcePath = new Map<string, RouteMatrixEntry>();
+  for (const asset of assets) {
+    if (asset.expectedStatus !== 200) {
+      throw new Error(
+        `Asset público de matriz debe tener status 200: ${routeMatrixKey(asset)}`,
+      );
+    }
+    if (!asset.sourceFile.startsWith("public/")) {
+      throw new Error(
+        `Asset público de matriz inválido: ${routeMatrixKey(asset)}`,
+      );
+    }
+    if (matrixAssetsBySourcePath.has(asset.sourceFile)) {
+      throw new Error(
+        `La matriz duplica el asset público: ${asset.sourceFile}`,
+      );
+    }
+    matrixAssetsBySourcePath.set(asset.sourceFile, asset);
+  }
+  const manifestWithoutMatrixRow = manifest.assets
+    .filter((asset) => !matrixAssetsBySourcePath.has(asset.path))
+    .map((asset) => asset.path);
+  if (manifestWithoutMatrixRow.length > 0) {
+    throw new Error(
+      `Asset público de manifest sin fila de matriz: ${manifestWithoutMatrixRow.join(", ")}`,
+    );
+  }
+  const matrixWithoutManifestAsset = assets
+    .filter((asset) => !expectedBySourcePath.has(asset.sourceFile))
+    .map((asset) => asset.sourceFile);
+  if (matrixWithoutManifestAsset.length > 0) {
+    throw new Error(
+      `Asset público de matriz sin manifest: ${matrixWithoutManifestAsset.join(", ")}`,
+    );
+  }
+  const routeKeys = new Set<string>();
+  const diffs: HttpDiff[] = [];
+  const verifiedRouteKeys = new Set<string>();
+
+  for (const asset of assets) {
+    const expected = expectedBySourcePath.get(asset.sourceFile);
+    const routeKey = routeMatrixKey(asset);
+    if (
+      expected === undefined ||
+      asset.path !== `/${asset.sourceFile.slice("public/".length)}` ||
+      routeKeys.has(routeKey)
+    ) {
+      throw new Error(`Asset público de matriz inválido: ${routeKey}`);
+    }
+    routeKeys.add(routeKey);
+    const response = await runtime.fetch(
+      new Request(`${localWorkerOrigin}${asset.path}`, { method: "GET" }),
+    );
+    const body = Buffer.from(await response.arrayBuffer());
+    const actual = {
+      status: response.status,
+      bytes: body.byteLength,
+      sha256: createHash("sha256").update(body).digest("hex"),
+      mediaType: response.headers.get("content-type")?.split(";", 1)[0] ?? null,
+    };
+    const expectedValues = {
+      status: asset.expectedStatus,
+      bytes: expected.bytes,
+      sha256: expected.sha256,
+      mediaType: expected.mediaType,
+    };
+    const assetDiffs = Object.entries(expectedValues).flatMap(
+      ([field, expectedValue]) =>
+        expectedValue === actual[field as keyof typeof actual]
+          ? []
+          : [
+              {
+                routeKey,
+                field,
+                expected: expectedValue,
+                actual: actual[field as keyof typeof actual],
+              },
+            ],
+    );
+    diffs.push(...assetDiffs);
+    if (assetDiffs.length === 0) verifiedRouteKeys.add(routeKey);
+  }
+  return { checkedAssets: assets.length, diffs, verifiedRouteKeys };
 }
 
 function asHeaders(value: unknown, routeKey: string): Record<string, string> {
@@ -706,7 +935,7 @@ export async function runHttpParity(
   options: RunHttpParityOptions,
   dependencies: HttpParityDependencies = {},
 ): Promise<HttpParityResult> {
-  if (options.scope !== "foundation") {
+  if (options.scope !== "foundation" && options.scope !== "public") {
     throw new Error(`Scope HTTP no soportado: ${options.scope}`);
   }
   const root = resolve(options.root ?? process.cwd());
@@ -728,23 +957,26 @@ export async function runHttpParity(
     readMatrix(root),
   ]);
   const runtime = await startRuntime(topology, root);
-  const foundation = await runFoundationParity(baseline, runtime, { root });
-  const updatedMatrix = applyFoundationMatrixResults(
-    matrix,
-    foundation.verifiedRouteKeys,
-  );
+  const parity =
+    options.scope === "foundation"
+      ? await runFoundationParity(baseline, runtime, { root })
+      : await runPublicParity(baseline, matrix, runtime, { root });
+  const updatedMatrix =
+    options.scope === "foundation"
+      ? applyFoundationMatrixResults(matrix, parity.verifiedRouteKeys)
+      : applyPublicMatrixResults(matrix, parity.verifiedRouteKeys);
 
-  if (foundation.diffs.length === 0) {
+  if (parity.diffs.length === 0) {
     await writeMatrix(updatedMatrix);
   }
 
   return {
-    scope: "foundation",
+    scope: options.scope,
     topology,
-    checkedContracts: foundation.checkedContracts,
+    checkedContracts: parity.checkedContracts,
     verifiedRoutes: countStatus(updatedMatrix, "verified"),
     pendingRoutes: countStatus(updatedMatrix, "pending"),
-    diffs: foundation.diffs,
+    diffs: parity.diffs,
     runtimeDisposed: true,
   };
 }
@@ -763,16 +995,20 @@ function formatDiff(diff: HttpDiff): string {
   ].join(" ");
 }
 
-function parseArguments(args: string[]): RunHttpParityOptions {
+export function parseHttpParityArguments(args: string[]): RunHttpParityOptions {
   if (args.length === 0) return { scope: "foundation" };
-  if (args.length === 2 && args[0] === "--scope" && args[1] === "foundation") {
-    return { scope: "foundation" };
+  if (
+    args.length === 2 &&
+    args[0] === "--scope" &&
+    (args[1] === "foundation" || args[1] === "public")
+  ) {
+    return { scope: args[1] };
   }
-  throw new Error("Uso: parity-http.ts --scope foundation");
+  throw new Error("Uso: parity-http.ts --scope foundation|public");
 }
 
 async function main(args: string[]): Promise<void> {
-  const result = await runHttpParity(parseArguments(args));
+  const result = await runHttpParity(parseHttpParityArguments(args));
   if (result.diffs.length > 0) {
     for (const diff of result.diffs) {
       process.stderr.write(`HTTP_DIFF ${formatDiff(diff)}\n`);

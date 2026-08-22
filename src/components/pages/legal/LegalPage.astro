@@ -1,0 +1,59 @@
+---
+import {
+  legalDocuments,
+  type LegalDocumentKey,
+} from "../../../content/legal-content.ts";
+
+interface Props {
+  documentKey: LegalDocumentKey;
+}
+
+const { documentKey } = Astro.props;
+const document = legalDocuments[documentKey];
+const legalNavigation: Array<{ key: LegalDocumentKey; label: string }> = [
+  { key: "privacy", label: "Privacidad" },
+  { key: "cookies", label: "Cookies" },
+  { key: "legal", label: "Aviso legal" },
+  { key: "terms", label: "Términos y condiciones" },
+];
+---
+
+<main>
+  <section class="legal-hero">
+    <div class="shell legal-hero-inner">
+      <p class="eyebrow">Información legal</p>
+      <h1 id="legal-document-title">{document.title}</h1>
+    </div>
+  </section>
+  <section class="legal-section">
+    <div class="shell legal-layout">
+      <aside class="legal-navigation">
+        <p>Documentos</p>
+        <nav aria-label="Documentos legales">
+          {
+            legalNavigation.map((item) => {
+              const candidate = legalDocuments[item.key];
+              return (
+                <a
+                  href={`/${candidate.slug}`}
+                  aria-current={item.key === documentKey ? "page" : undefined}
+                >
+                  {item.label}
+                </a>
+              );
+            })
+          }
+          <button type="button" data-cookie-settings>Configurar cookies</button>
+        </nav>
+      </aside>
+      <article
+        class="legal-document"
+        aria-labelledby="legal-document-title"
+        data-legal-document={documentKey}
+        data-source-hash={document.normalizedTextSha256}
+      >
+        <div class="legal-document-content" set:html={document.html} />
+      </article>
+    </div>
+  </section>
+</main>

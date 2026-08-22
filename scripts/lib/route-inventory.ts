@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { createRequire } from "node:module";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, dirname, extname, join, resolve } from "node:path";
 
 import ts from "typescript";
 
@@ -36,13 +36,17 @@ export interface SourceFileInventoryEntry {
   bytes: number;
 }
 
+export interface PublicAssetInventoryEntry extends SourceFileInventoryEntry {
+  mediaType: string;
+}
+
 export interface SourceManifest {
   schemaVersion: 1;
   source: SourceRef;
   generatedAt: string;
   routes: RouteContract[];
   sourceFiles: SourceFileInventoryEntry[];
-  assets: SourceFileInventoryEntry[];
+  assets: PublicAssetInventoryEntry[];
   wordpressAudit: { total: 122; unclassified: string[] };
 }
 
@@ -202,6 +206,25 @@ function sourceFileEntry(path: string, blob: Buffer): SourceFileInventoryEntry {
     sha256: createHash("sha256").update(blob).digest("hex"),
     bytes: blob.byteLength,
   };
+}
+
+const publicAssetMediaTypes: Readonly<Record<string, string>> = {
+  ".jpeg": "image/jpeg",
+  ".jpg": "image/jpeg",
+  ".png": "image/png",
+  ".svg": "image/svg+xml",
+  ".webp": "image/webp",
+};
+
+export function publicAssetMediaType(path: string): string {
+  if (!path.startsWith("public/")) {
+    throw new Error(`El asset público debe vivir en public/: ${path}`);
+  }
+  const mediaType = publicAssetMediaTypes[extname(path).toLowerCase()];
+  if (mediaType === undefined) {
+    throw new Error(`Media type público no declarado: ${path}`);
+  }
+  return mediaType;
 }
 
 function sourceFileComparator(
@@ -607,6 +630,7 @@ export async function buildSourceManifest(
   });
   const assets = inventory
     .filter((entry) => entry.path.startsWith("public/"))
+    .map((entry) => ({ ...entry, mediaType: publicAssetMediaType(entry.path) }))
     .sort(sourceFileComparator);
   const sourceFiles = inventory
     .filter((entry) => !entry.path.startsWith("public/"))
