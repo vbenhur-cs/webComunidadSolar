@@ -11,6 +11,10 @@ import MaintenancePage from "../components/pages/home-energy/MaintenancePage.ast
 import RemotePage from "../components/pages/remote/RemotePage.astro";
 import SolarInstallationPage from "../components/pages/home-energy/SolarInstallationPage.astro";
 import CommunitiesPage from "../components/pages/communities/CommunitiesPage.astro";
+import MemberPage from "../components/pages/member/MemberPage.astro";
+import ContactPage from "../components/pages/contact/ContactPage.astro";
+import AssetsPage from "../components/pages/assets/AssetsPage.astro";
+import OperationalAssetsPage from "../components/pages/assets/OperationalAssetsPage.astro";
 import SiteLayout from "../layouts/SiteLayout.astro";
 import { getLegacyRedirect } from "../lib/routing/legacy";
 import {
@@ -55,6 +59,10 @@ const components = {
   comercializadora: CommercializerPage,
   blog: BlogPage,
   eventos: EventsPage,
+  comunero: MemberPage,
+  contacto: ContactPage,
+  activos: AssetsPage,
+  activoConectado: OperationalAssetsPage,
 } as const;
 const Component = components[page as CorePageKey];
 ---

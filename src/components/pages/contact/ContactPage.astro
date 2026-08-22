@@ -1,0 +1,127 @@
+---
+import ButtonLink from "../../site/ButtonLink.astro";
+import PageHero from "../../site/PageHero.astro";
+import Pill from "../../site/Pill.astro";
+import SectionHeading from "../../site/SectionHeading.astro";
+
+const advisorBooking = "https://comunidadsolar.zohobookings.eu/";
+const communityPortal = "https://ayuda.comunidadsolar.es/portal/en-gb/signin";
+const helpCenter = "https://ayuda.comunidadsolar.es/portal/en-gb/home";
+const whatsappSupport = "https://wa.me/34611195869";
+const energyAdvisors = [
+  { name: "Víctor Romero", image: "/media/asesor-victor.jpg" },
+  { name: "Gema Hidalgo", image: "/media/asesora-gema.png" },
+  { name: "Laura Varella", image: "/media/asesora-laura.png" },
+  { name: "Irene Andrés", image: "/media/asesora-irene.png" },
+];
+---
+
+<main>
+  <PageHero
+    tone="yellow"
+    eyebrow="Contacto"
+    title="Hablemos por el camino correcto."
+    lead="Si estás valorando una solución energética, te acompaña un asesor. Si ya eres comunero, entras directamente en tu app o en Atención al Comunero."
+    primary={{ href: "#elige", label: "Elegir mi camino" }}
+    secondary={{ href: "/soy-comunero", label: "Ya soy comunero" }}
+  >
+    <div
+      class="contact-path-visual"
+      aria-label="Contacto comercial y Atención al Comunero son recorridos diferentes"
+    >
+      <article>
+        <span>QUIERO EMPEZAR</span>
+        <strong>Asesor energético</strong>
+        <small>Información, cobertura y contratación</small>
+      </article>
+      <article>
+        <span>YA SOY COMUNERO</span>
+        <strong>Atención al Comunero</strong>
+        <small>App, consultas e incidencias</small>
+      </article>
+      <p>
+        Cuéntanos en qué momento estás y llegarás antes a la persona adecuada.
+      </p>
+    </div>
+  </PageHero>
+
+  <section class="section contact-path-section" id="elige">
+    <div class="shell">
+      <SectionHeading
+        eyebrow="Dos necesidades diferentes"
+        title="Así evitamos hacerte perder el tiempo."
+        copy="El equipo comercial te ayuda a decidir y contratar. Atención al Comunero conoce las consultas de quienes ya forman parte de Comunidad Solar."
+      />
+      <div class="contact-path-grid">
+        <article class="contact-path-card contact-path-card-advisor">
+          <div>
+            <Pill tone="yellow">Quiero informarme o contratar</Pill>
+            <h2>Habla con un asesor energético.</h2>
+            <p>
+              Te ayudamos a comprobar si tienes cobertura y a comparar las
+              alternativas que realmente encajan con tu vivienda, tu consumo o
+              tu activo.
+            </p>
+          </div>
+          <div
+            class="advisor-portraits advisor-portraits-compact"
+            aria-label="Asesores energéticos de Comunidad Solar"
+          >
+            {
+              energyAdvisors.map((advisor) => (
+                <figure>
+                  <img
+                    src={advisor.image}
+                    alt={`${advisor.name}, del equipo de asesores energéticos de Comunidad Solar`}
+                    loading="lazy"
+                  />
+                </figure>
+              ))
+            }
+          </div>
+          <div class="contact-path-actions">
+            <ButtonLink href={advisorBooking}>Reservar una llamada</ButtonLink>
+            <ButtonLink
+              href="/comunidades-energeticas#cobertura"
+              kind="secondary"
+            >
+              Comprobar mi cobertura
+            </ButtonLink>
+          </div>
+          <div class="contact-direct-links">
+            <a href="tel:+34900802812">900 802 812</a>
+            <a href="mailto:info@comunidad.solar">info@comunidad.solar</a>
+            <span>Lunes a viernes · 9:00–18:00</span>
+          </div>
+        </article>
+
+        <article class="contact-path-card contact-path-card-member">
+          <div>
+            <Pill tone="green">Ya soy comunero</Pill>
+            <h2>Entra por tu puerta de comunero.</h2>
+            <p>
+              Desde allí eliges entre consultar producción, consumo, facturas y
+              contratos en la app, o identificarte para pedir ayuda y mantener
+              el seguimiento de una consulta.
+            </p>
+          </div>
+          <div class="contact-member-summary">
+            <span><strong>01</strong> App Comunidad Solar</span>
+            <span><strong>02</strong> Atención identificada</span>
+          </div>
+          <div class="contact-path-actions">
+            <ButtonLink href="/soy-comunero">Ir a Soy comunero</ButtonLink>
+            <ButtonLink href={communityPortal} kind="secondary">
+              Entrar en Atención
+            </ButtonLink>
+          </div>
+          <div class="contact-direct-links">
+            <a href={whatsappSupport}>WhatsApp · 611 195 869</a>
+            <a href={helpCenter}>Centro de Ayuda</a>
+            <span>Lunes a viernes · 9:00–18:00</span>
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>
+</main>

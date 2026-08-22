@@ -1,0 +1,149 @@
+---
+import ButtonLink from "../../site/ButtonLink.astro";
+import PageHero from "../../site/PageHero.astro";
+import Pill from "../../site/Pill.astro";
+import SectionHeading from "../../site/SectionHeading.astro";
+
+const memberApp = "https://comunidad-solar.clever.gy/login";
+const memberAppAndroid =
+  "https://play.google.com/store/apps/details?hl=es&id=comunidadsolar.clever.gy";
+const memberAppIos =
+  "https://apps.apple.com/es/app/comunidad-solar/id6479612258";
+const communityPortal = "https://ayuda.comunidadsolar.es/portal/en-gb/signin";
+const whatsappSupport = "https://wa.me/34611195869";
+---
+
+<main>
+  <PageHero
+    tone="cream"
+    eyebrow="Ya soy comunero"
+    title="Tu energía y tu atención, sin dar vueltas."
+    lead="La app es tu puerta para consultar tu energía. Si necesitas que te ayudemos, entra identificado en Atención al Comunero para conservar el seguimiento de tus consultas."
+    primary={{ href: memberApp, label: "Entrar en mi app" }}
+    secondary={{ href: "#atencion", label: "Necesito ayuda" }}
+  >
+    <div
+      class="member-access-visual"
+      aria-label="La app y Atención al Comunero son los dos accesos del comunero"
+    >
+      <article class="member-access-node member-access-node-app">
+        <span>01</span>
+        <strong>Mi app</strong>
+        <small>Producción, consumo y documentos</small>
+      </article>
+      <i aria-hidden="true">→</i>
+      <article class="member-access-node member-access-node-help">
+        <span>02</span>
+        <strong>Atención</strong>
+        <small>Consultas, incidencias y seguimiento</small>
+      </article>
+      <p>Dos accesos claros. La misma Comunidad Solar.</p>
+    </div>
+  </PageHero>
+
+  <section class="section member-access-section" id="accesos">
+    <div class="shell">
+      <SectionHeading
+        eyebrow="Elige lo que necesitas hacer"
+        title="La web te lleva al lugar correcto."
+        copy="No duplicamos en la web lo que ya resuelve la app. Separamos la gestión diaria de tu energía de las consultas que necesitan la ayuda de una persona."
+      />
+      <div class="member-access-grid">
+        <article class="member-access-card member-access-card-app">
+          <div>
+            <Pill tone="green">Mi energía</Pill>
+            <h2>Entrar en la app Comunidad Solar.</h2>
+            <p>
+              Consulta en un único sitio la información cotidiana de tu energía
+              y la documentación de tu relación con Comunidad Solar.
+            </p>
+            <ul>
+              <li>Producción, consumo y ahorro.</li>
+              <li>Facturas, contratos y documentación.</li>
+              <li>Estado de tus activos y proyectos.</li>
+            </ul>
+          </div>
+          <div class="member-access-actions">
+            <ButtonLink href={memberApp}>Entrar desde el ordenador</ButtonLink>
+            <div class="member-store-links">
+              <a href={memberAppAndroid}>
+                Descargar para Android <span aria-hidden="true">↗</span>
+              </a>
+              <a href={memberAppIos}>
+                Descargar para iPhone <span aria-hidden="true">↗</span>
+              </a>
+            </div>
+          </div>
+        </article>
+
+        <article
+          class="member-access-card member-access-card-help"
+          id="atencion"
+        >
+          <div>
+            <Pill tone="yellow">Necesito ayuda</Pill>
+            <h2>Entrar en Atención al Comunero.</h2>
+            <p>
+              Identifícate en el portal de Atención para abrir una consulta y
+              mantener reunido el historial de tus solicitudes.
+            </p>
+            <ul>
+              <li>Proyecto, producción o suministro.</li>
+              <li>Facturas, contratos o comercializadora.</li>
+              <li>Incidencias y seguimiento de consultas.</li>
+            </ul>
+          </div>
+          <div class="member-access-actions">
+            <ButtonLink href={communityPortal}>
+              Identificarme y pedir ayuda
+            </ButtonLink>
+            <div class="member-help-fallback">
+              <span>Si no puedes acceder:</span>
+              <a href="tel:+34900802812">900 802 812</a>
+              <a href={whatsappSupport}>WhatsApp · 611 195 869</a>
+            </div>
+          </div>
+        </article>
+      </div>
+      <p class="member-access-note">
+        La app y el portal de Atención utilizan actualmente accesos
+        independientes. Si no recuerdas tus datos de acceso, Atención al
+        Comunero te ayudará a recuperarlos.
+      </p>
+    </div>
+  </section>
+
+  <section class="section member-guide-section">
+    <div class="shell">
+      <SectionHeading
+        eyebrow="Qué encontrarás en cada acceso"
+        title="Una puerta para consultar. Otra para resolver."
+      />
+      <div class="member-guide-grid">
+        <article>
+          <span>APP COMUNIDAD SOLAR</span>
+          <h3>Tu actividad energética.</h3>
+          <p>
+            Es el espacio natural para volver con frecuencia: datos de
+            producción y consumo, ahorro, facturas, contratos, documentos y
+            novedades vinculadas a tu energía.
+          </p>
+          <a href={memberApp}>
+            Entrar en la app <span aria-hidden="true">↗</span>
+          </a>
+        </article>
+        <article>
+          <span>ATENCIÓN AL COMUNERO</span>
+          <h3>Tu conversación con nosotros.</h3>
+          <p>
+            Es el espacio para pedir ayuda, explicar una incidencia y consultar
+            después su evolución sin empezar de cero cada vez.
+          </p>
+          <a href={communityPortal}>
+            Entrar identificado <span aria-hidden="true">↗</span>
+          </a>
+        </article>
+      </div>
+    </div>
+  </section>
+</main>

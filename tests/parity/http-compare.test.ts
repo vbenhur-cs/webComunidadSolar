@@ -623,8 +623,8 @@ test(
 
     assert.deepEqual(result.diffs, []);
     assert.equal(result.checkedContracts, 225);
-    assert.equal(result.verifiedRoutes, 176);
-    assert.equal(result.pendingRoutes, 95);
+    assert.equal(result.verifiedRoutes, 180);
+    assert.equal(result.pendingRoutes, 91);
     assert.equal(result.runtimeDisposed, true);
     assert.match(
       result.topology.deployConfigPath,

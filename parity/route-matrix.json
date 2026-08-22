@@ -1438,7 +1438,7 @@
     "expectedLocation": null,
     "privateArea": null,
     "visualTemplate": "generic-page",
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/comunidades-energeticas/almendralejo",
@@ -1691,7 +1691,7 @@
     "expectedLocation": null,
     "privateArea": null,
     "visualTemplate": "generic-page",
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/cookies",
@@ -1757,7 +1757,7 @@
     "expectedLocation": null,
     "privateArea": null,
     "visualTemplate": "generic-page",
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/robots.txt",
@@ -1790,7 +1790,7 @@
     "expectedLocation": null,
     "privateArea": null,
     "visualTemplate": "generic-page",
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/terminos-y-condiciones",

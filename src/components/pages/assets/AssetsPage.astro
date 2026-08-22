@@ -1,0 +1,396 @@
+---
+import ButtonLink from "../../site/ButtonLink.astro";
+import PageHero from "../../site/PageHero.astro";
+import SectionHeading from "../../site/SectionHeading.astro";
+import TrustBand from "../../site/TrustBand.astro";
+
+const roofStudyForm =
+  "https://forms.zohopublic.eu/comunidadsolar/form/AnfitrinSolarCE/formperma/-chUN3G8tZScwiMnlbMjYZIB-DhlnNsFAQja-Xla1h8";
+---
+
+<main class="assets-page">
+  <PageHero
+    tone="cream"
+    eyebrow="Para propietarios de cubiertas y plantas solares"
+    title="Tu activo, conectado a una comunidad energética."
+    lead="Estudiamos cómo integrar una cubierta disponible o una planta fotovoltaica en funcionamiento en nuestro modelo de energía compartida. Reunimos desarrollo, comercialización, atención y tecnología para construir una solución adaptada cuando existe encaje."
+    primary={{ href: "#solicitar-estudio", label: "Solicitar estudio" }}
+    secondary={{ href: "#como-trabajamos", label: "Ver cómo trabajamos" }}
+  >
+    <div
+      class="assets-page-hero-stage"
+      role="img"
+      aria-label="Dos rutas: una cubierta disponible o una planta fotovoltaica en funcionamiento"
+    >
+      <figure class="assets-page-hero-card assets-page-hero-roof">
+        <img
+          src="/cubierta-comunidad.png"
+          alt="Gran cubierta solar próxima a hogares"
+        />
+        <figcaption>
+          <span>Ruta 01</span>
+          <strong>Cubierta disponible</strong>
+          <small>Estudiamos una nueva comunidad</small>
+        </figcaption>
+      </figure>
+      <figure class="assets-page-hero-card assets-page-hero-plant">
+        <img
+          src="/planta-fotovoltaica-proximidad.png"
+          alt="Planta fotovoltaica próxima a una población"
+        />
+        <figcaption>
+          <span>Ruta 02</span>
+          <strong>Planta operativa</strong>
+          <small>Estudiamos su integración</small>
+        </figcaption>
+      </figure>
+      <div class="assets-page-hero-bridge">
+        <span>Comunidad Solar</span>
+        <strong>Desarrollo · Demanda · Energía · Tecnología</strong>
+      </div>
+    </div>
+  </PageHero>
+
+  <section
+    class="assets-page-proof"
+    aria-label="Capacidades de Comunidad Solar para gestionar activos"
+  >
+    <div class="shell assets-page-proof-grid">
+      {
+        [
+          ["Desde 2018", "Experiencia energética"],
+          ["+3.500", "Comuneros"],
+          ["R2-883", "Comercializadora inscrita"],
+          ["Helios", "Tecnología propia"],
+        ].map(([value, label]) => (
+          <div>
+            <strong>{value}</strong>
+            <span>{label}</span>
+          </div>
+        ))
+      }
+    </div>
+  </section>
+
+  <section class="section assets-page-routes" id="elige">
+    <div class="shell">
+      <SectionHeading
+        eyebrow="Dos puntos de partida"
+        title="Dos activos. Dos rutas distintas."
+        copy="La primera conversación es técnica y comercial. Las condiciones económicas se plantean después, cuando conocemos el activo y hemos comprobado que existe una oportunidad viable."
+      />
+      <div class="assets-page-route-grid">
+        <article id="cubierta" class="assets-page-route-card">
+          <figure>
+            <img
+              src="/cubierta-comunidad.png"
+              alt="Cubierta industrial con una instalación solar próxima a viviendas"
+            />
+            <figcaption>01 · Cubierta disponible</figcaption>
+          </figure>
+          <div class="assets-page-route-content">
+            <span class="assets-page-route-label">Tengo una cubierta</span>
+            <h3>Tienes el espacio. Estudiamos qué proyecto puede albergar.</h3>
+            <p>
+              Analizamos el emplazamiento, la superficie útil, la estructura, el
+              acceso a red y la demanda potencial del entorno. Si el proyecto
+              encaja, podemos coordinar su desarrollo, financiación,
+              legalización y gestión energética.
+            </p>
+            <div class="assets-page-route-details">
+              <div>
+                <h3>Suele encajar si…</h3>
+                <ul>
+                  <li>
+                    Eres propietario o puedes acreditar la disponibilidad de la
+                    cubierta a largo plazo.
+                  </li>
+                  <li>
+                    Hay superficie útil y condiciones compatibles con una
+                    instalación solar.
+                  </li>
+                  <li>
+                    Existe una vía razonable de conexión y demanda dentro del
+                    ámbito aplicable.
+                  </li>
+                  <li>
+                    La situación urbanística y de uso permite estudiar el
+                    proyecto.
+                  </li>
+                </ul>
+              </div>
+              <div class="assets-page-start-data">
+                <h3>Para empezar necesitamos</h3>
+                <p>
+                  Municipio, superficie aproximada, uso del inmueble y, si los
+                  tienes, fotografías o planos.
+                </p>
+              </div>
+            </div>
+            <a
+              class="button button-primary"
+              href={roofStudyForm}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Solicitar estudio de cubierta <span aria-hidden="true">↗</span>
+            </a>
+          </div>
+        </article>
+
+        <article id="planta" class="assets-page-route-card">
+          <figure>
+            <img
+              src="/planta-fotovoltaica-proximidad.png"
+              alt="Planta fotovoltaica en funcionamiento próxima a una población"
+            />
+            <figcaption>02 · Planta en funcionamiento</figcaption>
+          </figure>
+          <div class="assets-page-route-content">
+            <span class="assets-page-route-label">Modelo Activo Conectado</span>
+            <h3>Tu planta ya produce. Estudiamos cómo integrarla.</h3>
+            <p>
+              Revisamos su situación técnica, administrativa y contractual, su
+              producción y la demanda potencial de la zona. Si existe encaje,
+              diseñamos una propuesta de gestión comercial y operativa apoyada
+              por nuestra comercializadora y nuestra tecnología.
+            </p>
+            <div class="assets-page-route-details">
+              <div>
+                <h3>Suele encajar si…</h3>
+                <ul>
+                  <li>
+                    La planta está operativa y su titularidad y legalización
+                    están claras.
+                  </li>
+                  <li>
+                    Puedes facilitar datos de producción, conexión y medida.
+                  </li>
+                  <li>
+                    Los contratos vigentes permiten estudiar una nueva
+                    estructura comercial.
+                  </li>
+                  <li>Existe demanda potencial dentro del ámbito aplicable.</li>
+                </ul>
+              </div>
+              <div class="assets-page-start-data">
+                <h3>Para empezar necesitamos</h3>
+                <p>
+                  Titularidad, documentación técnica, potencia, producción,
+                  conexión, permisos, contratos vigentes y energía disponible.
+                </p>
+              </div>
+            </div>
+            <ButtonLink href="/comunidades-energeticas-operativas">
+              Conocer el modelo para plantas operativas
+            </ButtonLink>
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="assets-page-model" id="como-trabajamos">
+    <div class="shell">
+      <SectionHeading
+        eyebrow="Un modelo que se entiende"
+        title="El activo y la demanda tienen que encajar."
+        copy="No mezclamos las dos oportunidades. En una cubierta estudiamos si puede nacer una nueva instalación; en una planta operativa estudiamos cómo aprovechar mejor la capacidad disponible."
+      />
+      <div class="assets-page-model-flows">
+        <div class="assets-page-model-flow">
+          <span class="assets-page-model-number">01</span>
+          <div>
+            <small>PUNTO DE PARTIDA</small><strong>Cubierta disponible</strong>
+          </div>
+          <i aria-hidden="true">→</i>
+          <div>
+            <small>NUEVO PROYECTO</small><strong>Desarrollo solar</strong>
+          </div>
+          <i aria-hidden="true">→</i>
+          <div>
+            <small>RESULTADO POSIBLE</small><strong>Comunidad local</strong>
+          </div>
+        </div>
+        <div class="assets-page-model-flow">
+          <span class="assets-page-model-number">02</span>
+          <div>
+            <small>PUNTO DE PARTIDA</small><strong>Planta operativa</strong>
+          </div>
+          <i aria-hidden="true">→</i>
+          <div>
+            <small>CAPA DE GESTIÓN</small><strong>Comunidad Solar</strong>
+          </div>
+          <i aria-hidden="true">→</i>
+          <div>
+            <small>RESULTADO POSIBLE</small><strong>Demanda próxima</strong>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section assets-page-economics">
+    <div class="shell assets-page-economics-grid">
+      <div>
+        <p class="eyebrow">La propuesta económica</p>
+        <h2>Primero validamos el activo. Después hablamos del acuerdo.</h2>
+        <p>
+          No publicamos una renta estándar ni una rentabilidad genérica:
+          ubicación, potencia, conexión, demanda, inversión y situación
+          contractual cambian el valor de cada oportunidad.
+        </p>
+      </div>
+      <div class="assets-page-agreement-grid">
+        <article>
+          <span>Cubierta</span>
+          <h3>Un acuerdo de uso adaptado al proyecto.</h3>
+          <p>
+            Si el estudio es viable, la propuesta define plazo,
+            responsabilidades y remuneración. Según el acuerdo, puede plantearse
+            en dinero o en energía.
+          </p>
+        </article>
+        <article>
+          <span>Planta operativa</span>
+          <h3>El activo sigue siendo tuyo.</h3>
+          <p>
+            La propuesta concreta la capacidad disponible, los servicios de
+            gestión, las responsabilidades y las condiciones comerciales
+            compatibles con los compromisos existentes.
+          </p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="assets-page-process">
+    <div class="shell">
+      <SectionHeading
+        eyebrow="De la información al proyecto"
+        title="Un proceso claro, sin promesas antes de tiempo."
+        copy="La solicitud inicia una evaluación de encaje. Solo avanzamos cuando el activo, su documentación, el entorno y la estructura propuesta tienen sentido."
+      />
+      <ol class="assets-page-process-grid">
+        {
+          [
+            [
+              "01",
+              "Información inicial",
+              "Recogemos la información necesaria según el tipo y la madurez del activo. En plantas operativas, documentación suficiente para verificar una oportunidad real y evaluable.",
+            ],
+            [
+              "02",
+              "Análisis de encaje",
+              "Revisamos la viabilidad técnica, administrativa, energética y comercial.",
+            ],
+            [
+              "03",
+              "Propuesta a medida",
+              "Si existe encaje, definimos responsabilidades, calendario y condiciones.",
+            ],
+            [
+              "04",
+              "Ejecución y gestión",
+              "Tras el acuerdo, coordinamos el desarrollo o la integración prevista.",
+            ],
+          ].map(([number, title, copy]) => (
+            <li>
+              <span>{number}</span>
+              <h3>{title}</h3>
+              <p>{copy}</p>
+            </li>
+          ))
+        }
+      </ol>
+    </div>
+  </section>
+
+  <section class="assets-page-capabilities">
+    <div class="shell assets-page-capabilities-grid">
+      <div>
+        <p class="eyebrow">Nuestra aportación</p>
+        <h2>Una estructura completa alrededor de cada activo.</h2>
+        <p>
+          Coordinamos las especialidades necesarias y damos continuidad a la
+          relación con propietarios, consumidores y proyectos.
+        </p>
+      </div>
+      <div class="assets-page-capability-list">
+        {
+          [
+            [
+              "01",
+              "Desarrollo",
+              "Coordinamos estudios, ingeniería, tramitación y conexión con los especialistas necesarios.",
+            ],
+            [
+              "02",
+              "Demanda",
+              "Activamos la captación, contratación y atención de potenciales consumidores.",
+            ],
+            [
+              "03",
+              "Energía",
+              "Nuestra comercializadora gestiona ante la distribuidora la legalización y activación de los coeficientes de reparto y, una vez activos, integra la energía asignada en la facturación.",
+            ],
+            [
+              "04",
+              "Tecnología",
+              "Helios organiza datos, contratos, asignaciones, cobros y seguimiento.",
+            ],
+          ].map(([number, title, copy]) => (
+            <article>
+              <span>{number}</span>
+              <div>
+                <>
+                  <h3>{title}</h3>
+                  <p>{copy}</p>
+                </>
+              </div>
+            </article>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+
+  <TrustBand compact />
+
+  <section class="section assets-page-contact" id="solicitar-estudio">
+    <div class="shell assets-page-contact-grid">
+      <div>
+        <p class="eyebrow">Primer análisis</p>
+        <h2>Cuéntanos qué activo tienes.</h2>
+        <p>
+          Cada activo necesita un nivel de análisis diferente. Elige el
+          formulario correspondiente y podremos valorarlo desde el primer
+          contacto con la información adecuada.
+        </p>
+      </div>
+      <div class="assets-page-contact-options">
+        <a href={roofStudyForm} target="_blank" rel="noreferrer">
+          <span>01 · Tengo una cubierta</span>
+          <strong>Solicitar estudio de cubierta</strong>
+          <small>Ubicación, contacto y datos básicos del espacio.</small>
+          <span aria-hidden="true">↗</span>
+        </a>
+        <a href="/comunidades-energeticas-operativas#formulario-planta">
+          <span>02 · Tengo una planta</span>
+          <strong>Solicitar estudio de planta</strong>
+          <small
+            >Información técnica, energética, administrativa y contractual.</small
+          >
+          <span aria-hidden="true">↗</span>
+        </a>
+      </div>
+    </div>
+    <p class="shell assets-page-contact-note">
+      La solicitud no supone la aceptación del activo, una oferta económica ni
+      un compromiso de desarrollo. Trataremos los datos conforme a nuestra<Fragment
+        set:html="<!-- -->"
+      />{" "}
+      <a href="/politica-privacidad">política de privacidad</a>.
+    </p>
+  </section>
+</main>

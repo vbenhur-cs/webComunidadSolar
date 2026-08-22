@@ -65,8 +65,18 @@ export const pageRegistry: Record<HeaderPageKey, PageRegistryEntry> = {
     description:
       "Coolfy, instalador Premium y partner oficial de Comunidad Solar, estudia e instala tu solución de aerotermia de principio a fin.",
   },
-  activos: { path: "/rentabiliza-tu-activo" },
-  activoConectado: { path: "/comunidades-energeticas-operativas" },
+  activos: {
+    path: "/rentabiliza-tu-activo",
+    title: "Rentabiliza tu activo",
+    description:
+      "Convierte tu cubierta o planta fotovoltaica en una comunidad energética con la gestión comercial y energética de Comunidad Solar.",
+  },
+  activoConectado: {
+    path: "/comunidades-energeticas-operativas",
+    title: "Convierte tu planta en una comunidad energética operativa",
+    description:
+      "Comunidad Solar aporta Helios, comercializadora, captación y operación para conectar plantas fotovoltaicas construidas con hogares y empresas de proximidad.",
+  },
   blog: {
     path: "/blog",
     title: "Blog",
@@ -79,8 +89,18 @@ export const pageRegistry: Record<HeaderPageKey, PageRegistryEntry> = {
     description:
       "Próximos encuentros y archivo de visitas, jornadas y webinars públicos de Comunidad Solar en Zoho Backstage y TrainerCentral.",
   },
-  comunero: { path: "/soy-comunero" },
-  contacto: { path: "/contacto" },
+  comunero: {
+    path: "/soy-comunero",
+    title: "Soy comunero",
+    description:
+      "Accede a la app Comunidad Solar o entra identificado en Atención al Comunero para consultar y seguir tus solicitudes.",
+  },
+  contacto: {
+    path: "/contacto",
+    title: "Contacto",
+    description:
+      "Habla con un asesor energético si estás decidiendo o entra directamente en los canales de atención si ya eres comunero.",
+  },
   comercializadora: {
     path: "/comercializadora-y-tarifas",
     title: "Comercializadora eléctrica para comuneros",
@@ -111,7 +131,11 @@ export type CorePageKey =
   | "mantenimiento"
   | "comercializadora"
   | "blog"
-  | "eventos";
+  | "eventos"
+  | "comunero"
+  | "contacto"
+  | "activos"
+  | "activoConectado";
 
 /** Native Astro page keys implemented so far; later tasks extend this map. */
 export const corePageComponents: Record<CorePageKey, string> = {
@@ -125,6 +149,10 @@ export const corePageComponents: Record<CorePageKey, string> = {
   comercializadora: "CommercializerPage",
   blog: "BlogPage",
   eventos: "EventsPage",
+  comunero: "MemberPage",
+  contacto: "ContactPage",
+  activos: "AssetsPage",
+  activoConectado: "OperationalAssetsPage",
 };
 
 export const staticSlugPaths = Object.keys(corePageComponents)
