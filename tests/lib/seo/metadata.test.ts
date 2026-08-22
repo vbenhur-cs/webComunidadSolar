@@ -41,3 +41,12 @@ test("keeps root social metadata for a canonical-less private page", () => {
     url: absoluteCanonical("/"),
   });
 });
+
+test("keeps an explicit page social image instead of the global fallback", () => {
+  const socialImage = {
+    url: "/media/villalbilla.jpg",
+    alt: "Vista aérea del municipio madrileño de Villalbilla",
+  };
+
+  assert.deepEqual(completeSiteMeta({ socialImage }).socialImage, socialImage);
+});

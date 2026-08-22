@@ -1,0 +1,419 @@
+---
+import { CoverageFinder } from "../../islands/CoverageFinder";
+import HumanHelp from "../../site/HumanHelp.astro";
+import Pill from "../../site/Pill.astro";
+import SectionHeading from "../../site/SectionHeading.astro";
+import {
+  communities,
+  getNetworkCommunities,
+} from "../../../content/community-data";
+import CommunitiesHero from "./CommunitiesHero.astro";
+import FactStrip from "../home-energy/FactStrip.astro";
+import FaqList from "../home-energy/FaqList.astro";
+import Steps from "../home-energy/Steps.astro";
+import { communityCoverageDto } from "./community-template";
+
+const proximityRadiusLabel = "Hasta 5 km";
+const communityDiagram = "/media/comunidades-energeticas.svg";
+const coverageCommunities = communities.map(communityCoverageDto);
+const extremaduraLocations = getNetworkCommunities("extremadura");
+const extremaduraPanels = extremaduraLocations.reduce(
+  (total, location) =>
+    total +
+    (location.installations?.reduce(
+      (subtotal, installation) => subtotal + installation.panelCount,
+      0,
+    ) ?? 0),
+  0,
+);
+const formatCommunityInteger = (value: number) =>
+  value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+---
+
+<main>
+  <CommunitiesHero />
+
+  <section class="facts-section">
+    <div class="shell">
+      <FactStrip
+        facts={[
+          {
+            value: `${proximityRadiusLabel}*`,
+            label: "Radio de proximidad",
+            note: "*Cobertura validada por dirección y punto de suministro",
+          },
+          { value: "Sin obras", label: "En tu casa o negocio" },
+          { value: "2 modelos", label: "Compra o alquiler" },
+          { value: "Local", label: "Energía producida cerca" },
+        ]}
+      />
+    </div>
+  </section>
+
+  <section class="coverage-section coverage-page" id="cobertura">
+    <div class="shell">
+      <CoverageFinder client:load communities={coverageCommunities} />
+    </div>
+  </section>
+
+  <section class="section models-section" id="modelos">
+    <div class="shell">
+      <SectionHeading
+        eyebrow="La misma energía local"
+        title="Dos formas muy diferentes de acceder."
+        copy="Comprar y alquilar no son versiones del mismo producto. La diferencia es si quieres realizar una inversión para maximizar el ahorro o empezar sin desembolso inicial."
+        align="center"
+      />
+      <div class="model-grid">
+        <article class="model-card model-buy" id="compra">
+          <div class="model-header">
+            <Pill tone="yellow">Compra</Pill>
+            <span>Mayor ahorro estimado</span>
+          </div>
+          <h3>Inviertes hoy para recibir tu producción durante 25 años.</h3>
+          <p>
+            Es la opción para quien quiere realizar una inversión inicial y
+            obtener el máximo ahorro posible a largo plazo.
+          </p>
+          <div class="model-highlight">
+            <strong>Hasta un 70%*</strong>
+            <span>de ahorro estimado</span>
+          </div>
+          <ul>
+            <li>Inversión inicial</li>
+            <li>Producción asignada durante 25 años*</li>
+            <li>Sin obras en tu vivienda</li>
+            <li>Financiación según comunidad</li>
+          </ul>
+          <a href="#cobertura"
+            >Comprobar si puedo comprar <span aria-hidden="true">↗</span></a
+          >
+        </article>
+        <article class="model-card model-rent" id="alquiler">
+          <div class="model-header">
+            <Pill tone="blue">Alquiler</Pill>
+            <span>Sin inversión inicial</span>
+          </div>
+          <h3>Pagas una cuota mensual y empiezas a ahorrar.</h3>
+          <p>
+            No compras el activo. Alquilas paneles o producción asignada y
+            recibes esa energía directamente en tu factura.
+          </p>
+          <div class="model-highlight">
+            <strong>20–25%*</strong>
+            <span>de ahorro estimado</span>
+          </div>
+          <ul>
+            <li>Sin desembolso inicial</li>
+            <li>Cuota mensual por panel</li>
+            <li>Sin obras en tu vivienda</li>
+            <li>Condiciones según comunidad</li>
+          </ul>
+          <a href="#cobertura"
+            >Ver mi cuota y ahorro <span aria-hidden="true">↗</span></a
+          >
+        </article>
+      </div>
+      <p class="claims-note">
+        *Cifras de referencia sujetas a validación por proyecto. El ahorro real
+        depende de producción, consumo, precio y condiciones contractuales.
+      </p>
+      <div
+        class="comparison-table"
+        role="table"
+        aria-label="Comparación de modelos"
+      >
+        <div class="comparison-row comparison-head" role="row">
+          <span role="columnheader">Qué comparas</span>
+          <strong role="columnheader">Compra</strong>
+          <strong role="columnheader">Alquiler</strong>
+        </div>
+        {
+          [
+            ["Inversión inicial", "Sí", "No"],
+            ["Titularidad", "Producción o paneles*", "No adquieres el activo"],
+            ["Pago", "Una inversión", "Cuota mensual"],
+            ["Duración", "25 años*", "Según contrato"],
+            ["Perfil ideal", "Maximizar ahorro", "Ahorrar sin invertir"],
+          ].map((row) => (
+            <div class="comparison-row" role="row">
+              <span role="cell">{row[0]}</span>
+              <strong role="cell">{row[1]}</strong>
+              <strong role="cell">{row[2]}</strong>
+            </div>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+
+  <HumanHelp compact />
+
+  <section class="section how-community">
+    <div class="shell">
+      <SectionHeading
+        eyebrow="Cómo funciona"
+        title="Una cubierta local conecta a toda una comunidad."
+        copy="Comunidad Solar desarrolla y gestiona la instalación. Nuestra comercializadora tramita ante la distribuidora la legalización y activación de los coeficientes de reparto y, cuando están activos, refleja en cada factura la energía asignada."
+      />
+      <div class="community-diagram-wrap">
+        <div class="community-diagram-copy">
+          <Pill tone="green">Proximidad real</Pill>
+          <h3>De una cubierta cercana a tu factura.</h3>
+          <p>
+            La instalación produce y la red distribuye. Nuestra comercializadora
+            gestiona los coeficientes ante la distribuidora y, una vez aplicados
+            a las medidas, refleja en tu factura la energía que corresponde a tu
+            suministro.
+          </p>
+        </div>
+        <div class="community-diagram-visual">
+          <div
+            class="community-distance-badge"
+            aria-label="Distancia máxima legal de hasta cinco kilómetros"
+          >
+            <span>Distancia máxima legal</span>
+            <strong>{proximityRadiusLabel}*</strong>
+          </div>
+          <img
+            src={communityDiagram}
+            alt="La energía pasa de una cubierta solar, a través de la red, hasta los hogares y empresas cercanos"
+          />
+          <div class="community-diagram-labels">
+            <span>Cubierta solar</span>
+            <span>Red eléctrica</span>
+            <span>Tu casa o negocio</span>
+          </div>
+          <p class="community-distance-note">
+            *Para instalaciones fotovoltaicas de hasta 5 MW conectadas a través
+            de la red, según la normativa vigente.
+          </p>
+        </div>
+      </div>
+      <Steps
+        items={[
+          {
+            title: "Una cubierta",
+            copy: "Un ayuntamiento, empresa o propietario aporta un espacio cercano.",
+          },
+          {
+            title: "Una planta",
+            copy: "Desarrollamos, legalizamos y gestionamos la instalación.",
+          },
+          {
+            title: "El reparto",
+            copy: "La comercializadora tramita los coeficientes ante la distribuidora.",
+          },
+          {
+            title: "La factura",
+            copy: "Cuando los coeficientes están activos, la energía asignada se refleja cada mes.",
+          },
+        ]}
+      />
+    </div>
+  </section>
+
+  <section class="storage-band">
+    <div class="shell storage-grid">
+      <div class="storage-copy">
+        <Pill tone="yellow">La siguiente pieza</Pill>
+        <h2>El sol no tiene que terminar cuando se pone.</h2>
+        <p>
+          Incorporamos baterías en hogares y parques para guardar la energía
+          solar de las horas centrales y utilizarla cuando más se necesita y más
+          valor tiene.
+        </p>
+        <a href="/nosotros#almacenamiento">
+          Por qué el almacenamiento lo cambia todo <span aria-hidden="true"
+            >↗</span
+          >
+        </a>
+      </div>
+      <div class="storage-visual" aria-hidden="true">
+        <div class="storage-sun"></div>
+        <div class="energy-line line-one"></div>
+        <div class="energy-line line-two"></div>
+        <div class="battery-large">
+          <span class="battery-fill"></span><i></i>
+        </div>
+        <p>ENERGÍA SOLAR<br />CUANDO LA NECESITAS</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section communities-gallery" id="proyectos">
+    <div class="shell">
+      <SectionHeading
+        eyebrow="Comunidades reales"
+        title="Cada proyecto muestra su estado con total claridad."
+        copy="Consulta ubicación, modalidad, potencia, capacidad, hitos, fecha de actualización y siguiente acción. Cuando un dato todavía no está validado, también lo decimos."
+      />
+      <div
+        class="community-scale-feature"
+        aria-label="Alcance total de los proyectos de proximidad en desarrollo"
+      >
+        <div class="community-scale-copy">
+          <span>Alcance total · España</span>
+          <h3>Lo que ves publicado es solo una parte.</h3>
+        </div>
+        <dl>
+          <div>
+            <dt>Proyectos en negociación o desarrollo activo</dt>
+            <dd>+320</dd>
+          </div>
+          <div>
+            <dt>Potencia conjunta en desarrollo</dt>
+            <dd>+96 MW</dd>
+          </div>
+        </dl>
+        <p class="community-scale-note">
+          Incluye acuerdos firmados y oportunidades en negociación o desarrollo
+          activo. <strong
+            >No todos los proyectos están cerrados ni disponibles.</strong
+          > Datos revisados en julio de 2026.
+        </p>
+      </div>
+      <a
+        class="community-network-feature"
+        href="/comunidades-energeticas/extremadura"
+      >
+        <div>
+          <span>Red especial · Extremadura</span>
+          <h3>Comunidad Energética Extremeña</h3>
+          <p>
+            Una página paraguas ordena las diez comunidades locales y sus quince
+            cubiertas sin contarlas como una sola planta.
+          </p>
+        </div>
+        <dl>
+          <div><dt>Localidades</dt><dd>{extremaduraLocations.length}</dd></div>
+          <div>
+            <dt>Cubiertas</dt>
+            <dd>
+              {
+                extremaduraLocations.reduce(
+                  (total, location) =>
+                    total + (location.installations?.length ?? 0),
+                  0,
+                )
+              }
+            </dd>
+          </div>
+          <div>
+            <dt>Paneles</dt><dd>{formatCommunityInteger(extremaduraPanels)}</dd>
+          </div>
+          <div><dt>Potencia</dt><dd>1.831 kWp</dd></div>
+        </dl>
+        <strong>Ver la red completa <span aria-hidden="true">↗</span></strong>
+      </a>
+      <a
+        class="manganafer-community-feature"
+        href="/comunidades-energeticas/manganafer"
+      >
+        <div class="manganafer-community-feature-copy">
+          <span>Cartagena · ámbito local de hasta 1 km</span>
+          <h3>Comunidad Energética de Manganáfer</h3>
+          <p>
+            Una propuesta para que los vecinos y pequeños negocios del entorno
+            inmediato —a un máximo de 1 kilómetro— tengan prioridad y puedan
+            acceder a un beneficio energético real, sin obras ni inversión
+            inicial.
+          </p>
+          <strong
+            >Conocer el proyecto y apuntarme <span aria-hidden="true">↗</span
+            ></strong
+          >
+        </div>
+        <img
+          src="/media/manganafer-hero-1024x792.png"
+          alt="Familia contemplando un entorno rural con energía solar"
+        />
+      </a>
+      <div class="community-published-heading">
+        <span>Comunidades publicadas</span>
+        <h3>Elige la tuya y comprueba si puedes apuntarte.</h3>
+        <p>
+          Cada ficha te dice si hay plazas, lista de espera o una próxima
+          apertura, además de ubicación, potencia, hitos y fecha de
+          actualización.
+        </p>
+      </div>
+      <div class="community-card-grid">
+        {
+          communities.map((community) => (
+            <article>
+              <div class="community-image">
+                <img src={community.image} alt={community.imageAlt} />
+                <span class={`status status-${community.statusTone}`}>
+                  {community.status}
+                </span>
+                {community.imageCredit && (
+                  <a
+                    class="community-image-credit"
+                    href={community.imageCredit.href}
+                    target="_blank"
+                    rel="noreferrer"
+                    aria-label={`Crédito de la imagen: ${community.imageCredit.label}${community.imageCredit.license ? `, ${community.imageCredit.license}` : ""}`}
+                  >
+                    {community.imageCredit.label}
+                    {community.imageCredit.license &&
+                      ` · ${community.imageCredit.license}`}
+                  </a>
+                )}
+              </div>
+              <div class="community-card-meta">
+                <span>{community.province}</span>
+                <span>{community.modalities.join(" · ")}</span>
+                <span>{community.power}</span>
+              </div>
+              <h3>{community.name}</h3>
+              <p>{community.summary}</p>
+              <a href={`/comunidades-energeticas/${community.slug}`}>
+                Ver estado y ficha completa <span aria-hidden="true">↗</span>
+              </a>
+            </article>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+
+  <section class="section faq-section">
+    <div class="shell faq-grid">
+      <SectionHeading
+        eyebrow="Preguntas frecuentes"
+        title="Compra y alquiler, sin mezclarlos."
+      />
+      <FaqList
+        items={[
+          {
+            question: "¿Quién puede participar?",
+            answer:
+              "Los suministros situados dentro del radio autorizado de cada instalación. La comprobación definitiva se realiza con la dirección y el punto de suministro.",
+          },
+          {
+            question: "¿Sin inversión significa sin coste?",
+            answer:
+              "No. En alquiler no existe desembolso inicial, pero se paga una cuota mensual. El ahorro resulta de comparar esa cuota y el resto de conceptos con el valor de la energía recibida.",
+          },
+          {
+            question: "¿Cuándo empieza el ahorro?",
+            answer:
+              "Cuando la comunidad está legalizada, la distribuidora ha activado los coeficientes de reparto y la energía comienza a reflejarse en la factura. Cada ficha debe mostrar estado e hitos, no prometer una fecha cerrada.",
+          },
+          {
+            question:
+              "¿Una planta conectada significa que la energía ya aparece en mi factura?",
+            answer:
+              "No. La conexión a la red es un hito técnico de la planta. Después, la comercializadora de Comunidad Solar debe tramitar ante la distribuidora la legalización y activación de los coeficientes de reparto. La energía solo aparece en las facturas cuando la distribuidora los aplica a las medidas.",
+          },
+          {
+            question: "¿Qué ocurre si todavía no hay cobertura?",
+            answer:
+              "Puedes apuntarte para recibir novedades, proponer una cubierta cercana o estudiar el autoconsumo remoto como alternativa disponible en toda España.",
+          },
+        ]}
+      />
+    </div>
+  </section>
+</main>

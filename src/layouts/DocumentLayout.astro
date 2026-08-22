@@ -19,7 +19,11 @@ const canonical = absoluteCanonical(metadata.canonical);
 const description = metadata.description;
 const social = socialMetadata(metadata);
 const robots = `${metadata.robots.index ? "index" : "noindex"}, ${metadata.robots.follow ? "follow" : "nofollow"}`;
-const socialImage = new URL("/comunidad-solar-hero.png", siteUrl).href;
+const socialImage = metadata.socialImage ?? {
+  url: "/comunidad-solar-hero.png",
+  alt: "Comunidad Solar, energía renovable cerca de las personas",
+};
+const socialImageUrl = new URL(socialImage.url, siteUrl).href;
 const icon = new URL("/comunidad-solar-logo.svg", siteUrl).href;
 ---
 
@@ -53,15 +57,12 @@ const icon = new URL("/comunidad-solar-logo.svg", siteUrl).href;
           <meta property="og:title" content={social.title} />
           <meta property="og:description" content={social.description} />
           <meta property="og:url" content={social.url} />
-          <meta property="og:image" content={socialImage} />
-          <meta
-            property="og:image:alt"
-            content="Comunidad Solar, energía renovable cerca de las personas"
-          />
+          <meta property="og:image" content={socialImageUrl} />
+          <meta property="og:image:alt" content={socialImage.alt} />
           <meta name="twitter:card" content="summary_large_image" />
           <meta name="twitter:title" content={social.title} />
           <meta name="twitter:description" content={social.description} />
-          <meta name="twitter:image" content={socialImage} />
+          <meta name="twitter:image" content={socialImageUrl} />
         </>
       )
     }

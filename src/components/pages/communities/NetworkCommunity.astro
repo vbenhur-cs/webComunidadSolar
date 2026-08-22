@@ -1,0 +1,265 @@
+---
+import { CoverageFinder } from "../../islands/CoverageFinder";
+import HumanHelp from "../../site/HumanHelp.astro";
+import PageHero from "../../site/PageHero.astro";
+import SectionHeading from "../../site/SectionHeading.astro";
+import {
+  getCommunityDisplayTitle,
+  getNetworkCommunities,
+  type Community,
+} from "../../../content/community-data";
+import FactStrip from "../home-energy/FactStrip.astro";
+import { communityCoverageDto } from "./community-template";
+import { formatCommunityInteger, localCommunityFaqs } from "./community-utils";
+
+interface Props {
+  community: Community;
+}
+
+const { community } = Astro.props;
+const communityDiagram = "/media/comunidades-energeticas.svg";
+const networkCommunities = getNetworkCommunities(community.slug);
+const recentMilestones = community.milestones.slice(-4);
+const stats = community.networkStats;
+const facts = stats
+  ? [
+      {
+        value: stats.municipalities.toLocaleString("es-ES"),
+        label: "Comunidades locales",
+      },
+      {
+        value: stats.installations.toLocaleString("es-ES"),
+        label: "Instalaciones previstas",
+      },
+      {
+        value: formatCommunityInteger(stats.panelCount),
+        label: "Paneles previstos",
+      },
+      {
+        value: `${formatCommunityInteger(stats.powerKwp)} kWp`,
+        label: "Potencia conjunta",
+      },
+    ]
+  : [];
+---
+
+<main class="community-network-detail">
+  <div class="shell community-breadcrumb">
+    <a href="/comunidades-energeticas"
+      ><span aria-hidden="true">←</span> Todas las comunidades</a
+    >
+  </div>
+
+  <PageHero
+    tone="green"
+    eyebrow={`Red de comunidades energéticas · ${community.region}`}
+    title={getCommunityDisplayTitle(community)}
+    lead={community.summary}
+    primary={{ href: "#localidades", label: "Ver las localidades" }}
+    secondary={{ href: "#cobertura", label: "Comprobar mi dirección" }}
+    image={community.image}
+    imageAlt={community.imageAlt}
+    imageCredit={community.imageCredit}
+  />
+
+  <section
+    class="community-live-status"
+    aria-label="Situación actual de la red"
+  >
+    <div class="shell community-live-status-grid">
+      <div>
+        <span>Participación</span><strong>{community.commercialStatus}</strong>
+      </div>
+      <div>
+        <span>Energía</span><strong
+          >Calendario por confirmar en cada localidad</strong
+        >
+      </div>
+      <div>
+        <span>Última actualización</span><strong>{community.updatedAt}</strong>
+      </div>
+    </div>
+  </section>
+
+  <section class="facts-section community-detail-facts">
+    <div class="shell"><FactStrip {facts} /></div>
+  </section>
+
+  <section class="section community-local-intro">
+    <div class="shell community-local-intro-grid">
+      <div>
+        <p class="eyebrow">Una red, diez comunidades locales</p>
+        <h2>Encuentra la localidad que puede compartir energía contigo.</h2>
+        <p class="community-local-intro-copy">
+          Cada comunidad tiene sus propias instalaciones y su propio radio de
+          cobertura. Elige tu localidad para conocer la potencia prevista y el
+          estado actual de la participación.
+        </p>
+      </div>
+      <div class="community-local-steps">
+        <article>
+          <span>01</span><h3>Elige tu localidad</h3><p>
+            La generación se organiza en diez comunidades de Cáceres y Badajoz,
+            no en una única instalación regional.
+          </p>
+        </article>
+        <article>
+          <span>02</span><h3>Helios comprueba tu dirección</h3><p>
+            La distancia y el punto de suministro determinan qué cubiertas o
+            instalaciones pueden darte cobertura.
+          </p>
+        </article>
+        <article>
+          <span>03</span><h3>Preparamos la propuesta</h3><p>
+            Cuando la participación esté abierta, tu factura permitirá ajustar
+            la producción y las condiciones a tu consumo.
+          </p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="section community-network-locations" id="localidades">
+    <div class="shell">
+      <SectionHeading
+        eyebrow="Comunidades de la red"
+        title="Elige tu localidad y conoce sus instalaciones."
+        copy="Consulta la potencia prevista en cada ciudad y comprueba si tu dirección tiene cobertura. Mérida agrupa cuatro instalaciones; Navalmoral de la Mata y Villafranca de los Barros, dos."
+      />
+      <div class="community-network-location-grid">
+        {
+          networkCommunities.map((location) => {
+            const installationCount = location.installations?.length ?? 0;
+            const locationPanelTotal =
+              location.installations?.reduce(
+                (total, installation) => total + installation.panelCount,
+                0,
+              ) ?? 0;
+            return (
+              <a
+                class="community-network-location-card"
+                href={`/comunidades-energeticas/${location.slug}`}
+              >
+                <div>
+                  <span>
+                    {location.province}
+                    <Fragment set:html="<!-- -->" /> ·{" "}
+                    <Fragment set:html="<!-- -->" />
+                    {installationCount}
+                    <Fragment set:html="<!-- -->" />{" "}
+                    <Fragment set:html="<!-- -->" />
+                    {installationCount === 1 ? "instalación" : "instalaciones"}
+                  </span>
+                  <h3>{location.name}</h3>
+                </div>
+                <dl>
+                  <div>
+                    <>
+                      <dt>Potencia</dt>
+                      <dd>{location.power}</dd>
+                    </>
+                  </div>
+                  <div>
+                    <>
+                      <dt>Paneles</dt>
+                      <dd>{locationPanelTotal.toLocaleString("es-ES")}</dd>
+                    </>
+                  </div>
+                </dl>
+                <strong>
+                  Ver comunidad <span aria-hidden="true">↗</span>
+                </strong>
+              </a>
+            );
+          })
+        }
+      </div>
+    </div>
+  </section>
+
+  <section class="section community-local-story">
+    <div class="shell community-local-story-grid">
+      <div class="community-local-story-image community-network-story-image">
+        <img
+          src={communityDiagram}
+          alt="Esquema de cubiertas solares que comparten energía con hogares y negocios cercanos"
+        />
+      </div>
+      <div class="community-local-story-copy">
+        <p class="eyebrow">Una red construida localidad a localidad</p>
+        <h2>La comunidad que te corresponde depende de dónde consumes.</h2>
+        {
+          (community.overview ?? [])
+            .slice(1)
+            .map((paragraph) => <p>{paragraph}</p>)
+        }
+      </div>
+    </div>
+  </section>
+
+  <section class="section community-local-update" id="estado">
+    <div class="shell">
+      <div class="community-local-update-heading">
+        <div>
+          <p class="eyebrow">Situación actual</p><h2>
+            {community.stateHeadline}
+          </h2><p>{community.stateCopy}</p>
+        </div>
+      </div>
+      <div class="community-local-milestones">
+        {
+          recentMilestones.map((milestone) => (
+            <article
+              class={`community-local-milestone community-local-milestone-${milestone.state}`}
+            >
+              <span>
+                {milestone.state === "done"
+                  ? "Completado"
+                  : milestone.state === "current"
+                    ? "Ahora"
+                    : "Siguiente"}
+              </span>
+              <h3>{milestone.title}</h3>
+              <p>{milestone.copy}</p>
+            </article>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+
+  <section class="coverage-section community-detail-coverage" id="cobertura">
+    <div class="shell">
+      <CoverageFinder compact community={communityCoverageDto(community)} />
+    </div>
+  </section>
+
+  <section class="section community-local-faq">
+    <div class="shell community-local-faq-grid">
+      <div>
+        <p class="eyebrow">Antes de participar</p><h2>
+          Las preguntas importantes, respondidas sin rodeos.
+        </h2>
+      </div>
+      <div class="faq-list">
+        {
+          localCommunityFaqs.map((item) => (
+            <details>
+              <>
+                <summary>
+                  <>
+                    <span>{item.question}</span>
+                    <i aria-hidden="true">+</i>
+                  </>
+                </summary>
+                <p>{item.answer}</p>
+              </>
+            </details>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+
+  <HumanHelp compact />
+</main>

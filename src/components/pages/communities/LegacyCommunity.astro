@@ -1,0 +1,506 @@
+---
+import { CoverageFinder } from "../../islands/CoverageFinder";
+import HumanHelp from "../../site/HumanHelp.astro";
+import PageHero from "../../site/PageHero.astro";
+import SectionHeading from "../../site/SectionHeading.astro";
+import {
+  communities,
+  getCommunityDisplayTitle,
+  getNetworkCommunities,
+  type Community,
+} from "../../../content/community-data";
+import FactStrip from "../home-energy/FactStrip.astro";
+import CommunityModelCard from "./CommunityModelCard.astro";
+import {
+  communityCurrency,
+  communityNumber,
+  communityPercentage,
+  formatCommunityInteger,
+} from "./community-utils";
+
+interface Props {
+  community: Community;
+}
+
+const { community } = Astro.props;
+const isNetwork = community.kind === "network";
+const networkCommunities = isNetwork
+  ? getNetworkCommunities(community.slug)
+  : [];
+const panelTotal =
+  community.installations?.reduce(
+    (total, installation) => total + installation.panelCount,
+    0,
+  ) ?? 0;
+const usePanelCapacity =
+  panelTotal > 0 &&
+  (community.estimatedParticipants === "Sin dato publicado" ||
+    community.estimatedParticipants === "Por confirmar");
+const detailFacts = community.networkStats
+  ? [
+      {
+        value: community.networkStats.municipalities.toString(),
+        label: "Comunidades locales",
+      },
+      {
+        value: community.networkStats.installations.toString(),
+        label: "Cubiertas publicadas",
+      },
+      {
+        value: formatCommunityInteger(community.networkStats.panelCount),
+        label: "Paneles publicados",
+      },
+      {
+        value: `${formatCommunityInteger(community.networkStats.powerKwp)} kWp`,
+        label: "Potencia conjunta",
+      },
+    ]
+  : [
+      { value: community.power, label: "Potencia publicada" },
+      usePanelCapacity
+        ? {
+            value: panelTotal.toLocaleString("es-ES"),
+            label: "Paneles publicados",
+            note: `Datos comerciales · ${community.commercialDataAt}`,
+          }
+        : {
+            value: community.estimatedParticipants,
+            label: "Participantes estimados",
+            note: "Estimación histórica; no equivale a participantes actuales",
+          },
+      { value: community.modalities.join(" · "), label: "Modalidad" },
+      {
+        value: community.radius,
+        label: "Radio de proximidad",
+        note: "*Sujeto a autorización y punto de suministro",
+      },
+    ];
+const related = communities
+  .filter(
+    (candidate) =>
+      candidate.slug !== community.slug &&
+      !(isNetwork && candidate.networkSlug === community.slug),
+  )
+  .sort(
+    (left, right) =>
+      Number(
+        right.networkSlug !== undefined &&
+          right.networkSlug === community.networkSlug,
+      ) -
+        Number(
+          left.networkSlug !== undefined &&
+            left.networkSlug === community.networkSlug,
+        ) ||
+      Number(right.region === community.region) -
+        Number(left.region === community.region),
+  )
+  .slice(0, 3);
+---
+
+<main>
+  <div class="shell community-breadcrumb">
+    <a href="/comunidades-energeticas"
+      ><span aria-hidden="true">←</span> Todas las comunidades</a
+    >
+    {
+      community.networkSlug && (
+        <>
+          <span aria-hidden="true">/</span>
+          <a href={`/comunidades-energeticas/${community.networkSlug}`}>
+            Comunidad Energética Extremeña
+          </a>
+        </>
+      )
+    }
+  </div>
+  <PageHero
+    tone="green"
+    eyebrow={`Comunidad energética · ${community.region}`}
+    title={getCommunityDisplayTitle(community)}
+    lead={community.summary}
+    primary={isNetwork
+      ? { href: "#localidades", label: "Ver las 10 localidades" }
+      : { href: "#estado", label: "Ver estado del proyecto" }}
+    secondary={{ href: "#cobertura", label: "Comprobar mi dirección" }}
+    image={community.image}
+    imageAlt={community.imageAlt}
+    imageCredit={community.imageCredit}
+  />
+  <section class="facts-section community-detail-facts">
+    <div class="shell"><FactStrip facts={detailFacts} /></div>
+  </section>
+  {
+    community.overview && (
+      <section class="section community-overview-section">
+        <div class="shell community-overview-grid">
+          <div>
+            <p class="eyebrow">La comunidad, con datos concretos</p>
+            <h2>
+              {isNetwork
+                ? "Una red regional formada por comunidades locales."
+                : "Qué instalaciones forman el proyecto y cómo se encuentra."}
+            </h2>
+          </div>
+          <div class="community-overview-copy">
+            {community.overview.map((paragraph) => (
+              <p>{paragraph}</p>
+            ))}
+            <div class="community-data-snapshot">
+              <>
+                <span>Situación comercial</span>
+                <strong>{community.commercialStatus}</strong>
+                <small>Datos consultados: {community.commercialDataAt}</small>
+              </>
+            </div>
+            {community.dataCaveat && (
+              <p class="community-data-caveat">{community.dataCaveat}</p>
+            )}
+          </div>
+        </div>
+      </section>
+    )
+  }
+  {
+    isNetwork && (
+      <section class="section community-network-locations" id="localidades">
+        <div class="shell">
+          <SectionHeading
+            eyebrow="Diez comunidades, no una sola instalación"
+            title="Elige la localidad que realmente puede darte cobertura."
+            copy="Cada ficha muestra la potencia y las cubiertas publicadas para esa ciudad. Mérida, Navalmoral de la Mata y Villafranca de los Barros agrupan varias cubiertas sin multiplicar artificialmente el número de comunidades."
+          />
+          <div class="community-network-location-grid">
+            {networkCommunities.map((location) => (
+              <a
+                class="community-network-location-card"
+                href={`/comunidades-energeticas/${location.slug}`}
+              >
+                <div>
+                  <span>
+                    {location.province} · {location.installations?.length}{" "}
+                    {location.installations?.length === 1
+                      ? "cubierta"
+                      : "cubiertas"}
+                  </span>
+                  <h3>{location.name}</h3>
+                </div>
+                <dl>
+                  <div>
+                    <dt>Potencia</dt>
+                    <dd>{location.power}</dd>
+                  </div>
+                  <div>
+                    <dt>Paneles</dt>
+                    <dd>
+                      {location.installations
+                        ?.reduce(
+                          (total, installation) =>
+                            total + installation.panelCount,
+                          0,
+                        )
+                        .toLocaleString("es-ES")}
+                    </dd>
+                  </div>
+                </dl>
+                <strong>
+                  Ver ficha local <span aria-hidden="true">↗</span>
+                </strong>
+              </a>
+            ))}
+          </div>
+        </div>
+      </section>
+    )
+  }
+  <section class="section community-status-section" id="estado">
+    <div class="shell community-status-grid">
+      <article class="project-status-card">
+        <span
+          class={`project-status-pill project-status-${community.statusTone}`}
+          >{community.status}</span
+        >
+        <p class="eyebrow">Estado actual</p><h2>{community.stateHeadline}</h2><p
+          class="project-status-copy"
+        >
+          {community.stateCopy}
+        </p>
+        {
+          community.activationStatus && (
+            <div
+              class="community-activation-status"
+              aria-label="Estado de conexión de la planta y de la energía en factura"
+            >
+              <article
+                class={`community-activation-step community-activation-${community.activationStatus.connection.tone}`}
+              >
+                <>
+                  <span>Planta y red</span>
+                  <strong>{community.activationStatus.connection.value}</strong>
+                  <small>{community.activationStatus.connection.detail}</small>
+                </>
+              </article>
+              <article
+                class={`community-activation-step community-activation-${community.activationStatus.billing.tone}`}
+              >
+                <>
+                  <span>Energía en factura</span>
+                  <strong>{community.activationStatus.billing.value}</strong>
+                  <small>{community.activationStatus.billing.detail}</small>
+                </>
+              </article>
+            </div>
+          )
+        }
+        <div class="project-status-meta">
+          <div>
+            <span>Última actualización</span><strong
+              >{community.updatedAt}</strong
+            >
+          </div><div>
+            <span>Ubicación de generación</span><strong>{community.host}</strong
+            >
+          </div><div>
+            <span>Duración / horizonte</span><strong>{community.term}</strong>
+          </div>
+        </div>
+      </article>
+      <aside class="project-next-card">
+        <span class="project-next-index">SIGUIENTE ACCIÓN</span><h3>
+          {community.nextAction}
+        </h3><p>
+          Esta es la acción que desbloquea el siguiente avance o permite saber
+          si tu suministro puede participar.
+        </p><a href="#cobertura"
+          >Comprobar mi dirección <span aria-hidden="true">↗</span></a
+        >
+      </aside>
+    </div>
+  </section>
+  {
+    !isNetwork &&
+      community.installations &&
+      community.installations.length > 0 && (
+        <section class="section community-installations-section">
+          <div class="shell">
+            <SectionHeading
+              eyebrow="Instalaciones que forman la comunidad"
+              title={
+                community.installations.length === 1
+                  ? "Una cubierta, con su inventario y estado separados."
+                  : `${community.installations.length} cubiertas, explicadas una a una.`
+              }
+              copy="La disponibilidad comercial no se confunde con el estado técnico. Paneles, participantes y precios corresponden al último dato público consultado y pueden cambiar con nuevas incorporaciones."
+            />
+            <div
+              class={`community-installation-grid community-installation-grid-${Math.min(community.installations.length, 4)}`}
+            >
+              {community.installations.map((installation) => {
+                const availablePanels =
+                  installation.panelCount -
+                  (installation.contractedPanels ?? 0);
+                const isRental = community.modalities.includes("Alquiler");
+                return (
+                  <article class="community-installation-card">
+                    <div class="community-installation-head">
+                      <div>
+                        <span>{community.projectType}</span>
+                        <h3>{installation.name}</h3>
+                        {installation.address && <p>{installation.address}</p>}
+                      </div>
+                      <strong>{installation.commercialStatus}</strong>
+                    </div>
+                    <dl>
+                      <div>
+                        <dt>Paneles</dt>
+                        <dd>
+                          {installation.panelCount.toLocaleString("es-ES")}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Potencia</dt>
+                        <dd>
+                          {communityNumber.format(installation.powerKwp)} kWp
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Potencia por panel</dt>
+                        <dd>
+                          {installation.panelPowerW.toLocaleString("es-ES")} W
+                        </dd>
+                      </div>
+                      {installation.contractedPanels !== undefined && (
+                        <div>
+                          <dt>
+                            {isRental
+                              ? "Paneles incorporados"
+                              : "Paneles contratados"}
+                          </dt>
+                          <dd>
+                            {installation.contractedPanels.toLocaleString(
+                              "es-ES",
+                            )}
+                          </dd>
+                        </div>
+                      )}
+                      {!isRental &&
+                        installation.contractedPanels !== undefined && (
+                          <div>
+                            <dt>Paneles disponibles</dt>
+                            <dd>{availablePanels.toLocaleString("es-ES")}</dd>
+                          </div>
+                        )}
+                      {installation.registeredParticipants !== undefined && (
+                        <div>
+                          <dt>Participantes registrados</dt>
+                          <dd>
+                            {installation.registeredParticipants.toLocaleString(
+                              "es-ES",
+                            )}
+                          </dd>
+                        </div>
+                      )}
+                      {installation.pricePerPanel !== undefined && (
+                        <div>
+                          <dt>Precio publicado · IVA incluido</dt>
+                          <dd>
+                            {communityCurrency.format(
+                              installation.pricePerPanel,
+                            )}
+                          </dd>
+                        </div>
+                      )}
+                      {installation.coefficientPercent !== undefined && (
+                        <div>
+                          <dt>Coeficiente por panel</dt>
+                          <dd>
+                            {communityPercentage.format(
+                              installation.coefficientPercent,
+                            )}
+                            %
+                          </dd>
+                        </div>
+                      )}
+                    </dl>
+                    {installation.technicalStatus && (
+                      <p class="community-installation-technical">
+                        <span>Estado técnico</span>
+                        <strong>{installation.technicalStatus}</strong>
+                      </p>
+                    )}
+                  </article>
+                );
+              })}
+            </div>
+            {community.installations.length > 1 && (
+              <p class="community-installation-note">
+                Los participantes se muestran por cubierta tal como aparecen en
+                la fuente pública. No se suman como personas únicas porque un
+                mismo comunero puede figurar en más de una instalación.
+              </p>
+            )}
+          </div>
+        </section>
+      )
+  }
+  <section class="section project-timeline-section">
+    <div class="shell">
+      <SectionHeading
+        eyebrow="Hitos del proyecto"
+        title="Lo conseguido, lo que ocurre ahora y lo siguiente."
+        copy="La ficha separa hechos, fase actual y próximos pasos para que el estado no dependa de mensajes dispersos."
+      /><div class="project-timeline">
+        {
+          community.milestones.map((milestone, index) => (
+            <article
+              class={`project-milestone project-milestone-${milestone.state}`}
+            >
+              <>
+                <div class="project-milestone-top">
+                  <>
+                    <span>{String(index + 1).padStart(2, "0")}</span>
+                    <i aria-hidden="true" />
+                  </>
+                </div>
+                <p>
+                  {milestone.state === "done"
+                    ? "Completado"
+                    : milestone.state === "current"
+                      ? "En curso"
+                      : "Siguiente"}
+                </p>
+                <h3>{milestone.title}</h3>
+                <small>{milestone.copy}</small>
+              </>
+            </article>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+  <section class="section community-detail-models">
+    <div class="shell">
+      <SectionHeading
+        eyebrow="Cómo participar"
+        title="Solo mostramos las modalidades publicadas para esta comunidad."
+        copy={community.kind === "network" ||
+        community.networkSlug === "extremadura"
+          ? "La red publica el alquiler como modalidad, pero todavía no ofrece una cuota completa y vigente por localidad. La lista de espera permite comprobar cobertura mientras se definen las condiciones comerciales."
+          : "Las condiciones definitivas dependen de la cobertura, la disponibilidad y el contrato concreto. El ahorro de compra no se presenta nunca por encima del 70%."}
+      /><div
+        class={`community-model-grid community-model-grid-${community.modalities.length}`}
+      >
+        {
+          community.modalities.map((modality) => (
+            <CommunityModelCard {modality} {community} />
+          ))
+        }
+      </div>{
+        community.kind !== "network" &&
+          community.networkSlug !== "extremadura" && (
+            <p class="claims-note">
+              *Ahorros estimados. El resultado real depende de la producción, tu
+              curva de consumo, el precio de la energía, los impuestos y las
+              condiciones de cada proyecto.
+            </p>
+          )
+      }
+    </div>
+  </section>
+  <section class="coverage-section community-detail-coverage" id="cobertura">
+    <div class="shell"><CoverageFinder compact /></div>
+  </section>
+  <HumanHelp compact />
+  <section class="section related-communities">
+    <div class="shell">
+      <div class="related-communities-heading">
+        <SectionHeading
+          eyebrow="Sigue explorando"
+          title="Otras comunidades de nuestra red."
+        /><a class="text-link" href="/comunidades-energeticas"
+          >Ver todas <span aria-hidden="true">↗</span></a
+        >
+      </div><div class="related-community-grid">
+        {
+          related.map((candidate) => (
+            <a
+              class="related-community-card"
+              href={`/comunidades-energeticas/${candidate.slug}`}
+            >
+              <>
+                <img src={candidate.image} alt={candidate.imageAlt} />
+                <div>
+                  <>
+                    <span>{candidate.province}</span>
+                    <h3>{candidate.name}</h3>
+                    <p>{candidate.status}</p>
+                  </>
+                </div>
+                <span aria-hidden="true">↗</span>
+              </>
+            </a>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+</main>

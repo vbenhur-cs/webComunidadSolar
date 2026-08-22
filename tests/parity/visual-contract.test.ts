@@ -367,7 +367,7 @@ test("keeps selectors missing on both sides as deterministic non-matched evidenc
   );
 });
 
-test("declares the three fixed capture viewports and structural selectors for home and generic pages", () => {
+test("declares the three fixed capture viewports and structural selectors for home, generic, and community pages", () => {
   assert.deepEqual(VISUAL_VIEWPORTS, [
     { name: "desktop", width: 1440, height: 900 },
     { name: "tablet", width: 768, height: 1024 },
@@ -386,6 +386,12 @@ test("declares the three fixed capture viewports and structural selectors for ho
     "body",
     "header",
     "main",
+    "footer",
+  ]);
+  assert.deepEqual(templateSelectors["community-detail"], [
+    "body",
+    "header",
+    "main.community-local-detail, main.community-network-detail",
     "footer",
   ]);
 });

@@ -1,0 +1,31 @@
+---
+export const prerender = true;
+
+import CommunityDetailPage from "../../components/pages/communities/CommunityDetailPage.astro";
+import SiteLayout from "../../layouts/SiteLayout.astro";
+import {
+  getCommunityDisplayTitle,
+  type Community,
+} from "../../content/community-data";
+import { communityDetailStaticPaths } from "../../components/pages/communities/community-template";
+
+export function getStaticPaths() {
+  return communityDetailStaticPaths;
+}
+
+const { community } = Astro.props as { community: Community };
+const title = getCommunityDisplayTitle(community);
+const canonical = `/comunidades-energeticas/${community.slug}`;
+---
+
+<SiteLayout
+  page="comunidades"
+  meta={{
+    title,
+    description: community.summary,
+    canonical,
+    socialImage: { url: community.image, alt: community.imageAlt },
+  }}
+>
+  <CommunityDetailPage {community} />
+</SiteLayout>

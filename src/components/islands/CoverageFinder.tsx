@@ -1,29 +1,62 @@
 import { useState } from "react";
-import {
-  communities as sourceCommunities,
-  type Community,
-} from "../../content/community-data";
+import type { Community } from "../../content/community-data";
 
 const heliosCoverageCalculator =
   "https://calculadoraenergetica.comunidadsolar.es";
 
+export type CoverageCommunity = Pick<
+  Community,
+  | "slug"
+  | "name"
+  | "province"
+  | "status"
+  | "summary"
+  | "map"
+  | "commercialStatus"
+>;
+
 export interface CoverageFinderProps {
   compact?: boolean;
-  community?: Community;
-  communities?: Community[];
+  community?: CoverageCommunity;
+  communities?: CoverageCommunity[];
   initialSlug?: string;
 }
 
-function communityHref(community: Pick<Community, "slug">): string {
+function communityHref(community: Pick<CoverageCommunity, "slug">): string {
   return `/comunidades-energeticas/${community.slug}`;
 }
 
 export function CoverageFinder({
   compact = false,
   community,
-  communities = sourceCommunities,
+  communities,
   initialSlug,
 }: CoverageFinderProps) {
+  if (compact) return <CompactCoverageFinder community={community} />;
+  if (communities === undefined || communities.length === 0) return null;
+
+  return (
+    <FullCoverageFinder
+      community={community}
+      communities={communities}
+      initialSlug={initialSlug}
+    />
+  );
+}
+
+function CompactCoverageFinder({
+  community,
+}: Pick<CoverageFinderProps, "community">) {
+  return (
+    <div className="coverage-finder coverage-compact">
+      <CoverageContent community={community} />
+    </div>
+  );
+}
+
+function CoverageContent({
+  community,
+}: Pick<CoverageFinderProps, "community">) {
   const participationIsFull = /participación completa/i.test(
     community?.commercialStatus ?? "",
   );
@@ -31,17 +64,6 @@ export function CoverageFinder({
     /lista de espera|próxima apertura|aún no abierta/i.test(
       community?.commercialStatus ?? "",
     );
-  const defaultCommunity =
-    communities.find((item) => item.slug === initialSlug) ??
-    communities.find((item) => item.slug === "villaverde-getafe") ??
-    communities[0];
-
-  if (defaultCommunity === undefined) return null;
-
-  const [selectedCommunitySlug, setSelectedCommunitySlug] = useState(
-    defaultCommunity.slug,
-  );
-
   const intro = (
     <div className="coverage-intro">
       <span className="pill pill-green">
@@ -138,20 +160,39 @@ export function CoverageFinder({
     </div>
   );
 
-  if (compact) {
-    return (
-      <div className="coverage-finder coverage-compact">
-        {intro}
-        {form}
-      </div>
-    );
-  }
+  return (
+    <>
+      {intro}
+      {form}
+    </>
+  );
+}
+
+interface FullCoverageFinderProps {
+  community?: CoverageCommunity;
+  communities: CoverageCommunity[];
+  initialSlug?: string;
+}
+
+function FullCoverageFinder({
+  community,
+  communities,
+  initialSlug,
+}: FullCoverageFinderProps) {
+  const defaultCommunity =
+    communities.find((item) => item.slug === initialSlug) ??
+    communities.find((item) => item.slug === "villaverde-getafe") ??
+    communities[0];
+  const [selectedCommunitySlug, setSelectedCommunitySlug] = useState(
+    defaultCommunity?.slug ?? "",
+  );
+
+  if (defaultCommunity === undefined) return null;
 
   return (
     <div className="coverage-finder coverage-finder-map">
       <div className="coverage-search-panel">
-        {intro}
-        {form}
+        <CoverageContent community={community} />
       </div>
       <SpainCommunitiesMap
         communities={communities}
@@ -163,9 +204,9 @@ export function CoverageFinder({
 }
 
 interface SpainCommunitiesMapProps {
-  communities: Community[];
+  communities: CoverageCommunity[];
   selectedSlug: string;
-  onSelect: (community: Community) => void;
+  onSelect: (community: CoverageCommunity) => void;
 }
 
 function SpainCommunitiesMap({

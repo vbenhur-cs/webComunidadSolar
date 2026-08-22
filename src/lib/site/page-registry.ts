@@ -31,7 +31,12 @@ export const pageRegistry: Record<HeaderPageKey, PageRegistryEntry> = {
   inicio: { path: "/" },
   nosotros: { path: "/nosotros" },
   remoto: { path: "/autoconsumo-remoto" },
-  comunidades: { path: "/comunidades-energeticas" },
+  comunidades: {
+    path: "/comunidades-energeticas",
+    title: "Comunidades Energéticas",
+    description:
+      "Energía solar de proximidad en compra o alquiler, con soluciones para quien quiere invertir y para quien prefiere no hacerlo.",
+  },
   fotovoltaica: {
     path: "/autoconsumo-en-mi-tejado",
     title: "Instalación fotovoltaica con batería valorada desde el diseño",
@@ -77,6 +82,7 @@ export const pageRegistry: Record<HeaderPageKey, PageRegistryEntry> = {
 };
 
 export type CorePageKey =
+  | "comunidades"
   | "fotovoltaica"
   | "baterias"
   | "aerotermia"
@@ -85,6 +91,7 @@ export type CorePageKey =
 
 /** Native Astro page keys implemented so far; later tasks extend this map. */
 export const corePageComponents: Record<CorePageKey, string> = {
+  comunidades: "CommunitiesPage",
   fotovoltaica: "SolarInstallationPage",
   baterias: "BatteriesPage",
   aerotermia: "AerothermalPage",

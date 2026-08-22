@@ -193,6 +193,12 @@ export const VISUAL_VIEWPORTS: readonly ViewportContract[] = [
 export const templateSelectors: Readonly<Record<string, readonly string[]>> = {
   home: ["body", "header", "main", "footer"],
   "generic-page": ["body", "header", "main", "footer"],
+  "community-detail": [
+    "body",
+    "header",
+    "main.community-local-detail, main.community-network-detail",
+    "footer",
+  ],
 };
 
 function compareText(left: string, right: string): number {

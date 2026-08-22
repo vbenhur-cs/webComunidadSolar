@@ -1,0 +1,21 @@
+---
+import type { Community } from "../../../content/community-data";
+import LocalCommunity from "./LocalCommunity.astro";
+import NetworkCommunity from "./NetworkCommunity.astro";
+import { selectCommunityTemplate } from "./community-template";
+
+interface Props {
+  community: Community;
+}
+
+const { community } = Astro.props;
+const template = selectCommunityTemplate(community);
+---
+
+{
+  template === "network" ? (
+    <NetworkCommunity {community} />
+  ) : (
+    <LocalCommunity {community} />
+  )
+}

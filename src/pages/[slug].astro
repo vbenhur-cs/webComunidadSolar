@@ -6,6 +6,7 @@ import BatteriesPage from "../components/pages/home-energy/BatteriesPage.astro";
 import CommercializerPage from "../components/pages/home-energy/CommercializerPage.astro";
 import MaintenancePage from "../components/pages/home-energy/MaintenancePage.astro";
 import SolarInstallationPage from "../components/pages/home-energy/SolarInstallationPage.astro";
+import CommunitiesPage from "../components/pages/communities/CommunitiesPage.astro";
 import SiteLayout from "../layouts/SiteLayout.astro";
 import { getLegacyRedirect } from "../lib/routing/legacy";
 import {
@@ -40,6 +41,7 @@ if (match === undefined || !isCorePageKey(match[0])) {
 
 const [page, entry] = match;
 const components = {
+  comunidades: CommunitiesPage,
   fotovoltaica: SolarInstallationPage,
   baterias: BatteriesPage,
   aerotermia: AerothermalPage,

@@ -1,0 +1,128 @@
+---
+import Pill from "../../site/Pill.astro";
+import type { Community } from "../../../content/community-data";
+
+interface Props {
+  modality: string;
+  community: Community;
+}
+
+const { modality, community } = Astro.props;
+const participationFull =
+  community.commercialStatus === "Participación completa";
+const isExtremaduraNetwork =
+  community.kind === "network" || community.networkSlug === "extremadura";
+---
+
+{
+  modality === "Compra" ? (
+    <article class="community-model-card community-model-buy">
+      <div>
+        <Pill tone="yellow">Compra</Pill>
+        <span class="community-model-availability">
+          {community.commercialStatus ?? "Según disponibilidad"}
+        </span>
+      </div>
+      <h3>
+        {participationFull
+          ? "La participación actual está completa."
+          : "Inviertes para maximizar tu ahorro."}
+      </h3>
+      <p>
+        {participationFull
+          ? "La compra es la modalidad de esta comunidad, pero ahora mismo no quedan paneles disponibles. Puedes pedir que te avisemos si se libera una plaza."
+          : "Adquieres producción o paneles asignados en esta comunidad y recibes su energía en tu factura, sin instalar nada en casa."}
+      </p>
+      <strong class="community-model-highlight">
+        {participationFull ? "Lista de espera" : "Hasta un 70%*"}
+      </strong>
+      <ul>
+        <li>Horizonte del proyecto: {community.term}</li>
+        <li>Sin obras en tu vivienda o negocio</li>
+        <li>Producción asignada a tu suministro</li>
+        <li>
+          {participationFull
+            ? "Te avisaremos si se libera una plaza"
+            : "Financiación según condiciones del proyecto"}
+        </li>
+      </ul>
+      <a href="#cobertura">
+        {participationFull
+          ? "Solicitar aviso de disponibilidad"
+          : "Comprobar cobertura y plazas"}{" "}
+        <span aria-hidden="true">↗</span>
+      </a>
+    </article>
+  ) : modality === "Alquiler" ? (
+    <article class="community-model-card community-model-rent">
+      <div>
+        <Pill tone="blue">Alquiler</Pill>
+        <span class="community-model-availability">
+          {isExtremaduraNetwork
+            ? community.commercialStatus
+            : "Sin inversión inicial"}
+        </span>
+      </div>
+      <h3>
+        {isExtremaduraNetwork
+          ? "La modalidad está definida; la cuota todavía no."
+          : "Empiezas a ahorrar con una cuota mensual."}
+      </h3>
+      <p>
+        {isExtremaduraNetwork
+          ? "La red extremeña se presenta mediante alquiler, sin compra inicial. Antes de abrir la contratación confirmaremos la cuota y las condiciones de cada localidad."
+          : "Alquilas paneles o producción de la instalación que da cobertura a tu dirección y recibes esa energía directamente en la factura."}
+      </p>
+      <strong class="community-model-highlight">
+        {isExtremaduraNetwork ? "Cuota por confirmar" : "20–25%*"}
+      </strong>
+      <ul>
+        {isExtremaduraNetwork ? (
+          <>
+            <li>Sin compra inicial</li>
+            <li>Cobertura comprobada por dirección</li>
+            <li>Lista de espera por localidad</li>
+            <li>Ahorro estimado antes de contratar</li>
+          </>
+        ) : (
+          <>
+            <li>Sin desembolso inicial</li>
+            <li>Cuota mensual por panel o producción</li>
+            <li>Sin obras en tu vivienda o negocio</li>
+            <li>Condiciones concretas según ubicación</li>
+          </>
+        )}
+      </ul>
+      <a href="#cobertura">
+        {isExtremaduraNetwork
+          ? "Comprobar mi localidad"
+          : "Ver mi ubicación y cuota"}{" "}
+        <span aria-hidden="true">↗</span>
+      </a>
+    </article>
+  ) : (
+    <article class="community-model-card community-model-pending">
+      <div>
+        <Pill tone="light">En definición</Pill>
+        <span class="community-model-availability">
+          Condiciones por confirmar
+        </span>
+      </div>
+      <h3>Te informaremos cuando la modalidad esté confirmada.</h3>
+      <p>
+        Esta ubicación forma parte de la red de Comunidad Solar, pero la
+        contratación todavía no está abierta.
+      </p>
+      <strong class="community-model-highlight">Lista de interés</strong>
+      <ul>
+        <li>Potencia y capacidad pendientes de validación</li>
+        <li>Compra o alquiler todavía por confirmar</li>
+        <li>Calendario sujeto al estado real del proyecto</li>
+        <li>Puedes solicitar una comprobación de tu dirección</li>
+      </ul>
+      <a href="#cobertura">
+        Solicitar comprobación <span aria-hidden="true">↗</span>
+      </a>
+    </article>
+  )
+}

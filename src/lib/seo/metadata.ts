@@ -4,6 +4,7 @@ export interface SiteMeta {
   canonical: string | null;
   robots: { index: boolean; follow: boolean };
   openGraph: boolean;
+  socialImage?: { url: string; alt: string };
 }
 
 export const siteUrl = "https://comunidadsolar.es";
@@ -23,6 +24,7 @@ export function completeSiteMeta(meta: Partial<SiteMeta> = {}): SiteMeta {
     canonical: meta.canonical === undefined ? "/" : meta.canonical,
     robots: meta.robots ?? { index: indexable, follow: indexable },
     openGraph: meta.openGraph ?? true,
+    socialImage: meta.socialImage,
   };
 }
 

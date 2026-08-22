@@ -1,0 +1,92 @@
+---
+import ButtonLink from "../../site/ButtonLink.astro";
+---
+
+<section class="communities-hero">
+  <img
+    class="communities-hero-image"
+    src="/comunidades-colegio-pueblo-1024x792.png"
+    alt=""
+    aria-hidden="true"
+  />
+  <div class="communities-hero-shade" aria-hidden="true"></div>
+  <svg
+    class="communities-hero-network"
+    viewBox="0 0 1000 700"
+    preserveAspectRatio="none"
+    aria-hidden="true"
+  >
+    <defs>
+      <filter
+        id="communities-network-glow"
+        x="-40%"
+        y="-40%"
+        width="180%"
+        height="180%"
+      >
+        <feGaussianBlur stdDeviation="4" result="blur"></feGaussianBlur>
+        <feMerge>
+          <feMergeNode in="blur"></feMergeNode>
+          <feMergeNode in="SourceGraphic"></feMergeNode>
+        </feMerge>
+      </filter>
+    </defs>
+    <g class="communities-network-halos" aria-hidden="true">
+      <path d="M451 304 C488 283 527 270 568 260"></path>
+      <path d="M568 260 C611 222 658 190 711 164"></path>
+      <path d="M711 164 C761 140 816 125 883 119"></path>
+      <path d="M568 260 C634 254 699 235 760 211"></path>
+      <path d="M760 211 C816 194 871 187 929 190"></path>
+      <path d="M568 260 C631 276 697 276 761 259"></path>
+      <path d="M761 259 C818 247 872 239 927 228"></path>
+    </g>
+    <g
+      class="communities-network-lines"
+      filter="url(#communities-network-glow)"
+    >
+      <path d="M451 304 C488 283 527 270 568 260"></path>
+      <path d="M568 260 C611 222 658 190 711 164"></path>
+      <path d="M711 164 C761 140 816 125 883 119"></path>
+      <path d="M568 260 C634 254 699 235 760 211"></path>
+      <path d="M760 211 C816 194 871 187 929 190"></path>
+      <path d="M568 260 C631 276 697 276 761 259"></path>
+      <path d="M761 259 C818 247 872 239 927 228"></path>
+    </g>
+    <g
+      class="communities-network-nodes"
+      filter="url(#communities-network-glow)"
+    >
+      <circle class="communities-network-origin" cx="451" cy="304" r="10"
+      ></circle>
+      <circle cx="568" cy="260" r="7"></circle>
+      <circle cx="711" cy="164" r="5"></circle>
+      <circle cx="760" cy="211" r="5"></circle>
+      <circle cx="761" cy="259" r="5"></circle>
+      <circle class="network-node-secondary" cx="883" cy="119" r="4"></circle>
+      <circle class="network-node-secondary" cx="929" cy="190" r="4"></circle>
+      <circle class="network-node-secondary" cx="927" cy="228" r="4"></circle>
+    </g>
+  </svg>
+
+  <div class="shell communities-hero-inner">
+    <div class="communities-hero-copy">
+      <p class="eyebrow">Comunidades energéticas</p>
+      <h1>
+        <span>Ahorra en tu factura</span>
+        <span>con energía solar</span>
+        <span>generada <em>cerca de ti.</em></span>
+      </h1>
+      <p>
+        Si vives o trabajas cerca de una de nuestras instalaciones, puedes
+        utilizar su energía sin poner paneles en casa. Compra para conseguir el
+        mayor ahorro o alquila para empezar sin inversión.
+      </p>
+      <div class="hero-actions communities-hero-actions">
+        <ButtonLink href="#cobertura">Comprobar mi dirección</ButtonLink>
+        <ButtonLink href="#modelos" kind="secondary">
+          Comparar compra y alquiler
+        </ButtonLink>
+      </div>
+    </div>
+  </div>
+</section>
