@@ -2,9 +2,13 @@
 export const prerender = true;
 
 import AerothermalPage from "../components/pages/home-energy/AerothermalPage.astro";
+import AboutPage from "../components/pages/about/AboutPage.astro";
 import BatteriesPage from "../components/pages/home-energy/BatteriesPage.astro";
+import BlogPage from "../components/pages/blog/BlogPage.astro";
 import CommercializerPage from "../components/pages/home-energy/CommercializerPage.astro";
+import EventsPage from "../components/pages/events/EventsPage.astro";
 import MaintenancePage from "../components/pages/home-energy/MaintenancePage.astro";
+import RemotePage from "../components/pages/remote/RemotePage.astro";
 import SolarInstallationPage from "../components/pages/home-energy/SolarInstallationPage.astro";
 import CommunitiesPage from "../components/pages/communities/CommunitiesPage.astro";
 import SiteLayout from "../layouts/SiteLayout.astro";
@@ -41,12 +45,16 @@ if (match === undefined || !isCorePageKey(match[0])) {
 
 const [page, entry] = match;
 const components = {
+  nosotros: AboutPage,
+  remoto: RemotePage,
   comunidades: CommunitiesPage,
   fotovoltaica: SolarInstallationPage,
   baterias: BatteriesPage,
   aerotermia: AerothermalPage,
   mantenimiento: MaintenancePage,
   comercializadora: CommercializerPage,
+  blog: BlogPage,
+  eventos: EventsPage,
 } as const;
 const Component = components[page as CorePageKey];
 ---

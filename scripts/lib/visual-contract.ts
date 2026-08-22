@@ -199,6 +199,14 @@ export const templateSelectors: Readonly<Record<string, readonly string[]>> = {
     "main.community-local-detail, main.community-network-detail",
     "footer",
   ],
+  "remote-detail": [
+    "body",
+    "header",
+    "main.remote-commercial-page, main.remote-project-page",
+    "footer",
+  ],
+  "blog-index": ["body", "header", "main.blog-page", "footer"],
+  "blog-detail": ["body", "header", "main.blog-detail", "footer"],
 };
 
 function compareText(left: string, right: string): number {

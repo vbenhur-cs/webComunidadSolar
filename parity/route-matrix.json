@@ -1130,7 +1130,7 @@
     "expectedLocation": null,
     "privateArea": null,
     "visualTemplate": "generic-page",
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/autoconsumo-remoto/fuente-alamo",
@@ -1141,7 +1141,7 @@
     "expectedLocation": null,
     "privateArea": null,
     "visualTemplate": "remote-detail",
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/autoconsumo-remoto/liguerzana",
@@ -1152,7 +1152,7 @@
     "expectedLocation": null,
     "privateArea": null,
     "visualTemplate": "remote-detail",
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/autoconsumo-remoto/torrontera",
@@ -1163,7 +1163,7 @@
     "expectedLocation": null,
     "privateArea": null,
     "visualTemplate": "remote-detail",
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/aviso-legal",
@@ -1196,7 +1196,7 @@
     "expectedLocation": null,
     "privateArea": null,
     "visualTemplate": "blog-index",
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/blog/bautizo-bajo-la-lluvia-en-fuente-alamo",
@@ -1207,7 +1207,7 @@
     "expectedLocation": null,
     "privateArea": null,
     "visualTemplate": "blog-detail",
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/blog/ceuti-encuentro-con-los-vecinos",
@@ -1218,7 +1218,7 @@
     "expectedLocation": null,
     "privateArea": null,
     "visualTemplate": "blog-detail",
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/blog/ceuti-termina-su-instalacion",
@@ -1229,7 +1229,7 @@
     "expectedLocation": null,
     "privateArea": null,
     "visualTemplate": "blog-detail",
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/blog/comuneros-por-el-mundo-jose-luis",
@@ -1240,7 +1240,7 @@
     "expectedLocation": null,
     "privateArea": null,
     "visualTemplate": "blog-detail",
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/blog/el-adn-de-comunidad-solar",
@@ -1251,7 +1251,7 @@
     "expectedLocation": null,
     "privateArea": null,
     "visualTemplate": "blog-detail",
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/blog/encuentro-comunero-en-liguerzana",
@@ -1262,7 +1262,7 @@
     "expectedLocation": null,
     "privateArea": null,
     "visualTemplate": "blog-detail",
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/blog/fuente-alamo-vuelve-a-abrir-sus-puertas",
@@ -1273,7 +1273,7 @@
     "expectedLocation": null,
     "privateArea": null,
     "visualTemplate": "blog-detail",
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/blog/manolo-un-ano-viviendo-con-el-sol",
@@ -1284,7 +1284,7 @@
     "expectedLocation": null,
     "privateArea": null,
     "visualTemplate": "blog-detail",
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/blog/nace-la-comunidad-de-nuevo-baztan",
@@ -1295,7 +1295,7 @@
     "expectedLocation": null,
     "privateArea": null,
     "visualTemplate": "blog-detail",
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/blog/nuevo-baztan-abre-la-casa-de-un-comunero",
@@ -1306,7 +1306,7 @@
     "expectedLocation": null,
     "privateArea": null,
     "visualTemplate": "blog-detail",
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/blog/premio-comunidad-goparity",
@@ -1317,7 +1317,7 @@
     "expectedLocation": null,
     "privateArea": null,
     "visualTemplate": "blog-detail",
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/blog/puebla-del-principe-entra-en-construccion",
@@ -1328,7 +1328,7 @@
     "expectedLocation": null,
     "privateArea": null,
     "visualTemplate": "blog-detail",
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/blog/septimo-aniversario-capsula-del-tiempo",
@@ -1339,7 +1339,7 @@
     "expectedLocation": null,
     "privateArea": null,
     "visualTemplate": "blog-detail",
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/blog/solsticio-2022-puertas-abiertas",
@@ -1350,7 +1350,7 @@
     "expectedLocation": null,
     "privateArea": null,
     "visualTemplate": "blog-detail",
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/blog/solsticio-2023-quinto-aniversario",
@@ -1361,7 +1361,7 @@
     "expectedLocation": null,
     "privateArea": null,
     "visualTemplate": "blog-detail",
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/blog/solsticio-2024-sexto-aniversario",
@@ -1372,7 +1372,7 @@
     "expectedLocation": null,
     "privateArea": null,
     "visualTemplate": "blog-detail",
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/blog/torrontera-ya-esta-en-marcha",
@@ -1383,7 +1383,7 @@
     "expectedLocation": null,
     "privateArea": null,
     "visualTemplate": "blog-detail",
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/blog/villalbilla-dos-colegios-una-comunidad",
@@ -1394,7 +1394,7 @@
     "expectedLocation": null,
     "privateArea": null,
     "visualTemplate": "blog-detail",
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/blog/villalbilla-presenta-su-comunidad",
@@ -1405,7 +1405,7 @@
     "expectedLocation": null,
     "privateArea": null,
     "visualTemplate": "blog-detail",
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/comercializadora-y-tarifas",
@@ -1713,7 +1713,7 @@
     "expectedLocation": null,
     "privateArea": null,
     "visualTemplate": "generic-page",
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/mantenimiento",
@@ -1735,7 +1735,7 @@
     "expectedLocation": null,
     "privateArea": null,
     "visualTemplate": "generic-page",
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/politica-privacidad",

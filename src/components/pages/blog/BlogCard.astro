@@ -1,0 +1,33 @@
+---
+import type { BlogPost } from "../../../content/blog-data";
+
+interface Props {
+  post: BlogPost;
+  large?: boolean;
+}
+
+const { post, large = false } = Astro.props;
+---
+
+<article class={`blog-card ${large ? "blog-card-large" : ""}`}>
+  <a
+    class={`blog-card-image ${
+      post.format === "Archivo de evento" ? "blog-card-image-event" : ""
+    }`}
+    href={`/blog/${post.slug}`}
+  >
+    <img src={post.image} alt={post.imageAlt} loading="lazy" />
+    <span class="blog-card-format">{post.format}</span>
+  </a>
+  <div class="blog-card-body">
+    <div class="blog-card-meta">
+      <span>{post.category}</span>
+      <time datetime={post.date}>{post.displayDate}</time>
+    </div>
+    <h3><a href={`/blog/${post.slug}`}>{post.title}</a></h3>
+    <p>{post.excerpt}</p>
+    <a class="blog-card-link" href={`/blog/${post.slug}`}>
+      Leer la historia <span aria-hidden="true">↗</span>
+    </a>
+  </div>
+</article>

@@ -1,0 +1,37 @@
+---
+import RemoteProjectDetailPage from "../../components/pages/remote/RemoteProjectDetailPage.astro";
+import { remoteProjects } from "../../content/remote-project-data";
+import SiteLayout from "../../layouts/SiteLayout.astro";
+
+export const prerender = true;
+
+export function getStaticPaths() {
+  return remoteProjects.map((project) => ({
+    params: { project: project.slug },
+    props: { project },
+  }));
+}
+
+const { project } = Astro.props;
+const descriptions: Record<string, string> = {
+  torrontera:
+    "Torrontera I y II: compra anticipada de energía solar con almacenamiento para proteger una parte de tu coste energético durante 40 años, sin placas en tu tejado.",
+  liguerzana:
+    "Conoce la central hidroeléctrica de Ligüérzana: 500 kW en el río Pisuerga, cómo transforma el agua en electricidad y cómo se repartió su producción.",
+};
+const description =
+  descriptions[project.slug] ??
+  `${project.summary} Consulta cómo funciona el proyecto y su disponibilidad actual.`;
+---
+
+<SiteLayout
+  page="remoto"
+  meta={{
+    title: `${project.name} | Autoconsumo Remoto`,
+    description,
+    canonical: `/autoconsumo-remoto/${project.slug}`,
+    socialImage: { url: project.image, alt: project.imageAlt },
+  }}
+>
+  <RemoteProjectDetailPage {project} />
+</SiteLayout>

@@ -1,0 +1,197 @@
+---
+import { BlogFilter } from "../../islands/BlogFilter";
+import { blogPosts } from "../../../content/blog-data";
+import { communityVoices } from "../../../content/trust-data";
+import Pill from "../../site/Pill.astro";
+import SectionHeading from "../../site/SectionHeading.astro";
+import BlogCard from "./BlogCard.astro";
+
+const featured = blogPosts.filter((post) => post.featured).slice(0, 4);
+---
+
+<main class="blog-page">
+  <section class="blog-hero">
+    <div class="shell blog-hero-grid">
+      <div class="blog-hero-copy">
+        <Pill tone="yellow">Blog · Archivo vivo</Pill>
+        <h1>La comunidad no se cuenta. Se ve.</h1>
+        <p>
+          Personas que visitan sus parques, vecinos que abren su casa, proyectos
+          que avanzan y encuentros que dejan memoria. Esta es la vida real de
+          Comunidad Solar, desde 2018 hasta hoy.
+        </p>
+        <div class="blog-hero-actions">
+          <a class="button button-primary" href="#archivo">
+            <span>Explorar el archivo</span><span aria-hidden="true">↗</span>
+          </a>
+          <a class="button button-secondary" href="/eventos">
+            <span>Ver eventos</span><span aria-hidden="true">↗</span>
+          </a>
+        </div>
+        <div class="blog-live-note">
+          <i aria-hidden="true"></i>
+          <span>Historias con fecha, lugar y enlace a su fuente original.</span>
+        </div>
+      </div>
+      <div class="blog-hero-collage" aria-label="La comunidad en imágenes">
+        <figure class="blog-collage-main">
+          <img src={featured[0].image} alt={featured[0].imageAlt} />
+          <figcaption>
+            <span>{featured[0].location}</span>
+            <strong>{featured[0].title}</strong>
+          </figcaption>
+        </figure>
+        <figure>
+          <img src={featured[3].image} alt={featured[3].imageAlt} />
+          <figcaption>
+            <span>{featured[3].displayDate}</span>
+            <strong>{featured[3].title}</strong>
+          </figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <section class="blog-manifesto">
+    <div class="shell blog-manifesto-grid">
+      <p class="eyebrow">Esto también es energía</p>
+      <p>
+        Una comunidad es real cuando sus miembros pueden verla, visitarla,
+        preguntar y reconocerse en ella. Por eso recuperamos tanto lo que ocurre
+        hoy como la historia que nos trajo hasta aquí.
+      </p>
+      <div class="blog-manifesto-facts">
+        <span><strong>2018—hoy</strong>Historia con memoria</span>
+        <span
+          ><strong
+            >{blogPosts.length}<Fragment set:html="<!-- -->" /> historias</strong
+          >Archivo inicial recuperado</span
+        >
+        <span><strong>5 miradas</strong>Comunidad, eventos y proyectos</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="section blog-featured">
+    <div class="shell">
+      <SectionHeading
+        eyebrow="Historias destacadas"
+        title="Aquí hay personas detrás de cada kilovatio."
+        copy="Visitas, conversaciones y momentos que explican mejor quiénes somos que cualquier presentación."
+      />
+      <div class="blog-featured-grid">
+        {featured.map((post, index) => <BlogCard {post} large={index === 0} />)}
+      </div>
+    </div>
+  </section>
+
+  <section class="section blog-voices" id="voces">
+    <div class="shell">
+      <SectionHeading
+        eyebrow="Voces de los comuneros"
+        title="Contado por quienes ya forman parte."
+        copy="Cuatro conversaciones reales recuperadas de nuestra propia home. Sin actores, sin guion y con experiencias diferentes."
+      />
+      <div class="blog-voices-grid">
+        {
+          communityVoices.map((voice) => (
+            <a href={voice.href} target="_blank" rel="noreferrer">
+              <img
+                src={voice.image}
+                alt={`Testimonio de ${voice.names}, comuneros de Comunidad Solar`}
+                loading="lazy"
+              />
+              <span class="blog-voice-play" aria-hidden="true">
+                ▶
+              </span>
+              <span class="blog-voice-name">
+                <small>Su experiencia</small>
+                <strong>{voice.names}</strong>
+              </span>
+            </a>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+
+  <section class="section blog-archive" id="archivo">
+    <div class="shell">
+      <BlogFilter client:visible />
+    </div>
+  </section>
+
+  <section class="section blog-social">
+    <div class="shell blog-social-grid">
+      <div>
+        <Pill tone="dark">En tiempo real</Pill>
+        <h2>La comunidad también vive fuera de esta web.</h2>
+        <p>
+          Vídeos, obras, encuentros y voces de comuneros continúan en nuestros
+          canales. El Blog ordena y conserva esa actividad para que no
+          desaparezca en el flujo de las redes.
+        </p>
+      </div>
+      <div class="blog-social-links">
+        {
+          [
+            [
+              "Instagram",
+              "Proyectos y vida diaria",
+              "https://www.instagram.com/comunidadsolar/",
+            ],
+            [
+              "YouTube",
+              "Vídeos y webinars",
+              "https://www.youtube.com/channel/UCbTB-HMWNfk8TUz05uuehcw/videos",
+            ],
+            [
+              "TikTok",
+              "La comunidad en vídeo",
+              "https://www.tiktok.com/@comunidad.solar?lang=es",
+            ],
+            [
+              "LinkedIn",
+              "Hitos y actualidad",
+              "https://es.linkedin.com/company/comunidadsolar",
+            ],
+            [
+              "Facebook",
+              "Archivo social",
+              "https://www.facebook.com/comunidadsolar2.0/",
+            ],
+            [
+              "Vimeo",
+              "Nuestro archivo audiovisual",
+              "https://vimeo.com/user205073229",
+            ],
+          ].map(([label, note, href]) => (
+            <a href={href}>
+              <span>
+                <>
+                  <strong>{label}</strong>
+                  <small>{note}</small>
+                </>
+              </span>
+              <span aria-hidden="true">↗</span>
+            </a>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+
+  <section class="blog-endnote">
+    <div class="shell">
+      <span>¿Tienes una historia que merece estar aquí?</span>
+      <strong
+        >La voz de los comuneros será una parte central de este archivo.</strong
+      >
+      <a
+        href="mailto:info@comunidad.solar?subject=Mi%20historia%20como%20comunero"
+      >
+        Compartir mi historia <span aria-hidden="true">↗</span>
+      </a>
+    </div>
+  </section>
+</main>

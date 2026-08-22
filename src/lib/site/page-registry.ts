@@ -29,8 +29,18 @@ export interface PageRegistryEntry {
 
 export const pageRegistry: Record<HeaderPageKey, PageRegistryEntry> = {
   inicio: { path: "/" },
-  nosotros: { path: "/nosotros" },
-  remoto: { path: "/autoconsumo-remoto" },
+  nosotros: {
+    path: "/nosotros",
+    title: "Quiénes somos",
+    description:
+      "Conoce la historia, la misión y el movimiento #PorElPlaneta de Comunidad Solar: energía limpia, compartida y pensada para quienes vienen detrás.",
+  },
+  remoto: {
+    path: "/autoconsumo-remoto",
+    title: "Autoconsumo Remoto: tus paneles solares a distancia",
+    description:
+      "Elige tus paneles en una planta solar real y aprovecha durante 40 años la energía que producen. Sin tejado, sin obras y con almacenamiento en Torrontera.",
+  },
   comunidades: {
     path: "/comunidades-energeticas",
     title: "Comunidades Energéticas",
@@ -57,8 +67,18 @@ export const pageRegistry: Record<HeaderPageKey, PageRegistryEntry> = {
   },
   activos: { path: "/rentabiliza-tu-activo" },
   activoConectado: { path: "/comunidades-energeticas-operativas" },
-  blog: { path: "/blog" },
-  eventos: { path: "/eventos" },
+  blog: {
+    path: "/blog",
+    title: "Blog",
+    description:
+      "La vida real de Comunidad Solar: comuneros, visitas, eventos, proyectos y un archivo vivo desde 2018.",
+  },
+  eventos: {
+    path: "/eventos",
+    title: "Eventos y webinars",
+    description:
+      "Próximos encuentros y archivo de visitas, jornadas y webinars públicos de Comunidad Solar en Zoho Backstage y TrainerCentral.",
+  },
   comunero: { path: "/soy-comunero" },
   contacto: { path: "/contacto" },
   comercializadora: {
@@ -82,21 +102,29 @@ export const pageRegistry: Record<HeaderPageKey, PageRegistryEntry> = {
 };
 
 export type CorePageKey =
+  | "nosotros"
+  | "remoto"
   | "comunidades"
   | "fotovoltaica"
   | "baterias"
   | "aerotermia"
   | "mantenimiento"
-  | "comercializadora";
+  | "comercializadora"
+  | "blog"
+  | "eventos";
 
 /** Native Astro page keys implemented so far; later tasks extend this map. */
 export const corePageComponents: Record<CorePageKey, string> = {
+  nosotros: "AboutPage",
+  remoto: "RemotePage",
   comunidades: "CommunitiesPage",
   fotovoltaica: "SolarInstallationPage",
   baterias: "BatteriesPage",
   aerotermia: "AerothermalPage",
   mantenimiento: "MaintenancePage",
   comercializadora: "CommercializerPage",
+  blog: "BlogPage",
+  eventos: "EventsPage",
 };
 
 export const staticSlugPaths = Object.keys(corePageComponents)

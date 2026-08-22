@@ -1,0 +1,165 @@
+---
+import type { RemoteProject } from "../../../content/remote-project-data";
+import FactStrip from "../home-energy/FactStrip.astro";
+import PageHero from "../../site/PageHero.astro";
+import Pill from "../../site/Pill.astro";
+import SectionHeading from "../../site/SectionHeading.astro";
+import Steps from "../home-energy/Steps.astro";
+import RemoteProjectClosing from "./RemoteProjectClosing.astro";
+
+interface Props {
+  project: RemoteProject;
+}
+
+const { project } = Astro.props;
+const memberApp = "https://comunidad-solar.clever.gy/login";
+const communityPortal = "https://ayuda.comunidadsolar.es/portal/en-gb/signin";
+---
+
+<main class="remote-commercial-page hydro-project-page">
+  <div class="shell community-breadcrumb">
+    <a href="/autoconsumo-remoto#proyectos"
+      ><span aria-hidden="true">←</span> Todos los proyectos de Remoto</a
+    >
+  </div>
+  <PageHero
+    tone="blue"
+    eyebrow="Ligüérzana · Central del Pisuerga"
+    title="La fuerza del Pisuerga convertida en energía para sus comuneros."
+    lead="Ligüérzana es una central hidroeléctrica de 500 kW en Palencia. Su generación complementó los primeros parques solares de Comunidad Solar y puede producir también fuera de las horas de sol cuando el caudal y la operación de la central lo permiten."
+    primary={{
+      href: "/autoconsumo-remoto#proyectos",
+      label: "Ver proyectos disponibles",
+    }}
+    secondary={{ href: "#como-funciona", label: "Cómo funciona la central" }}
+    image={project.image}
+    imageAlt={project.imageAlt}
+  />
+  <section class="facts-section community-detail-facts">
+    <div class="shell">
+      <FactStrip
+        facts={[
+          { value: "500 kW", label: "Potencia de la central" },
+          {
+            value: "30 años",
+            label: "Duración del proyecto",
+            note: "Participación contractual en su producción",
+          },
+          { value: "2.010", label: "Comuneros del proyecto" },
+          {
+            value: project.availability,
+            label: "Nuevas plazas",
+            note: "Proyecto en funcionamiento y sin nuevas plazas",
+          },
+        ]}
+      />
+    </div>
+  </section>
+  <section class="section hydro-how-section" id="como-funciona">
+    <div class="shell">
+      <SectionHeading
+        eyebrow="CÓMO FUNCIONA"
+        title="Del caudal del río a la red eléctrica."
+        copy="Ligüérzana no son miles de pequeñas turbinas. Es una central de 500 kW cuya producción se repartió contractualmente entre sus comuneros mediante participaciones equivalentes."
+      /><Steps
+        items={[
+          {
+            title: "El agua aporta la fuerza",
+            copy: "El caudal del Pisuerga atraviesa la instalación y aporta la energía hidráulica que pone en movimiento la turbina.",
+          },
+          {
+            title: "La turbina gira",
+            copy: "El movimiento del agua se convierte en movimiento mecánico dentro de la central.",
+          },
+          {
+            title: "El generador produce",
+            copy: "Ese giro acciona el generador, que transforma la energía mecánica en electricidad renovable e inyecta la producción a la red.",
+          },
+          {
+            title: "Se asigna a los comuneros",
+            copy: "Cada comunero recibe la parte de producción que le corresponde de acuerdo con sus participaciones y con el contrato del proyecto.",
+          },
+        ]}
+      />
+    </div>
+  </section>
+  <section class="section hydro-role-section">
+    <div class="shell hydro-role-grid">
+      <article>
+        <Pill tone="yellow">El complemento del sol</Pill><h2>
+          Energía renovable con otro horario y otra estacionalidad.
+        </h2><p>
+          La central del Pisuerga formó parte de los primeros mixes de
+          Autoconsumo Remoto junto a los parques solares de Fuente Álamo.
+          Mientras la fotovoltaica produce con irradiación, la hidráulica puede
+          generar de día o de noche si hay caudal suficiente y la central está
+          disponible.
+        </p>
+      </article><aside>
+        <span>PRODUCCIÓN REAL</span><h3>No es una generación constante.</h3><p>
+          El caudal, las estaciones, las condiciones ambientales y los periodos
+          de mantenimiento influyen en la producción. Su valor está en
+          diversificar el mix, no en prometer la misma energía todos los días.
+        </p>
+      </aside>
+    </div>
+  </section>
+  <section class="section hydro-shares-section">
+    <div class="shell hydro-shares-grid">
+      <div>
+        <p class="eyebrow">Cómo se repartió la central</p><h2>
+          Participaciones de producción, no turbinas domésticas.
+        </h2><p>
+          Para repartir la producción, los 500 kW se expresaron en unidades
+          equivalentes. Así, cada comunero recibió una participación
+          proporcional durante el plazo del proyecto.
+        </p>
+      </div><div class="hydro-share-cards">
+        <article>
+          <strong>3.262 × 75 W</strong><span>participaciones equivalentes</span>
+        </article><article>
+          <strong>2.554 × 100 W</strong><span>participaciones equivalentes</span
+          >
+        </article><p>
+          Juntas representan aproximadamente los 500 kW de la central. No
+          significa que existan 5.816 turbinas físicas independientes.
+        </p>
+      </div>
+    </div>
+  </section>
+  <section class="section hydro-status-section">
+    <div class="shell hydro-status-grid">
+      <article>
+        <span class="project-status-pill project-status-active"
+          >En funcionamiento</span
+        ><p class="eyebrow">Estado del proyecto</p><h2>
+          La central está completa.
+        </h2><p>
+          Ligüérzana continúa produciendo para los comuneros vinculados, pero no
+          admite nuevas incorporaciones. Si buscas Autoconsumo Remoto, consulta
+          los proyectos que sí tienen disponibilidad.
+        </p><a
+          class="button button-primary"
+          href="/autoconsumo-remoto#proyectos"
+          ><span>Ver proyectos disponibles</span><span aria-hidden="true"
+            >↗</span
+          ></a
+        >
+      </article><aside class="project-next-card remote-project-member-card">
+        <span class="project-next-index">YA SOY COMUNERO</span><h3>
+          Consulta tu producción y tu contrato en el espacio privado.
+        </h3><p>
+          Aquí puedes conocer la central. Tu producción individual y tus
+          documentos se consultan de forma segura con acceso identificado.
+        </p><div class="remote-project-member-actions">
+          <a href={memberApp}
+            >Entrar en mi app <span aria-hidden="true">↗</span></a
+          ><a href={communityPortal}
+            >Atención al Comunero <span aria-hidden="true">↗</span></a
+          >
+        </div>
+      </aside>
+    </div>
+  </section>
+  <RemoteProjectClosing {project} />
+</main>

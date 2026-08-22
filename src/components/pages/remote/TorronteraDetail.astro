@@ -1,0 +1,208 @@
+---
+import type { RemoteProject } from "../../../content/remote-project-data";
+import FactStrip from "../home-energy/FactStrip.astro";
+import PageHero from "../../site/PageHero.astro";
+import Pill from "../../site/Pill.astro";
+import SectionHeading from "../../site/SectionHeading.astro";
+import Steps from "../home-energy/Steps.astro";
+import RemoteProjectClosing from "./RemoteProjectClosing.astro";
+
+interface Props {
+  project: RemoteProject;
+}
+
+const { project } = Astro.props;
+const remoteCalculator = "https://presupuesto-ar.comunidadsolar.es";
+---
+
+<main class="remote-commercial-page torrontera-project-page">
+  <div class="shell community-breadcrumb">
+    <a href="/autoconsumo-remoto#proyectos"
+      ><span aria-hidden="true">←</span> Todos los proyectos de Remoto</a
+    >
+  </div>
+  <PageHero
+    tone="yellow"
+    eyebrow="Torrontera I y II · Solar + almacenamiento"
+    title="Energía solar y almacenamiento, sin placas en tu tejado."
+    lead="Con Torrontera compras por adelantado una parte de la energía que utilizarás durante los próximos 40 años. No busca un beneficio rápido: busca darte más control y menos exposición al precio del mercado durante décadas."
+    primary={{
+      href: remoteCalculator,
+      label: "Calcular mi propuesta",
+      analyticsEvent: "remote_calculator_open",
+    }}
+    secondary={{ href: "#como-funciona", label: "Ver cómo funciona" }}
+    image={project.image}
+    imageAlt={project.imageAlt}
+  />
+  <section class="facts-section community-detail-facts">
+    <div class="shell">
+      <FactStrip
+        facts={[
+          {
+            value: "40 años",
+            label: "Horizonte del producto",
+            note: "Derechos de producción según contrato",
+          },
+          {
+            value: "0,00 €/kWh",
+            label: "Componente de energía coincidente",
+            note: "Después de la compra; el resto de costes continúa",
+          },
+          {
+            value: "4 MWh",
+            label: "Almacenamiento en el parque",
+            note: "No es una batería instalada en casa",
+          },
+          {
+            value: project.availability,
+            label: "Plazas de Torrontera",
+            note: project.availabilityDetail,
+          },
+        ]}
+      />
+    </div>
+  </section>
+  <section class="section remote-long-term-section">
+    <div class="shell remote-long-term-grid">
+      <article>
+        <Pill tone="yellow">Tranquilidad a largo plazo</Pill>
+        <h2>Una parte de tu energía deja de depender del precio de mañana.</h2>
+        <p>
+          Compras por adelantado la energía asociada a una participación
+          concreta de Torrontera durante 40 años. Cuando esa producción coincide
+          hora a hora con tu consumo, el componente de energía se refleja a 0,00
+          €/kWh porque ya lo has pagado.
+        </p>
+      </article>
+      <aside>
+        <span>La idea importante</span><strong
+          >No compras una promesa de rentabilidad rápida.</strong
+        ><p>
+          Compras estabilidad: cuando la energía de mercado suba, estarás más
+          protegido; cuando baje, la diferencia será menor. El valor se
+          construye con el paso de los años.
+        </p>
+      </aside>
+    </div>
+  </section>
+  <section class="section remote-how-section" id="como-funciona">
+    <div class="shell">
+      <SectionHeading
+        eyebrow="CÓMO FUNCIONA"
+        title="De una instalación concreta de Torrontera a tu factura."
+        copy="No instalamos nada en tu vivienda. Dimensionamos la compra anticipada según tu consumo y el contrato identifica la planta cuya producción se aplica en tu suministro."
+      />
+      <Steps
+        items={[
+          {
+            title: "Analizamos tu factura",
+            copy: "Calculamos cuánta energía consumes y cuántas participaciones tienen sentido para no sobredimensionar la compra.",
+          },
+          {
+            title: "Compras energía por adelantado",
+            copy: "La propuesta y el contrato indican una instalación concreta, paneles, producción estimada, almacenamiento asignado, precio y cuotas.",
+          },
+          {
+            title: "Torrontera produce y almacena",
+            copy: "Los seguidores acompañan al sol y la batería desplaza parte de la energía a otras franjas. No crea energía: permite aprovecharla en otro momento.",
+          },
+          {
+            title: "Lo ves en tu factura",
+            copy: "La comercializadora aplica la producción coincidente en el suministro recogido en el contrato y factura aparte la energía de red que todavía necesites.",
+          },
+        ]}
+      />
+    </div>
+  </section>
+  <section class="section remote-bill-section">
+    <div class="shell">
+      <SectionHeading
+        eyebrow="Sin letra pequeña en el mensaje"
+        title="Proteges el coste de la energía producida, no toda la factura."
+        copy="La propuesta personalizada debe enseñarte por separado qué queda cubierto, qué seguirás pagando y qué costes acompañan al producto."
+      />
+      <div class="remote-bill-grid">
+        <article class="remote-bill-card remote-bill-card-positive">
+          <span>LO QUE TE APORTA</span><h3>
+            Producción propia a distancia.
+          </h3><ul>
+            <li>
+              Componente de energía coincidente a 0,00 €/kWh en factura.
+            </li><li>
+              Excedentes vendidos hora a hora y valor neto acumulado en el
+              monedero.
+            </li><li>
+              El suministro no tiene permanencia; si cambias, la energía
+              pendiente pasa al mecanismo de venta y compensación.
+            </li>
+          </ul>
+        </article>
+        <article class="remote-bill-card">
+          <span>LO QUE SIGUE EXISTIENDO</span><h3>
+            Los demás conceptos de tu suministro.
+          </h3><ul>
+            <li>La compra anticipada indicada en tu propuesta.</li><li>
+              1 € + IVA por panel y mes de mantenimiento y 3 € + IVA al mes de
+              cuota Comunidad Solar, ambas actualizadas por IPC.
+            </li><li>La potencia contratada, peajes, cargos e impuestos.</li><li
+            >
+              La energía de red que Torrontera no cubra.
+            </li><li>
+              La producción puede variar; tu propuesta debe mostrar los
+              supuestos utilizados.
+            </li>
+          </ul>
+        </article>
+      </div>
+    </div>
+  </section>
+  <section class="section remote-asset-section">
+    <div class="shell remote-asset-grid">
+      <div>
+        <p class="eyebrow">El activo que trabaja para ti</p><h2>
+          Dos parques solares en producción, con seguimiento y batería.
+        </h2><p>
+          Torrontera I produce desde agosto de 2023 y Torrontera II desde marzo
+          de 2024. Las dos plantas se incorporaron a Comunidad Solar en 2025 y
+          hoy conforman la generación disponible de Remoto con almacenamiento.
+        </p><p>
+          La batería está en el parque: ayuda a mover parte de la producción
+          solar a otras horas, pero no funciona como respaldo de tu vivienda
+          ante un apagón.
+        </p>
+      </div>
+      <div class="remote-asset-facts">
+        <article>
+          <strong>≈2,06 MWp</strong><span>potencia en módulos</span>
+        </article><article>
+          <strong>3.808</strong><span>paneles de 540 W</span>
+        </article><article>
+          <strong>1 eje</strong><span>seguimiento solar</span>
+        </article><article>
+          <strong>4 MWh</strong><span>almacenamiento</span>
+        </article>
+      </div>
+    </div>
+  </section>
+  <section class="section remote-proposal-section">
+    <div class="shell remote-proposal-card">
+      <div>
+        <p class="eyebrow">Tu decisión, con números propios</p><h2>
+          Comprueba cuánto de tu consumo tiene sentido cubrir.
+        </h2><p>
+          La calculadora analiza tu factura y prepara una propuesta con
+          inversión, producción estimada, costes recurrentes y escenarios a
+          largo plazo. Así decides con una expectativa realista, no con un
+          porcentaje genérico de ahorro.
+        </p>
+      </div><a
+        class="button button-primary"
+        href={remoteCalculator}
+        data-analytics-event="remote_calculator_open"
+        ><span>Calcular mi propuesta</span><span aria-hidden="true">↗</span></a
+      >
+    </div>
+  </section>
+  <RemoteProjectClosing {project} />
+</main>

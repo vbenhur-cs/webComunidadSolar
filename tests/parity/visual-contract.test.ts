@@ -396,6 +396,27 @@ test("declares the three fixed capture viewports and structural selectors for ho
   ]);
 });
 
+test("declares structural selectors for the remote and editorial templates", () => {
+  assert.deepEqual(templateSelectors["remote-detail"], [
+    "body",
+    "header",
+    "main.remote-commercial-page, main.remote-project-page",
+    "footer",
+  ]);
+  assert.deepEqual(templateSelectors["blog-index"], [
+    "body",
+    "header",
+    "main.blog-page",
+    "footer",
+  ]);
+  assert.deepEqual(templateSelectors["blog-detail"], [
+    "body",
+    "header",
+    "main.blog-detail",
+    "footer",
+  ]);
+});
+
 test("serves exact archive assets before the source worker and delegates absent paths", async () => {
   const root = await mkdtemp(join(tmpdir(), "visual-source-assets-"));
   const outsideRoot = await mkdtemp(join(tmpdir(), "visual-source-escape-"));

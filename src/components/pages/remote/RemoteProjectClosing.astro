@@ -1,0 +1,80 @@
+---
+import { blogPosts } from "../../../content/blog-data";
+import {
+  remoteProjects,
+  type RemoteProject,
+} from "../../../content/remote-project-data";
+import HumanHelp from "../../site/HumanHelp.astro";
+import SectionHeading from "../../site/SectionHeading.astro";
+import BlogCard from "../blog/BlogCard.astro";
+
+interface Props {
+  project: RemoteProject;
+}
+
+const { project } = Astro.props;
+const relatedProjects = remoteProjects.filter(
+  (candidate) => candidate.slug !== project.slug,
+);
+const relatedStories = project.relatedBlogSlugs
+  .map((slug) => blogPosts.find((post) => post.slug === slug))
+  .filter((post): post is NonNullable<typeof post> => Boolean(post));
+---
+
+{
+  relatedStories.length > 0 && (
+    <section class="section remote-project-stories">
+      <div class="shell">
+        <SectionHeading
+          eyebrow="La comunidad alrededor del proyecto"
+          title="Historias que también forman parte del proyecto."
+          copy="Visitas y encuentros para conocer de cerca dónde se produce la energía de los comuneros."
+        />
+        <div class="blog-grid remote-project-story-grid">
+          {relatedStories.map((post) => (
+            <BlogCard {post} />
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+<HumanHelp compact />
+
+<section class="section related-communities remote-project-related">
+  <div class="shell">
+    <div class="related-communities-heading">
+      <SectionHeading
+        eyebrow="Sigue explorando"
+        title="Otros proyectos de Autoconsumo Remoto."
+      />
+      <a class="text-link" href="/autoconsumo-remoto"
+        >Entender el modelo <span aria-hidden="true">↗</span></a
+      >
+    </div>
+    <div class="related-community-grid">
+      {
+        relatedProjects.map((candidate) => (
+          <a
+            class="related-community-card"
+            href={`/autoconsumo-remoto/${candidate.slug}`}
+          >
+            <img src={candidate.image} alt={candidate.imageAlt} />
+            <div>
+              <span>{candidate.technology}</span>
+              <h3>{candidate.name}</h3>
+              <p>
+                {candidate.status}
+                <Fragment set:html="<!-- -->" /> ·{" "}
+                <Fragment set:html="<!-- -->" />
+                {candidate.availability}
+              </p>
+            </div>
+            <span aria-hidden="true">↗</span>
+          </a>
+        ))
+      }
+    </div>
+  </div>
+</section>

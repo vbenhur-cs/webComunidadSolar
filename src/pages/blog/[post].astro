@@ -1,0 +1,28 @@
+---
+import BlogDetailPage from "../../components/pages/blog/BlogDetailPage.astro";
+import { blogPosts } from "../../content/blog-data";
+import SiteLayout from "../../layouts/SiteLayout.astro";
+
+export const prerender = true;
+
+export function getStaticPaths() {
+  return blogPosts.map((post) => ({
+    params: { post: post.slug },
+    props: { post },
+  }));
+}
+
+const { post } = Astro.props;
+---
+
+<SiteLayout
+  page="blog"
+  meta={{
+    title: post.title,
+    description: post.excerpt,
+    canonical: `/blog/${post.slug}`,
+    socialImage: { url: post.image, alt: post.imageAlt },
+  }}
+>
+  <BlogDetailPage {post} />
+</SiteLayout>

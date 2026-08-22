@@ -1,0 +1,22 @@
+---
+import type { RemoteProject } from "../../../content/remote-project-data";
+import GenericRemoteDetail from "./GenericRemoteDetail.astro";
+import LiguerzanaDetail from "./LiguerzanaDetail.astro";
+import TorronteraDetail from "./TorronteraDetail.astro";
+
+interface Props {
+  project: RemoteProject;
+}
+
+const { project } = Astro.props;
+---
+
+{
+  project.slug === "torrontera" ? (
+    <TorronteraDetail {project} />
+  ) : project.slug === "liguerzana" ? (
+    <LiguerzanaDetail {project} />
+  ) : (
+    <GenericRemoteDetail {project} />
+  )
+}

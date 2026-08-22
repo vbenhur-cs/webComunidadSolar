@@ -1,0 +1,504 @@
+---
+import { RemoteVideo } from "../../islands/RemoteVideo";
+import { remoteProjects } from "../../../content/remote-project-data";
+import HumanHelp from "../../site/HumanHelp.astro";
+import Pill from "../../site/Pill.astro";
+import SectionHeading from "../../site/SectionHeading.astro";
+import TrustBand from "../../site/TrustBand.astro";
+import FactStrip from "../home-energy/FactStrip.astro";
+import FaqList from "../home-energy/FaqList.astro";
+import ProductVisuals from "../home-energy/ProductVisuals.astro";
+import RemoteProjectCard from "./RemoteProjectCard.astro";
+
+const remoteCalculator = "https://presupuesto-ar.comunidadsolar.es";
+const advisorBooking = "https://comunidadsolar.zohobookings.eu/";
+const currentProject =
+  remoteProjects.find((project) => project.slug === "torrontera") ??
+  remoteProjects[0];
+const completedProjects = remoteProjects.filter(
+  (project) => project.slug !== currentProject.slug,
+);
+---
+
+<main class="remote-product-page">
+  <section class="remote-hero">
+    <div class="remote-hero-atmosphere" aria-hidden="true">
+      <span></span><span></span>
+    </div>
+    <div class="shell remote-hero-shell">
+      <div class="remote-hero-copy">
+        <p class="remote-hero-eyebrow">
+          Autoconsumo Remoto · Tus paneles solares, a distancia
+        </p>
+        <h1 aria-label="Tus paneles solares no tienen que estar en tu tejado.">
+          <span>Tus paneles solares</span>
+          no tienen que estar
+          <em>en tu tejado.</em>
+        </h1>
+        <p class="remote-hero-lead">
+          Elige los paneles de una planta solar real que quieres vincular a tu
+          consumo y aprovecha durante 40 años la energía que producen. Nosotros
+          los instalamos, operamos y mantenemos; tú recibes su energía en tu
+          factura, sin obras y estés donde estés.
+        </p>
+        <div class="hero-actions remote-hero-actions">
+          <a
+            class="button button-primary"
+            href={remoteCalculator}
+            data-analytics-event="remote_calculator_open"
+            ><span>Calcular mis paneles</span><span aria-hidden="true">↗</span
+            ></a
+          >
+          <a class="button button-secondary" href="#como-funciona"
+            ><span>Descubrir cómo funciona</span><span aria-hidden="true"
+              >↗</span
+            ></a
+          >
+        </div>
+        <div class="remote-hero-proof" aria-label="Ventajas principales">
+          <span><i aria-hidden="true"></i>40 años de energía</span>
+          <span><i aria-hidden="true"></i>Sin obras en casa</span>
+        </div>
+      </div>
+      <div class="remote-hero-media">
+        <span class="remote-hero-media-kicker"
+          >Una planta real. Tus paneles. Tu factura.</span
+        >
+        <RemoteVideo client:visible variant="hero" />
+      </div>
+      <svg
+        class="remote-hero-bridge"
+        viewBox="0 0 1180 680"
+        preserveAspectRatio="none"
+        aria-hidden="true"
+      >
+        <path
+          class="remote-hero-bridge-halo"
+          d="M392 242C505 202 568 201 646 230C700 250 738 263 790 244"></path>
+        <path
+          class="remote-hero-bridge-line"
+          d="M392 242C505 202 568 201 646 230C700 250 738 263 790 244"></path>
+        <circle class="remote-hero-bridge-node" cx="392" cy="242" r="7"
+        ></circle>
+        <circle class="remote-hero-bridge-node" cx="790" cy="244" r="7"
+        ></circle>
+        <circle class="remote-hero-bridge-spark" r="6"
+          ><animateMotion
+            dur="4.8s"
+            repeatCount="indefinite"
+            path="M392 242C505 202 568 201 646 230C700 250 738 263 790 244"
+          ></animateMotion></circle
+        >
+      </svg>
+    </div>
+  </section>
+
+  <section class="facts-section">
+    <div class="shell">
+      <FactStrip
+        facts={[
+          {
+            value: "40 años",
+            label: "Energía vinculada a tus paneles",
+            note: "Producción estimada en tu propuesta",
+          },
+          { value: "0 obras", label: "Los paneles están en el parque" },
+          { value: "2 plantas", label: "Torrontera ya está produciendo" },
+          { value: "4 MWh", label: "Baterías para aprovechar más horas" },
+        ]}
+      />
+      <p class="remote-fact-note">
+        Torrontera se presenta como un conjunto de dos plantas. Tu propuesta y
+        tu contrato identifican una instalación concreta.
+      </p>
+    </div>
+  </section>
+
+  <TrustBand compact />
+
+  <section class="section remote-definition-section" id="como-funciona">
+    <div class="shell remote-definition-grid">
+      <div class="remote-definition-copy">
+        <SectionHeading
+          eyebrow="La idea en una frase"
+          title="Tus paneles están a distancia. Su energía trabaja para ti."
+          copy="Eliges cuántos paneles necesitas y quedan identificados en tu propuesta dentro de una planta solar real. No tienes que instalarlos ni cuidarlos en casa: Comunidad Solar opera el parque y lleva el valor de su producción a tu factura."
+        />
+        <div class="remote-definition-key">
+          <span>La idea que debes recordar</span>
+          <strong
+            >Es como tener tus propias placas, pero donde mejor pueden producir:
+            la planta genera y Megapark aplica en tu factura la energía que
+            coincide con tu consumo.</strong
+          >
+        </div>
+        <div class="remote-network-explainer">
+          <span aria-hidden="true">↝</span>
+          <div>
+            <strong
+              >La red hace de puente; no llega un cable hasta tu casa.</strong
+            >
+            <p>
+              La producción se mide hora a hora y la comercializadora realiza su
+              aplicación en tu suministro. Por eso continúan existiendo peajes,
+              cargos y otros conceptos regulados.
+            </p>
+          </div>
+        </div>
+      </div>
+      <div
+        class="remote-energy-route"
+        aria-label="Recorrido del Autoconsumo Remoto desde el proyecto renovable hasta la factura"
+      >
+        {
+          [
+            [
+              "01",
+              "Analizamos tu consumo",
+              "Estudiamos tu factura y tus horarios para no sobredimensionar la compra.",
+            ],
+            [
+              "02",
+              "Eliges tus paneles a distancia",
+              "Tu propuesta identifica la planta, el número de paneles, su producción estimada, el almacenamiento, el precio y las cuotas.",
+            ],
+            [
+              "03",
+              "El parque produce y almacena",
+              "Comunidad Solar instala, opera y mantiene los paneles; la batería permite aprovechar más horas de su energía.",
+            ],
+            [
+              "04",
+              "Su energía llega a tu factura",
+              "Cuando producción y consumo coinciden, el componente de energía se refleja a 0,00 €/kWh.",
+            ],
+          ].map(([number, title, copy]) => (
+            <article>
+              <>
+                <span>{number}</span>
+                <div>
+                  <>
+                    <h3>{title}</h3>
+                    <p>{copy}</p>
+                  </>
+                </div>
+              </>
+            </article>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+
+  <section class="section remote-projects-section" id="torrontera">
+    <div class="shell">
+      <SectionHeading
+        eyebrow="La propuesta disponible"
+        title="Torrontera: el parque donde puedes tener tus paneles."
+        copy="Dos plantas solares en funcionamiento y 4 MWh de almacenamiento para aprovechar más horas. Calculamos cuántos paneles encajan con tu consumo y te enseñamos todos los datos antes de decidir."
+      />
+      <article class="remote-current-project">
+        <div class="remote-current-project-image">
+          <img
+            src={currentProject.image}
+            alt={currentProject.imageAlt}
+            loading="lazy"
+          /><span>{currentProject.status}</span>
+        </div>
+        <div class="remote-current-project-copy">
+          <Pill tone="yellow">Últimas plazas</Pill>
+          <h2>{currentProject.name}</h2>
+          <p>{currentProject.summary}</p>
+          <div class="remote-current-project-facts">
+            {
+              currentProject.facts.map((fact) => (
+                <div>
+                  <>
+                    <strong>{fact.value}</strong>
+                    <span>{fact.label}</span>
+                  </>
+                </div>
+              ))
+            }
+          </div>
+          <div class="remote-current-project-availability">
+            <span>{currentProject.availability}</span><strong
+              >{currentProject.availabilityDetail}</strong
+            >
+          </div>
+          <div class="remote-current-project-actions">
+            <a
+              class="button button-primary"
+              href={remoteCalculator}
+              data-analytics-event="remote_calculator_open"
+              ><span>Calcular mis paneles</span><span aria-hidden="true">↗</span
+              ></a
+            >
+            <a
+              class="text-link"
+              href={`/autoconsumo-remoto/${currentProject.slug}`}
+              >Conocer Torrontera en detalle <span aria-hidden="true">↗</span
+              ></a
+            >
+          </div>
+        </div>
+      </article>
+      <div class="remote-contract-note">
+        <div>
+          <span>UNA OFERTA, UN CONTRATO CONCRETO</span><strong
+            >Tu documentación identifica una sola instalación.</strong
+          >
+        </div><p>
+          Antes de firmar conocerás el nombre y la ubicación de la planta, su
+          potencia, el número de paneles, la producción estimada, la acumulación
+          asignada, la aseguradora y la póliza.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section class="remote-long-term-band">
+    <div class="shell remote-long-term-band-grid">
+      <div>
+        <span class="remote-long-term-number">40</span><small
+          >AÑOS · TORRONTERA</small
+        >
+      </div>
+      <div>
+        <Pill tone="yellow">Una decisión de largo plazo</Pill>
+        <h2>
+          El sol de tus paneles, convertido en tranquilidad durante 40 años.
+        </h2>
+        <p>
+          Vinculas a tu consumo la energía que producirán tus paneles durante
+          décadas. Habrá años en los que la diferencia frente al mercado sea
+          mayor y otros en los que sea menor. El valor está en toda la
+          producción acumulada y en reducir tu exposición al precio futuro, no
+          en buscar una rentabilidad rápida.
+        </p>
+        <strong class="remote-long-term-thesis"
+          >Tus paneles producen para ti durante 40 años; tu factura mantiene los
+          conceptos regulados y la energía de red que todavía necesites.</strong
+        >
+      </div>
+    </div>
+  </section>
+
+  <section class="section remote-bill-section">
+    <div class="shell">
+      <SectionHeading
+        eyebrow="Tu factura, sin confusiones"
+        title="0,00 €/kWh se aplica a la energía de Torrontera que coincide con tu consumo."
+        copy="La factura compara producción y consumo hora a hora. La energía no utilizada se vende al mercado y su valor neto pasa al monedero; la energía que falte se compra a la red."
+      />
+      <ProductVisuals kind="bill-example" />
+      <div class="remote-bill-grid">
+        <article class="remote-bill-card remote-bill-card-positive">
+          <span>LO QUE YA HAS COMPRADO</span><h3>
+            La energía producida que aprovechas.
+          </h3><ul>
+            <li>
+              El componente de energía coincidente se refleja a 0,00 €/kWh.
+            </li><li>
+              Torrontera incorpora almacenamiento en el parque para desplazar
+              parte de la energía a otras franjas.
+            </li><li>
+              Los excedentes se venden hora a hora y el ingreso neto se acumula
+              en tu monedero.
+            </li>
+          </ul>
+        </article>
+        <article class="remote-bill-card">
+          <span>LOS COSTES QUE SIGUEN EXISTIENDO</span><h3>
+            Todo visible desde el principio.
+          </h3><ul>
+            <li>La compra anticipada indicada en tu propuesta.</li><li>
+              1 € + IVA por panel y mes de mantenimiento y administración,
+              actualizado por IPC.
+            </li><li>
+              3 € + IVA al mes de cuota Comunidad Solar, actualizada por IPC.
+            </li><li>
+              Potencia, peajes, cargos, costes de sistema, impuestos y la
+              energía de red no cubierta.
+            </li>
+          </ul>
+        </article>
+      </div>
+      <p class="remote-bill-disclaimer">
+        0,00 €/kWh se refiere exclusivamente al componente de energía
+        coincidente que ya compraste por adelantado. No significa una factura
+        total de 0 € ni una rentabilidad garantizada.
+      </p>
+    </div>
+  </section>
+
+  <section class="section remote-security-section" id="seguridad">
+    <div class="shell">
+      <SectionHeading
+        eyebrow="La seguridad del modelo"
+        title="Lo importante queda por escrito antes de decidir."
+        copy="Antes de decidir recibes una propuesta y un contrato con los datos de tu compra. Estos son los cuatro compromisos que sostienen la relación."
+      />
+      <div class="remote-security-grid">
+        {
+          [
+            [
+              "01",
+              "Una instalación concreta",
+              "Tu contrato identifica planta, ubicación, potencia, paneles, producción estimada, almacenamiento, aseguradora y póliza.",
+            ],
+            [
+              "02",
+              "Operación, mantenimiento y seguro",
+              "No cuidas equipos en casa. Comunidad Solar opera y administra la planta, y su propietaria garantiza contractualmente los compromisos sobre la energía.",
+            ],
+            [
+              "03",
+              "Libertad para cambiar de comercializadora",
+              "El suministro no tiene permanencia. Si cambias, la producción pendiente se vende al mercado y recibes su rendimiento neto conforme al contrato.",
+            ],
+            [
+              "04",
+              "Cesión y herencia",
+              "Puedes ceder el contrato a otra persona si estás al corriente de pago y también es transmisible a tus herederos.",
+            ],
+          ].map(([number, title, copy]) => (
+            <article>
+              <>
+                <span>{number}</span>
+                <h3>{title}</h3>
+                <p>{copy}</p>
+              </>
+            </article>
+          ))
+        }
+      </div>
+      <div class="remote-contract-note">
+        <div>
+          <span>“TUS PANELES”, EN LENGUAJE SENCILLO</span><strong
+            >Una forma clara de visualizar la energía que contratas.</strong
+          >
+        </div><p>
+          Hablamos de “tus paneles” porque tu propuesta identifica cuántos
+          módulos y qué producción quedan vinculados a tu consumo. Jurídicamente
+          contratas por adelantado la energía asociada a esa asignación: no
+          adquieres la propiedad física del parque ni participaciones sociales
+          de la productora.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section class="section remote-projects-section" id="proyectos">
+    <div class="shell">
+      <SectionHeading
+        eyebrow="Trayectoria real"
+        title="Torrontera no es el primer proyecto: es la nueva generación."
+        copy="Fuente Álamo y Ligüérzana están completas y siguen produciendo para sus comuneros. Son la mejor prueba de que el modelo ya funciona en proyectos reales."
+      />
+      <div class="remote-project-grid remote-project-grid-history">
+        {completedProjects.map((project) => <RemoteProjectCard {project} />)}
+      </div>
+    </div>
+  </section>
+
+  <section class="section remote-video-library">
+    <div class="shell">
+      <SectionHeading
+        eyebrow="Para seguir viendo"
+        title="Una planta real y un reportaje completo."
+        copy="Después del reel de la cabecera, puedes conocer a los comuneros de Fuente Álamo y ver cómo explicó Antena 3 el Autoconsumo Remoto."
+      />
+      <div class="remote-video-library-grid">
+        <RemoteVideo
+          client:visible
+          provider="youtube"
+          videoId="reqBqJBFQIk"
+          title="Comuneros en Fuente Álamo"
+          label="Un parque real"
+          description="La inauguración que puso cara a quienes producen su energía a cientos de kilómetros."
+          poster="/media/evento-visita-parque.jpg"
+        />
+        <RemoteVideo
+          client:visible
+          provider="vimeo"
+          videoId="1108990443"
+          title="Autoconsumo Remoto en Antena 3"
+          label="Televisión · 2025"
+          description="Un reportaje reciente que ayuda a situar el producto y muestra que el modelo existe más allá de esta web."
+          poster="/media/radio-cyl.jpg"
+        />
+      </div>
+      <p class="remote-video-archive-note">
+        Los vídeos históricos muestran el funcionamiento y nuestra trayectoria.
+        Las condiciones comerciales vigentes son las de Torrontera y las de tu
+        propuesta personalizada.
+      </p>
+    </div>
+  </section>
+
+  <HumanHelp compact />
+
+  <section class="section faq-section">
+    <div class="shell faq-grid">
+      <SectionHeading
+        eyebrow="Preguntas importantes"
+        title="Las dudas que suelen quedar antes de decidir."
+        copy="Respuestas directas sobre lo que compras, la factura y los cambios que pueden ocurrir durante una relación de largo plazo."
+      />
+      <FaqList
+        items={[
+          {
+            question: "¿Qué adquiero exactamente?",
+            answer:
+              "En sencillo, eliges tus paneles a distancia y aprovechas su energía. En el contrato, compras por adelantado la energía asociada a una asignación concreta de una instalación identificada. Las condiciones particulares indican paneles, producción estimada, almacenamiento, precio y cuotas. No adquieres la propiedad física del parque ni participaciones sociales de la productora.",
+          },
+          {
+            question: "¿0 €/kWh significa que mi factura será de 0 €?",
+            answer:
+              "No. 0,00 €/kWh se aplica al componente de energía de Torrontera que coincide hora a hora con tu consumo. Continúas pagando potencia, peajes, cargos, costes de sistema, impuestos, energía de red no cubierta y las cuotas indicadas.",
+          },
+          {
+            question: "¿Qué ocurre si cambio de comercializadora?",
+            answer:
+              "El suministro no tiene permanencia. Al cambiar, la energía pendiente deja de aplicarse como consumo en tu factura y entra en vigor el mecanismo de participación en su venta: se vende al mercado y recibes la compensación neta prevista en el contrato. En ese régimen se descuentan el mantenimiento y 40 € IVA incluido al año por la gestión de la liquidación.",
+          },
+          {
+            question: "¿Puedo cederlo o dejarlo en herencia?",
+            answer:
+              "Sí. Puedes ceder el contrato a otra persona si estás al corriente de pago, y el contrato es transmisible a tus herederos. Comunidad Solar gestiona el cambio de titular y la regularización del suministro.",
+          },
+          {
+            question: "¿Qué ocurre si la planta produce menos?",
+            answer:
+              "La producción renovable puede variar por irradiación, mantenimiento, indisponibilidad o fuerza mayor. La planta está asegurada y la producción real se mide; el contrato regula la cobertura y el tratamiento de la energía pendiente.",
+          },
+        ]}
+      />
+    </div>
+  </section>
+
+  <section class="remote-final-cta">
+    <div class="shell remote-final-cta-grid">
+      <div>
+        <span>EMPIEZA POR SABER CUÁNTOS PANELES NECESITAS</span><h2>
+          ¿Cuántos paneles pondrías bajo el sol para ti?
+        </h2><p>
+          Analizamos tu consumo y te mostramos la instalación, los paneles
+          recomendados, su producción estimada, el almacenamiento, el precio,
+          las cuotas y el horizonte de Torrontera antes de decidir.
+        </p>
+      </div>
+      <div class="remote-final-cta-actions">
+        <a
+          class="button button-primary"
+          href={remoteCalculator}
+          data-analytics-event="remote_calculator_open"
+          ><span>Calcular mis paneles</span><span aria-hidden="true">↗</span></a
+        ><a href={advisorBooking}
+          >Prefiero hablar con un asesor <span aria-hidden="true">↗</span></a
+        >
+      </div>
+    </div>
+  </section>
+</main>

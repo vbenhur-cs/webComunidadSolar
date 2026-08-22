@@ -1,0 +1,248 @@
+---
+import { AboutVideo } from "../../islands/AboutVideo";
+import FactStrip from "../home-energy/FactStrip.astro";
+import Pill from "../../site/Pill.astro";
+import SectionHeading from "../../site/SectionHeading.astro";
+---
+
+<main>
+  <AboutVideo client:visible />
+
+  <section class="facts-section">
+    <div class="shell">
+      <FactStrip
+        facts={[
+          { value: "2018", label: "Nacimos con una misión" },
+          { value: "+3.500", label: "Comuneros" },
+          { value: "España", label: "Una comunidad en expansión" },
+          { value: "#PorElPlaneta", label: "El legado que construimos juntos" },
+        ]}
+      />
+    </div>
+  </section>
+
+  <section class="section story-section" id="historia">
+    <div class="shell story-grid">
+      <div class="story-sticky">
+        <p class="eyebrow">Una historia muy nuestra</p>
+        <h2>Empezamos entre amigos.</h2>
+        <p>
+          No veníamos del sector eléctrico. Quizá por eso nos atrevimos a
+          imaginar una relación completamente distinta entre la energía y las
+          personas.
+        </p>
+      </div>
+      <div class="timeline">
+        <article>
+          <span>El origen</span>
+          <h3>Una verdad que ya no podíamos ignorar</h3>
+          <p>
+            La presentación de <em>Una verdad incómoda</em>, de Al Gore, cambió
+            nuestra forma de mirar el reto climático y nos empujó a buscar
+            respuestas desde nuestra propia casa.
+          </p>
+        </article>
+        <article>
+          <span>2016</span>
+          <h3>El primer panel en casa</h3>
+          <p>
+            Paco instaló su primer panel mientras un grupo de amigos
+            experimentaba, aprendía y buscaba la forma de hacer la energía
+            renovable más accesible.
+          </p>
+        </article>
+        <article>
+          <span>2018</span>
+          <h3>Diez amigos fundan Comunidad Solar</h3>
+          <p>
+            Aquellas pruebas dejaron de ser un proyecto personal y se
+            convirtieron en una comunidad con una misión compartida.
+          </p>
+        </article>
+        <article>
+          <span>Hoy</span>
+          <h3>Más de 3.500 comuneros</h3>
+          <p>
+            Lo que empezó como una prueba entre amigos es hoy una comunidad que
+            produce, comparte y aprovecha mejor su propia energía.
+          </p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="section mission-intro" id="mision">
+    <div class="shell editorial-grid">
+      <div>
+        <p class="eyebrow">#PorElPlaneta</p>
+        <h2>Construir un mundo mejor también es una decisión energética.</h2>
+      </div>
+      <div class="editorial-copy">
+        <p>
+          Comunidad Solar nació de una convicción sencilla: la energía limpia no
+          debía quedar reservada a quien tuviera un tejado, capital o
+          conocimientos técnicos. Tenía que estar al alcance de muchas más
+          personas.
+        </p>
+        <p>
+          Cada panel, cada batería y cada comunidad energética forman parte de
+          algo mayor: producir cerca, compartir mejor, reducir emisiones y dejar
+          a quienes vienen detrás un sistema más limpio, más distribuido y más
+          humano.
+        </p>
+        <blockquote>
+          La energía que elegimos hoy cambia el mundo que dejamos mañana.
+        </blockquote>
+      </div>
+    </div>
+  </section>
+
+  <section class="section plan-section" id="nuestro-plan">
+    <div class="shell">
+      <SectionHeading
+        eyebrow="Nuestro plan"
+        title="Producir cerca. Almacenar mejor. No dejar a nadie fuera."
+        copy="Tres decisiones ordenan la nueva etapa de Comunidad Solar: acercar la energía, aprovecharla mejor y hacerla accesible para más personas."
+        align="center"
+      />
+      <div class="pillar-grid">
+        <article class="pillar pillar-green">
+          <span>01</span>
+          <h3>Acercar</h3>
+          <p>
+            Desarrollamos comunidades energéticas por toda España para conectar
+            cubiertas y plantas con quienes viven o trabajan cerca, reduciendo
+            transporte y costes de red.
+          </p>
+          <strong>Menos red. Más energía local.</strong>
+        </article>
+        <article class="pillar pillar-dark" id="almacenamiento">
+          <span>02</span>
+          <h3>Almacenar</h3>
+          <p>
+            Incorporamos baterías en hogares y parques para guardar parte de la
+            producción solar y utilizarla después, cuando más se necesita y más
+            valor tiene.
+          </p>
+          <strong>El sol, también después del sol.</strong>
+        </article>
+        <article class="pillar pillar-blue">
+          <span>03</span>
+          <h3>Abrir</h3>
+          <p>
+            Quien quiera invertir puede comprar y maximizar su ahorro. Quien no
+            pueda o no quiera hacerlo puede alquilar y empezar sin desembolso
+            inicial.
+          </p>
+          <strong>Compra o alquiler. Nadie fuera.</strong>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="section what-we-do">
+    <div class="shell">
+      <SectionHeading
+        eyebrow="Qué hacemos hoy"
+        title="Conectamos energía, tecnología y atención a las personas."
+        copy="Gestionamos todo el recorrido para que la producción encuentre a sus consumidores y el ahorro llegue de forma clara a la factura."
+      />
+      <div class="capability-grid">
+        {
+          [
+            [
+              "Energía",
+              "Desarrollamos, integramos y operamos proyectos renovables y almacenamiento, propios y de terceros.",
+            ],
+            [
+              "Helios",
+              "Nuestra plataforma conecta cobertura, contratación, reparto, seguimiento y relación con cada comunero.",
+            ],
+            [
+              "Comercializadora",
+              "Gestiona ante la distribuidora la activación de los coeficientes de reparto, refleja la energía asignada en factura y completa el suministro cuando hace falta.",
+            ],
+            [
+              "Comunidad",
+              "Acompañamos antes, durante y después de la activación. Nuestra responsabilidad no termina con una firma.",
+            ],
+          ].map(([title, copy], index) => (
+            <article>
+              <span>0{index + 1}</span>
+              <h3>{title}</h3>
+              <p>{copy}</p>
+            </article>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+
+  <section class="independent-section about-independent">
+    <div class="shell independent-grid">
+      <div>
+        <Pill tone="dark">Independientes por una razón</Pill>
+        <h2>No pertenecemos a ningún gran grupo eléctrico.</h2>
+      </div>
+      <div>
+        <p>
+          Nuestro compromiso es con los comuneros y con la solución que más les
+          conviene. Ser independientes en un mercado cada vez más concentrado no
+          siempre es fácil, pero nos permite cambiar, innovar y abrir caminos
+          nuevos cuando eso crea más valor.
+        </p>
+        <a href="/comunidades-energeticas#cobertura">
+          Descubre qué solución tienes cerca <span aria-hidden="true">↗</span>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <section class="section principles-section" id="principios">
+    <div class="shell">
+      <SectionHeading
+        eyebrow="Cómo actuamos"
+        title="La innovación solo vale si mejora la vida de las personas."
+      />
+      <div class="principles-grid">
+        {
+          [
+            [
+              "Las personas antes que el producto",
+              "Buscamos la solución que mejor encaja con cada comunero, aunque no sea siempre la misma.",
+            ],
+            [
+              "Claridad, también cuando cambia el mercado",
+              "Explicamos qué ahorras, qué pagas y por qué evoluciona nuestro modelo.",
+            ],
+            [
+              "Cuidar toda la relación",
+              "Acompañamos antes, durante y después. Nuestra responsabilidad no termina con la firma.",
+            ],
+            [
+              "Mejorar sin abandonar lo construido",
+              "Seguimos mejorando el autoconsumo remoto mientras aceleramos proximidad y almacenamiento.",
+            ],
+          ].map(([title, copy], index) => (
+            <article>
+              <span>0{index + 1}</span>
+              <h3>{title}</h3>
+              <p>{copy}</p>
+            </article>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+
+  <section class="manifesto">
+    <div class="shell">
+      <p>TU SIGUIENTE PASO</p>
+      <h2>¿Hay una comunidad energética cerca de ti?</h2>
+      <a class="button button-ghost" href="/comunidades-energeticas#cobertura">
+        <span>Comprobar mi cobertura</span>
+        <span aria-hidden="true">↗</span>
+      </a>
+    </div>
+  </section>
+</main>

@@ -1,0 +1,174 @@
+---
+import {
+  eventsLastReviewed,
+  pastEvents,
+  upcomingEvents,
+} from "../../../content/events-data";
+import Pill from "../../site/Pill.astro";
+import SectionHeading from "../../site/SectionHeading.astro";
+import EventCard from "./EventCard.astro";
+
+const featuredEvent = pastEvents[0];
+const archivedEvents = pastEvents.slice(1);
+---
+
+<main class="events-page">
+  <section class="events-hero">
+    <div class="shell events-hero-grid">
+      <div class="events-hero-copy">
+        <Pill tone="yellow">Eventos · Webinars</Pill>
+        <h1>La energía se entiende mejor cuando la compartimos.</h1>
+        <p>
+          Encuentros en nuestros parques, jornadas abiertas y webinars para
+          explicar lo que hacemos sin filtros. Aquí reunimos las citas públicas
+          de Comunidad Solar, estén en Backstage o en TrainerCentral.
+        </p>
+        <div class="events-hero-actions">
+          <a class="button button-primary" href="#proximos"
+            ><span>Próximos eventos</span><span aria-hidden="true">↗</span></a
+          >
+          <a class="button button-secondary" href="#archivo"
+            ><span>Ver el archivo</span><span aria-hidden="true">↗</span></a
+          >
+        </div>
+        <div class="events-platform-key" aria-label="Plataformas de eventos">
+          <span class="event-platform event-platform-backstage"
+            ><i aria-hidden="true"></i>Zoho Backstage</span
+          >
+          <span>Encuentros y visitas</span>
+          <span class="event-platform event-platform-trainercentral"
+            ><i aria-hidden="true"></i>Zoho TrainerCentral</span
+          >
+          <span>Webinars</span>
+        </div>
+      </div>
+      <article class="events-hero-feature">
+        <div class="events-hero-feature-media">
+          <img
+            src={featuredEvent.image}
+            alt={featuredEvent.imageAlt}
+            fetchpriority="high"
+          />
+          <span>Último encuentro publicado</span>
+        </div>
+        <div class="events-hero-feature-body">
+          <div>
+            <time datetime={featuredEvent.date}
+              >{featuredEvent.displayDate}</time
+            ><span>{featuredEvent.location}</span>
+          </div>
+          <h2>{featuredEvent.title}</h2>
+          <p>{featuredEvent.summary}</p>
+          <div class="events-hero-feature-actions">
+            {
+              featuredEvent.platforms.map((platform) => (
+                <a
+                  href={platform.href}
+                  data-analytics-event={
+                    platform.name === "Zoho Backstage"
+                      ? "event_backstage_open"
+                      : "event_trainercentral_open"
+                  }
+                >
+                  {platform.action} <span aria-hidden="true">↗</span>
+                </a>
+              ))
+            }
+          </div>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <section class="section events-upcoming" id="proximos">
+    <div class="shell">
+      <SectionHeading
+        eyebrow="Próximos eventos"
+        title="La siguiente cita aparecerá aquí cuando el registro esté abierto."
+        copy="Solo publicamos convocatorias confirmadas. Nada de borradores, pruebas o encuentros que finalmente no sucedieron."
+      />
+      {
+        upcomingEvents.length > 0 ? (
+          <div class="event-grid event-grid-upcoming">
+            {upcomingEvents.map((event) => (
+              <EventCard event={event} large />
+            ))}
+          </div>
+        ) : (
+          <div class="events-empty-state">
+            <div class="events-empty-date" aria-hidden="true">
+              <>
+                <span>Próxima</span>
+                <strong>cita</strong>
+              </>
+            </div>
+            <div>
+              <p class="eyebrow">Agenda pública</p>
+              <h3>Ahora mismo no hay ningún evento abierto.</h3>
+              <p>
+                En cuanto publiquemos una visita, un encuentro o un webinar,
+                aparecerá aquí con su enlace oficial de inscripción.
+              </p>
+            </div>
+            <span class="events-reviewed">
+              Agenda revisada · {eventsLastReviewed}
+            </span>
+          </div>
+        )
+      }
+    </div>
+  </section>
+
+  <section class="section events-archive" id="archivo">
+    <div class="shell">
+      <div class="events-archive-heading">
+        <SectionHeading
+          eyebrow="Eventos anteriores"
+          title="Lo que ya hemos vivido juntos."
+          copy="Cada ficha conserva su fecha y abre el evento original en la plataforma en la que se organizó."
+        />
+        <a
+          class="text-link"
+          href="https://eventos.comunidadsolar.es/events?type=completed"
+          data-analytics-event="event_backstage_archive_open"
+          >Archivo completo en Backstage <span aria-hidden="true">↗</span></a
+        >
+      </div>
+      <div class="event-grid">
+        {
+          archivedEvents.map((event, index) => (
+            <EventCard event={event} large={index === 0} />
+          ))
+        }
+      </div>
+    </div>
+  </section>
+
+  <section class="events-platforms-section">
+    <div class="shell events-platforms-grid">
+      <div>
+        <p class="eyebrow">Una agenda, dos herramientas</p>
+        <h2>Entras por Comunidad Solar. Cada evento continúa donde toca.</h2>
+      </div>
+      <article>
+        <span class="event-platform event-platform-backstage"
+          ><i aria-hidden="true"></i>Zoho Backstage</span
+        >
+        <h3>Encuentros presenciales e híbridos</h3>
+        <p>
+          Visitas a parques, jornadas abiertas, aniversarios y programas con
+          agenda física.
+        </p>
+      </article>
+      <article>
+        <span class="event-platform event-platform-trainercentral"
+          ><i aria-hidden="true"></i>Zoho TrainerCentral</span
+        >
+        <h3>Webinars y sesiones online</h3>
+        <p>
+          Registro, acceso a la emisión y archivo de las sesiones informativas.
+        </p>
+      </article>
+    </div>
+  </section>
+</main>

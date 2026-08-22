@@ -1,0 +1,44 @@
+---
+import type { RemoteProject } from "../../../content/remote-project-data";
+
+interface Props {
+  project: RemoteProject;
+}
+
+const { project } = Astro.props;
+const location = project.province
+  ? `${project.location}, ${project.province}`
+  : project.location;
+---
+
+<article class="remote-project-card">
+  <div class="remote-project-card-image">
+    <img src={project.image} alt={project.imageAlt} />
+    <span
+      class={`remote-project-status remote-project-status-${project.statusTone}`}
+      >{project.status}</span
+    >
+  </div>
+  <div class="remote-project-card-meta">
+    <span>{project.technology}</span><span>{location}</span>
+  </div>
+  <div
+    class={`remote-project-availability remote-project-availability-${project.availabilityTone}`}
+    aria-label={`Participación en ${project.name}: ${project.availability}. ${project.availabilityDetail}`}
+  >
+    <span
+      >{
+        project.availabilityTone === "available"
+          ? "Puedes incorporarte"
+          : "Participación"
+      }</span
+    >
+    <strong>{project.availability}</strong>
+    <small>{project.availabilityDetail}</small>
+  </div>
+  <h3>{project.name}</h3>
+  <p>{project.summary}</p>
+  <a href={`/autoconsumo-remoto/${project.slug}`}
+    >Ver ficha del proyecto <span aria-hidden="true">↗</span></a
+  >
+</article>

@@ -1,0 +1,159 @@
+---
+import type { RemoteProject } from "../../../content/remote-project-data";
+import FactStrip from "../home-energy/FactStrip.astro";
+import PageHero from "../../site/PageHero.astro";
+import Pill from "../../site/Pill.astro";
+import SectionHeading from "../../site/SectionHeading.astro";
+import RemoteProjectClosing from "./RemoteProjectClosing.astro";
+
+interface Props {
+  project: RemoteProject;
+}
+
+const { project } = Astro.props;
+const remoteCalculator = "https://presupuesto-ar.comunidadsolar.es";
+const memberApp = "https://comunidad-solar.clever.gy/login";
+const communityPortal = "https://ayuda.comunidadsolar.es/portal/en-gb/signin";
+const isAvailable = project.availabilityTone === "available";
+const location = project.province
+  ? `${project.location}, ${project.province}`
+  : project.location;
+---
+
+<main>
+  <div class="shell community-breadcrumb">
+    <a href="/autoconsumo-remoto#proyectos"
+      ><span aria-hidden="true">←</span> Todos los proyectos de Remoto</a
+    >
+  </div>
+  <PageHero
+    tone="yellow"
+    eyebrow={`Proyecto de Autoconsumo Remoto · ${project.region}`}
+    title={project.name}
+    lead={project.summary}
+    primary={isAvailable
+      ? { href: remoteCalculator, label: "Calcular mi propuesta" }
+      : { href: memberApp, label: "Entrar en mi app" }}
+    secondary={{ href: "#como-funciona", label: "Conocer el proyecto" }}
+    image={project.image}
+    imageAlt={project.imageAlt}
+  />
+  <section class="facts-section community-detail-facts">
+    <div class="shell">
+      <FactStrip
+        facts={[
+          {
+            value: project.availability,
+            label: "Disponibilidad comercial",
+            note: project.availabilityDetail,
+          },
+          ...project.facts.slice(0, 3),
+        ]}
+      />
+    </div>
+  </section>
+  <section
+    class="section community-status-section remote-project-status-section"
+    id="estado"
+  >
+    <div class="shell community-status-grid">
+      <article class="project-status-card">
+        <div class="project-status-badges">
+          <span
+            class={`project-status-pill project-status-${project.statusTone}`}
+            >Activo · {project.status}</span
+          >
+          <span
+            class={`project-availability-pill project-availability-${project.availabilityTone}`}
+            >Disponibilidad comercial · {project.availability}</span
+          >
+        </div>
+        <p class="eyebrow">Situación del proyecto</p>
+        <h2>{project.stateHeadline}</h2>
+        <p class="project-status-copy">{project.stateCopy}</p>
+        <div class="project-status-meta">
+          <div>
+            <span>Información actualizada</span><strong
+              >{project.reviewedAt}</strong
+            >
+          </div>
+          <div><span>Ubicación</span><strong>{location}</strong></div>
+          <div>
+            <span>Tecnología</span><strong>{project.technology}</strong>
+          </div>
+        </div>
+      </article>
+      <aside class="project-next-card remote-project-member-card">
+        <span class="project-next-index">INFORMACIÓN PERSONAL</span>
+        <h3>Tu producción y tu contrato están en tu espacio privado.</h3>
+        <p>
+          Esta ficha explica el activo. Para consultar tus datos, documentos o
+          una incidencia necesitamos identificarte como comunero.
+        </p>
+        <div class="remote-project-member-actions">
+          <a href={memberApp}
+            >Entrar en mi app <span aria-hidden="true">↗</span></a
+          ><a href={communityPortal}
+            >Atención identificada <span aria-hidden="true">↗</span></a
+          >
+        </div>
+      </aside>
+    </div>
+  </section>
+  <section class="section remote-project-role-section">
+    <div class="shell remote-project-role-grid">
+      <article>
+        <Pill tone="yellow">Su papel en la historia</Pill><h2>
+          {project.roleHeadline}
+        </h2><p>{project.roleCopy}</p>
+      </article>
+      <aside id="como-funciona">
+        <span>CÓMO FUNCIONA</span><h3>{project.technologyHeadline}</h3><p>
+          {project.technologyCopy}
+        </p><ul class="remote-project-technology-list">
+          {
+            project.technologyPoints.map((point) => (
+              <li>
+                <>
+                  <strong>{point.title}</strong>
+                  <small>{point.copy}</small>
+                </>
+              </li>
+            ))
+          }
+        </ul>
+      </aside>
+    </div>
+  </section>
+  <section class="section project-timeline-section">
+    <div class="shell">
+      <SectionHeading
+        eyebrow="Hitos del proyecto"
+        title="Cómo ha llegado hasta aquí."
+        copy="Los hitos principales permiten entender la evolución del activo sin mezclarla con la producción o el contrato individual de cada comunero."
+      />
+      <div class="project-timeline">
+        {
+          project.milestones.map((milestone, index) => (
+            <article
+              class={`project-milestone project-milestone-${milestone.state}`}
+            >
+              <>
+                <div class="project-milestone-top">
+                  <>
+                    <span>{String(index + 1).padStart(2, "0")}</span>
+                    <i aria-hidden="true" />
+                  </>
+                </div>
+                <p>{milestone.state === "done" ? "Completado" : "Actual"}</p>
+                <h3>{milestone.title}</h3>
+                <small>{milestone.copy}</small>
+              </>
+            </article>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+  <RemoteProjectClosing {project} />
+</main>

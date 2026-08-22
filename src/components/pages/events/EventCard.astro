@@ -1,0 +1,71 @@
+---
+import type { EventPlatform, PublicEvent } from "../../../content/events-data";
+
+interface Props {
+  event: PublicEvent;
+  large?: boolean;
+}
+
+const { event, large = false } = Astro.props;
+const platformClass = (platform: EventPlatform) =>
+  platform.name === "Zoho Backstage" ? "backstage" : "trainercentral";
+---
+
+<article
+  class={`event-card ${large ? "event-card-large" : ""}`}
+  data-event-status="celebrado"
+>
+  <div class="event-card-media">
+    {
+      event.image ? (
+        <img src={event.image} alt={event.imageAlt ?? ""} loading="lazy" />
+      ) : (
+        <div
+          class={`event-card-webinar event-card-webinar-${event.tone ?? "green"}`}
+          aria-label={`Archivo del webinar ${event.title}`}
+        >
+          <>
+            <span>Archivo digital</span>
+            <strong>Webinar</strong>
+            <small>Zoho TrainerCentral</small>
+          </>
+        </div>
+      )
+    }
+    <span class="event-card-format">{event.format}</span>
+  </div>
+  <div class="event-card-content">
+    <div class="event-card-platforms">
+      {
+        event.platforms.map((platform) => (
+          <span
+            class={`event-platform event-platform-${platformClass(platform)}`}
+          >
+            <i aria-hidden="true" />
+            {platform.name}
+          </span>
+        ))
+      }
+    </div>
+    <time datetime={event.date}>{event.displayDate}</time>
+    <h3>{event.title}</h3>
+    <p>{event.summary}</p>
+    <span class="event-card-location">{event.location}</span>
+    <div class="event-card-actions">
+      {
+        event.platforms.map((platform) => (
+          <a
+            href={platform.href}
+            data-analytics-event={
+              platform.name === "Zoho Backstage"
+                ? "event_backstage_open"
+                : "event_trainercentral_open"
+            }
+          >
+            {platform.action} <span aria-hidden="true">↗</span>
+          </a>
+        ))
+      }
+    </div>
+  </div>
+</article>
