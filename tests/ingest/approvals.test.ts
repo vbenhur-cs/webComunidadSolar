@@ -15,6 +15,7 @@ import { promisify } from "node:util";
 
 import { sha256Canonical } from "../../src/ingest/canonical-json.ts";
 import type { CandidateManifest, ChangePlan } from "../../src/ingest/domain.ts";
+import { sanitizedGitEnv } from "../../src/ingest/git-env.ts";
 import { ingestPaths } from "../../src/ingest/paths.ts";
 import {
   approveGate1,
@@ -127,17 +128,23 @@ async function withHostileGitEnvironment(
   gitDir: string,
   run: () => Promise<void>,
 ): Promise<void> {
-  const previousDir = process.env.GIT_DIR;
-  const previousWorkTree = process.env.GIT_WORK_TREE;
-  process.env.GIT_DIR = gitDir;
-  process.env.GIT_WORK_TREE = "/attacker-controlled-work-tree";
+  const overrides = {
+    GIT_DIR: gitDir,
+    GIT_WORK_TREE: "/attacker-controlled-work-tree",
+    git_dir: gitDir,
+    GiT_WoRk_TrEe: "/attacker-controlled-work-tree",
+  };
+  const previous = new Map(
+    Object.keys(overrides).map((name) => [name, process.env[name]]),
+  );
+  Object.assign(process.env, overrides);
   try {
     await run();
   } finally {
-    if (previousDir === undefined) delete process.env.GIT_DIR;
-    else process.env.GIT_DIR = previousDir;
-    if (previousWorkTree === undefined) delete process.env.GIT_WORK_TREE;
-    else process.env.GIT_WORK_TREE = previousWorkTree;
+    for (const [name, value] of previous) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
   }
 }
 
@@ -287,6 +294,22 @@ test("requires the twelve-character subject hash confirmation", async () => {
       /confirmaci[oó]n|hash/i,
     );
   });
+});
+
+test("removes case variants of Git environment overrides", () => {
+  const names = ["git_dir", "GiT_WoRk_TrEe"];
+  const previous = new Map(names.map((name) => [name, process.env[name]]));
+  try {
+    process.env.git_dir = "/attacker/.git";
+    process.env.GiT_WoRk_TrEe = "/attacker/worktree";
+    const safeEnvironment = sanitizedGitEnv();
+    for (const name of names) assert.equal(safeEnvironment[name], undefined);
+  } finally {
+    for (const [name, value] of previous) {
+      if (value === undefined) delete process.env[name];
+      else process.env[name] = value;
+    }
+  }
 });
 
 test("ignores hostile GIT_DIR and GIT_WORK_TREE for fixtures and main authority", async () => {
@@ -624,6 +647,132 @@ test("does not mint fixture prompts through a symlinked state directory", async 
       );
     } finally {
       await rm(foreignRoot, { force: true, recursive: true });
+    }
+  });
+});
+
+test("revokes a fixture capability when its run is disposed", async () => {
+  await withStateRoot(async ({ projectRoot, stateRoot, mainCommit }) => {
+    const approvedPlan = fixturePlan(mainCommit);
+    const prompt = await fixturePrompt(projectRoot, {
+      isTTY: true,
+      answer: approvedPlan.planSha256.slice(0, 12),
+    });
+    const fixture = fixtureRuns.get(projectRoot);
+    if (fixture === undefined) throw new Error("No se creó el fixture");
+    await fixture.dispose();
+
+    await assert.rejects(
+      approveGate1(
+        {
+          plan: approvedPlan,
+          actor: "test-human",
+          stateRoot,
+          repositoryRoot: projectRoot,
+        },
+        prompt,
+      ),
+      /prompt de aprobaci[oó]n|capacidad/i,
+    );
+    await assert.rejects(lstat(projectRoot), { code: "ENOENT" });
+  });
+});
+
+test("rejects a fixture capability after its clone path is recreated", async () => {
+  await withStateRoot(async ({ projectRoot, stateRoot, mainCommit }) => {
+    const approvedPlan = fixturePlan(mainCommit);
+    const prompt = await fixturePrompt(projectRoot, {
+      isTTY: true,
+      answer: approvedPlan.planSha256.slice(0, 12),
+    });
+    const { stdout: origin } = await execFileAsync("git", [
+      "-C",
+      projectRoot,
+      "remote",
+      "get-url",
+      "origin",
+    ]);
+    await rm(projectRoot, { force: true, recursive: true });
+    await execFileAsync("git", [
+      "clone",
+      "--quiet",
+      "--branch",
+      "main",
+      origin.trim(),
+      projectRoot,
+    ]);
+
+    await assert.rejects(
+      approveGate1(
+        {
+          plan: approvedPlan,
+          actor: "test-human",
+          stateRoot,
+          repositoryRoot: projectRoot,
+        },
+        prompt,
+      ),
+      /fixture|identidad|clon/i,
+    );
+    await assert.rejects(lstat(stateRoot), { code: "ENOENT" });
+  });
+});
+
+test("rejects an owned clone whose Git common directory leaves its root", async () => {
+  await withStateRoot(async ({ projectRoot, stateRoot, mainCommit }) => {
+    const external = await mkdtemp(join(tmpdir(), "comunidadsolar-common-"));
+    try {
+      const approvedPlan = fixturePlan(mainCommit);
+      const prompt = await fixturePrompt(projectRoot, {
+        isTTY: true,
+        answer: approvedPlan.planSha256.slice(0, 12),
+      });
+      const { stdout: origin } = await execFileAsync("git", [
+        "-C",
+        projectRoot,
+        "remote",
+        "get-url",
+        "origin",
+      ]);
+      await rm(external, { force: true, recursive: true });
+      await execFileAsync("git", [
+        "clone",
+        "--quiet",
+        "--branch",
+        "main",
+        origin.trim(),
+        external,
+      ]);
+      await writeFile(
+        join(projectRoot, ".git", "commondir"),
+        `${join(external, ".git")}\n`,
+        "utf8",
+      );
+
+      await assert.rejects(
+        approveGate1(
+          {
+            plan: approvedPlan,
+            actor: "test-human",
+            stateRoot,
+            repositoryRoot: projectRoot,
+          },
+          prompt,
+        ),
+        /Git|repositorio|fixture|clon/i,
+      );
+      await assert.rejects(
+        approveGate1({
+          plan: approvedPlan,
+          actor: "test-human",
+          stateRoot,
+          repositoryRoot: projectRoot,
+        }),
+        /Git|repositorio|independiente/i,
+      );
+      await assert.rejects(lstat(stateRoot), { code: "ENOENT" });
+    } finally {
+      await rm(external, { force: true, recursive: true });
     }
   });
 });

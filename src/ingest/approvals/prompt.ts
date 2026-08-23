@@ -22,6 +22,7 @@ interface ApprovalPrompt {
   readonly environment: "production" | "test";
   readonly fixtureProjectRoot: string | null;
   confirm(confirmation: ApprovalConfirmation): Promise<string>;
+  revalidate(): Promise<void>;
 }
 
 export interface FixtureApprovalPrompt {
@@ -43,6 +44,16 @@ export interface FixtureApprovalRunOptions {
 }
 
 const fixturePrompts = new WeakMap<FixtureApprovalPrompt, ApprovalPrompt>();
+
+interface FilesystemIdentity {
+  readonly device: number;
+  readonly inode: number;
+}
+
+interface FixtureRootIdentity {
+  readonly root: FilesystemIdentity;
+  readonly git: FilesystemIdentity;
+}
 
 function isWithin(parent: string, child: string): boolean {
   const path = relative(parent, child);
@@ -82,7 +93,31 @@ async function gitOutput(root: string, args: string[]): Promise<string> {
   }
 }
 
-async function assertOwnedFixtureClone(root: string): Promise<void> {
+function filesystemIdentity(entry: {
+  dev: number;
+  ino: number;
+}): FilesystemIdentity {
+  return { device: entry.dev, inode: entry.ino };
+}
+
+function sameFilesystemIdentity(
+  left: FilesystemIdentity,
+  right: FilesystemIdentity,
+): boolean {
+  return left.device === right.device && left.inode === right.inode;
+}
+
+async function assertStandaloneGitRoot(
+  root: string,
+  expectedIdentity?: FixtureRootIdentity,
+): Promise<FixtureRootIdentity> {
+  const rootEntry = await lstat(root);
+  if (rootEntry.isSymbolicLink() || !rootEntry.isDirectory()) {
+    throw new TypeError("El clon temporal fixture no tiene Git válido");
+  }
+  if ((await realpath(root)) !== root) {
+    throw new TypeError("El clon temporal fixture no tiene Git válido");
+  }
   const gitEntry = await lstat(join(root, ".git"));
   if (!gitEntry.isDirectory() || gitEntry.isSymbolicLink()) {
     throw new TypeError("El clon temporal fixture no tiene Git válido");
@@ -93,25 +128,63 @@ async function assertOwnedFixtureClone(root: string): Promise<void> {
   if ((await gitOutput(root, ["rev-parse", "--show-toplevel"])) !== root) {
     throw new TypeError("El clon temporal fixture no tiene Git válido");
   }
-  const head = await gitOutput(root, [
-    "rev-parse",
-    "--verify",
-    "HEAD^{commit}",
-  ]);
-  const origin = await gitOutput(root, ["remote", "get-url", "origin"]);
-  const trackedMain = await gitOutput(root, [
-    "rev-parse",
-    "--verify",
-    "refs/remotes/origin/main^{commit}",
+  const gitRoot = join(root, ".git");
+  const [absoluteGitDir, commonGitDir] = await Promise.all([
+    gitOutput(root, ["rev-parse", "--absolute-git-dir"]),
+    gitOutput(root, ["rev-parse", "--git-common-dir"]),
   ]);
   if (
-    !/^[a-f0-9]{40,64}$/u.test(head) ||
-    origin === "" ||
-    trackedMain !== head
+    resolve(root, absoluteGitDir) !== gitRoot ||
+    resolve(root, commonGitDir) !== gitRoot ||
+    (await realpath(resolve(root, absoluteGitDir))) !== gitRoot ||
+    (await realpath(resolve(root, commonGitDir))) !== gitRoot
   ) {
-    throw new TypeError("El clon temporal fixture no tiene origen verificable");
+    throw new TypeError("El clon temporal fixture no tiene Git independiente");
+  }
+  const identity = {
+    root: filesystemIdentity(rootEntry),
+    git: filesystemIdentity(gitEntry),
+  };
+  if (
+    expectedIdentity !== undefined &&
+    (!sameFilesystemIdentity(identity.root, expectedIdentity.root) ||
+      !sameFilesystemIdentity(identity.git, expectedIdentity.git))
+  ) {
+    throw new TypeError("La identidad del clon fixture ha cambiado");
+  }
+  return identity;
+}
+
+async function assertOwnedFixtureClone(
+  root: string,
+  expectedIdentity?: FixtureRootIdentity,
+  requireOriginAtHead = false,
+): Promise<FixtureRootIdentity> {
+  const identity = await assertStandaloneGitRoot(root, expectedIdentity);
+  if (requireOriginAtHead) {
+    const head = await gitOutput(root, [
+      "rev-parse",
+      "--verify",
+      "HEAD^{commit}",
+    ]);
+    const origin = await gitOutput(root, ["remote", "get-url", "origin"]);
+    const trackedMain = await gitOutput(root, [
+      "rev-parse",
+      "--verify",
+      "refs/remotes/origin/main^{commit}",
+    ]);
+    if (
+      !/^[a-f0-9]{40,64}$/u.test(head) ||
+      origin === "" ||
+      trackedMain !== head
+    ) {
+      throw new TypeError(
+        "El clon temporal fixture no tiene origen verificable",
+      );
+    }
   }
   await assertSafeStateRoot(root);
+  return identity;
 }
 
 async function safeFixtureSource(source: string): Promise<string> {
@@ -137,6 +210,8 @@ export async function createFixtureApprovalRun(
   );
   const repositoryRoot = join(parent, "clone");
   let disposed = false;
+  const capabilities = new Set<FixtureApprovalPrompt>();
+  let identity: FixtureRootIdentity;
   try {
     await execFileAsync(
       "git",
@@ -153,7 +228,7 @@ export async function createFixtureApprovalRun(
         "El clon fixture no puede vivir en un worktree de agente",
       );
     }
-    await assertOwnedFixtureClone(repositoryRoot);
+    identity = await assertOwnedFixtureClone(repositoryRoot, undefined, true);
   } catch (error) {
     await rm(parent, { force: true, recursive: true });
     throw error;
@@ -165,21 +240,34 @@ export async function createFixtureApprovalRun(
     async createPrompt({ isTTY, answer }: { isTTY: boolean; answer: string }) {
       if (disposed)
         throw new TypeError("El fixture de aprobación ya fue liberado");
-      await assertSafeStateRoot(repositoryRoot);
+      await assertOwnedFixtureClone(repositoryRoot, identity);
       const capability = Object.freeze({
         [fixturePromptBrand]: true as const,
       }) as FixtureApprovalPrompt;
+      capabilities.add(capability);
       fixturePrompts.set(capability, {
         isTTY,
         environment: "test",
         fixtureProjectRoot: repositoryRoot,
         confirm: async () => answer,
+        async revalidate() {
+          if (disposed)
+            throw new TypeError("El fixture de aprobación ya fue liberado");
+          try {
+            await assertOwnedFixtureClone(repositoryRoot, identity);
+          } catch (error: unknown) {
+            if (error instanceof TypeError) throw error;
+            throw new TypeError("La identidad del clon fixture no es válida");
+          }
+        },
       });
       return capability;
     },
     async dispose() {
       if (disposed) return;
       disposed = true;
+      for (const capability of capabilities) fixturePrompts.delete(capability);
+      capabilities.clear();
       await rm(parent, { force: true, recursive: true });
     },
   });
@@ -190,6 +278,7 @@ function createProductionApprovalPrompt(): ApprovalPrompt {
     isTTY: stdin.isTTY === true && stdout.isTTY === true,
     environment: "production",
     fixtureProjectRoot: null,
+    async revalidate() {},
     async confirm({ gate, subjectSha256, summary }): Promise<string> {
       stdout.write(`\nGate ${gate}\n${summary}\nHash: ${subjectSha256}\n`);
       const prompt = createInterface({ input: stdin, output: stdout });
@@ -221,9 +310,16 @@ export async function assertPromptStateRoot(
   options: { repositoryRoot?: string; stateRoot?: string },
 ): Promise<void> {
   if (prompt.fixtureProjectRoot === null) return;
+  await prompt.revalidate();
+  let repositoryRoot: string;
+  try {
+    repositoryRoot = await realpath(options.repositoryRoot ?? "");
+  } catch {
+    throw new TypeError("El repositorio fixture no tiene una raíz válida");
+  }
   if (
     options.repositoryRoot === undefined ||
-    (await realpath(options.repositoryRoot)) !== prompt.fixtureProjectRoot
+    repositoryRoot !== prompt.fixtureProjectRoot
   ) {
     throw new TypeError(
       "El prompt fixture solo puede leer main desde su clon temporal",

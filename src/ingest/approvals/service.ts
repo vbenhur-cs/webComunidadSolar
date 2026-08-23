@@ -51,13 +51,35 @@ async function protectedMainBaseline(repositoryRoot: string): Promise<string> {
     if (git.isSymbolicLink() || !git.isDirectory()) {
       throw new TypeError("El repositorio no tiene Git seguro");
     }
-    const topLevel = await execFileAsync(
-      "git",
-      ["-C", root, "rev-parse", "--show-toplevel"],
-      { encoding: "utf8", env: sanitizedGitEnv() },
-    );
+    const gitRoot = join(root, ".git");
+    if ((await realpath(gitRoot)) !== gitRoot) {
+      throw new TypeError("El repositorio no tiene Git seguro");
+    }
+    const [topLevel, absoluteGitDir, commonGitDir] = await Promise.all([
+      execFileAsync("git", ["-C", root, "rev-parse", "--show-toplevel"], {
+        encoding: "utf8",
+        env: sanitizedGitEnv(),
+      }),
+      execFileAsync("git", ["-C", root, "rev-parse", "--absolute-git-dir"], {
+        encoding: "utf8",
+        env: sanitizedGitEnv(),
+      }),
+      execFileAsync("git", ["-C", root, "rev-parse", "--git-common-dir"], {
+        encoding: "utf8",
+        env: sanitizedGitEnv(),
+      }),
+    ]);
     if (topLevel.stdout.trim() !== root) {
       throw new TypeError("El repositorio no tiene una raíz segura");
+    }
+    if (
+      resolve(root, absoluteGitDir.stdout.trim()) !== gitRoot ||
+      resolve(root, commonGitDir.stdout.trim()) !== gitRoot ||
+      (await realpath(resolve(root, absoluteGitDir.stdout.trim()))) !==
+        gitRoot ||
+      (await realpath(resolve(root, commonGitDir.stdout.trim()))) !== gitRoot
+    ) {
+      throw new TypeError("El repositorio no tiene Git independiente");
     }
     const main = await execFileAsync(
       "git",
@@ -190,7 +212,9 @@ async function confirm(
 async function persistApproval(
   approval: ApprovalRecord,
   options: ApprovalStorageOptions,
+  prompt: ReturnType<typeof approvalPrompt>,
 ): Promise<ApprovalRecord> {
+  await assertPromptStateRoot(prompt, options);
   const paths = await ingestPaths(approval.changeId, options);
   const filename = `gate-${approval.gate}.json`;
   await writeAtomic(
@@ -206,9 +230,9 @@ export async function approveGate1(
 ): Promise<ApprovalRecord> {
   assertActor(input.actor);
   const subjectSha256 = planSubject(input.plan);
-  await assertIssuanceBaseline(input.plan, input.repositoryRoot);
   const prompt = approvalPrompt(fixturePrompt);
   await assertPromptStateRoot(prompt, input);
+  await assertIssuanceBaseline(input.plan, input.repositoryRoot);
   await confirm(
     prompt,
     1,
@@ -227,7 +251,7 @@ export async function approveGate1(
     candidateCommit: null,
     artifactSha256: null,
   });
-  return persistApproval(approval, input);
+  return persistApproval(approval, input, prompt);
 }
 
 export async function approveGate2(
@@ -236,12 +260,12 @@ export async function approveGate2(
 ): Promise<ApprovalRecord> {
   assertActor(input.actor);
   const approvedPlanSha256 = planSubject(input.plan);
+  const prompt = approvalPrompt(fixturePrompt);
+  await assertPromptStateRoot(prompt, input);
   const currentBaseline = await assertIssuanceBaseline(
     input.plan,
     input.repositoryRoot,
   );
-  const prompt = approvalPrompt(fixturePrompt);
-  await assertPromptStateRoot(prompt, input);
   const gate1 = await persistedGate1(input);
   verifyApproval(gate1, input.plan, currentBaseline);
   if (gate1.environment !== prompt.environment) {
@@ -269,7 +293,7 @@ export async function approveGate2(
     candidateCommit: input.candidate.candidateCommit,
     artifactSha256: input.candidate.artifactSha256,
   });
-  return persistApproval(approval, input);
+  return persistApproval(approval, input, prompt);
 }
 
 export function verifyApproval(
