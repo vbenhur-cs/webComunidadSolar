@@ -1,0 +1,207 @@
+---
+import guideSource from "../../content/guide-content.md?raw";
+import {
+  parseGuideMarkdown,
+  type GuideBlock,
+} from "../../lib/guide/markdown.ts";
+import {
+  hydrateTeamGuideMarkdown,
+  teamGuideDownloadPath,
+  teamGuideSnapshot,
+  teamGuideTotalRoutes,
+} from "../../lib/guide/runtime.ts";
+import GuideInline from "./GuideInline.astro";
+
+const hydratedGuide = hydrateTeamGuideMarkdown(guideSource);
+const title =
+  hydratedGuide.match(/^#\s+(.+)$/m)?.[1] ??
+  "Manual estratégico y de implementación";
+const blocks = parseGuideMarkdown(hydratedGuide);
+const indexItems = blocks.filter(
+  (block): block is Extract<GuideBlock, { kind: "heading" }> =>
+    block.kind === "heading" && block.level === 2,
+);
+
+function guideMeta(label: string): string | undefined {
+  const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return hydratedGuide.match(
+    new RegExp(`^\\*\\*${escaped}:\\*\\*\\s*(.+)$`, "m"),
+  )?.[1];
+}
+---
+
+<main class="team-guide-page">
+  <section class="team-guide-hero">
+    <div class="shell team-guide-hero-grid">
+      <div>
+        <p class="eyebrow">Manual vivo del equipo</p>
+        <h1>{title}</h1>
+        <p class="team-guide-hero-lead">
+          La referencia compartida para entender la estrategia, mantener la
+          coherencia comercial e implementar la web sin perder decisiones.
+        </p>
+        <div class="team-guide-meta">
+          <span>{guideMeta("Actualizado")}</span>
+          <span>{guideMeta("Estado")}</span>
+        </div>
+        <div class="team-guide-actions">
+          <a
+            class="button button-primary"
+            href={teamGuideDownloadPath}
+            download
+          >
+            Descargar manual .md <span aria-hidden="true">→</span>
+          </a>
+          <a class="text-link" href="#regla-de-sincronizacion">
+            Ver regla de actualización
+          </a>
+        </div>
+      </div>
+      <div
+        class="team-guide-route-card"
+        aria-label={`${teamGuideTotalRoutes} rutas de contenido documentadas`}
+      >
+        <strong>{teamGuideTotalRoutes}</strong>
+        <span>rutas documentadas</span>
+        <dl>
+          <div>
+            <dt>{teamGuideSnapshot.basePages}</dt>
+            <dd>páginas base</dd>
+          </div>
+          <div>
+            <dt>{teamGuideSnapshot.communities}</dt>
+            <dd>comunidades</dd>
+          </div>
+          <div>
+            <dt>{teamGuideSnapshot.remoteProjects}</dt>
+            <dd>proyectos Remoto</dd>
+          </div>
+          <div>
+            <dt>{teamGuideSnapshot.stories}</dt>
+            <dd>historias</dd>
+          </div>
+        </dl>
+      </div>
+    </div>
+  </section>
+
+  <div class="shell team-guide-layout">
+    <aside class="team-guide-aside">
+      <p>Índice</p>
+      <nav aria-label="Secciones del manual">
+        {
+          indexItems.map((item) => (
+            <a href={`#${item.id}`}>{item.text.replace(/^\d+\.\s*/, "")}</a>
+          ))
+        }
+      </nav>
+      <a
+        class="team-guide-aside-download"
+        href={teamGuideDownloadPath}
+        download
+      >
+        Descargar el `.md`
+      </a>
+    </aside>
+
+    <article class="team-guide-document">
+      {
+        blocks.map((block) => {
+          if (block.kind === "heading") {
+            if (block.level === 2) {
+              return (
+                <h2 id={block.id}>
+                  <GuideInline value={block.text} />
+                </h2>
+              );
+            }
+            if (block.level === 3) {
+              return (
+                <h3 id={block.id}>
+                  <GuideInline value={block.text} />
+                </h3>
+              );
+            }
+            return (
+              <h4 id={block.id}>
+                <GuideInline value={block.text} />
+              </h4>
+            );
+          }
+          if (block.kind === "paragraph") {
+            return (
+              <p>
+                <GuideInline value={block.text} />
+              </p>
+            );
+          }
+          if (block.kind === "quote") {
+            return (
+              <blockquote>
+                <GuideInline value={block.text} />
+              </blockquote>
+            );
+          }
+          if (block.kind === "list") {
+            if (block.ordered) {
+              return (
+                <ol>
+                  {block.items.map((item) => (
+                    <li>
+                      <GuideInline value={item} />
+                    </li>
+                  ))}
+                </ol>
+              );
+            }
+            return (
+              <ul>
+                {block.items.map((item) => (
+                  <li>
+                    <GuideInline value={item} />
+                  </li>
+                ))}
+              </ul>
+            );
+          }
+          if (block.kind === "table") {
+            return (
+              <div class="team-guide-table-scroll">
+                <table>
+                  <thead>
+                    <tr>
+                      {block.headers.map((header) => (
+                        <th>
+                          <GuideInline value={header} />
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {block.rows.map((row) => (
+                      <tr>
+                        {block.headers.map((_, index) => (
+                          <td>
+                            <GuideInline value={row[index] ?? ""} />
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            );
+          }
+          if (block.kind === "code") {
+            return (
+              <pre data-language={block.language || undefined}>
+                <code>{block.value}</code>
+              </pre>
+            );
+          }
+          return <hr />;
+        })
+      }
+    </article>
+  </div>
+</main>

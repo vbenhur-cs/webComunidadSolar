@@ -2,7 +2,12 @@ export interface SiteMeta {
   title: string | null;
   description: string | null;
   canonical: string | null;
-  robots: { index: boolean; follow: boolean };
+  robots: {
+    index: boolean;
+    follow: boolean;
+    noarchive?: boolean;
+    noimageindex?: boolean;
+  };
   openGraph: boolean;
   socialImage?: { url: string; alt: string };
 }

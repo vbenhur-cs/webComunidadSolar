@@ -18,7 +18,12 @@ const title = documentTitle(metadata.title);
 const canonical = absoluteCanonical(metadata.canonical);
 const description = metadata.description;
 const social = socialMetadata(metadata);
-const robots = `${metadata.robots.index ? "index" : "noindex"}, ${metadata.robots.follow ? "follow" : "nofollow"}`;
+const robots = [
+  metadata.robots.index ? "index" : "noindex",
+  metadata.robots.follow ? "follow" : "nofollow",
+  ...(metadata.robots.noarchive ? ["noarchive"] : []),
+  ...(metadata.robots.noimageindex ? ["noimageindex"] : []),
+].join(", ");
 const socialImage = metadata.socialImage ?? {
   url: "/comunidad-solar-hero.png",
   alt: "Comunidad Solar, energía renovable cerca de las personas",

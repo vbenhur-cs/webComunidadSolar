@@ -1,0 +1,52 @@
+---
+import { env } from "cloudflare:workers";
+
+import PrivateAccessPage from "../components/private/PrivateAccessPage.astro";
+import TeamGuidePage from "../components/private/TeamGuidePage.astro";
+import DocumentLayout from "../layouts/DocumentLayout.astro";
+import SiteLayout from "../layouts/SiteLayout.astro";
+import { readIdentity } from "../lib/auth/identity.ts";
+import {
+  readAccessEnv,
+  resolvePrivateAccess,
+} from "../lib/auth/private-area.ts";
+
+export const prerender = false;
+
+const returnTo = "/guia-equipo";
+const identity = readIdentity(Astro.request.headers);
+const decision = resolvePrivateAccess(
+  "equipo",
+  identity,
+  readAccessEnv(env as unknown as Record<string, unknown>),
+);
+const meta = {
+  title: "Manual estratégico y de implementación",
+  description:
+    "Manual interno de estrategia, contenido e implementación de la web de Comunidad Solar.",
+  canonical: null,
+  robots: {
+    index: false,
+    follow: false,
+    noarchive: true,
+    noimageindex: true,
+  },
+};
+---
+
+{
+  decision.allowed ? (
+    <SiteLayout page="guia" {meta}>
+      <TeamGuidePage />
+    </SiteLayout>
+  ) : (
+    <DocumentLayout {meta}>
+      <PrivateAccessPage
+        area="equipo"
+        {returnTo}
+        state={decision.state}
+        userEmail={identity?.email}
+      />
+    </DocumentLayout>
+  )
+}

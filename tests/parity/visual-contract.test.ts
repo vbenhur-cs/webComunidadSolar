@@ -30,12 +30,15 @@ import {
   parseVisualArguments,
   readVisualFixtures,
   runVisualParity,
+  resolveVisualAuthPlan,
   runVisualCommand,
   selectFoundationVisualRoutes,
   selectPublicVisualRoutes,
+  selectVisualCaptureSelectors,
   selectVisualRoutes,
   sourceAssetFetcher,
   startCandidateRuntime,
+  withVisualSourceEnvironment,
   writeVisualReports,
   type VisualCaptureInput,
   type VisualParityDependencies,
@@ -421,6 +424,12 @@ test("declares structural selectors for the remote and editorial templates", () 
     "header",
     "main",
     "main .legal-document",
+    "footer",
+  ]);
+  assert.deepEqual(templateSelectors["team-guide"], [
+    "body",
+    "header",
+    "main.team-guide-page",
     "footer",
   ]);
 });
@@ -1643,10 +1652,17 @@ test("waits deterministically, injects consent before navigation, captures full 
     viewport: VISUAL_VIEWPORTS[1],
     selectors: ["body", "main", "footer"],
     localOrigins: ["http://127.0.0.1:40123"],
+    headers: { "x-visual-z": "last", "x-visual-a": "first" },
     fixtures: [],
   });
 
-  assert.deepEqual(receivedContextOptions, CAPTURE_CONTEXT_OPTIONS(VISUAL_VIEWPORTS[1]));
+  assert.deepEqual(
+    receivedContextOptions,
+    CAPTURE_CONTEXT_OPTIONS(VISUAL_VIEWPORTS[1], {
+      "x-visual-z": "last",
+      "x-visual-a": "first",
+    }),
+  );
   assert.deepEqual(capture.geometry, [
     box("body", 0, 1.24, 2.34, 30.01, 40),
     box("main", 0, 1.24, 2.34, 30.01, 40),
@@ -2440,6 +2456,22 @@ function publicVisualMatrix(): RouteMatrixEntry[] {
   ];
 }
 
+function privateGuideVisualMatrix(): RouteMatrixEntry[] {
+  return [
+    {
+      path: "/guia-equipo",
+      kind: "private-page",
+      sourceFile: "app/guia-equipo/page.tsx",
+      fixtureId: null,
+      expectedStatus: 200,
+      expectedLocation: null,
+      privateArea: "equipo",
+      visualTemplate: "team-guide",
+      status: "pending",
+    },
+  ];
+}
+
 function lifecycleDependencies(options: {
   failCapture?: boolean;
   failReport?: boolean;
@@ -2625,6 +2657,408 @@ test("selects exactly the requested pending visual routes and rejects an ambiguo
     () => parseVisualArguments(["--scope", "foundation", "--routes", "/baterias"]),
     /no se pueden combinar/i,
   );
+});
+
+test("requires exact, separate auth fixtures for private visual routes", () => {
+  const [guide] = privateGuideVisualMatrix();
+
+  assert.throws(
+    () => selectVisualRoutes([guide], [guide.path]),
+    /no es una página/i,
+  );
+  assert.deepEqual(
+    selectVisualRoutes([guide], [guide.path], { allowPrivate: true }),
+    [guide],
+  );
+  assert.deepEqual(
+    parseVisualArguments([
+      "--routes",
+      guide.path,
+      "--fixtures",
+      "anonymous,allowed",
+      "--allow-pending",
+    ]),
+    {
+      scope: "foundation",
+      routes: [guide.path],
+      authFixtures: ["anonymous", "allowed"],
+      allowPending: true,
+    },
+  );
+  assert.deepEqual(
+    parseVisualArguments([
+      "--routes",
+      guide.path,
+      "--fixtures",
+      "allowed,anonymous",
+      "--allow-pending",
+    ]),
+    {
+      scope: "foundation",
+      routes: [guide.path],
+      authFixtures: ["anonymous", "allowed"],
+      allowPending: true,
+    },
+  );
+  assert.deepEqual(
+    resolveVisualAuthPlan([guide], ["anonymous", "allowed"]),
+    {
+      privateArea: "equipo",
+      environment: {
+        TEAM_ALLOWED_EMAILS: "visual-parity-auth@example.test",
+      },
+      fixtures: [
+        { name: "anonymous", headers: {} },
+        {
+          name: "allowed",
+          headers: {
+            "oai-authenticated-user-email": "visual-parity-auth@example.test",
+          },
+        },
+      ],
+    },
+  );
+  assert.throws(
+    () => parseVisualArguments(["--routes", guide.path, "--fixtures", ""]),
+    /fixture.*vac/i,
+  );
+  assert.throws(
+    () =>
+      parseVisualArguments([
+        "--routes",
+        guide.path,
+        "--fixtures",
+        "anonymous,anonymous",
+      ]),
+    /fixture.*duplicad/i,
+  );
+  assert.throws(
+    () =>
+      parseVisualArguments([
+        "--routes",
+        guide.path,
+        "--fixtures",
+        "anonymous,denied",
+      ]),
+    /fixture.*desconocid/i,
+  );
+  assert.throws(
+    () =>
+      resolveVisualAuthPlan(
+        [foundationMatrix()[0]],
+        ["anonymous", "allowed"],
+      ),
+    /privad/i,
+  );
+});
+
+test("uses the access-wall selectors for an anonymous guide and restores source process bindings after a failed fetch", async () => {
+  const [guide] = privateGuideVisualMatrix();
+  assert.deepEqual(
+    selectVisualCaptureSelectors(guide, { name: "anonymous", headers: {} }),
+    ["body", "header", "main.private-access-page", "footer"],
+  );
+  assert.deepEqual(
+    selectVisualCaptureSelectors(guide, {
+      name: "allowed",
+      headers: { "oai-authenticated-user-email": "visual-parity-auth@example.test" },
+    }),
+    ["body", "header", "main.team-guide-page", "footer"],
+  );
+
+  const key = "TEAM_ALLOWED_EMAILS";
+  const previous = process.env[key];
+  process.env[key] = "preexisting@example.test";
+  try {
+    await assert.rejects(
+      withVisualSourceEnvironment(
+        { [key]: "visual-parity-auth@example.test" },
+        async () => {
+          assert.equal(process.env[key], "visual-parity-auth@example.test");
+          throw new Error("source fetch failed");
+        },
+      ),
+      /source fetch failed/,
+    );
+    assert.equal(process.env[key], "preexisting@example.test");
+  } finally {
+    if (previous === undefined) delete process.env[key];
+    else process.env[key] = previous;
+  }
+});
+
+test("serializes overlapping source environment scopes before restoring process bindings", async () => {
+  const key = "TEAM_ALLOWED_EMAILS";
+  const previous = process.env[key];
+  let signalFirstStarted!: () => void;
+  const firstStarted = new Promise<void>((resolveFirstStarted) => {
+    signalFirstStarted = resolveFirstStarted;
+  });
+  let releaseFirst!: () => void;
+  const firstMayFinish = new Promise<void>((resolveFirstMayFinish) => {
+    releaseFirst = resolveFirstMayFinish;
+  });
+  let secondEntered = false;
+  process.env[key] = "preexisting@example.test";
+  try {
+    const first = withVisualSourceEnvironment(
+      { [key]: "first@example.test" },
+      async () => {
+        assert.equal(process.env[key], "first@example.test");
+        signalFirstStarted();
+        await firstMayFinish;
+        assert.equal(process.env[key], "first@example.test");
+        return "first";
+      },
+    );
+    await firstStarted;
+    const second = withVisualSourceEnvironment(
+      { [key]: "second@example.test" },
+      async () => {
+        secondEntered = true;
+        assert.equal(process.env[key], "second@example.test");
+        return "second";
+      },
+    );
+
+    await new Promise((resolveLater) => setTimeout(resolveLater, 10));
+    assert.equal(secondEntered, false);
+    releaseFirst();
+    assert.deepEqual(await Promise.all([first, second]), ["first", "second"]);
+    assert.equal(process.env[key], "preexisting@example.test");
+  } finally {
+    if (previous === undefined) delete process.env[key];
+    else process.env[key] = previous;
+  }
+});
+
+test("does not let an empty source environment observe another request's bindings", async () => {
+  const key = "TEAM_ALLOWED_EMAILS";
+  const previous = process.env[key];
+  let signalPrivateStarted!: () => void;
+  const privateStarted = new Promise<void>((resolvePrivateStarted) => {
+    signalPrivateStarted = resolvePrivateStarted;
+  });
+  let releasePrivate!: () => void;
+  const privateMayFinish = new Promise<void>((resolvePrivateMayFinish) => {
+    releasePrivate = resolvePrivateMayFinish;
+  });
+  let emptyEntered = false;
+  let emptyObserved: string | undefined;
+  let privateFetch: Promise<string> | undefined;
+  process.env[key] = "preexisting@example.test";
+  try {
+    privateFetch = withVisualSourceEnvironment(
+      { [key]: "private@example.test" },
+      async () => {
+        signalPrivateStarted();
+        await privateMayFinish;
+        return "private";
+      },
+    );
+    await privateStarted;
+    const emptyFetch = withVisualSourceEnvironment({}, async () => {
+      emptyEntered = true;
+      emptyObserved = process.env[key];
+      return "empty";
+    });
+
+    await new Promise((resolveLater) => setTimeout(resolveLater, 10));
+    assert.equal(emptyEntered, false);
+    releasePrivate();
+    assert.deepEqual(await Promise.all([privateFetch, emptyFetch]), [
+      "private",
+      "empty",
+    ]);
+    assert.equal(emptyObserved, "preexisting@example.test");
+  } finally {
+    releasePrivate();
+    await privateFetch?.catch(() => undefined);
+    if (previous === undefined) delete process.env[key];
+    else process.env[key] = previous;
+  }
+});
+
+test("bounds queued source environment callers without mutating a timed-out scope", async () => {
+  const key = "TEAM_ALLOWED_EMAILS";
+  const previous = process.env[key];
+  let signalFirstStarted!: () => void;
+  const firstStarted = new Promise<void>((resolveFirstStarted) => {
+    signalFirstStarted = resolveFirstStarted;
+  });
+  let releaseFirst!: () => void;
+  const firstMayFinish = new Promise<void>((resolveFirstMayFinish) => {
+    releaseFirst = resolveFirstMayFinish;
+  });
+  let secondEntered = false;
+  process.env[key] = "preexisting@example.test";
+  try {
+    const first = withVisualSourceEnvironment(
+      { [key]: "first@example.test" },
+      async () => {
+        signalFirstStarted();
+        await firstMayFinish;
+      },
+      5,
+    );
+    await firstStarted;
+    await assert.rejects(first, /superó 5 ms.*fetch fuente con entorno/i);
+
+    await assert.rejects(
+      withVisualSourceEnvironment(
+        { [key]: "second@example.test" },
+        async () => {
+          secondEntered = true;
+        },
+        5,
+      ),
+      /superó 5 ms.*fetch fuente con entorno/i,
+    );
+    assert.equal(secondEntered, false);
+    assert.equal(process.env[key], "first@example.test");
+
+    releaseFirst();
+    await new Promise((resolveLater) => setTimeout(resolveLater, 10));
+    assert.equal(process.env[key], "preexisting@example.test");
+  } finally {
+    if (previous === undefined) delete process.env[key];
+    else process.env[key] = previous;
+  }
+});
+
+test("isolates private visual evidence by auth fixture and closes all resources on a later-fixture failure", async () => {
+  const events: string[] = [];
+  const candidateEnvironments: Array<Record<string, string> | undefined> = [];
+  const referenceEnvironments: Array<Record<string, string> | undefined> = [];
+  const captured: Array<{
+    side: string;
+    fixture: string | undefined;
+    headers: Record<string, string> | undefined;
+  }> = [];
+  const dependencies = lifecycleDependencies({
+    events,
+    matrix: privateGuideVisualMatrix(),
+  });
+  dependencies.startCandidate = async (_topology, _root, environment) => {
+    candidateEnvironments.push(environment);
+    return {
+      origin: "http://127.0.0.1:40127",
+      dispose: async () => {
+        events.push("candidate:dispose");
+      },
+    };
+  };
+  dependencies.startReference = async (_build, environment) => {
+    referenceEnvironments.push(environment);
+    return {
+      origin: "http://127.0.0.1:40128",
+      dispose: async () => {
+        events.push("reference:dispose");
+      },
+    };
+  };
+  dependencies.capture = async (input) => {
+    captured.push({
+      side: input.side,
+      fixture: input.authFixture?.name,
+      headers: input.authFixture?.headers,
+    });
+    if (
+      input.side === "candidate" &&
+      input.authFixture?.name === "allowed" &&
+      input.viewport.name === "desktop"
+    ) {
+      throw new Error("allowed capture exploded");
+    }
+    return {
+      screenshot: createPng(1, 1),
+      geometry: [box("body", 0, 0, 0, 1, 1)],
+      missingSelectors: [],
+    };
+  };
+
+  await assert.rejects(
+    runVisualParity(
+      {
+        scope: "foundation",
+        routes: ["/guia-equipo"],
+        authFixtures: ["anonymous", "allowed"],
+        allowPending: true,
+        root: "/candidate",
+      },
+      dependencies,
+    ),
+    /allowed capture exploded/,
+  );
+  assert.deepEqual(candidateEnvironments, [
+    { TEAM_ALLOWED_EMAILS: "visual-parity-auth@example.test" },
+  ]);
+  assert.deepEqual(referenceEnvironments, [
+    { TEAM_ALLOWED_EMAILS: "visual-parity-auth@example.test" },
+  ]);
+  assert.deepEqual(captured.slice(0, 2), [
+    { side: "reference", fixture: "anonymous", headers: {} },
+    { side: "candidate", fixture: "anonymous", headers: {} },
+  ]);
+  assert.deepEqual(captured.at(-1), {
+    side: "candidate",
+    fixture: "allowed",
+    headers: {
+      "oai-authenticated-user-email": "visual-parity-auth@example.test",
+    },
+  });
+  assert.ok(events.includes("browser:dispose"));
+  assert.ok(events.includes("reference:dispose"));
+  assert.ok(events.includes("candidate:dispose"));
+  assert.ok(events.includes("archive:close"));
+});
+
+test("keeps successful private visual artifacts and route keys disjoint per auth fixture", async () => {
+  const events: string[] = [];
+  const result = await runVisualParity(
+    {
+      scope: "foundation",
+      routes: ["/guia-equipo"],
+      authFixtures: ["anonymous", "allowed"],
+      allowPending: true,
+      root: "/candidate",
+    },
+    lifecycleDependencies({
+      events,
+      matrix: privateGuideVisualMatrix(),
+    }),
+  );
+
+  assert.equal(result.results.length, 6);
+  assert.deepEqual(result.summary, {
+    routes: 2,
+    results: 6,
+    matched: 0,
+    reviewRequired: 0,
+    pending: 6,
+  });
+  assert.deepEqual(
+    [...new Set(result.results.map((entry) => entry.routeKey))],
+    [
+      "private-page:/guia-equipo|fixture=anonymous",
+      "private-page:/guia-equipo|fixture=allowed",
+    ],
+  );
+  assert.equal(
+    new Set(result.results.map((entry) => entry.files.reference)).size,
+    6,
+  );
+  assert.ok(
+    result.results
+      .filter((entry) => entry.routeKey.endsWith("fixture=anonymous"))
+      .every((entry) => entry.files.reference.includes("/anonymous/")),
+  );
+  assert.ok(
+    result.results
+      .filter((entry) => entry.routeKey.endsWith("fixture=allowed"))
+      .every((entry) => entry.files.reference.includes("/allowed/")),
+  );
+  assert.ok(events.includes("archive:close"));
 });
 
 test("rejects pending foundation output without --allow-pending", async () => {

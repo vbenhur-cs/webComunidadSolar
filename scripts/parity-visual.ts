@@ -48,6 +48,7 @@ import {
 } from "./lib/visual-contract.ts";
 import {
   readExistingRouteMatrix,
+  type PrivateArea,
   type RouteMatrixEntry,
 } from "./lib/route-inventory.ts";
 import { assertSourcePristine } from "./lib/source-reference.ts";
@@ -59,6 +60,24 @@ import {
 import { isPhase2PublicRoute } from "../src/lib/site/public-route-closure.ts";
 
 export type VisualParityScope = "foundation" | "public";
+
+/**
+ * Deliberately separate from CaptureFixture: these fixtures vary only the
+ * authenticated request headers of a private visual capture. Network fixtures
+ * remain the external-resource policy used for every capture.
+ */
+export type VisualAuthFixtureName = "anonymous" | "allowed";
+
+export interface VisualAuthFixture {
+  name: VisualAuthFixtureName;
+  headers: Record<string, string>;
+}
+
+export interface VisualAuthPlan {
+  privateArea: PrivateArea;
+  environment: Record<string, string>;
+  fixtures: VisualAuthFixture[];
+}
 
 export interface VisualRuntime {
   origin: string;
@@ -91,6 +110,8 @@ export interface RunVisualParityOptions {
   allowPending: boolean;
   /** An exact, fail-closed subset of matrix paths to capture. */
   routes?: string[];
+  /** Exact private auth fixtures, valid only with an explicit private route. */
+  authFixtures?: VisualAuthFixtureName[];
   root?: string;
   lifecycleTimeoutMs?: number;
   sourceBuildTimeoutMs?: number;
@@ -103,6 +124,8 @@ export interface VisualCaptureInput {
   route: RouteMatrixEntry;
   viewport: ViewportContract;
   localOrigins: string[];
+  /** Separate from external CaptureFixture network fixtures. */
+  authFixture?: VisualAuthFixture;
   fixtures: CaptureFixture[];
 }
 
@@ -128,12 +151,16 @@ export interface VisualParityDependencies {
   startCandidate?(
     topology: DeploymentTopology,
     root: string,
+    environment: Record<string, string>,
   ): Promise<VisualRuntime>;
   withTemporarySourceBuild?<T>(
     callback: (build: TemporarySourceBuild) => Promise<T>,
     options?: TemporarySourceOptions,
   ): Promise<T>;
-  startReference?(build: TemporarySourceBuild): Promise<VisualRuntime>;
+  startReference?(
+    build: TemporarySourceBuild,
+    environment: Record<string, string>,
+  ): Promise<VisualRuntime>;
   launchBrowser?(): Promise<CaptureBrowserLike & { close(): Promise<void> }>;
   capture?(input: VisualCaptureInput): Promise<CapturedVisual>;
   writeReports?(input: VisualReportInput): Promise<VisualArtifactPaths>;
@@ -162,7 +189,10 @@ interface StartedWranglerWorker {
 }
 
 export interface CandidateRuntimeDependencies {
-  startWorker?(topology: DeploymentTopology): Promise<StartedWranglerWorker>;
+  startWorker?(
+    topology: DeploymentTopology,
+    environment: Record<string, string>,
+  ): Promise<StartedWranglerWorker>;
   startBridge?(
     fetchWorker: (request: Request) => Promise<Response>,
     timeoutMs: number,
@@ -175,6 +205,21 @@ const defaultVisualLifecycleTimeoutMs = 30_000;
 const defaultCandidateBuildTimeoutMs = 120_000;
 const defaultProcessTerminationGraceMs = 5_000;
 const defaultSourceBuildTimeoutMs = 300_000;
+const visualAuthEmail = "visual-parity-auth@example.test";
+const visualAuthEmailHeader = "oai-authenticated-user-email";
+const visualAuthFixtureNames = ["anonymous", "allowed"] as const;
+const visualAuthEnvironmentKey: Record<
+  PrivateArea,
+  keyof Record<string, string>
+> = {
+  socios: "SOCIOS_ALLOWED_EMAILS",
+  equipo: "TEAM_ALLOWED_EMAILS",
+  manganafer: "MANGANAFER_ALLOWED_EMAILS",
+};
+const visualSourceEnvironmentKeys = new Set(
+  Object.values(visualAuthEnvironmentKey),
+);
+let visualSourceEnvironmentTail: Promise<void> = Promise.resolve();
 
 function compareText(left: string, right: string): number {
   if (left < right) return -1;
@@ -406,8 +451,13 @@ async function withVisualResource<T, TResult>(
   return result;
 }
 
-function routeKey(route: Pick<RouteMatrixEntry, "kind" | "path">): string {
-  return `${route.kind}:${route.path}`;
+function routeKey(
+  route: Pick<RouteMatrixEntry, "kind" | "path">,
+  authFixture?: Pick<VisualAuthFixture, "name">,
+): string {
+  return `${route.kind}:${route.path}${
+    authFixture === undefined ? "" : `|fixture=${authFixture.name}`
+  }`;
 }
 
 function isWithin(root: string, candidate: string): boolean {
@@ -486,6 +536,7 @@ function artifactFiles(
   scope: VisualParityScope,
   route: RouteMatrixEntry,
   viewport: ViewportContract,
+  authFixture?: Pick<VisualAuthFixture, "name">,
 ): {
   reference: string;
   candidate: string;
@@ -501,6 +552,9 @@ function artifactFiles(
       resolve(root, ".artifacts", "visual"),
       safeArtifactSegment(scope, "Scope"),
       `${routeArtifactSegment(route.path)}-${safeArtifactSegment(template, "Template")}`,
+      ...(authFixture === undefined
+        ? []
+        : [safeArtifactSegment(authFixture.name, "Fixture de autenticación")]),
       safeArtifactSegment(viewport.name, "Viewport"),
     ),
     "El artefacto visual",
@@ -587,9 +641,14 @@ function assertVisualRoutePath(path: string): void {
  * fail-closed: a typo, duplicate, non-page, or a row without a visual
  * template must never broaden a visual capture to a different route set.
  */
+export interface SelectVisualRoutesOptions {
+  allowPrivate?: boolean;
+}
+
 export function selectVisualRoutes(
   matrix: RouteMatrixEntry[],
   requestedPaths: readonly string[],
+  options: SelectVisualRoutesOptions = {},
 ): RouteMatrixEntry[] {
   if (requestedPaths.length === 0) {
     throw new Error("--routes visual debe declarar al menos una ruta");
@@ -606,8 +665,14 @@ export function selectVisualRoutes(
       throw new Error(`Ruta visual no declarada exactamente una vez: ${path}`);
     }
     const [route] = matches;
-    if (route.kind !== "page") {
+    if (
+      route.kind !== "page" &&
+      !(options.allowPrivate === true && route.kind === "private-page")
+    ) {
       throw new Error(`Ruta visual no es una página: ${path}`);
+    }
+    if (route.kind === "private-page" && route.privateArea === null) {
+      throw new Error(`Ruta visual privada no declara área: ${path}`);
     }
     if (typeof route.visualTemplate !== "string" || !route.visualTemplate) {
       throw new Error(`La ruta visual no declara template: ${path}`);
@@ -617,6 +682,81 @@ export function selectVisualRoutes(
   return selected.sort((left, right) =>
     compareText(routeKey(left), routeKey(right)),
   );
+}
+
+function parseVisualAuthFixtures(value: string): VisualAuthFixtureName[] {
+  const fixtures = value.split(",");
+  if (fixtures.some((fixture) => fixture.length === 0)) {
+    throw new Error("--fixtures visual no admite fixtures vacíos");
+  }
+  const seen = new Set<string>();
+  for (const fixture of fixtures) {
+    if (seen.has(fixture)) {
+      throw new Error(`Fixture visual duplicado: ${fixture}`);
+    }
+    seen.add(fixture);
+    if (!visualAuthFixtureNames.includes(fixture as VisualAuthFixtureName)) {
+      throw new Error(`Fixture visual desconocido: ${fixture}`);
+    }
+  }
+  if (
+    fixtures.length !== visualAuthFixtureNames.length ||
+    !visualAuthFixtureNames.every((fixture) => seen.has(fixture))
+  ) {
+    throw new Error(
+      "--fixtures visual privado debe declarar anonymous,allowed exactamente una vez",
+    );
+  }
+  return [...visualAuthFixtureNames];
+}
+
+/**
+ * Resolves the synthetic authentication setup without mixing it with network
+ * fixtures. A private visual run has one explicit area and captures both
+ * anonymous and allowed states against the same two runtimes.
+ */
+export function resolveVisualAuthPlan(
+  routes: readonly RouteMatrixEntry[],
+  requestedFixtures: readonly VisualAuthFixtureName[] | undefined,
+): VisualAuthPlan | undefined {
+  const privateRoutes = routes.filter((route) => route.kind === "private-page");
+  if (requestedFixtures === undefined) {
+    if (privateRoutes.length > 0) {
+      throw new Error(
+        "Una ruta visual privada requiere --fixtures anonymous,allowed",
+      );
+    }
+    return undefined;
+  }
+  if (routes.length === 0 || privateRoutes.length !== routes.length) {
+    throw new Error("--fixtures visual solo admite rutas privadas");
+  }
+  const areas = new Set(privateRoutes.map((route) => route.privateArea));
+  if (areas.size !== 1 || areas.has(null)) {
+    throw new Error(
+      "--fixtures visual requiere una sola área privada explícita",
+    );
+  }
+  const [privateArea] = [...areas];
+  if (privateArea === null) {
+    throw new Error(
+      "--fixtures visual requiere una sola área privada explícita",
+    );
+  }
+  const normalizedFixtures = parseVisualAuthFixtures(
+    [...requestedFixtures].join(","),
+  );
+  return {
+    privateArea,
+    environment: {
+      [visualAuthEnvironmentKey[privateArea]]: visualAuthEmail,
+    },
+    fixtures: normalizedFixtures.map((name): VisualAuthFixture => ({
+      name,
+      headers:
+        name === "allowed" ? { [visualAuthEmailHeader]: visualAuthEmail } : {},
+    })),
+  };
 }
 
 function parseFixture(value: unknown): CaptureFixture {
@@ -912,11 +1052,18 @@ async function startLoopbackBridge(
 
 async function defaultStartCandidateWorker(
   topology: DeploymentTopology,
+  environment: Record<string, string> = {},
 ): Promise<StartedWranglerWorker> {
   const { unstable_startWorker } = await import("wrangler");
+  const bindings = Object.fromEntries(
+    Object.entries(environment)
+      .sort(([left], [right]) => compareText(left, right))
+      .map(([name, value]) => [name, { type: "secret_text", value } as const]),
+  );
   return (await unstable_startWorker({
     config: topology.wranglerConfigPath,
     entrypoint: topology.entryPath,
+    ...(Object.keys(bindings).length === 0 ? {} : { bindings }),
     dev: {
       server: { hostname: "127.0.0.1", port: 0, secure: false },
       logLevel: "error",
@@ -989,6 +1136,7 @@ export async function startCandidateRuntime(
   topology: DeploymentTopology,
   timeoutMs = defaultVisualLifecycleTimeoutMs,
   dependencies: CandidateRuntimeDependencies = {},
+  environment: Record<string, string> = {},
 ): Promise<VisualRuntime> {
   const boundedTimeoutMs = visualLifecycleTimeout(timeoutMs);
   const workerCleanupTimeoutMs = cleanupTimeoutBudget(boundedTimeoutMs, 2);
@@ -997,7 +1145,7 @@ export async function startCandidateRuntime(
   const startBridge = dependencies.startBridge ?? startLoopbackBridge;
   const worker = await acquireVisualResource(
     "iniciar el Worker candidato",
-    startWorker(topology),
+    startWorker(topology, environment),
     "cerrar el Worker candidato",
     (candidateWorker) =>
       disposeCandidateWorker(candidateWorker, workerCleanupTimeoutMs),
@@ -1240,6 +1388,7 @@ export async function dispatchSourceRuntimeRequest(
 async function startSourceRuntime(
   build: TemporarySourceBuild,
   timeoutMs = defaultVisualLifecycleTimeoutMs,
+  bindings: Record<string, string> = {},
 ): Promise<VisualRuntime> {
   const archiveRoot = await resolveArchiveRoot(build.root);
   const entryPath = resolveInside(
@@ -1259,6 +1408,7 @@ async function startSourceRuntime(
   }
   const assets = sourceAssetFetcher(archiveRoot);
   const environment = {
+    ...bindings,
     ASSETS: assets,
     DB: new Proxy(
       {},
@@ -1286,15 +1436,104 @@ async function startSourceRuntime(
   };
   return startLoopbackBridge(
     async (request) =>
-      dispatchSourceRuntimeRequest(
-        request,
-        assets,
-        (workerRequest) =>
-          module.default?.fetch(workerRequest, environment, context) ??
-          Promise.reject(new Error("El Worker fuente no está disponible")),
+      dispatchSourceRuntimeRequest(request, assets, (workerRequest) =>
+        withVisualSourceEnvironment(
+          bindings,
+          () =>
+            module.default?.fetch(workerRequest, environment, context) ??
+            Promise.reject(new Error("El Worker fuente no está disponible")),
+          timeoutMs,
+        ),
       ),
     timeoutMs,
   );
+}
+
+/**
+ * The frozen source Worker reads private allowlists from process.env instead
+ * of its Worker environment. Scope the synthetic allowlist to one source
+ * fetch, then restore every touched key even when that fetch fails. A timed
+ * out fetch retains its lease until it truly settles, so no later fetch can
+ * interleave a different process-wide environment while it still runs.
+ */
+export async function withVisualSourceEnvironment<T>(
+  bindings: Readonly<Record<string, string>>,
+  run: () => Promise<T>,
+  timeoutMs = defaultVisualLifecycleTimeoutMs,
+): Promise<T> {
+  const entries = Object.entries(bindings).sort(([left], [right]) =>
+    compareText(left, right),
+  );
+  for (const [key] of entries) {
+    if (!visualSourceEnvironmentKeys.has(key)) {
+      throw new Error(`Binding fuente visual no permitido: ${key}`);
+    }
+  }
+  const boundedTimeoutMs = visualLifecycleTimeout(timeoutMs);
+  const previousLease = visualSourceEnvironmentTail;
+  let releaseLease!: () => void;
+  const lease = new Promise<void>((resolveLease) => {
+    releaseLease = resolveLease;
+  });
+  visualSourceEnvironmentTail = previousLease.then(() => lease);
+
+  let resolveResult!: (value: T | PromiseLike<T>) => void;
+  let rejectResult!: (reason?: unknown) => void;
+  const result = new Promise<T>((resolveResultPromise, rejectResultPromise) => {
+    resolveResult = resolveResultPromise;
+    rejectResult = rejectResultPromise;
+  });
+  let timedOut = false;
+  let timer: ReturnType<typeof setTimeout> | undefined = setTimeout(() => {
+    timedOut = true;
+    rejectResult(
+      new Error(
+        `El ciclo de vida visual superó ${boundedTimeoutMs} ms durante ejecutar el fetch fuente con entorno`,
+      ),
+    );
+  }, boundedTimeoutMs);
+
+  void previousLease.then(() => {
+    if (timedOut) {
+      releaseLease();
+      return;
+    }
+    try {
+      const previous = new Map<string, string | undefined>();
+      for (const [key, value] of entries) {
+        previous.set(key, process.env[key]);
+        process.env[key] = value;
+      }
+      const restore = () => {
+        for (const [key, value] of previous) {
+          if (value === undefined) delete process.env[key];
+          else process.env[key] = value;
+        }
+        releaseLease();
+      };
+      const operation = Promise.resolve().then(run);
+      void operation.then(
+        (value) => {
+          restore();
+          if (timer !== undefined) clearTimeout(timer);
+          timer = undefined;
+          if (!timedOut) resolveResult(value);
+        },
+        (error) => {
+          restore();
+          if (timer !== undefined) clearTimeout(timer);
+          timer = undefined;
+          if (!timedOut) rejectResult(error);
+        },
+      );
+    } catch (error) {
+      releaseLease();
+      if (timer !== undefined) clearTimeout(timer);
+      timer = undefined;
+      if (!timedOut) rejectResult(error);
+    }
+  });
+  return result;
 }
 
 interface ChromiumBrowserServer {
@@ -1388,17 +1627,34 @@ export async function launchChromium(
   };
 }
 
+export function selectVisualCaptureSelectors(
+  route: RouteMatrixEntry,
+  authFixture: VisualAuthFixture | undefined,
+): readonly string[] {
+  const template = route.visualTemplate;
+  if (template === null || template === undefined) {
+    throw new Error(`La ruta ${route.path} no tiene template visual`);
+  }
+  const selectedTemplate =
+    template === "team-guide" && authFixture?.name === "anonymous"
+      ? "private-access"
+      : template;
+  const selectors = templateSelectors[selectedTemplate];
+  if (selectors === undefined) {
+    throw new Error(
+      `No hay selectores visuales para template ${selectedTemplate}`,
+    );
+  }
+  return selectors;
+}
+
 async function captureVisual(
   input: VisualCaptureInput,
 ): Promise<CapturedVisual> {
-  const template = input.route.visualTemplate;
-  if (template === null || template === undefined) {
-    throw new Error(`La ruta ${input.route.path} no tiene template visual`);
-  }
-  const selectors = templateSelectors[template];
-  if (selectors === undefined) {
-    throw new Error(`No hay selectores visuales para template ${template}`);
-  }
+  const selectors = selectVisualCaptureSelectors(
+    input.route,
+    input.authFixture,
+  );
   return captureDeterministicPage({
     browser: input.browser,
     side: input.side,
@@ -1406,6 +1662,7 @@ async function captureVisual(
     viewport: input.viewport,
     selectors,
     localOrigins: input.localOrigins,
+    headers: input.authFixture?.headers,
     fixtures: input.fixtures,
   });
 }
@@ -1743,14 +2000,17 @@ export async function runVisualParity(
   const readFixtures = dependencies.readFixtures ?? readVisualFixtures;
   const startCandidate =
     dependencies.startCandidate ??
-    ((topology: DeploymentTopology) =>
-      startCandidateRuntime(topology, lifecycleTimeoutMs));
+    ((
+      topology: DeploymentTopology,
+      _root: string,
+      environment: Record<string, string>,
+    ) => startCandidateRuntime(topology, lifecycleTimeoutMs, {}, environment));
   const sourceBuild =
     dependencies.withTemporarySourceBuild ?? withTemporarySourceBuild;
   const startReference =
     dependencies.startReference ??
-    ((build: TemporarySourceBuild) =>
-      startSourceRuntime(build, lifecycleTimeoutMs));
+    ((build: TemporarySourceBuild, environment: Record<string, string>) =>
+      startSourceRuntime(build, lifecycleTimeoutMs, environment));
   const launchBrowser =
     dependencies.launchBrowser ?? (() => launchChromium(lifecycleTimeoutMs));
   const capture = dependencies.capture ?? captureVisual;
@@ -1775,7 +2035,12 @@ export async function runVisualParity(
         ? options.scope === "foundation"
           ? selectFoundationVisualRoutes(matrix)
           : selectPublicVisualRoutes(matrix)
-        : selectVisualRoutes(matrix, options.routes);
+        : selectVisualRoutes(matrix, options.routes, {
+            allowPrivate: options.authFixtures !== undefined,
+          });
+    const authPlan = resolveVisualAuthPlan(routes, options.authFixtures);
+    const authFixtures = authPlan?.fixtures ?? [undefined];
+    const runtimeEnvironment = authPlan?.environment ?? {};
     await build(root);
     const topology = await withinVisualTimeout(
       "resolver la topología del candidato visual",
@@ -1787,14 +2052,14 @@ export async function runVisualParity(
       async (source) =>
         withVisualResource(
           "iniciar el runtime candidato",
-          () => startCandidate(topology, root),
+          () => startCandidate(topology, root, runtimeEnvironment),
           "cerrar el runtime candidato",
           (candidate) => candidate.dispose(),
           candidateAcquisitionTimeoutMs,
           async (candidate) =>
             withVisualResource(
               "iniciar el runtime de referencia",
-              () => startReference(source),
+              () => startReference(source, runtimeEnvironment),
               "cerrar el runtime de referencia",
               (reference) => reference.dispose(),
               lifecycleTimeoutMs,
@@ -1809,53 +2074,58 @@ export async function runVisualParity(
                     const localOrigins = [reference.origin, candidate.origin];
                     const evidence: VisualEvidence[] = [];
                     for (const route of routes) {
-                      for (const viewport of VISUAL_VIEWPORTS) {
-                        const referenceCapture = await capture({
-                          browser,
-                          side: "reference",
-                          runtime: reference,
-                          route,
-                          viewport,
-                          localOrigins,
-                          fixtures,
-                        });
-                        const candidateCapture = await capture({
-                          browser,
-                          side: "candidate",
-                          runtime: candidate,
-                          route,
-                          viewport,
-                          localOrigins,
-                          fixtures,
-                        });
-                        const comparison = resultForPendingRoute(
-                          route,
-                          await compareVisuals(
-                            referenceCapture.screenshot,
-                            candidateCapture.screenshot,
-                            {
-                              routeKey: routeKey(route),
-                              viewport,
-                              referenceGeometry: referenceCapture.geometry,
-                              candidateGeometry: candidateCapture.geometry,
-                              referenceMissingSelectors:
-                                referenceCapture.missingSelectors,
-                              candidateMissingSelectors:
-                                candidateCapture.missingSelectors,
-                              files: artifactFiles(
-                                root,
-                                options.scope,
-                                route,
+                      for (const authFixture of authFixtures) {
+                        for (const viewport of VISUAL_VIEWPORTS) {
+                          const referenceCapture = await capture({
+                            browser,
+                            side: "reference",
+                            runtime: reference,
+                            route,
+                            viewport,
+                            localOrigins,
+                            authFixture,
+                            fixtures,
+                          });
+                          const candidateCapture = await capture({
+                            browser,
+                            side: "candidate",
+                            runtime: candidate,
+                            route,
+                            viewport,
+                            localOrigins,
+                            authFixture,
+                            fixtures,
+                          });
+                          const comparison = resultForPendingRoute(
+                            route,
+                            await compareVisuals(
+                              referenceCapture.screenshot,
+                              candidateCapture.screenshot,
+                              {
+                                routeKey: routeKey(route, authFixture),
                                 viewport,
-                              ),
-                            },
-                          ),
-                        );
-                        evidence.push({
-                          result: comparison,
-                          reference: referenceCapture,
-                          candidate: candidateCapture,
-                        });
+                                referenceGeometry: referenceCapture.geometry,
+                                candidateGeometry: candidateCapture.geometry,
+                                referenceMissingSelectors:
+                                  referenceCapture.missingSelectors,
+                                candidateMissingSelectors:
+                                  candidateCapture.missingSelectors,
+                                files: artifactFiles(
+                                  root,
+                                  options.scope,
+                                  route,
+                                  viewport,
+                                  authFixture,
+                                ),
+                              },
+                            ),
+                          );
+                          evidence.push({
+                            result: comparison,
+                            reference: referenceCapture,
+                            candidate: candidateCapture,
+                          });
+                        }
                       }
                     }
                     const results = evidence.map((entry) => entry.result);
@@ -1931,6 +2201,7 @@ export function formatVisualParitySummary(result: VisualParityResult): string {
 export function parseVisualArguments(args: string[]): RunVisualParityOptions {
   let scope: VisualParityScope | undefined;
   let routes: string[] | undefined;
+  let authFixtures: VisualAuthFixtureName[] | undefined;
   let allowPending = false;
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
@@ -1965,17 +2236,36 @@ export function parseVisualArguments(args: string[]): RunVisualParityOptions {
       index += 1;
       continue;
     }
+    if (argument === "--fixtures") {
+      const value = args[index + 1];
+      if (authFixtures !== undefined || value === undefined) {
+        throw new Error(
+          "--fixtures visual debe aparecer una sola vez con fixtures",
+        );
+      }
+      authFixtures = parseVisualAuthFixtures(value);
+      index += 1;
+      continue;
+    }
     throw new Error(`Argumento visual desconocido: ${argument}`);
   }
   if (scope !== undefined && routes !== undefined) {
     throw new Error("--scope y --routes visual no se pueden combinar");
   }
+  if (authFixtures !== undefined && routes === undefined) {
+    throw new Error("--fixtures visual requiere --routes privado explícito");
+  }
   if (scope === undefined && routes === undefined) {
     throw new Error(
-      "Uso: parity-visual.ts --scope foundation|public [--allow-pending] | --routes /ruta,/ruta [--allow-pending]",
+      "Uso: parity-visual.ts --scope foundation|public [--allow-pending] | --routes /ruta,/ruta [--fixtures anonymous,allowed] [--allow-pending]",
     );
   }
-  return { scope: scope ?? "foundation", routes, allowPending };
+  return {
+    scope: scope ?? "foundation",
+    routes,
+    ...(authFixtures === undefined ? {} : { authFixtures }),
+    allowPending,
+  };
 }
 
 async function main(args: string[]): Promise<void> {

@@ -21,6 +21,12 @@ const accessVariables: Record<PrivateArea, keyof AccessEnv> = {
   manganafer: "MANGANAFER_ALLOWED_EMAILS",
 };
 
+const accessEnvironmentKeys = [
+  "SOCIOS_ALLOWED_EMAILS",
+  "TEAM_ALLOWED_EMAILS",
+  "MANGANAFER_ALLOWED_EMAILS",
+] as const satisfies ReadonlyArray<keyof AccessEnv>;
+
 const signInRoute = "/signin-with-chatgpt";
 const signOutRoute = "/signout-with-chatgpt";
 const callbackRoute = "/callback";
@@ -35,6 +41,16 @@ export function signOutPath(returnTo = "/"): string {
   return `${signOutRoute}?return_to=${encodeURIComponent(
     safeRelativeReturnPath(returnTo),
   )}`;
+}
+
+/** Selects only string allowlist bindings from an explicitly supplied Worker env. */
+export function readAccessEnv(bindings: Record<string, unknown>): AccessEnv {
+  const result: AccessEnv = {};
+  for (const key of accessEnvironmentKeys) {
+    const value = bindings[key];
+    if (typeof value === "string") result[key] = value;
+  }
+  return result;
 }
 
 export function resolvePrivateAccess(

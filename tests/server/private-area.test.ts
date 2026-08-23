@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  readAccessEnv,
   resolvePrivateAccess,
   signInPath,
   signOutPath,
@@ -76,5 +77,17 @@ test("normalizes configured allowlists and distinguishes denied from allowed acc
       MANGANAFER_ALLOWED_EMAILS: "PERSONA@EXAMPLE.COM",
     }),
     { state: "allowed", allowed: true },
+  );
+});
+
+test("reads only string allowlist bindings from an explicit Worker environment", () => {
+  assert.deepEqual(
+    readAccessEnv({
+      TEAM_ALLOWED_EMAILS: "equipo@comunidadsolar.es",
+      SOCIOS_ALLOWED_EMAILS: 42,
+      MANGANAFER_ALLOWED_EMAILS: null,
+      unrelated: "not-an-access-binding",
+    }),
+    { TEAM_ALLOWED_EMAILS: "equipo@comunidadsolar.es" },
   );
 });

@@ -1812,7 +1812,7 @@
     "expectedLocation": null,
     "privateArea": "equipo",
     "visualTemplate": "team-guide",
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/guia-equipo-nueva-web-comunidad-solar.md",
@@ -1823,7 +1823,7 @@
     "expectedLocation": null,
     "privateArea": "equipo",
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/manganafer/interesados",

@@ -1,0 +1,28 @@
+---
+import { parseGuideInline } from "../../lib/guide/markdown.ts";
+
+interface Props {
+  value: string;
+}
+
+const { value } = Astro.props;
+const parts = parseGuideInline(value);
+---
+
+{
+  parts.map((part) => {
+    if (part.kind === "strong") return <strong>{part.value}</strong>;
+    if (part.kind === "code") return <code>{part.value}</code>;
+    if (part.kind === "link") {
+      return (
+        <a
+          href={part.href}
+          {...(part.external ? { target: "_blank", rel: "noreferrer" } : {})}
+        >
+          {part.value}
+        </a>
+      );
+    }
+    return part.value;
+  })
+}

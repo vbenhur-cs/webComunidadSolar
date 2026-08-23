@@ -137,6 +137,8 @@ export interface CaptureDeterministicPageOptions extends CaptureNetworkPolicy {
   url: string;
   viewport: ViewportContract;
   selectors: readonly string[];
+  /** Explicit deterministic request headers, used only by private auth fixtures. */
+  headers?: Readonly<Record<string, string>>;
   timeoutMs?: number;
 }
 
@@ -147,6 +149,7 @@ export interface CaptureContextOptions {
   colorScheme: "light";
   reducedMotion: "reduce";
   serviceWorkers: "block";
+  extraHTTPHeaders?: Record<string, string>;
 }
 
 export interface CaptureNetworkPolicyHandle {
@@ -208,6 +211,8 @@ export const templateSelectors: Readonly<Record<string, readonly string[]>> = {
   "blog-index": ["body", "header", "main.blog-page", "footer"],
   "blog-detail": ["body", "header", "main.blog-detail", "footer"],
   "legal-page": ["body", "header", "main", "main .legal-document", "footer"],
+  "private-access": ["body", "header", "main.private-access-page", "footer"],
+  "team-guide": ["body", "header", "main.team-guide-page", "footer"],
 };
 
 function compareText(left: string, right: string): number {
@@ -492,8 +497,9 @@ export async function compareVisuals(
 
 export function CAPTURE_CONTEXT_OPTIONS(
   viewport: ViewportContract,
+  headers: Readonly<Record<string, string>> = {},
 ): CaptureContextOptions {
-  return {
+  const context: CaptureContextOptions = {
     viewport: { width: viewport.width, height: viewport.height },
     deviceScaleFactor: 1,
     locale: "es-ES",
@@ -501,6 +507,13 @@ export function CAPTURE_CONTEXT_OPTIONS(
     reducedMotion: "reduce",
     serviceWorkers: "block",
   };
+  const entries = Object.entries(headers).sort(([left], [right]) =>
+    compareText(left, right),
+  );
+  if (entries.length > 0) {
+    context.extraHTTPHeaders = Object.fromEntries(entries);
+  }
+  return context;
 }
 
 function assertLoopbackOrigin(origin: string): string {
@@ -802,7 +815,7 @@ export async function captureDeterministicPage(
   const timeoutMs = captureTimeout(options.timeoutMs);
   const target = `url=${options.url} viewport=${options.viewport.name}:${options.viewport.width}x${options.viewport.height}`;
   const contextPromise = options.browser.newContext(
-    CAPTURE_CONTEXT_OPTIONS(options.viewport),
+    CAPTURE_CONTEXT_OPTIONS(options.viewport, options.headers),
   ) as Promise<CaptureContextLike>;
   let context: CaptureContextLike;
   try {
