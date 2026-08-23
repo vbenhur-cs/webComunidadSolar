@@ -1,0 +1,111 @@
+{
+  "$id": "request-input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["changeId", "intent", "targetPath", "acceptanceCriteria"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "changeId": { "$ref": "#/$defs/changeId" },
+    "intent": { "type": "string" },
+    "targetPath": { "$ref": "#/$defs/targetPath" },
+    "acceptanceCriteria": { "$ref": "#/$defs/acceptanceCriteria" },
+    "audience": { "type": ["string", "null"] },
+    "mode": { "$ref": "#/$defs/compositionMode" },
+    "content": { "type": "string" },
+    "claims": { "$ref": "#/$defs/stringList" },
+    "references": { "$ref": "#/$defs/stringList" },
+    "assets": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/asset" }
+    },
+    "seo": { "$ref": "#/$defs/rawSeo" },
+    "privacy": { "$ref": "#/$defs/rawPrivacy" },
+    "allowedExternalLinks": { "$ref": "#/$defs/stringList" }
+  },
+  "$defs": {
+    "changeId": {
+      "type": "string",
+      "pattern": "^[a-z0-9](?:[a-z0-9-]{1,62}[a-z0-9])$"
+    },
+    "targetPath": {
+      "type": "string",
+      "allOf": [
+        {
+          "pattern": "^/$|^/(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)(?:/[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*$"
+        },
+        { "not": { "pattern": "(?:^|/)api(?:/|$)" } }
+      ]
+    },
+    "hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "compositionMode": {
+      "enum": ["auto", "blocks", "freeform", "hybrid"]
+    },
+    "acceptanceCriteria": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 50,
+      "items": { "type": "string", "minLength": 1, "maxLength": 500 }
+    },
+    "stringList": { "type": "array", "items": { "type": "string" } },
+    "asset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256", "mediaType"],
+      "properties": {
+        "path": { "type": "string" },
+        "sha256": { "$ref": "#/$defs/hash" },
+        "mediaType": { "type": "string" }
+      }
+    },
+    "rawSeo": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "title": { "type": ["string", "null"] },
+        "description": { "type": ["string", "null"] },
+        "index": { "type": "boolean" }
+      }
+    },
+    "rawPrivacy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "private": { "type": "boolean" },
+        "area": { "enum": ["socios", "equipo", "manganafer", null] }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": ["private"],
+            "properties": { "private": { "const": true } }
+          },
+          "then": {
+            "required": ["area"],
+            "properties": {
+              "area": { "enum": ["socios", "equipo", "manganafer"] }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": ["private", "area"],
+            "properties": { "private": { "const": false } }
+          },
+          "then": { "properties": { "area": { "const": null } } }
+        },
+        {
+          "if": {
+            "required": ["area"],
+            "properties": {
+              "area": { "enum": ["socios", "equipo", "manganafer"] }
+            }
+          },
+          "then": {
+            "required": ["private"],
+            "properties": { "private": { "const": true } }
+          }
+        }
+      ]
+    }
+  }
+}

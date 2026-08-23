@@ -1,0 +1,64 @@
+{
+  "$id": "approval",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "environment",
+    "gate",
+    "changeId",
+    "actor",
+    "approvedAt",
+    "subjectSha256",
+    "baselineCommit",
+    "candidateCommit",
+    "artifactSha256"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "environment": { "enum": ["production", "test"] },
+    "gate": { "enum": [1, 2] },
+    "changeId": { "$ref": "#/$defs/changeId" },
+    "actor": { "type": "string" },
+    "approvedAt": { "type": "string" },
+    "subjectSha256": { "$ref": "#/$defs/hash" },
+    "baselineCommit": { "type": "string" },
+    "candidateCommit": { "type": ["string", "null"] },
+    "artifactSha256": {
+      "anyOf": [{ "$ref": "#/$defs/hash" }, { "type": "null" }]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "required": ["gate"],
+        "properties": { "gate": { "const": 1 } }
+      },
+      "then": {
+        "properties": {
+          "candidateCommit": { "const": null },
+          "artifactSha256": { "const": null }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": ["gate"],
+        "properties": { "gate": { "const": 2 } }
+      },
+      "then": {
+        "properties": {
+          "candidateCommit": { "type": "string", "minLength": 1 },
+          "artifactSha256": { "$ref": "#/$defs/hash" }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "changeId": {
+      "type": "string",
+      "pattern": "^[a-z0-9](?:[a-z0-9-]{1,62}[a-z0-9])$"
+    },
+    "hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+  }
+}

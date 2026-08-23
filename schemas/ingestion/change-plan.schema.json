@@ -1,0 +1,102 @@
+{
+  "$id": "change-plan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "changeId",
+    "baselineCommit",
+    "requestSha256",
+    "selectedMode",
+    "targetPath",
+    "overwritesExistingRoute",
+    "files",
+    "components",
+    "islands",
+    "dependencies",
+    "validations",
+    "publication",
+    "planSha256"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "changeId": { "$ref": "#/$defs/changeId" },
+    "baselineCommit": { "type": "string" },
+    "requestSha256": { "$ref": "#/$defs/hash" },
+    "selectedMode": { "enum": ["blocks", "freeform", "hybrid"] },
+    "targetPath": { "$ref": "#/$defs/targetPath" },
+    "overwritesExistingRoute": { "type": "boolean" },
+    "files": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/plannedFile" }
+    },
+    "components": { "$ref": "#/$defs/stringList" },
+    "islands": { "$ref": "#/$defs/stringList" },
+    "dependencies": { "$ref": "#/$defs/stringList" },
+    "validations": { "$ref": "#/$defs/stringList" },
+    "publication": { "$ref": "#/$defs/publication" },
+    "planSha256": { "$ref": "#/$defs/hash" }
+  },
+  "$defs": {
+    "changeId": {
+      "type": "string",
+      "pattern": "^[a-z0-9](?:[a-z0-9-]{1,62}[a-z0-9])$"
+    },
+    "targetPath": {
+      "type": "string",
+      "allOf": [
+        {
+          "pattern": "^/$|^/(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)(?:/[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)*$"
+        },
+        { "not": { "pattern": "(?:^|/)api(?:/|$)" } }
+      ]
+    },
+    "hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "stringList": { "type": "array", "items": { "type": "string" } },
+    "plannedFile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "operation"],
+      "properties": {
+        "path": { "type": "string" },
+        "operation": { "enum": ["create", "modify"] }
+      }
+    },
+    "publication": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["adapter", "configSha256", "environment", "siteIndexable"],
+      "properties": {
+        "adapter": { "enum": ["local", "cloudflare"] },
+        "configSha256": { "$ref": "#/$defs/hash" },
+        "environment": { "type": ["string", "null"] },
+        "siteIndexable": { "type": "boolean" }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": ["adapter"],
+            "properties": { "adapter": { "const": "local" } }
+          },
+          "then": {
+            "properties": {
+              "environment": { "const": null },
+              "siteIndexable": { "const": false }
+            }
+          }
+        },
+        {
+          "if": {
+            "required": ["adapter"],
+            "properties": { "adapter": { "const": "cloudflare" } }
+          },
+          "then": {
+            "properties": {
+              "environment": { "type": "string", "minLength": 1 }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

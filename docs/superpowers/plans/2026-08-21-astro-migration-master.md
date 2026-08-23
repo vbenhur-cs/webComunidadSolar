@@ -92,6 +92,27 @@ export interface Identity {
 
 export type CompositionMode = "auto" | "blocks" | "freeform" | "hybrid";
 
+export interface RequestInput {
+  schemaVersion?: 1;
+  changeId: string;
+  intent: string;
+  targetPath: `/${string}`;
+  acceptanceCriteria: string[];
+  audience?: string | null;
+  mode?: CompositionMode;
+  content?: string;
+  claims?: string[];
+  references?: string[];
+  assets?: Array<{ path: string; sha256: string; mediaType: string }>;
+  seo?: {
+    title?: string | null;
+    description?: string | null;
+    index?: boolean;
+  };
+  privacy?: { private?: boolean; area?: PrivateArea | null };
+  allowedExternalLinks?: string[];
+}
+
 export type ChangeState =
   | "received"
   | "normalized"
@@ -162,6 +183,39 @@ export interface ApprovalRecord {
   artifactSha256: string | null;
 }
 
+export interface ValidationResult {
+  id: string;
+  status: "passed" | "failed" | "skipped";
+  evidence: string | null;
+  evidenceSha256: string | null;
+}
+
+export interface AttemptRecord {
+  schemaVersion: 1;
+  changeId: string;
+  attemptId: string;
+  status: "running" | "generated" | "validated" | "rejected" | "failed";
+  resumeState: "received" | "normalized" | "planned" | "gate1_approved" | null;
+  adapter: string | null;
+  startedAt: string;
+  finishedAt: string | null;
+  requestSha256: string | null;
+  planSha256: string | null;
+  baselineCommit: string;
+  generatedFiles: string[];
+  // Paths relative to the sanitized attempt record; never raw log content.
+  logs: { stdout: string | null; stderr: string | null; finalMessage: string | null };
+  validations: ValidationResult[];
+  failure: { code: string; message: string } | null;
+}
+
+// AttemptRecord invariants enforced by the closed schema:
+// - `running` keeps `finishedAt` and `failure` null.
+// - `validated` has a null `resumeState` and `failure`, a finished timestamp,
+//   and at least one passed validation with sanitized evidence and hash.
+// - `failed` and `rejected` retain a non-null resume checkpoint, finished
+//   timestamp, and failure object for safe Task 2 resumption.
+
 export interface CandidateManifest {
   schemaVersion: 1;
   changeId: string;
@@ -174,6 +228,7 @@ export interface CandidateManifest {
   buildProfile: ChangePlan["publication"];
   routes: string[];
   files: string[];
+  // At least one passed automatic validation is required before Gate 2.
   validations: Array<{ id: string; status: "passed" | "failed"; evidence: string }>;
   artifacts: Array<{ path: string; sha256: string; bytes: number }>;
   preview: { command: string; url: string };

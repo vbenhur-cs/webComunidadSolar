@@ -1,0 +1,155 @@
+{
+  "$id": "attempt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "changeId",
+    "attemptId",
+    "status",
+    "resumeState",
+    "adapter",
+    "startedAt",
+    "finishedAt",
+    "requestSha256",
+    "planSha256",
+    "baselineCommit",
+    "generatedFiles",
+    "logs",
+    "validations",
+    "failure"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "changeId": { "$ref": "#/$defs/changeId" },
+    "attemptId": { "type": "string" },
+    "status": {
+      "enum": ["running", "generated", "validated", "rejected", "failed"]
+    },
+    "resumeState": {
+      "enum": ["received", "normalized", "planned", "gate1_approved", null]
+    },
+    "adapter": { "type": ["string", "null"] },
+    "startedAt": { "type": "string" },
+    "finishedAt": { "type": ["string", "null"] },
+    "requestSha256": {
+      "anyOf": [{ "$ref": "#/$defs/hash" }, { "type": "null" }]
+    },
+    "planSha256": { "anyOf": [{ "$ref": "#/$defs/hash" }, { "type": "null" }] },
+    "baselineCommit": { "type": "string" },
+    "generatedFiles": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/safeRelativePath" }
+    },
+    "logs": { "$ref": "#/$defs/logs" },
+    "validations": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/validationResult" }
+    },
+    "failure": { "anyOf": [{ "$ref": "#/$defs/failure" }, { "type": "null" }] }
+  },
+  "allOf": [
+    {
+      "if": {
+        "required": ["status"],
+        "properties": { "status": { "const": "validated" } }
+      },
+      "then": {
+        "properties": {
+          "validations": {
+            "minItems": 1,
+            "items": {
+              "required": ["status", "evidence", "evidenceSha256"],
+              "properties": {
+                "status": { "const": "passed" },
+                "evidence": { "$ref": "#/$defs/safeRelativePath" },
+                "evidenceSha256": { "$ref": "#/$defs/hash" }
+              }
+            }
+          },
+          "finishedAt": { "type": "string" },
+          "failure": { "const": null },
+          "resumeState": { "const": null }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": ["status"],
+        "properties": { "status": { "enum": ["failed", "rejected"] } }
+      },
+      "then": {
+        "properties": {
+          "finishedAt": { "type": "string" },
+          "failure": { "$ref": "#/$defs/failure" },
+          "resumeState": {
+            "enum": ["received", "normalized", "planned", "gate1_approved"]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": ["status"],
+        "properties": { "status": { "const": "running" } }
+      },
+      "then": {
+        "properties": {
+          "finishedAt": { "const": null },
+          "failure": { "const": null }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "changeId": {
+      "type": "string",
+      "pattern": "^[a-z0-9](?:[a-z0-9-]{1,62}[a-z0-9])$"
+    },
+    "hash": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "safeRelativePath": {
+      "type": "string",
+      "pattern": "^(?!/)(?!.*//)(?!.*(?:^|/)\\.\\.(?:/|$))[A-Za-z0-9][A-Za-z0-9._/-]*$"
+    },
+    "logs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stdout", "stderr", "finalMessage"],
+      "properties": {
+        "stdout": {
+          "anyOf": [{ "$ref": "#/$defs/safeRelativePath" }, { "type": "null" }]
+        },
+        "stderr": {
+          "anyOf": [{ "$ref": "#/$defs/safeRelativePath" }, { "type": "null" }]
+        },
+        "finalMessage": {
+          "anyOf": [{ "$ref": "#/$defs/safeRelativePath" }, { "type": "null" }]
+        }
+      }
+    },
+    "validationResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "status", "evidence", "evidenceSha256"],
+      "properties": {
+        "id": { "type": "string" },
+        "status": { "enum": ["passed", "failed", "skipped"] },
+        "evidence": {
+          "anyOf": [{ "$ref": "#/$defs/safeRelativePath" }, { "type": "null" }]
+        },
+        "evidenceSha256": {
+          "anyOf": [{ "$ref": "#/$defs/hash" }, { "type": "null" }]
+        }
+      }
+    },
+    "failure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message"],
+      "properties": {
+        "code": { "type": "string" },
+        "message": { "type": "string" }
+      }
+    }
+  }
+}
