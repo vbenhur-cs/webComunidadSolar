@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "changeId": "nueva-pagina-autoconsumo",
+  "intent": "Explicar el autoconsumo compartido",
+  "audience": "Comunidades vecinales",
+  "targetPath": "/autoconsumo-compartido",
+  "mode": "auto",
+  "content": "Compartir energía reduce la factura.\nLa comunidad conserva el control.\n",
+  "claims": ["Ahorro local verificable"],
+  "references": ["https://example.test/referencia"],
+  "assets": [],
+  "seo": {
+    "title": "Autoconsumo compartido",
+    "description": null,
+    "index": true
+  },
+  "privacy": {
+    "private": false,
+    "area": null
+  },
+  "allowedExternalLinks": ["https://example.test"],
+  "acceptanceCriteria": [
+    "La ruta responde 200",
+    "El contenido explica el reparto",
+    "El enlace externo está declarado"
+  ]
+}

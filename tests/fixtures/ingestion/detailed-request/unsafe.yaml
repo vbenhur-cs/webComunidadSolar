@@ -1,0 +1,5 @@
+changeId: &id nueva-pagina-autoconsumo
+intent: !unsafe Explicar el autoconsumo compartido
+targetPath: /autoconsumo-compartido
+acceptanceCriteria:
+  - *id
