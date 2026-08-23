@@ -9,6 +9,11 @@ dist/
 .source-work/
 .artifacts/
 .change-state/
+.agent-worktrees/
+# Ingestion raw inputs and candidate builds are operational artifacts.  `changes/`
+# remains deliberately trackable as the sanitized publication record.
+.artifacts/intake/
+.artifacts/candidates/
 test-results/
 playwright-report/
 **/.source-copy-*.tmp

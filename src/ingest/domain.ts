@@ -14,6 +14,38 @@ export type ChangeState =
   | "rejected"
   | "failed";
 
+export type ResumeState =
+  "received" | "normalized" | "planned" | "gate1_approved";
+
+export interface ChangeRecord {
+  schemaVersion: 1;
+  changeId: string;
+  state: ChangeState;
+  revision: number;
+  attemptNumber: number;
+  currentAttemptId: string;
+  resumeState: ResumeState;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TransitionEvent {
+  type: string;
+  to: ChangeState;
+  payload: unknown;
+}
+
+export interface JournalEvent {
+  sequence: number;
+  at: string;
+  type: string;
+  from: ChangeState | null;
+  to: ChangeState;
+  payloadSha256: string;
+  previousEventSha256: string | null;
+  eventSha256: string;
+}
+
 export interface RequestAsset {
   path: string;
   sha256: string;

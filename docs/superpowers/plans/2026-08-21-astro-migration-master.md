@@ -125,6 +125,55 @@ export type ChangeState =
   | "rejected"
   | "failed";
 
+export type ResumeState =
+  | "received"
+  | "normalized"
+  | "planned"
+  | "gate1_approved";
+
+// El estado operativo vive en `.change-state/<changeId>/state.json`; no duplica
+// request, plan, approvals, attempts ni candidate, que tienen documentos propios.
+export interface ChangeRecord {
+  schemaVersion: 1;
+  changeId: string;
+  state: ChangeState;
+  revision: number;
+  attemptNumber: number;
+  currentAttemptId: string;
+  resumeState: ResumeState;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// `at` se asigna exclusivamente por el store mediante un clock inyectable.
+export interface TransitionEvent {
+  type: string;
+  to: ChangeState;
+  payload: unknown;
+}
+
+export interface JournalEvent {
+  sequence: number;
+  at: string;
+  type: string;
+  from: ChangeState | null;
+  to: ChangeState;
+  payloadSha256: string;
+  previousEventSha256: string | null;
+  eventSha256: string;
+}
+
+// State-store invariants:
+// - The only initial transition is `null -> received`, creating revision 1,
+//   attempt 1, `attempt-000001`, and the `received` checkpoint.
+// - Every allowed normal transition increments `revision`; entering a resume
+//   checkpoint updates it and later states retain the most recent checkpoint.
+// - `retryChange` only accepts `failed` or `rejected`, returns to that retained
+//   checkpoint, increments attemptNumber/currentAttemptId/revision, and emits a
+//   `retry` JournalEvent. Published is never retryable.
+// - The journal stores canonical payload hashes; `eventSha256` is the canonical
+//   hash of the event without its own `eventSha256`, chained to the prior hash.
+
 export interface NormalizedRequest {
   schemaVersion: 1;
   changeId: string;
