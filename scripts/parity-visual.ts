@@ -5,6 +5,7 @@ import {
 } from "node:http";
 import { constants } from "node:fs";
 import { randomUUID } from "node:crypto";
+import { register } from "node:module";
 import {
   access,
   lstat,
@@ -66,7 +67,8 @@ export type VisualParityScope = "foundation" | "public";
  * authenticated request headers of a private visual capture. Network fixtures
  * remain the external-resource policy used for every capture.
  */
-export type VisualAuthFixtureName = "anonymous" | "allowed";
+export type VisualAuthFixtureName =
+  "anonymous" | "allowed" | "allowed-empty" | "allowed-data";
 
 export interface VisualAuthFixture {
   name: VisualAuthFixtureName;
@@ -82,6 +84,23 @@ export interface VisualAuthPlan {
 export interface VisualRuntime {
   origin: string;
   dispose(): Promise<void>;
+}
+
+/**
+ * This control is deliberately attached only to an in-process candidate
+ * runtime. The public loopback bridge remains a capture-only HTTP boundary
+ * and continues to discard incoming request bodies.
+ */
+interface VisualCandidateFixtureRuntime extends VisualRuntime {
+  fetchForVisualFixture?(
+    path: string,
+    options?: RequestInit,
+  ): Promise<Response>;
+}
+
+/** Mutable, in-memory source D1 fixture used only by Manganáfer visual runs. */
+interface VisualManganaferSourceRuntime extends VisualRuntime {
+  seedManganaferInterest?(createdAt: string): void;
 }
 
 export interface VisualArtifactPaths {
@@ -207,7 +226,20 @@ const defaultProcessTerminationGraceMs = 5_000;
 const defaultSourceBuildTimeoutMs = 300_000;
 const visualAuthEmail = "visual-parity-auth@example.test";
 const visualAuthEmailHeader = "oai-authenticated-user-email";
-const visualAuthFixtureNames = ["anonymous", "allowed"] as const;
+const visualAuthFixtureNames = [
+  "anonymous",
+  "allowed",
+  "allowed-empty",
+  "allowed-data",
+] as const satisfies readonly VisualAuthFixtureName[];
+const visualAuthFixturesByPrivateArea: Record<
+  PrivateArea,
+  readonly VisualAuthFixtureName[]
+> = {
+  socios: ["anonymous", "allowed"],
+  equipo: ["anonymous", "allowed"],
+  manganafer: ["anonymous", "allowed-empty", "allowed-data"],
+};
 const visualAuthEnvironmentKey: Record<
   PrivateArea,
   keyof Record<string, string>
@@ -237,6 +269,9 @@ const visualSourceEnvironmentKeys = new Set([
   ...Object.keys(manganaferVisualQuoteEnvironment),
 ]);
 let visualSourceEnvironmentTail: Promise<void> = Promise.resolve();
+const visualSourceWorkerEnvironmentSlot =
+  "__comunidadsolarVisualSourceWorkerEnvironment";
+let visualSourceWorkerLoaderInstalled = false;
 
 function compareText(left: string, right: string): number {
   if (left < right) return -1;
@@ -716,15 +751,21 @@ function parseVisualAuthFixtures(value: string): VisualAuthFixtureName[] {
       throw new Error(`Fixture visual desconocido: ${fixture}`);
     }
   }
-  if (
-    fixtures.length !== visualAuthFixtureNames.length ||
-    !visualAuthFixtureNames.every((fixture) => seen.has(fixture))
-  ) {
+  const expectedSets = [
+    visualAuthFixturesByPrivateArea.equipo,
+    visualAuthFixturesByPrivateArea.manganafer,
+  ];
+  const canonical = expectedSets.some(
+    (expected) =>
+      fixtures.length === expected.length &&
+      expected.every((fixture, index) => fixture === fixtures[index]),
+  );
+  if (!canonical) {
     throw new Error(
-      "--fixtures visual privado debe declarar anonymous,allowed exactamente una vez",
+      "--fixtures visual privado debe usar anonymous,allowed o anonymous,allowed-empty,allowed-data en orden canónico",
     );
   }
-  return [...visualAuthFixtureNames];
+  return fixtures as VisualAuthFixtureName[];
 }
 
 /**
@@ -763,6 +804,17 @@ export function resolveVisualAuthPlan(
   const normalizedFixtures = parseVisualAuthFixtures(
     [...requestedFixtures].join(","),
   );
+  const expectedFixtures = visualAuthFixturesByPrivateArea[privateArea];
+  if (
+    normalizedFixtures.length !== expectedFixtures.length ||
+    !expectedFixtures.every(
+      (fixture, index) => normalizedFixtures[index] === fixture,
+    )
+  ) {
+    throw new Error(
+      `El área privada ${privateArea} requiere --fixtures ${expectedFixtures.join(",")}`,
+    );
+  }
   return {
     privateArea,
     environment: {
@@ -771,7 +823,9 @@ export function resolveVisualAuthPlan(
     fixtures: normalizedFixtures.map((name): VisualAuthFixture => ({
       name,
       headers:
-        name === "allowed" ? { [visualAuthEmailHeader]: visualAuthEmail } : {},
+        name === "anonymous"
+          ? {}
+          : { [visualAuthEmailHeader]: visualAuthEmail },
     })),
   };
 }
@@ -803,6 +857,536 @@ export function resolveVisualRuntimeEnvironment(
       compareText(left, right),
     ),
   );
+}
+
+const visualManganaferExportHeaders = [
+  "Fecha",
+  "Tipo",
+  "Nombre",
+  "Apellidos",
+  "Email",
+  "Teléfono",
+  "Municipio o diputación",
+  "Código postal",
+  "Dirección o zona",
+  "Perfil participante",
+  "Superficie cubierta",
+  "Relación con cubierta",
+  "Mensaje",
+  "Estado",
+  "Consentimiento",
+] as const;
+
+const visualManganaferInterestPayload = {
+  kind: "neighbor",
+  firstName: "Visual",
+  lastName: "Fixture",
+  email: "visual-fixture@example.test",
+  phone: "600000000",
+  municipality: "Alacant",
+  postalCode: "03000",
+  address: "",
+  participantProfile: "hogar",
+  roofSurfaceRange: "",
+  roofRelationship: "",
+  message: "",
+  privacyAccepted: true,
+} as const;
+
+const visualManganaferExportCells = [
+  visualManganaferInterestPayload.kind,
+  visualManganaferInterestPayload.firstName,
+  visualManganaferInterestPayload.lastName,
+  visualManganaferInterestPayload.email,
+  visualManganaferInterestPayload.phone,
+  visualManganaferInterestPayload.municipality,
+  visualManganaferInterestPayload.postalCode,
+  visualManganaferInterestPayload.address,
+  visualManganaferInterestPayload.participantProfile,
+  visualManganaferInterestPayload.roofSurfaceRange,
+  visualManganaferInterestPayload.roofRelationship,
+  visualManganaferInterestPayload.message,
+  "nuevo",
+  "2026-07-31",
+] as const;
+
+interface VisualManganaferFixtureStore {
+  database: unknown;
+  seed(createdAt: string): void;
+}
+
+const maxVisualManganaferExportBytes = 64 * 1024;
+
+/**
+ * Canonicalised from the pinned source's `db/index.ts` D1 batch. This is an
+ * internal visual-fixture allowlist, not a second application migration.
+ */
+const visualManganaferSourceDdl = [
+  `
+    CREATE TABLE IF NOT EXISTS manganafer_interests (
+      id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+      kind TEXT NOT NULL,
+      first_name TEXT NOT NULL,
+      last_name TEXT DEFAULT '' NOT NULL,
+      email TEXT NOT NULL,
+      phone TEXT NOT NULL,
+      municipality TEXT NOT NULL,
+      postal_code TEXT NOT NULL,
+      address TEXT DEFAULT '' NOT NULL,
+      participant_profile TEXT DEFAULT '' NOT NULL,
+      roof_surface_range TEXT DEFAULT '' NOT NULL,
+      roof_relationship TEXT DEFAULT '' NOT NULL,
+      message TEXT DEFAULT '' NOT NULL,
+      consent_version TEXT DEFAULT '2026-07-31' NOT NULL,
+      source TEXT DEFAULT 'manganafer-landing' NOT NULL,
+      status TEXT DEFAULT 'nuevo' NOT NULL,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP NOT NULL,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP NOT NULL
+    )
+  `,
+  `
+    CREATE UNIQUE INDEX IF NOT EXISTS manganafer_interests_email_kind_unique
+    ON manganafer_interests (email, kind)
+  `,
+  `
+    CREATE INDEX IF NOT EXISTS manganafer_interests_created_at_idx
+    ON manganafer_interests (created_at)
+  `,
+  `
+    CREATE INDEX IF NOT EXISTS manganafer_interests_kind_idx
+    ON manganafer_interests (kind)
+  `,
+] as const;
+
+const visualManganaferSourceSelect =
+  'select "id", "kind", "first_name", "last_name", "email", "phone", "municipality", "postal_code", "address", "participant_profile", "roof_surface_range", "roof_relationship", "message", "consent_version", "source", "status", "created_at", "updated_at" from "manganafer_interests" order by "manganafer_interests"."created_at" desc, "manganafer_interests"."id" desc';
+
+const visualManganaferStoreStatement = Symbol("visualManganaferStoreStatement");
+
+type VisualManganaferStoreStatementKind = "ddl" | "select";
+
+interface VisualManganaferStoreStatement {
+  [visualManganaferStoreStatement]: {
+    kind: VisualManganaferStoreStatementKind;
+    sql: string;
+  };
+  bind(...values: unknown[]): VisualManganaferStoreStatement;
+  raw(...options: unknown[]): Promise<unknown[][]>;
+  all(...options: unknown[]): Promise<never>;
+  first(...options: unknown[]): Promise<never>;
+  run(...options: unknown[]): Promise<never>;
+}
+
+function canonicalizeVisualManganaferSql(statement: string): string {
+  return statement.replace(/\s+/g, " ").trim();
+}
+
+const visualManganaferSourceDdlCanonical = visualManganaferSourceDdl.map(
+  canonicalizeVisualManganaferSql,
+);
+const visualManganaferSourceSelectCanonical = canonicalizeVisualManganaferSql(
+  visualManganaferSourceSelect,
+);
+
+function visualManganaferStoreError(operation: string): Error {
+  return new Error(
+    `El fixture visual de Manganáfer no permite la operación D1: ${operation}`,
+  );
+}
+
+function visualCsvError(): Error {
+  return new Error("El CSV visual de Manganáfer no tiene el formato esperado");
+}
+
+function isVisualD1Timestamp(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(value)) {
+    return false;
+  }
+  const parsed = new Date(`${value.replace(" ", "T")}Z`);
+  return (
+    Number.isFinite(parsed.getTime()) &&
+    parsed.toISOString().slice(0, 19).replace("T", " ") === value
+  );
+}
+
+function parseVisualCsvRecord(line: string): string[] {
+  const values: string[] = [];
+  let cursor = 0;
+  while (cursor < line.length) {
+    if (line[cursor] !== '"') throw visualCsvError();
+    cursor += 1;
+    let value = "";
+    let closed = false;
+    while (cursor < line.length) {
+      const character = line[cursor];
+      if (character !== '"') {
+        value += character;
+        cursor += 1;
+        continue;
+      }
+      if (line[cursor + 1] === '"') {
+        value += '"';
+        cursor += 2;
+        continue;
+      }
+      cursor += 1;
+      closed = true;
+      break;
+    }
+    if (!closed) throw visualCsvError();
+    values.push(value);
+    if (cursor === line.length) break;
+    if (line[cursor] !== ",") throw visualCsvError();
+    cursor += 1;
+    if (cursor === line.length) throw visualCsvError();
+  }
+  return values;
+}
+
+/**
+ * Reads only the raw created-at value needed to seed the frozen source store.
+ * The synthetic CSV bytes are deliberately never persisted or reported.
+ */
+export function parseManganaferVisualExport(input: Uint8Array): string {
+  if (
+    input.byteLength < 3 ||
+    input[0] !== 0xef ||
+    input[1] !== 0xbb ||
+    input[2] !== 0xbf
+  ) {
+    throw visualCsvError();
+  }
+  const text = new TextDecoder("utf-8", { fatal: true }).decode(
+    input.subarray(3),
+  );
+  const lines = text.split("\r\n");
+  if (lines.length !== 2 || lines.some((line) => line.length === 0)) {
+    throw visualCsvError();
+  }
+  const headers = parseVisualCsvRecord(lines[0]);
+  const row = parseVisualCsvRecord(lines[1]);
+  if (
+    headers.length !== visualManganaferExportHeaders.length ||
+    row.length !== visualManganaferExportHeaders.length ||
+    !visualManganaferExportHeaders.every(
+      (header, index) => headers[index] === header,
+    ) ||
+    !isVisualD1Timestamp(row[0]) ||
+    !visualManganaferExportCells.every((cell, index) => row[index + 1] === cell)
+  ) {
+    throw visualCsvError();
+  }
+  return row[0];
+}
+
+export function createVisualManganaferFixtureStore(): VisualManganaferFixtureStore {
+  let createdAt: string | undefined;
+  let seeded = false;
+  const row = () =>
+    createdAt === undefined
+      ? []
+      : [
+          [
+            1,
+            visualManganaferInterestPayload.kind,
+            visualManganaferInterestPayload.firstName,
+            visualManganaferInterestPayload.lastName,
+            visualManganaferInterestPayload.email,
+            visualManganaferInterestPayload.phone,
+            visualManganaferInterestPayload.municipality,
+            visualManganaferInterestPayload.postalCode,
+            visualManganaferInterestPayload.address,
+            visualManganaferInterestPayload.participantProfile,
+            visualManganaferInterestPayload.roofSurfaceRange,
+            visualManganaferInterestPayload.roofRelationship,
+            visualManganaferInterestPayload.message,
+            "2026-07-31",
+            "manganafer-landing",
+            "nuevo",
+            createdAt,
+            createdAt,
+          ],
+        ];
+  const statementFor = (
+    kind: VisualManganaferStoreStatementKind,
+    sql: string,
+  ): VisualManganaferStoreStatement => {
+    const statement: VisualManganaferStoreStatement = {
+      [visualManganaferStoreStatement]: { kind, sql },
+      bind(...values: unknown[]) {
+        if (values.length !== 0) {
+          throw visualManganaferStoreError("bind con argumentos");
+        }
+        return statement;
+      },
+      async raw(...options: unknown[]) {
+        if (kind !== "select" || options.length !== 0) {
+          throw visualManganaferStoreError("raw fuera del SELECT permitido");
+        }
+        return row();
+      },
+      async all() {
+        throw visualManganaferStoreError("all");
+      },
+      async first() {
+        throw visualManganaferStoreError("first");
+      },
+      async run() {
+        throw visualManganaferStoreError("run");
+      },
+    };
+    return statement;
+  };
+  const database = {
+    prepare(sql: string) {
+      const canonical = canonicalizeVisualManganaferSql(sql);
+      if (visualManganaferSourceDdlCanonical.includes(canonical)) {
+        return statementFor("ddl", canonical);
+      }
+      if (canonical === visualManganaferSourceSelectCanonical) {
+        return statementFor("select", canonical);
+      }
+      throw visualManganaferStoreError("SQL no permitido");
+    },
+    async batch(statements: unknown[]) {
+      if (
+        statements.length !== visualManganaferSourceDdlCanonical.length ||
+        !statements.every((statement, index) => {
+          if (
+            typeof statement !== "object" ||
+            statement === null ||
+            !(visualManganaferStoreStatement in statement)
+          ) {
+            return false;
+          }
+          const metadata = (statement as VisualManganaferStoreStatement)[
+            visualManganaferStoreStatement
+          ];
+          return (
+            metadata.kind === "ddl" &&
+            metadata.sql === visualManganaferSourceDdlCanonical[index]
+          );
+        })
+      ) {
+        throw visualManganaferStoreError("batch DDL no canónico");
+      }
+      return [];
+    },
+  };
+  return {
+    database,
+    seed(value) {
+      if (seeded || !value) {
+        throw new Error(
+          "El fixture visual de Manganáfer solo puede sembrarse una vez",
+        );
+      }
+      createdAt = value;
+      seeded = true;
+    },
+  };
+}
+
+function visualCandidateFixtureControl(
+  runtime: VisualRuntime,
+): VisualCandidateFixtureRuntime {
+  const controlled = runtime as VisualCandidateFixtureRuntime;
+  if (typeof controlled.fetchForVisualFixture !== "function") {
+    throw new Error(
+      "El runtime candidato visual no admite el seed interno de Manganáfer",
+    );
+  }
+  return controlled;
+}
+
+function visualManganaferSourceControl(
+  runtime: VisualRuntime,
+): VisualManganaferSourceRuntime {
+  const controlled = runtime as VisualManganaferSourceRuntime;
+  if (typeof controlled.seedManganaferInterest !== "function") {
+    throw new Error(
+      "El runtime fuente visual no admite el seed interno de Manganáfer",
+    );
+  }
+  return controlled;
+}
+
+async function fetchVisualManganaferFixture(
+  candidate: VisualCandidateFixtureRuntime,
+  stage: string,
+  path: string,
+  options: RequestInit,
+  timeoutMs: number,
+): Promise<Response> {
+  const controller = new AbortController();
+  const operation = candidate.fetchForVisualFixture!(path, {
+    ...options,
+    signal: controller.signal,
+  });
+  try {
+    return await withinVisualTimeout(stage, operation, timeoutMs);
+  } catch (error) {
+    controller.abort();
+    void operation.catch(() => undefined);
+    throw error;
+  }
+}
+
+async function cancelVisualResponseBody(
+  response: Response,
+  stage: string,
+  timeoutMs: number,
+): Promise<void> {
+  if (response.body === null) return;
+  const reader = response.body.getReader();
+  try {
+    await withinVisualTimeout(stage, reader.cancel(), timeoutMs);
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+async function readVisualResponseBytes(
+  response: Response,
+  stage: string,
+  timeoutMs: number,
+): Promise<Uint8Array> {
+  if (response.body === null) return new Uint8Array();
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let length = 0;
+  let primaryFailure: unknown;
+  let cancelled = false;
+  const readAll = async () => {
+    for (;;) {
+      const result = await reader.read();
+      if (cancelled || result.done) break;
+      const value = result.value;
+      if (value === undefined) {
+        throw new Error(
+          "El export visual de Manganáfer contiene un chunk vacío",
+        );
+      }
+      length += value.byteLength;
+      if (length > maxVisualManganaferExportBytes) {
+        throw new Error(
+          "El export visual de Manganáfer supera su límite de bytes",
+        );
+      }
+      chunks.push(value);
+    }
+  };
+  const operation = readAll();
+  try {
+    await withinVisualTimeout(stage, operation, timeoutMs);
+  } catch (error) {
+    primaryFailure = error;
+    cancelled = true;
+    void operation.catch(() => undefined);
+  }
+
+  if (primaryFailure !== undefined) {
+    try {
+      await withinVisualTimeout(
+        "cancelar el export visual de Manganáfer",
+        reader.cancel(),
+        timeoutMs,
+      );
+    } catch (cleanupFailure) {
+      preserveVisualFailure(primaryFailure, cleanupFailure);
+    } finally {
+      reader.releaseLock();
+    }
+    throw primaryFailure;
+  }
+
+  reader.releaseLock();
+  const output = new Uint8Array(length);
+  let offset = 0;
+  for (const chunk of chunks) {
+    output.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return output;
+}
+
+async function seedVisualManganaferInterest(
+  candidateRuntime: VisualRuntime,
+  referenceRuntime: VisualRuntime,
+  timeoutMs: number,
+): Promise<void> {
+  const candidate = visualCandidateFixtureControl(candidateRuntime);
+  const reference = visualManganaferSourceControl(referenceRuntime);
+  const post = await fetchVisualManganaferFixture(
+    candidate,
+    "enviar el seed visual de Manganáfer",
+    "/api/manganafer-interest",
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(visualManganaferInterestPayload),
+      redirect: "manual",
+    },
+    timeoutMs,
+  );
+  let postFailure: unknown;
+  if (post.status !== 201) {
+    postFailure = new Error(
+      "El seed visual de Manganáfer no aceptó la solicitud sintética",
+    );
+  }
+  try {
+    await cancelVisualResponseBody(
+      post,
+      "cancelar el seed visual de Manganáfer",
+      timeoutMs,
+    );
+  } catch (cleanupFailure) {
+    if (postFailure !== undefined) {
+      preserveVisualFailure(postFailure, cleanupFailure);
+    } else {
+      throw cleanupFailure;
+    }
+  }
+  if (postFailure !== undefined) throw postFailure;
+
+  const exported = await fetchVisualManganaferFixture(
+    candidate,
+    "obtener el export visual de Manganáfer",
+    "/api/manganafer-interest/export",
+    {
+      method: "GET",
+      headers: { [visualAuthEmailHeader]: visualAuthEmail },
+      redirect: "manual",
+    },
+    timeoutMs,
+  );
+  let exportFailure: unknown;
+  if (exported.status !== 200) {
+    exportFailure = new Error(
+      "El export visual de Manganáfer no está disponible",
+    );
+  }
+  if (exportFailure !== undefined) {
+    try {
+      await cancelVisualResponseBody(
+        exported,
+        "cancelar el export visual de Manganáfer",
+        timeoutMs,
+      );
+    } catch (cleanupFailure) {
+      preserveVisualFailure(exportFailure, cleanupFailure);
+    }
+    throw exportFailure;
+  }
+  const createdAt = parseManganaferVisualExport(
+    await readVisualResponseBytes(
+      exported,
+      "leer el export visual de Manganáfer",
+      timeoutMs,
+    ),
+  );
+  reference.seedManganaferInterest!(createdAt);
 }
 
 function parseFixture(value: unknown): CaptureFixture {
@@ -1220,8 +1804,18 @@ export async function startCandidateRuntime(
       (candidateBridge) => candidateBridge.dispose(),
       boundedTimeoutMs,
     );
-    return {
-      origin: bridge.origin,
+    if (bridge === undefined) {
+      throw new Error("El bridge loopback candidato no está disponible");
+    }
+    const bridgeOrigin = bridge.origin;
+    const runtime: VisualCandidateFixtureRuntime = {
+      origin: bridgeOrigin,
+      async fetchForVisualFixture(path: string, options: RequestInit = {}) {
+        return worker.fetch(new URL(path, bridgeOrigin).href, {
+          ...options,
+          redirect: "manual",
+        });
+      },
       async dispose() {
         await disposeCandidateRuntimeParts(
           worker,
@@ -1230,6 +1824,7 @@ export async function startCandidateRuntime(
         );
       },
     };
+    return runtime;
   } catch (error) {
     try {
       await disposeCandidateRuntimeParts(
@@ -1431,11 +2026,78 @@ export async function dispatchSourceRuntimeRequest(
   return asset ?? fetchWorker(request);
 }
 
+function installVisualSourceWorkersLoader(): void {
+  if (visualSourceWorkerLoaderInstalled) return;
+  const workersModule = `export const env = new Proxy({}, {
+    get(_target, key) {
+      const bindings = globalThis[${JSON.stringify(visualSourceWorkerEnvironmentSlot)}];
+      return bindings == null ? undefined : bindings[key];
+    }
+  });`;
+  const workersModuleUrl = `data:text/javascript,${encodeURIComponent(workersModule)}`;
+  const loader = `export async function resolve(specifier, context, nextResolve) {
+    if (specifier === "cloudflare:workers") {
+      return {
+        shortCircuit: true,
+        url: ${JSON.stringify(workersModuleUrl)}
+      };
+    }
+    return nextResolve(specifier, context);
+  }`;
+  register(
+    `data:text/javascript,${encodeURIComponent(loader)}`,
+    import.meta.url,
+  );
+  visualSourceWorkerLoaderInstalled = true;
+}
+
+/**
+ * Gives a source Worker the bindings it imports from `cloudflare:workers` for
+ * one already-serialized visual fetch. The source archive remains immutable:
+ * Node resolves the synthetic module through an in-memory loader only. The
+ * loader is process-global solely because the parity CLI and this unit-test
+ * file each run in their own Node process; its proxy returns undefined outside
+ * this scope and the slot is restored even when the fetch rejects.
+ */
+export async function withVisualSourceWorkerEnvironment<T>(
+  bindings: Record<string, unknown>,
+  run: () => Promise<T>,
+): Promise<T> {
+  installVisualSourceWorkersLoader();
+  const globalBindings = globalThis as Record<string, unknown>;
+  const hadPrevious = Object.hasOwn(
+    globalBindings,
+    visualSourceWorkerEnvironmentSlot,
+  );
+  const previous = globalBindings[visualSourceWorkerEnvironmentSlot];
+  globalBindings[visualSourceWorkerEnvironmentSlot] = bindings;
+  try {
+    return await run();
+  } finally {
+    if (hadPrevious)
+      globalBindings[visualSourceWorkerEnvironmentSlot] = previous;
+    else delete globalBindings[visualSourceWorkerEnvironmentSlot];
+  }
+}
+
+async function materializeSourceResponse(
+  response: Response,
+): Promise<Response> {
+  const body = response.body === null ? null : await response.arrayBuffer();
+  return new Response(body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: response.headers,
+  });
+}
+
 async function startSourceRuntime(
   build: TemporarySourceBuild,
   timeoutMs = defaultVisualLifecycleTimeoutMs,
   bindings: Record<string, string> = {},
+  manganaferFixtureStore: VisualManganaferFixtureStore | undefined = undefined,
 ): Promise<VisualRuntime> {
+  installVisualSourceWorkersLoader();
   const archiveRoot = await resolveArchiveRoot(build.root);
   const entryPath = resolveInside(
     archiveRoot,
@@ -1456,18 +2118,20 @@ async function startSourceRuntime(
   const environment = {
     ...bindings,
     ASSETS: assets,
-    DB: new Proxy(
-      {},
-      {
-        get() {
-          return () => {
-            throw new Error(
-              "La home visual no puede usar una base de datos sin fixture",
-            );
-          };
+    DB:
+      manganaferFixtureStore?.database ??
+      new Proxy(
+        {},
+        {
+          get() {
+            return () => {
+              throw new Error(
+                "La captura visual no puede usar una base de datos sin fixture",
+              );
+            };
+          },
         },
-      },
-    ),
+      ),
     IMAGES: {
       input() {
         throw new Error(
@@ -1480,19 +2144,33 @@ async function startSourceRuntime(
     waitUntil() {},
     passThroughOnException() {},
   };
-  return startLoopbackBridge(
+  const bridge = await startLoopbackBridge(
     async (request) =>
       dispatchSourceRuntimeRequest(request, assets, (workerRequest) =>
         withVisualSourceEnvironment(
           bindings,
           () =>
-            module.default?.fetch(workerRequest, environment, context) ??
-            Promise.reject(new Error("El Worker fuente no está disponible")),
+            withVisualSourceWorkerEnvironment(environment, async () => {
+              const response =
+                module.default?.fetch(workerRequest, environment, context) ??
+                Promise.reject(
+                  new Error("El Worker fuente no está disponible"),
+                );
+              return materializeSourceResponse(await response);
+            }),
           timeoutMs,
         ),
       ),
     timeoutMs,
   );
+  if (manganaferFixtureStore === undefined) return bridge;
+  const runtime: VisualManganaferSourceRuntime = {
+    ...bridge,
+    seedManganaferInterest(createdAt: string) {
+      manganaferFixtureStore.seed(createdAt);
+    },
+  };
+  return runtime;
 }
 
 /**
@@ -2053,10 +2731,7 @@ export async function runVisualParity(
     ) => startCandidateRuntime(topology, lifecycleTimeoutMs, {}, environment));
   const sourceBuild =
     dependencies.withTemporarySourceBuild ?? withTemporarySourceBuild;
-  const startReference =
-    dependencies.startReference ??
-    ((build: TemporarySourceBuild, environment: Record<string, string>) =>
-      startSourceRuntime(build, lifecycleTimeoutMs, environment));
+  const startReference = dependencies.startReference;
   const launchBrowser =
     dependencies.launchBrowser ?? (() => launchChromium(lifecycleTimeoutMs));
   const capture = dependencies.capture ?? captureVisual;
@@ -2086,6 +2761,10 @@ export async function runVisualParity(
           });
     const authPlan = resolveVisualAuthPlan(routes, options.authFixtures);
     const authFixtures = authPlan?.fixtures ?? [undefined];
+    const manganaferFixtureStore =
+      authPlan?.privateArea === "manganafer"
+        ? createVisualManganaferFixtureStore()
+        : undefined;
     const runtimeEnvironment = resolveVisualRuntimeEnvironment(
       routes,
       authPlan,
@@ -2108,7 +2787,15 @@ export async function runVisualParity(
           async (candidate) =>
             withVisualResource(
               "iniciar el runtime de referencia",
-              () => startReference(source, runtimeEnvironment),
+              () =>
+                startReference === undefined
+                  ? startSourceRuntime(
+                      source,
+                      lifecycleTimeoutMs,
+                      runtimeEnvironment,
+                      manganaferFixtureStore,
+                    )
+                  : startReference(source, runtimeEnvironment),
               "cerrar el runtime de referencia",
               (reference) => reference.dispose(),
               lifecycleTimeoutMs,
@@ -2122,8 +2809,25 @@ export async function runVisualParity(
                   async (browser) => {
                     const localOrigins = [reference.origin, candidate.origin];
                     const evidence: VisualEvidence[] = [];
-                    for (const route of routes) {
-                      for (const authFixture of authFixtures) {
+                    let manganaferSeeded = false;
+                    for (const authFixture of authFixtures) {
+                      if (
+                        authFixture?.name === "allowed-data" &&
+                        manganaferFixtureStore !== undefined
+                      ) {
+                        if (manganaferSeeded) {
+                          throw new Error(
+                            "El fixture visual Manganáfer intentó sembrarse más de una vez",
+                          );
+                        }
+                        await seedVisualManganaferInterest(
+                          candidate,
+                          reference,
+                          lifecycleTimeoutMs,
+                        );
+                        manganaferSeeded = true;
+                      }
+                      for (const route of routes) {
                         for (const viewport of VISUAL_VIEWPORTS) {
                           const referenceCapture = await capture({
                             browser,

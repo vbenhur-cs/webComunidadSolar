@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
+import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -117,6 +118,85 @@ test("uses the selected config, optional environment and explicit dist assets fo
     "/project/dist",
   );
   assert.deepEqual(spawned[0]?.slice(-2), ["--env", "preview"]);
+});
+
+test("passes sorted synthetic private allowlists only to the local dev Worker", async () => {
+  const commands: string[][] = [];
+  const spawned: string[][] = [];
+  const root = await mkdtemp(join(tmpdir(), "wrangler-local-bindings-"));
+  const dependencies = successfulDependencies({
+    runCommand: async (_command, args) => {
+      commands.push(args);
+      return { code: 0, stdout: "[]", stderr: "" };
+    },
+    spawn: ((_command: string, args: readonly string[] | undefined) => {
+      spawned.push(args === undefined ? [] : [...args]);
+      const child = new FakeChild();
+      queueMicrotask(() => child.emit("spawn"));
+      return child as never;
+    }) as unknown as typeof import("node:child_process").spawn,
+  });
+
+  try {
+    await withLocalD1Worker(
+      async () => undefined,
+      {
+        root,
+        syntheticBindings: {
+          TEAM_ALLOWED_EMAILS: "team-synthetic@example.test",
+          MANGANAFER_ALLOWED_EMAILS: "admin-synthetic@example.test",
+        },
+      },
+      dependencies,
+    );
+
+    assert.equal(
+      commands.every((args) => args.includes("--var") === false),
+      true,
+    );
+    assert.deepEqual(spawned[0]?.slice(-4), [
+      "--var",
+      "MANGANAFER_ALLOWED_EMAILS:admin-synthetic@example.test",
+      "--var",
+      "TEAM_ALLOWED_EMAILS:team-synthetic@example.test",
+    ]);
+    assert.equal(existsSync(join(root, ".dev.vars")), false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("rejects unsafe synthetic bindings before local D1 build or spawn", async () => {
+  let commands = 0;
+  let spawned = 0;
+  const dependencies = successfulDependencies({
+    runCommand: async () => {
+      commands += 1;
+      return { code: 0, stdout: "[]", stderr: "" };
+    },
+    spawn: () => {
+      spawned += 1;
+      const child = new FakeChild();
+      queueMicrotask(() => child.emit("spawn"));
+      return child as never;
+    },
+  });
+
+  await assert.rejects(
+    withLocalD1Worker(
+      async () => undefined,
+      {
+        root: "/project",
+        syntheticBindings: {
+          MANGANAFER_ALLOWED_EMAILS: "outside@example.invalid:unsafe",
+        },
+      },
+      dependencies,
+    ),
+    /binding sintético.*no válido/i,
+  );
+  assert.equal(commands, 0);
+  assert.equal(spawned, 0);
 });
 
 test("can deliberately start an empty local D1 without preapplying migrations", async () => {

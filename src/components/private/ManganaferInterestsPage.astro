@@ -1,0 +1,193 @@
+---
+import { signOutPath } from "../../lib/auth/private-area.ts";
+import type { ManganaferInterestExportRow } from "../../lib/manganafer/csv.ts";
+import { HeaderIsland } from "../site/HeaderIsland.tsx";
+import Footer from "../site/Footer.astro";
+
+interface Props {
+  displayName: string;
+  email: string;
+  interests: readonly ManganaferInterestExportRow[];
+}
+
+const { displayName, email, interests } = Astro.props;
+const signOutHref = signOutPath("/");
+const neighbors = interests.filter((interest) => interest.kind === "neighbor");
+const roofs = interests.filter((interest) => interest.kind === "roof");
+const municipalities = new Set(
+  interests.map((interest) => interest.municipality.toLocaleLowerCase("es")),
+);
+
+const profileLabels: Record<string, string> = {
+  hogar: "Hogar",
+  negocio: "Negocio o empresa",
+  asociacion: "Asociación o entidad",
+  otro: "Otro",
+};
+
+const roofSurfaceLabels: Record<string, string> = {
+  "menos-500": "< 500 m²",
+  "500-1000": "500–1.000 m²",
+  "1000-2000": "1.000–2.000 m²",
+  "mas-2000": "> 2.000 m²",
+  "no-se": "Sin calcular",
+};
+
+function formatDate(value: string): string {
+  const normalized = value.includes("T")
+    ? value
+    : `${value.replace(" ", "T")}Z`;
+  const date = new Date(normalized);
+  if (Number.isNaN(date.getTime())) return value;
+
+  return new Intl.DateTimeFormat("es-ES", {
+    dateStyle: "medium",
+    timeStyle: "short",
+    timeZone: "Europe/Madrid",
+  }).format(date);
+}
+---
+
+<div class="site-root manganafer-admin-root">
+  <HeaderIsland client:load page="comunidades" />
+  <main id="contenido-principal" class="manganafer-admin-page" tabindex="-1">
+    <section class="manganafer-admin-hero">
+      <div class="shell manganafer-admin-hero-grid">
+        <div>
+          <p class="eyebrow">Área privada</p>
+          <h1>Interesados en Manganáfer</h1>
+          <p>
+            Registros recibidos desde la landing pública, ordenados de más
+            reciente a más antiguo.
+          </p>
+        </div>
+        <div class="manganafer-admin-account">
+          <span>Sesión verificada</span>
+          <strong>{displayName}</strong>
+          <small>{email}</small>
+          <a href={signOutHref}>Cerrar sesión →</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="section manganafer-admin-content">
+      <div class="shell">
+        <div class="manganafer-admin-toolbar">
+          <div class="manganafer-admin-stats">
+            <article>
+              <strong>{interests.length}</strong>
+              <span>Registros totales</span>
+            </article>
+            <article>
+              <strong>{neighbors.length}</strong>
+              <span>Hogares y negocios</span>
+            </article>
+            <article>
+              <strong>{roofs.length}</strong>
+              <span>Cubiertas propuestas</span>
+            </article>
+            <article>
+              <strong>{municipalities.size}</strong>
+              <span>Zonas representadas</span>
+            </article>
+          </div>
+          <a
+            class="button button-primary"
+            href="/api/manganafer-interest/export"
+          >
+            Descargar CSV <span aria-hidden="true">↓</span>
+          </a>
+        </div>
+
+        {
+          interests.length === 0 ? (
+            <div class="manganafer-admin-empty">
+              <strong>Todavía no hay registros.</strong>
+              <p>
+                Las nuevas solicitudes aparecerán aquí en cuanto alguien
+                complete el formulario público.
+              </p>
+            </div>
+          ) : (
+            <div class="manganafer-admin-table-wrap">
+              <table class="manganafer-admin-table">
+                <thead>
+                  <tr>
+                    <th>Fecha</th>
+                    <th>Tipo</th>
+                    <th>Persona</th>
+                    <th>Contacto</th>
+                    <th>Zona</th>
+                    <th>Perfil</th>
+                    <th>Mensaje</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {interests.map((interest) => (
+                    <tr>
+                      <td>
+                        <time datetime={interest.createdAt}>
+                          {formatDate(interest.createdAt)}
+                        </time>
+                      </td>
+                      <td>
+                        <span
+                          class={`manganafer-admin-kind manganafer-admin-kind-${interest.kind}`}
+                        >
+                          {interest.kind === "neighbor"
+                            ? "Participante"
+                            : "Cubierta"}
+                        </span>
+                      </td>
+                      <td>
+                        <strong>
+                          {interest.firstName}
+                          <Fragment set:html="<!-- -->" />{" "}
+                          <Fragment set:html="<!-- -->" />
+                          {interest.lastName}
+                        </strong>
+                        {interest.address && <small>{interest.address}</small>}
+                      </td>
+                      <td>
+                        <a href={`mailto:${interest.email}`}>
+                          {interest.email}
+                        </a>
+                        <a href={`tel:${interest.phone}`}>{interest.phone}</a>
+                      </td>
+                      <td>
+                        <strong>{interest.municipality}</strong>
+                        <small>{interest.postalCode}</small>
+                      </td>
+                      <td>
+                        {interest.kind === "neighbor" ? (
+                          <span>
+                            {profileLabels[interest.participantProfile] ??
+                              interest.participantProfile}
+                          </span>
+                        ) : (
+                          <>
+                            <span>
+                              {roofSurfaceLabels[interest.roofSurfaceRange] ??
+                                interest.roofSurfaceRange}
+                            </span>
+                            <small>{interest.roofRelationship}</small>
+                          </>
+                        )}
+                      </td>
+                      <td>
+                        <span class="manganafer-admin-message">
+                          {interest.message || "—"}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )
+        }
+      </div>
+    </section>
+  </main>
+  <Footer />
+</div>

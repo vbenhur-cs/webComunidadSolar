@@ -1,0 +1,48 @@
+---
+import ManganaferInterestsPage from "../../../../../src/components/private/ManganaferInterestsPage.astro";
+
+const interests = [
+  {
+    id: 2,
+    createdAt: "2026-08-23 10:00:00",
+    kind: "neighbor",
+    firstName: "Registro",
+    lastName: "Sintético",
+    email: "row-a@example.test",
+    phone: "600000000",
+    municipality: "Municipio sintético",
+    postalCode: "30385",
+    address: "Zona sintética",
+    participantProfile: "hogar",
+    roofSurfaceRange: "",
+    roofRelationship: "",
+    message: "Mensaje sintético",
+    status: "nuevo",
+    consentVersion: "2026-07-31",
+  },
+  {
+    id: 1,
+    createdAt: "2026-08-22 10:00:00",
+    kind: "roof",
+    firstName: "Cubierta",
+    lastName: "Sintética",
+    email: "row-b@example.test",
+    phone: "600000001",
+    municipality: "Municipio sintético",
+    postalCode: "30385",
+    address: "",
+    participantProfile: "",
+    roofSurfaceRange: "500-1000",
+    roofRelationship: "propietario",
+    message: "",
+    status: "nuevo",
+    consentVersion: "2026-07-31",
+  },
+];
+---
+
+<ManganaferInterestsPage
+  displayName="Administración sintética"
+  email="admin-synthetic@example.test"
+  {interests}
+/>

@@ -11,6 +11,7 @@ export function needsPrivateResponseHeaders(request: Request): boolean {
     pathname === "/socios" ||
     pathname.startsWith("/socios/") ||
     pathname === "/guia-equipo" ||
-    pathname === "/guia-equipo-nueva-web-comunidad-solar.md"
+    pathname === "/guia-equipo-nueva-web-comunidad-solar.md" ||
+    pathname === "/manganafer/interesados"
   );
 }

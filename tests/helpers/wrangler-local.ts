@@ -13,6 +13,16 @@ import {
 const buildTimeoutMs = 120_000;
 const commandTimeoutMs = 30_000;
 const shutdownTimeoutMs = 5_000;
+const syntheticPrivateBindingNames = [
+  "MANGANAFER_ALLOWED_EMAILS",
+  "SOCIOS_ALLOWED_EMAILS",
+  "TEAM_ALLOWED_EMAILS",
+] as const;
+
+const syntheticAllowlist = new RegExp(
+  "^[A-Z0-9.!#$%&'*+/=?^_`{|}~-]+@example\\.test(?:[;,][A-Z0-9.!#$%&'*+/=?^_`{|}~-]+@example\\.test)*$",
+  "i",
+);
 
 export interface LocalD1Worker {
   fetch(path: string, init?: RequestInit): Promise<Response>;
@@ -23,6 +33,18 @@ export interface WithLocalD1WorkerOptions {
   root?: string;
   /** Leaves D1 empty so an integration test can exercise endpoint bootstrapping. */
   applyMigrations?: boolean;
+  /**
+   * Narrow test-only allowlists injected into `wrangler dev` with `--var`.
+   * They are intentionally not inherited by build, migration, or query CLIs.
+   */
+  syntheticBindings?: Partial<
+    Record<
+      | "SOCIOS_ALLOWED_EMAILS"
+      | "TEAM_ALLOWED_EMAILS"
+      | "MANGANAFER_ALLOWED_EMAILS",
+      string
+    >
+  >;
 }
 
 interface CommandResult {
@@ -364,6 +386,30 @@ function environmentArguments(environment: NodeJS.ProcessEnv): string[] {
   return name === undefined || name === "" ? [] : ["--env", name];
 }
 
+function syntheticBindingArguments(
+  bindings: WithLocalD1WorkerOptions["syntheticBindings"],
+): string[] {
+  if (bindings === undefined) return [];
+
+  const entries = Object.entries(bindings).sort(([left], [right]) =>
+    left < right ? -1 : left > right ? 1 : 0,
+  );
+  const argumentsForWorker: string[] = [];
+  for (const [name, value] of entries) {
+    if (
+      !syntheticPrivateBindingNames.includes(
+        name as (typeof syntheticPrivateBindingNames)[number],
+      ) ||
+      typeof value !== "string" ||
+      !syntheticAllowlist.test(value)
+    ) {
+      throw new Error(`Binding sintético privado no válido: ${name}`);
+    }
+    argumentsForWorker.push("--var", `${name}:${value}`);
+  }
+  return argumentsForWorker;
+}
+
 function parseQueryResult(output: string): Array<Record<string, unknown>> {
   const parsed = JSON.parse(output) as unknown;
   if (!Array.isArray(parsed) || !isRecord(parsed[0])) {
@@ -423,6 +469,9 @@ export async function withLocalD1Worker<T>(
   const closeWorker =
     dependencies.closeProcess ??
     ((child: ChildProcess) => closeLocalProcess(child, platform, killProcess));
+  const workerBindingArguments = syntheticBindingArguments(
+    options.syntheticBindings,
+  );
   const persistenceRoot = await createTemporaryDirectory();
   let worker: ChildProcess | undefined;
   let value: T | undefined;
@@ -481,6 +530,7 @@ export async function withLocalD1Worker<T>(
         "--config",
         topology.wranglerConfigPath,
         ...envArguments,
+        ...workerBindingArguments,
       ],
       {
         cwd: root,

@@ -1,0 +1,65 @@
+---
+import { env } from "cloudflare:workers";
+
+import PrivateAccessPage from "../../components/private/PrivateAccessPage.astro";
+import DocumentLayout from "../../layouts/DocumentLayout.astro";
+import { readIdentity } from "../../lib/auth/identity.ts";
+import {
+  readAccessEnv,
+  resolvePrivateAccess,
+} from "../../lib/auth/private-area.ts";
+import { listManganaferInterests } from "../../lib/db/client.ts";
+import { ensureManganaferInterestStorage } from "../../lib/db/migrations.ts";
+
+export const prerender = false;
+
+const returnTo = "/manganafer/interesados";
+const identity = readIdentity(Astro.request.headers);
+const decision = resolvePrivateAccess(
+  "manganafer",
+  identity,
+  readAccessEnv(env as unknown as Record<string, unknown>),
+);
+const meta = {
+  title: "Interesados en Manganáfer",
+  description: "Base privada de registros de interés del proyecto Manganáfer.",
+  canonical: null,
+  robots: {
+    index: false,
+    follow: false,
+    noarchive: true,
+    noimageindex: true,
+  },
+};
+
+let interests: Awaited<ReturnType<typeof listManganaferInterests>> = [];
+let ManganaferInterestsPage:
+  | typeof import("../../components/private/ManganaferInterestsPage.astro").default
+  | null = null;
+if (decision.allowed) {
+  ({ default: ManganaferInterestsPage } =
+    await import("../../components/private/ManganaferInterestsPage.astro"));
+  await ensureManganaferInterestStorage(env.DB);
+  interests = await listManganaferInterests(env.DB);
+}
+const blockedDecision = decision.allowed ? null : decision;
+---
+
+<DocumentLayout {meta}>
+  {
+    ManganaferInterestsPage ? (
+      <ManganaferInterestsPage
+        displayName={identity?.displayName ?? ""}
+        email={identity?.email ?? ""}
+        {interests}
+      />
+    ) : (
+      <PrivateAccessPage
+        area="manganafer"
+        {returnTo}
+        state={blockedDecision!.state}
+        userEmail={identity?.email}
+      />
+    )
+  }
+</DocumentLayout>

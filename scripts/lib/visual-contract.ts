@@ -215,6 +215,13 @@ export const templateSelectors: Readonly<Record<string, readonly string[]>> = {
   "team-guide": ["body", "header", "main.team-guide-page", "footer"],
   socios: ["body", "header", "main.partner-page", "footer"],
   manganafer: ["body", "header", "main.manganafer-page", "footer"],
+  "manganafer-interests": [
+    "body",
+    "header",
+    "main.manganafer-admin-page",
+    ".manganafer-admin-toolbar",
+    "footer",
+  ],
 };
 
 function compareText(left: string, right: string): number {

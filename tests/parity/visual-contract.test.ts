@@ -24,9 +24,11 @@ import {
   type GeometryBox,
 } from "../../scripts/lib/visual-contract.ts";
 import {
+  createVisualManganaferFixtureStore,
   dispatchSourceRuntimeRequest,
   formatVisualParitySummary,
   launchChromium,
+  parseManganaferVisualExport,
   parseVisualArguments,
   readVisualFixtures,
   resolveVisualRuntimeEnvironment,
@@ -39,6 +41,7 @@ import {
   selectVisualRoutes,
   sourceAssetFetcher,
   startCandidateRuntime,
+  withVisualSourceWorkerEnvironment,
   withVisualSourceEnvironment,
   writeVisualReports,
   type VisualCaptureInput,
@@ -443,6 +446,13 @@ test("declares structural selectors for the remote and editorial templates", () 
     "body",
     "header",
     "main.manganafer-page",
+    "footer",
+  ]);
+  assert.deepEqual(templateSelectors["manganafer-interests"], [
+    "body",
+    "header",
+    "main.manganafer-admin-page",
+    ".manganafer-admin-toolbar",
     "footer",
   ]);
 });
@@ -2501,6 +2511,22 @@ function privatePartnerVisualMatrix(): RouteMatrixEntry[] {
   ];
 }
 
+function privateManganaferVisualMatrix(): RouteMatrixEntry[] {
+  return [
+    {
+      path: "/manganafer/interesados",
+      kind: "private-page",
+      sourceFile: "app/manganafer/interesados/page.tsx",
+      fixtureId: null,
+      expectedStatus: 200,
+      expectedLocation: null,
+      privateArea: "manganafer",
+      visualTemplate: "manganafer-interests",
+      status: "pending",
+    },
+  ];
+}
+
 function lifecycleDependencies(options: {
   failCapture?: boolean;
   failReport?: boolean;
@@ -2690,6 +2716,7 @@ test("selects exactly the requested pending visual routes and rejects an ambiguo
 
 test("requires exact, separate auth fixtures for private visual routes", () => {
   const [guide] = privateGuideVisualMatrix();
+  const [manganafer] = privateManganaferVisualMatrix();
 
   assert.throws(
     () => selectVisualRoutes([guide], [guide.path]),
@@ -2714,20 +2741,16 @@ test("requires exact, separate auth fixtures for private visual routes", () => {
       allowPending: true,
     },
   );
-  assert.deepEqual(
-    parseVisualArguments([
-      "--routes",
-      guide.path,
-      "--fixtures",
-      "allowed,anonymous",
-      "--allow-pending",
-    ]),
-    {
-      scope: "foundation",
-      routes: [guide.path],
-      authFixtures: ["anonymous", "allowed"],
-      allowPending: true,
-    },
+  assert.throws(
+    () =>
+      parseVisualArguments([
+        "--routes",
+        guide.path,
+        "--fixtures",
+        "allowed,anonymous",
+        "--allow-pending",
+      ]),
+    /canónico|anonymous,allowed/i,
   );
   assert.deepEqual(
     resolveVisualAuthPlan([guide], ["anonymous", "allowed"]),
@@ -2779,6 +2802,58 @@ test("requires exact, separate auth fixtures for private visual routes", () => {
       ),
     /privad/i,
   );
+  assert.deepEqual(
+    parseVisualArguments([
+      "--routes",
+      manganafer.path,
+      "--fixtures",
+      "anonymous,allowed-empty,allowed-data",
+      "--allow-pending",
+    ]),
+    {
+      scope: "foundation",
+      routes: [manganafer.path],
+      authFixtures: ["anonymous", "allowed-empty", "allowed-data"],
+      allowPending: true,
+    },
+  );
+  assert.deepEqual(
+    resolveVisualAuthPlan(
+      [manganafer],
+      ["anonymous", "allowed-empty", "allowed-data"],
+    ),
+    {
+      privateArea: "manganafer",
+      environment: {
+        MANGANAFER_ALLOWED_EMAILS: "visual-parity-auth@example.test",
+      },
+      fixtures: [
+        { name: "anonymous", headers: {} },
+        {
+          name: "allowed-empty",
+          headers: {
+            "oai-authenticated-user-email": "visual-parity-auth@example.test",
+          },
+        },
+        {
+          name: "allowed-data",
+          headers: {
+            "oai-authenticated-user-email": "visual-parity-auth@example.test",
+          },
+        },
+      ],
+    },
+  );
+  for (const fixtures of [
+    ["anonymous", "allowed"] as const,
+    ["allowed-empty", "anonymous", "allowed-data"] as const,
+    ["anonymous", "allowed-empty", "allowed-empty"] as const,
+  ]) {
+    assert.throws(
+      () => resolveVisualAuthPlan([manganafer], fixtures),
+      /fixture|anonymous,allowed-empty,allowed-data/i,
+    );
+  }
 });
 
 test("uses synthetic, valid quote bindings only for the Manganáfer visual landing", async () => {
@@ -2815,9 +2890,159 @@ test("uses synthetic, valid quote bindings only for the Manganáfer visual landi
   }
 });
 
+test("parses exactly one synthetic Manganáfer export row in memory without retaining its body", () => {
+  const headers = [
+    "Fecha",
+    "Tipo",
+    "Nombre",
+    "Apellidos",
+    "Email",
+    "Teléfono",
+    "Municipio o diputación",
+    "Código postal",
+    "Dirección o zona",
+    "Perfil participante",
+    "Superficie cubierta",
+    "Relación con cubierta",
+    "Mensaje",
+    "Estado",
+    "Consentimiento",
+  ];
+  const row = [
+    "2026-08-23 12:34:56",
+    "neighbor",
+    "Visual",
+    "Fixture",
+    "visual-fixture@example.test",
+    "600000000",
+    "Alacant",
+    "03000",
+    "",
+    "hogar",
+    "",
+    "",
+    "",
+    "nuevo",
+    "2026-07-31",
+  ];
+  const quote = (value: string) => `"${value.replaceAll('"', '""')}"`;
+  const bytes = Buffer.from(
+    `\uFEFF${headers.map(quote).join(",")}\r\n${row.map(quote).join(",")}`,
+    "utf8",
+  );
+
+  assert.equal(
+    parseManganaferVisualExport(bytes),
+    "2026-08-23 12:34:56",
+  );
+  for (const invalid of [
+    Buffer.from(bytes.subarray(3)),
+    Buffer.from(`\uFEFF${headers.map(quote).join(",")}\r\n${row.map(quote).join(",")}\r\n${row.map(quote).join(",")}`, "utf8"),
+    Buffer.from(`\uFEFF${headers.slice(1).map(quote).join(",")}\r\n${row.map(quote).join(",")}`, "utf8"),
+  ]) {
+    assert.throws(
+      () => parseManganaferVisualExport(invalid),
+      /export.*Manganáfer|CSV.*visual/i,
+    );
+  }
+});
+
+test("fails closed when a Manganáfer visual export row is not the one synthetic row", () => {
+  const valid = manganaferVisualExportBytes();
+  for (const [from, to] of [
+    ["visual-fixture@example.test", "other@example.test"],
+    ["Alacant", "Other municipality"],
+    ["nuevo", "archivado"],
+    ["2026-08-23 12:34:56", "2026-02-30 12:34:56"],
+  ] as const) {
+    const altered = Buffer.from(
+      valid.toString("utf8").replace(from, to),
+      "utf8",
+    );
+    assert.throws(
+      () => parseManganaferVisualExport(altered),
+      /export.*Manganáfer|CSV.*visual/i,
+    );
+  }
+});
+
+test("allows only the source DDL batch and ordered select in the Manganáfer visual fixture store", async () => {
+  const table = `
+    CREATE TABLE IF NOT EXISTS manganafer_interests (
+      id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+      kind TEXT NOT NULL,
+      first_name TEXT NOT NULL,
+      last_name TEXT DEFAULT '' NOT NULL,
+      email TEXT NOT NULL,
+      phone TEXT NOT NULL,
+      municipality TEXT NOT NULL,
+      postal_code TEXT NOT NULL,
+      address TEXT DEFAULT '' NOT NULL,
+      participant_profile TEXT DEFAULT '' NOT NULL,
+      roof_surface_range TEXT DEFAULT '' NOT NULL,
+      roof_relationship TEXT DEFAULT '' NOT NULL,
+      message TEXT DEFAULT '' NOT NULL,
+      consent_version TEXT DEFAULT '2026-07-31' NOT NULL,
+      source TEXT DEFAULT 'manganafer-landing' NOT NULL,
+      status TEXT DEFAULT 'nuevo' NOT NULL,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP NOT NULL,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP NOT NULL
+    )
+  `;
+  const ddl = [
+    table,
+    `
+      CREATE UNIQUE INDEX IF NOT EXISTS manganafer_interests_email_kind_unique
+      ON manganafer_interests (email, kind)
+    `,
+    `
+      CREATE INDEX IF NOT EXISTS manganafer_interests_created_at_idx
+      ON manganafer_interests (created_at)
+    `,
+    `
+      CREATE INDEX IF NOT EXISTS manganafer_interests_kind_idx
+      ON manganafer_interests (kind)
+    `,
+  ];
+  const select =
+    'select "id", "kind", "first_name", "last_name", "email", "phone", "municipality", "postal_code", "address", "participant_profile", "roof_surface_range", "roof_relationship", "message", "consent_version", "source", "status", "created_at", "updated_at" from "manganafer_interests" order by "manganafer_interests"."created_at" desc, "manganafer_interests"."id" desc';
+  const store = createVisualManganaferFixtureStore();
+  const database = store.database as {
+    prepare(sql: string): {
+      bind(...values: unknown[]): unknown;
+      raw(): Promise<unknown[][]>;
+      all(): Promise<unknown>;
+    };
+    batch(statements: unknown[]): Promise<unknown>;
+  };
+
+  const statements = ddl.map((statement) => database.prepare(statement));
+  await database.batch(statements);
+  const query = database.prepare(select);
+  assert.deepEqual(await query.raw(), []);
+  store.seed("2026-08-23 12:34:56");
+  assert.equal((await query.raw()).length, 1);
+  assert.throws(() => query.bind("unexpected"), /bind|argument/i);
+  await assert.rejects(query.all(), /modo|operación/i);
+  await assert.rejects(database.prepare(ddl[0]).raw(), /modo|operación/i);
+  assert.throws(
+    () => database.prepare("INSERT INTO manganafer_interests VALUES (1)"),
+    /SQL|Manganáfer/i,
+  );
+  assert.throws(
+    () =>
+      database.prepare(
+        'select * from "manganafer_interests" order by "id" desc',
+      ),
+    /SQL|Manganáfer/i,
+  );
+  await assert.rejects(database.batch([...statements].reverse()), /DDL|batch/i);
+});
+
 test("uses the access-wall selectors for any anonymous private page and restores source process bindings after a failed fetch", async () => {
   const [guide] = privateGuideVisualMatrix();
   const [partner] = privatePartnerVisualMatrix();
+  const [manganafer] = privateManganaferVisualMatrix();
   assert.deepEqual(
     selectVisualCaptureSelectors(guide, { name: "anonymous", headers: {} }),
     ["body", "header", "main.private-access-page", "footer"],
@@ -2840,6 +3065,30 @@ test("uses the access-wall selectors for any anonymous private page and restores
     }),
     ["body", "header", "main.partner-page", "footer"],
   );
+  assert.deepEqual(
+    selectVisualCaptureSelectors(manganafer, {
+      name: "anonymous",
+      headers: {},
+    }),
+    ["body", "header", "main.private-access-page", "footer"],
+  );
+  for (const name of ["allowed-empty", "allowed-data"] as const) {
+    assert.deepEqual(
+      selectVisualCaptureSelectors(manganafer, {
+        name,
+        headers: {
+          "oai-authenticated-user-email": "visual-parity-auth@example.test",
+        },
+      }),
+      [
+        "body",
+        "header",
+        "main.manganafer-admin-page",
+        ".manganafer-admin-toolbar",
+        "footer",
+      ],
+    );
+  }
 
   const key = "TEAM_ALLOWED_EMAILS";
   const previous = process.env[key];
@@ -2860,6 +3109,23 @@ test("uses the access-wall selectors for any anonymous private page and restores
     if (previous === undefined) delete process.env[key];
     else process.env[key] = previous;
   }
+});
+
+test("binds cloudflare:workers source environment only for the visual source fetch scope", async () => {
+  const database = {};
+  await withVisualSourceWorkerEnvironment({ DB: database }, async () => {
+    const workers = await import("cloudflare:workers");
+    assert.equal(workers.env.DB, database);
+  });
+  const workers = await import("cloudflare:workers");
+  assert.equal(workers.env.DB, undefined);
+  await assert.rejects(
+    withVisualSourceWorkerEnvironment({ DB: database }, async () => {
+      throw new Error("source worker scope failed");
+    }),
+    /source worker scope failed/,
+  );
+  assert.equal(workers.env.DB, undefined);
 });
 
 test("serializes overlapping source environment scopes before restoring process bindings", async () => {
@@ -3133,6 +3399,507 @@ test("keeps successful private visual artifacts and route keys disjoint per auth
       .filter((entry) => entry.routeKey.endsWith("fixture=allowed"))
       .every((entry) => entry.files.reference.includes("/allowed/")),
   );
+  assert.ok(events.includes("archive:close"));
+});
+
+test("captures Manganáfer anonymous, empty, and seeded states in canonical order without artifact collisions", async () => {
+  const events: string[] = [];
+  const [route] = privateManganaferVisualMatrix();
+  const quote = (value: string) => `"${value.replaceAll('"', '""')}"`;
+  const exportBytes = Buffer.from(
+    `\uFEFF${[
+      "Fecha",
+      "Tipo",
+      "Nombre",
+      "Apellidos",
+      "Email",
+      "Teléfono",
+      "Municipio o diputación",
+      "Código postal",
+      "Dirección o zona",
+      "Perfil participante",
+      "Superficie cubierta",
+      "Relación con cubierta",
+      "Mensaje",
+      "Estado",
+      "Consentimiento",
+    ].map(quote).join(",")}\r\n${[
+      "2026-08-23 12:34:56",
+      "neighbor",
+      "Visual",
+      "Fixture",
+      "visual-fixture@example.test",
+      "600000000",
+      "Alacant",
+      "03000",
+      "",
+      "hogar",
+      "",
+      "",
+      "",
+      "nuevo",
+      "2026-07-31",
+    ].map(quote).join(",")}`,
+    "utf8",
+  );
+  const dependencies = lifecycleDependencies({
+    events,
+    matrix: [route],
+  });
+  dependencies.startCandidate = async () => ({
+    origin: "http://127.0.0.1:40127",
+    async dispose() {
+      events.push("candidate:dispose");
+    },
+    async fetchForVisualFixture(path: string, options: RequestInit = {}) {
+      if (path === "/api/manganafer-interest") {
+        events.push("candidate:post");
+        assert.equal(options.method, "POST");
+        return Response.json({ ok: true }, { status: 201 });
+      }
+      if (path === "/api/manganafer-interest/export") {
+        events.push("candidate:export");
+        return new Response(exportBytes, { status: 200 });
+      }
+      throw new Error("Solicitud interna visual inesperada");
+    },
+  });
+  dependencies.startReference = async () => ({
+    origin: "http://127.0.0.1:40128",
+    async dispose() {
+      events.push("reference:dispose");
+    },
+    seedManganaferInterest(createdAt: string) {
+      events.push(`reference:seed:${createdAt}`);
+    },
+  });
+  dependencies.capture = async ({ side, authFixture, viewport }) => {
+    events.push(`capture:${side}:${authFixture?.name}:${viewport.name}`);
+    return {
+      screenshot: createPng(1, 1),
+      geometry: [box("body", 0, 0, 0, 1, 1)],
+      missingSelectors: [],
+    };
+  };
+
+  const result = await runVisualParity(
+    {
+      scope: "foundation",
+      routes: [route.path],
+      authFixtures: ["anonymous", "allowed-empty", "allowed-data"],
+      allowPending: true,
+      root: "/candidate",
+    },
+    dependencies,
+  );
+
+  assert.equal(result.results.length, 9);
+  assert.equal(new Set(result.results.map((entry) => entry.routeKey)).size, 3);
+  assert.equal(
+    new Set(result.results.map((entry) => entry.files.reference)).size,
+    9,
+  );
+  assert.deepEqual(
+    result.results.map((entry) => entry.routeKey),
+    [
+      ...Array(3).fill(
+        "private-page:/manganafer/interesados|fixture=anonymous",
+      ),
+      ...Array(3).fill(
+        "private-page:/manganafer/interesados|fixture=allowed-empty",
+      ),
+      ...Array(3).fill(
+        "private-page:/manganafer/interesados|fixture=allowed-data",
+      ),
+    ],
+  );
+  const lastEmpty = events.lastIndexOf("capture:candidate:allowed-empty:mobile");
+  const firstData = events.indexOf("capture:reference:allowed-data:desktop");
+  assert.ok(lastEmpty >= 0);
+  assert.ok(firstData > lastEmpty);
+  assert.deepEqual(events.slice(lastEmpty + 1, firstData), [
+    "candidate:post",
+    "candidate:export",
+    "reference:seed:2026-08-23 12:34:56",
+  ]);
+});
+
+test("cleans every visual resource when Manganáfer fixture seeding fails before data capture", async () => {
+  const events: string[] = [];
+  const [route] = privateManganaferVisualMatrix();
+  const dependencies = lifecycleDependencies({ events, matrix: [route] });
+  dependencies.startCandidate = async () => ({
+    origin: "http://127.0.0.1:40127",
+    async dispose() {
+      events.push("candidate:dispose");
+    },
+    async fetchForVisualFixture(path: string) {
+      events.push(`candidate:${path}`);
+      if (path === "/api/manganafer-interest") {
+        return Response.json({ ok: true }, { status: 201 });
+      }
+      return new Response(Buffer.from("invalid export", "utf8"), {
+        status: 200,
+      });
+    },
+  });
+  dependencies.startReference = async () => ({
+    origin: "http://127.0.0.1:40128",
+    async dispose() {
+      events.push("reference:dispose");
+    },
+    seedManganaferInterest() {
+      events.push("reference:seed");
+    },
+  });
+  dependencies.capture = async ({ side, authFixture, viewport }) => {
+    events.push(`capture:${side}:${authFixture?.name}:${viewport.name}`);
+    return {
+      screenshot: createPng(1, 1),
+      geometry: [box("body", 0, 0, 0, 1, 1)],
+      missingSelectors: [],
+    };
+  };
+
+  await assert.rejects(
+    runVisualParity(
+      {
+        scope: "foundation",
+        routes: [route.path],
+        authFixtures: ["anonymous", "allowed-empty", "allowed-data"],
+        allowPending: true,
+        root: "/candidate",
+      },
+      dependencies,
+    ),
+    /export.*Manganáfer|CSV.*visual/i,
+  );
+  assert.equal(events.includes("reference:seed"), false);
+  assert.equal(
+    events.some((event) => event.includes("allowed-data")),
+    false,
+  );
+  assert.ok(events.includes("browser:dispose"));
+  assert.ok(events.includes("reference:dispose"));
+  assert.ok(events.includes("candidate:dispose"));
+  assert.ok(events.includes("archive:close"));
+});
+
+function manganaferVisualExportBytes(
+  createdAt = "2026-08-23 12:34:56",
+): Buffer {
+  const quote = (value: string) => `"${value.replaceAll('"', '""')}"`;
+  return Buffer.from(
+    `\uFEFF${[
+      "Fecha",
+      "Tipo",
+      "Nombre",
+      "Apellidos",
+      "Email",
+      "Teléfono",
+      "Municipio o diputación",
+      "Código postal",
+      "Dirección o zona",
+      "Perfil participante",
+      "Superficie cubierta",
+      "Relación con cubierta",
+      "Mensaje",
+      "Estado",
+      "Consentimiento",
+    ]
+      .map(quote)
+      .join(",")}\r\n${[
+      createdAt,
+      "neighbor",
+      "Visual",
+      "Fixture",
+      "visual-fixture@example.test",
+      "600000000",
+      "Alacant",
+      "03000",
+      "",
+      "hogar",
+      "",
+      "",
+      "",
+      "nuevo",
+      "2026-07-31",
+    ]
+      .map(quote)
+      .join(",")}`,
+    "utf8",
+  );
+}
+
+function manganaferVisualSeedDependencies(
+  events: string[],
+  fetchForVisualFixture: (
+    path: string,
+    options?: RequestInit,
+  ) => Promise<Response>,
+): { dependencies: VisualParityDependencies; route: RouteMatrixEntry } {
+  const [route] = privateManganaferVisualMatrix();
+  const dependencies = lifecycleDependencies({ events, matrix: [route] });
+  dependencies.startCandidate = async () => ({
+    origin: "http://127.0.0.1:40127",
+    async dispose() {
+      events.push("candidate:dispose");
+    },
+    fetchForVisualFixture,
+  });
+  dependencies.startReference = async () => ({
+    origin: "http://127.0.0.1:40128",
+    async dispose() {
+      events.push("reference:dispose");
+    },
+    seedManganaferInterest() {
+      events.push("reference:seed");
+    },
+  });
+  return { dependencies, route };
+}
+
+async function expectManganaferVisualSeedDeadline(
+  events: string[],
+  route: RouteMatrixEntry,
+  dependencies: VisualParityDependencies,
+  stage: RegExp,
+): Promise<void> {
+  await assert.rejects(
+    Promise.race([
+      runVisualParity(
+        {
+          scope: "foundation",
+          routes: [route.path],
+          authFixtures: ["anonymous", "allowed-empty", "allowed-data"],
+          allowPending: true,
+          root: "/candidate",
+          lifecycleTimeoutMs: 30,
+        },
+        dependencies,
+      ),
+      new Promise<never>((_resolve, reject) => {
+        setTimeout(
+          () =>
+            reject(
+              new Error(
+                "El seed visual Manganáfer no cerró sus recursos antes del watchdog",
+              ),
+            ),
+          500,
+        );
+      }),
+    ]),
+    stage,
+  );
+  assert.ok(events.includes("browser:dispose"));
+  assert.ok(events.includes("reference:dispose"));
+  assert.ok(events.includes("candidate:dispose"));
+  assert.ok(events.includes("archive:close"));
+}
+
+test("bounds a hung Manganáfer visual seed POST before outer resources return", async () => {
+  const events: string[] = [];
+  const { dependencies, route } = manganaferVisualSeedDependencies(
+    events,
+    async (path) => {
+      assert.equal(path, "/api/manganafer-interest");
+      events.push("seed:post");
+      return new Promise<Response>(() => undefined);
+    },
+  );
+
+  await expectManganaferVisualSeedDeadline(
+    events,
+    route,
+    dependencies,
+    /30 ms.*enviar el seed visual de Manganáfer/i,
+  );
+});
+
+test("bounds a hung Manganáfer visual export fetch and cancels the seed POST body", async () => {
+  const events: string[] = [];
+  const postBody = {
+    getReader() {
+      return {
+        async read() {
+          return { done: true, value: undefined };
+        },
+        async cancel() {
+          events.push("seed:post:cancel");
+        },
+        releaseLock() {},
+      };
+    },
+  };
+  const { dependencies, route } = manganaferVisualSeedDependencies(
+    events,
+    async (path) => {
+      if (path === "/api/manganafer-interest") {
+        events.push("seed:post");
+        return { status: 201, body: postBody } as unknown as Response;
+      }
+      assert.equal(path, "/api/manganafer-interest/export");
+      events.push("seed:export");
+      return new Promise<Response>(() => undefined);
+    },
+  );
+
+  await expectManganaferVisualSeedDeadline(
+    events,
+    route,
+    dependencies,
+    /30 ms.*obtener el export visual de Manganáfer/i,
+  );
+  assert.ok(events.includes("seed:post:cancel"));
+});
+
+test("bounds a hung Manganáfer visual export body and cancels its reader before cleanup", async () => {
+  const events: string[] = [];
+  const exportBody = {
+    getReader() {
+      return {
+        read() {
+          events.push("seed:export:read");
+          return new Promise<ReadableStreamReadResult<Uint8Array>>(
+            () => undefined,
+          );
+        },
+        async cancel() {
+          events.push("seed:export:cancel");
+        },
+        releaseLock() {},
+      };
+    },
+  };
+  const { dependencies, route } = manganaferVisualSeedDependencies(
+    events,
+    async (path) => {
+      if (path === "/api/manganafer-interest") {
+        events.push("seed:post");
+        return Response.json({ ok: true }, { status: 201 });
+      }
+      assert.equal(path, "/api/manganafer-interest/export");
+      events.push("seed:export");
+      return {
+        status: 200,
+        body: exportBody,
+        arrayBuffer() {
+          return new Promise<ArrayBuffer>(() => undefined);
+        },
+      } as unknown as Response;
+    },
+  );
+
+  await expectManganaferVisualSeedDeadline(
+    events,
+    route,
+    dependencies,
+    /30 ms.*leer el export visual de Manganáfer/i,
+  );
+  assert.ok(events.includes("seed:export:cancel"));
+});
+
+test("bounds the whole Manganáfer visual export body instead of resetting its deadline per chunk", async () => {
+  const events: string[] = [];
+  const bytes = manganaferVisualExportBytes();
+  const chunkLength = Math.ceil(bytes.byteLength / 4);
+  const chunks = Array.from({ length: 4 }, (_, index) =>
+    bytes.subarray(index * chunkLength, (index + 1) * chunkLength),
+  ).filter((chunk) => chunk.byteLength > 0);
+  const exportBody = {
+    getReader() {
+      return {
+        async read() {
+          await new Promise<void>((resolveDelay) => {
+            setTimeout(resolveDelay, 12);
+          });
+          const value = chunks.shift();
+          return value === undefined
+            ? { done: true, value: undefined }
+            : { done: false, value };
+        },
+        async cancel() {
+          events.push("seed:export:cancel");
+        },
+        releaseLock() {},
+      };
+    },
+  };
+  const { dependencies, route } = manganaferVisualSeedDependencies(
+    events,
+    async (path) => {
+      if (path === "/api/manganafer-interest") {
+        return Response.json({ ok: true }, { status: 201 });
+      }
+      return { status: 200, body: exportBody } as unknown as Response;
+    },
+  );
+
+  await expectManganaferVisualSeedDeadline(
+    events,
+    route,
+    dependencies,
+    /30 ms.*leer el export visual de Manganáfer/i,
+  );
+  assert.ok(events.includes("seed:export:cancel"));
+});
+
+test("cancels a non-200 Manganáfer visual export body while preserving the status failure", async () => {
+  const events: string[] = [];
+  const exportBody = {
+    getReader() {
+      return {
+        async read() {
+          return { done: true, value: undefined };
+        },
+        async cancel() {
+          events.push("seed:export:cancel");
+          throw new Error("export body cleanup failed");
+        },
+        releaseLock() {},
+      };
+    },
+  };
+  const { dependencies, route } = manganaferVisualSeedDependencies(
+    events,
+    async (path) => {
+      if (path === "/api/manganafer-interest") {
+        return Response.json({ ok: true }, { status: 201 });
+      }
+      return { status: 503, body: exportBody } as unknown as Response;
+    },
+  );
+
+  await assert.rejects(
+    runVisualParity(
+      {
+        scope: "foundation",
+        routes: [route.path],
+        authFixtures: ["anonymous", "allowed-empty", "allowed-data"],
+        allowPending: true,
+        root: "/candidate",
+        lifecycleTimeoutMs: 30,
+      },
+      dependencies,
+    ),
+    (error: unknown) => {
+      assert.match(
+        error instanceof Error ? error.message : String(error),
+        /export visual de Manganáfer no está disponible/i,
+      );
+      const cause = (error as Error & { cause?: unknown }).cause;
+      assert.match(
+        cause instanceof Error ? cause.message : String(cause),
+        /export body cleanup failed/i,
+      );
+      return true;
+    },
+  );
+  assert.ok(events.includes("seed:export:cancel"));
+  assert.ok(events.includes("browser:dispose"));
+  assert.ok(events.includes("reference:dispose"));
+  assert.ok(events.includes("candidate:dispose"));
   assert.ok(events.includes("archive:close"));
 });
 
