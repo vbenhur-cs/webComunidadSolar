@@ -95,3 +95,30 @@
 
 - Intended commit after staged autonomous verification and cached review:
   `feat: import supplied page packages safely`.
+
+## Fix round 1
+
+- RED: focused importer run completed 57/63; the six expected failures showed
+  quoted API-key/password assignments were accepted, declared hidden
+  entrypoints were rejected, multiline/comment-separated literal imports were
+  omitted, and a comment-separated dynamic expression was not rejected. No
+  supplied secret body appeared in diagnostics.
+- GREEN: quoted assignments now fail closed; import inventory uses the
+  TypeScript parser as inert syntax analysis (never import/evaluation);
+  multiline static and comment-separated literal imports are inventoried, and
+  genuinely dynamic expressions reject.
+- The path reader admits only a dot-prefixed page-extension leaf as a potential
+  entrypoint. Page selection then requires exactly one hidden path and an exact
+  external or incorporated metadata declaration. Hidden assets/directories,
+  `.git`, and `node_modules` remain rejected.
+- Added positive inert coverage for Markdown, Astro, and a single supplied page
+  file.
+- Fresh focused suite: PASS 64/64. `format:check`, lint, and Astro check:
+  PASS (Astro check retained the three inherited informational hints).
+- A parallel full-test/build attempt was invalidated by both commands racing on
+  shared `dist`: 428/429 tests passed before the embedded runtime check found
+  `dist/client` concurrently absent. A subsequent isolated full-suite run was
+  interrupted by orchestration before its final TAP summary; the parent
+  explicitly directed focused verification and handoff rather than another
+  prolonged run. This is recorded as a verification limitation, not a passing
+  full-suite claim.

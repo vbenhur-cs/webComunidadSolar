@@ -130,7 +130,7 @@ for (const [name, message] of [
   ["archives/empty-path.zip", /paquete rechazado/i],
   ["archives/case-collision.zip", /rutas que colisionan/i],
   ["archives/nfc-collision.zip", /rutas que colisionan/i],
-  ["archives/dotfile.zip", /ruta.*segura/i],
+  ["archives/dotfile.zip", /paquete rechazado|metadatos|ocult/i],
   ["archives/node-modules.zip", /ruta.*segura/i],
 ] as const) {
   test(`rejects invalid package path ${name}`, async () => {
@@ -213,6 +213,41 @@ test("rejects a supplied secret assignment before creating raw artifacts", async
     ),
   );
 });
+
+for (const [name, assignment, secretBody] of [
+  [
+    "double-quoted API key",
+    'const API_KEY = "fixture-quoted-value";',
+    "fixture-quoted-value",
+  ],
+  [
+    "single-quoted password",
+    "const password = 'fixture-password-value';",
+    "fixture-password-value",
+  ],
+] as const) {
+  test(`rejects a ${name} without exposing its value`, async () => {
+    await withTemporaryPackage(async (root, artifactRoot) => {
+      await writeFile(join(root, "page.tsx"), assignment, "utf8");
+      const metadataPath = join(dirname(root), "metadata.yaml");
+      await writeFile(
+        metadataPath,
+        `${metadata}\nentrypoint: page.tsx\n`,
+        "utf8",
+      );
+
+      await assert.rejects(
+        importPage(root, metadataPath, { artifactRoot }),
+        (error: unknown) => {
+          assert.match(String(error), /secreto|token/i);
+          assert.equal(String(error).includes(secretBody), false);
+          return true;
+        },
+      );
+      await assertNoPublishedRawArtifacts(artifactRoot);
+    });
+  });
+}
 
 test("rejects a secret in raw ZIP container metadata before raw publication", async () => {
   await withTemporaryArtifactRoot(async (artifactRoot) => {
@@ -399,6 +434,64 @@ test("requires a single page entrypoint unless page metadata declares one", asyn
     assert.match(result.content, /Segunda/u);
     assert.doesNotMatch(result.content, /Primera/u);
   });
+});
+
+for (const placement of ["external", "incorporated"] as const) {
+  test(`allows one hidden page entrypoint exactly declared in ${placement} metadata`, async () => {
+    await withTemporaryPackage(async (root, artifactRoot) => {
+      await writeFile(
+        join(root, ".landing.astro"),
+        "<main>Entrada oculta declarada</main>",
+        "utf8",
+      );
+      const metadataPath =
+        placement === "external"
+          ? join(dirname(root), "metadata.yaml")
+          : join(root, "page-meta.yaml");
+      await writeFile(
+        metadataPath,
+        `${metadata}\nentrypoint: .landing.astro\n`,
+        "utf8",
+      );
+
+      const result = await importPage(
+        root,
+        placement === "external" ? metadataPath : undefined,
+        { artifactRoot },
+      );
+      assert.match(result.content, /Entrada oculta declarada/u);
+      assert.deepEqual(result.assets, []);
+    });
+  });
+}
+
+test("rejects an undeclared hidden page path", async () => {
+  await withTemporaryPackage(async (root, artifactRoot) => {
+    await writeFile(
+      join(root, ".landing.astro"),
+      "<main>Entrada oculta no declarada</main>",
+      "utf8",
+    );
+    const metadataPath = join(dirname(root), "metadata.yaml");
+    await writeFile(metadataPath, metadata, "utf8");
+
+    await assert.rejects(
+      importPage(root, metadataPath, { artifactRoot }),
+      /paquete rechazado|ocult.*declar/i,
+    );
+    await assertNoPublishedRawArtifacts(artifactRoot);
+  });
+});
+
+test("keeps hidden assets and hidden directories forbidden", () => {
+  assert.throws(
+    () => validateSuppliedPackagePaths([".hidden.css"]),
+    /ruta.*segura/i,
+  );
+  assert.throws(
+    () => validateSuppliedPackagePaths([".hidden/page.astro"]),
+    /ruta.*segura/i,
+  );
 });
 
 test("rejects a case-folded node_modules path before inventorying it", async () => {
@@ -671,6 +764,45 @@ test("inventories local TSX imports without importing or evaluating them", async
   });
 });
 
+test("inventories multiline static imports and comment-separated literal imports", async () => {
+  await withTemporaryPackage(async (root, artifactRoot) => {
+    await writeFile(
+      join(root, "page.tsx"),
+      [
+        "import {",
+        "  Card,",
+        "} from",
+        "'./Card.tsx';",
+        'void import /* inert inventory */ ("./Widget.tsx");',
+        "export default () => <Card />;",
+      ].join("\n"),
+      "utf8",
+    );
+    await writeFile(
+      join(root, "Card.tsx"),
+      "export const Card = () => null;",
+      "utf8",
+    );
+    await writeFile(
+      join(root, "Widget.tsx"),
+      "export default () => null;",
+      "utf8",
+    );
+    const metadataPath = join(dirname(root), "metadata.yaml");
+    await writeFile(
+      metadataPath,
+      `${metadata}\nentrypoint: page.tsx\n`,
+      "utf8",
+    );
+
+    const result = await importPage(root, metadataPath, { artifactRoot });
+    assert.deepEqual(
+      result.assets.map((asset) => asset.path),
+      ["Card.tsx", "Widget.tsx"],
+    );
+  });
+});
+
 test("inventories literal dynamic imports and CommonJS require calls without evaluating them", async () => {
   await withTemporaryPackage(async (root, artifactRoot) => {
     await writeFile(
@@ -731,6 +863,79 @@ test("rejects dynamic source import expressions instead of inventing an incomple
       importPage(root, metadataPath, { artifactRoot }),
       /importación.*dinámica/i,
     );
+  });
+});
+
+test("rejects a comment-separated genuinely dynamic import expression", async () => {
+  await withTemporaryPackage(async (root, artifactRoot) => {
+    await writeFile(
+      join(root, "page.tsx"),
+      [
+        'const componentPath = "./Card.tsx";',
+        "void import /* inert inventory */ (componentPath);",
+        "export default () => <main />;",
+      ].join("\n"),
+      "utf8",
+    );
+    const metadataPath = join(dirname(root), "metadata.yaml");
+    await writeFile(
+      metadataPath,
+      `${metadata}\nentrypoint: page.tsx\n`,
+      "utf8",
+    );
+
+    await assert.rejects(
+      importPage(root, metadataPath, { artifactRoot }),
+      /importación.*dinámica/i,
+    );
+  });
+});
+
+test("imports Markdown as inert text", async () => {
+  await withTemporaryPackage(async (root, artifactRoot) => {
+    await writeFile(join(root, "page.md"), "# Página Markdown", "utf8");
+    const metadataPath = join(dirname(root), "metadata.yaml");
+    await writeFile(metadataPath, metadata, "utf8");
+
+    const result = await importPage(root, metadataPath, { artifactRoot });
+    assert.equal(result.content, "# Página Markdown");
+  });
+});
+
+test("imports Astro as inert text without evaluating it", async () => {
+  await withTemporaryPackage(async (root, artifactRoot) => {
+    delete (globalThis as { __suppliedAstroExecuted?: boolean })
+      .__suppliedAstroExecuted;
+    const source = [
+      "---",
+      "globalThis.__suppliedAstroExecuted = true;",
+      "---",
+      "<main>Página Astro</main>",
+    ].join("\n");
+    await writeFile(join(root, "page.astro"), source, "utf8");
+    const metadataPath = join(dirname(root), "metadata.yaml");
+    await writeFile(metadataPath, metadata, "utf8");
+
+    const result = await importPage(root, metadataPath, { artifactRoot });
+    assert.equal(result.content, source);
+    assert.equal(
+      (globalThis as { __suppliedAstroExecuted?: boolean })
+        .__suppliedAstroExecuted,
+      undefined,
+    );
+  });
+});
+
+test("imports one supplied page file with external metadata", async () => {
+  await withTemporaryPackage(async (root, artifactRoot) => {
+    const pagePath = join(root, "single.html");
+    await writeFile(pagePath, "<main>Página individual</main>", "utf8");
+    const metadataPath = join(dirname(root), "metadata.yaml");
+    await writeFile(metadataPath, metadata, "utf8");
+
+    const result = await importPage(pagePath, metadataPath, { artifactRoot });
+    assert.match(result.content, /Página individual/u);
+    assert.deepEqual(result.assets, []);
   });
 });
 

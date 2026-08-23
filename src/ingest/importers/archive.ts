@@ -58,6 +58,8 @@ const imageExtensions = new Set([
   ".webp",
 ]);
 
+const hiddenPageExtensions = new Set([".html", ".md", ".astro", ".tsx"]);
+
 export interface SuppliedFile {
   path: string;
   bytes: Uint8Array;
@@ -109,15 +111,18 @@ function assertSafePackagePath(path: string): string {
   }
 
   const segments = path.split("/");
+  const lastSegmentIndex = segments.length - 1;
   if (
     segments.some(
-      (segment) =>
+      (segment, index) =>
         segment.length === 0 ||
         segment === "." ||
         segment === ".." ||
-        segment.startsWith(".") ||
         segment.toLowerCase() === ".git" ||
-        segment.toLowerCase() === "node_modules",
+        segment.toLowerCase() === "node_modules" ||
+        (segment.startsWith(".") &&
+          (index !== lastSegmentIndex ||
+            !hiddenPageExtensions.has(extname(segment).toLowerCase()))),
     )
   ) {
     return rejectPackage("la ruta del paquete no es segura");

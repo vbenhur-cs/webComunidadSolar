@@ -3,6 +3,7 @@ import { lstat, realpath } from "node:fs/promises";
 import { extname, isAbsolute, relative, sep } from "node:path";
 
 import { parseFragment, type DefaultTreeAdapterTypes } from "parse5";
+import ts from "typescript";
 
 import { readSuppliedPackage, type SuppliedFile } from "./archive.ts";
 import {
@@ -235,8 +236,23 @@ function selectEntrypoint(
   const candidates = files.filter((file) =>
     pageExtensions.has(extname(file.path).toLowerCase()),
   );
+  const hiddenPaths = files.filter((file) =>
+    file.path.split("/").some((segment) => segment.startsWith(".")),
+  );
+  const selected =
+    entrypoint === undefined ? undefined : normalizedEntrypoint(entrypoint);
+  if (
+    hiddenPaths.length > 0 &&
+    (hiddenPaths.length !== 1 ||
+      selected === undefined ||
+      hiddenPaths[0].path !== selected ||
+      !candidates.includes(hiddenPaths[0]))
+  ) {
+    throw new TypeError(
+      "Una ruta oculta solo puede ser el único entrypoint oculto declarado",
+    );
+  }
   if (entrypoint !== undefined) {
-    const selected = normalizedEntrypoint(entrypoint);
     const result = candidates.find((candidate) => candidate.path === selected);
     if (result === undefined) {
       throw new TypeError("El entrypoint declarado no existe en la página");
@@ -383,29 +399,62 @@ function hasMagicBytes(path: string, bytes: Uint8Array): boolean {
 
 function staticImportSpecifiers(source: string): string[] {
   const specifiers = new Set<string>();
-  const declarationPattern =
-    /\b(?:import|export)\s+(?:[^"'`;\r\n]*?\s+from\s+)?["']([^"'\r\n]+)["']/gu;
-  for (const match of source.matchAll(declarationPattern)) {
-    if (match[1] !== undefined) {
-      specifiers.add(match[1]);
-    }
-  }
+  const sourceFile = ts.createSourceFile(
+    "supplied.tsx",
+    source,
+    ts.ScriptTarget.Latest,
+    false,
+    ts.ScriptKind.TSX,
+  );
 
-  const literalCallPattern =
-    /\b(?:import|require)\s*\(\s*(["'])([^"'\\\r\n]+)\1\s*\)/gu;
-  let literalCalls = 0;
-  for (const match of source.matchAll(literalCallPattern)) {
-    literalCalls += 1;
-    if (match[2] !== undefined) {
-      specifiers.add(match[2]);
+  const addLiteralCall = (argumentsList: ts.NodeArray<ts.Expression>): void => {
+    if (argumentsList.length !== 1 || !ts.isStringLiteral(argumentsList[0])) {
+      throw new TypeError(
+        "Una importación dinámica aportada debe usar una ruta literal",
+      );
     }
-  }
-  const allCalls = [...source.matchAll(/\b(?:import|require)\s*\(/gu)].length;
-  if (allCalls !== literalCalls) {
-    throw new TypeError(
-      "Una importación dinámica aportada debe usar una ruta literal",
-    );
-  }
+    specifiers.add(argumentsList[0].text);
+  };
+
+  const visit = (node: ts.Node): void => {
+    if (
+      (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
+      node.moduleSpecifier !== undefined &&
+      ts.isStringLiteral(node.moduleSpecifier)
+    ) {
+      specifiers.add(node.moduleSpecifier.text);
+    } else if (
+      ts.isCallExpression(node) &&
+      (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
+        (ts.isIdentifier(node.expression) &&
+          node.expression.text === "require"))
+    ) {
+      addLiteralCall(node.arguments);
+    } else if (
+      ts.isImportEqualsDeclaration(node) &&
+      ts.isExternalModuleReference(node.moduleReference) &&
+      node.moduleReference.expression !== undefined
+    ) {
+      if (!ts.isStringLiteral(node.moduleReference.expression)) {
+        throw new TypeError(
+          "Una importación dinámica aportada debe usar una ruta literal",
+        );
+      }
+      specifiers.add(node.moduleReference.expression.text);
+    } else if (ts.isImportTypeNode(node)) {
+      if (
+        !ts.isLiteralTypeNode(node.argument) ||
+        !ts.isStringLiteral(node.argument.literal)
+      ) {
+        throw new TypeError(
+          "Una importación dinámica aportada debe usar una ruta literal",
+        );
+      }
+      specifiers.add(node.argument.literal.text);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
 
   return [...specifiers].sort((left, right) =>
     left < right ? -1 : left > right ? 1 : 0,

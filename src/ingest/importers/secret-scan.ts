@@ -7,7 +7,7 @@ const knownSecretPatterns = [
   /\bAKIA[0-9A-Z]{16}\b/u,
   /\bxox[baprs]-[A-Za-z0-9-]{20,}\b/u,
   /\bAIza[0-9A-Za-z_-]{20,}\b/u,
-  /\b(?:api[_-]?key|secret|token|password)\s*[:=]\s*[^\s'"`]+/iu,
+  /\b(?:api[_-]?key|secret|token|password)\s*[:=]\s*(?:["'][^"'`\r\n]+["']|[^\s'"`]+)/iu,
 ];
 
 /** Rejects supplied text that looks like a credential before it can be archived. */
