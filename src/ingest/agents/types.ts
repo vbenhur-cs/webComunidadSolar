@@ -8,6 +8,8 @@ export interface AgentRunInput {
   planPath: string;
   policyPath: string;
   resultSchemaPath: string;
+  /** Created by worktree service outside the agent-writable candidate. */
+  outputDirectory?: string;
 }
 
 export interface AgentRunResult {

@@ -1,7 +1,5 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { join } from "node:path";
-
-import { sanitizedGitEnv } from "../git-env.ts";
+import { lstat, readFile, realpath, writeFile } from "node:fs/promises";
+import { isAbsolute, join, relative, resolve } from "node:path";
 
 import {
   runProcess,
@@ -17,13 +15,17 @@ export interface CodexInvocation {
   input: string;
 }
 
-function outputPaths(worktree: string): {
+function outputPaths(input: AgentRunInput): {
   outputDir: string;
   stdoutPath: string;
   stderrPath: string;
   finalMessagePath: string;
 } {
-  const outputDir = join(worktree, ".agent-output");
+  if (input.outputDirectory === undefined)
+    throw new TypeError(
+      "El agente exige un directorio de salida propiedad del servicio",
+    );
+  const outputDir = resolve(input.outputDirectory);
   return {
     outputDir,
     stdoutPath: join(outputDir, "codex.stdout.log"),
@@ -32,9 +34,23 @@ function outputPaths(worktree: string): {
   };
 }
 
+async function assertOutputDirectory(input: AgentRunInput): Promise<void> {
+  const output = outputPaths(input).outputDir;
+  const relation = relative(resolve(input.worktree), output);
+  if (relation === "" || (!relation.startsWith("..") && !isAbsolute(relation)))
+    throw new TypeError("La salida del agente no puede vivir en el worktree");
+  const entry = await lstat(output);
+  if (
+    entry.isSymbolicLink() ||
+    !entry.isDirectory() ||
+    (await realpath(output)) !== output
+  )
+    throw new TypeError("La salida del agente no es un directorio seguro");
+}
+
 /** Build the fixed Codex CLI argv without ever interpolating untrusted input. */
 export function codexInvocation(input: AgentRunInput): CodexInvocation {
-  const paths = outputPaths(input.worktree);
+  const paths = outputPaths(input);
   const dataPaths = {
     requestPath: input.requestPath,
     planPath: input.planPath,
@@ -73,11 +89,11 @@ export class CodexAgent implements AgentAdapter {
 
   async run(input: AgentRunInput): Promise<AgentRunResult> {
     const invocation = codexInvocation(input);
-    const paths = outputPaths(input.worktree);
-    await mkdir(paths.outputDir, { recursive: true });
+    const paths = outputPaths(input);
+    await assertOutputDirectory(input);
     const result = await this.runner(invocation.command, invocation.args, {
       cwd: input.worktree,
-      env: sanitizedGitEnv() as Record<string, string>,
+      env: { PATH: "/usr/bin:/bin", LANG: "C", LC_ALL: "C" },
       input: invocation.input,
       shell: false,
     });

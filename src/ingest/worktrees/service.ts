@@ -1,25 +1,27 @@
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import {
-  cp,
-  lstat,
-  mkdir,
-  readFile,
-  realpath,
-  rm,
-  writeFile,
-} from "node:fs/promises";
-import { dirname, join, relative, resolve } from "node:path";
+import { cp, lstat, mkdir, readFile, realpath } from "node:fs/promises";
+import { isAbsolute, join, relative, resolve } from "node:path";
 import { promisify } from "node:util";
 
+import { canonicalJson, sha256Canonical } from "../canonical-json.ts";
+import type { ChangePlan, NormalizedRequest } from "../domain.ts";
 import { sanitizedGitEnv } from "../git-env.ts";
+import { validateSchema } from "../schema-validator.ts";
 
 const execFileAsync = promisify(execFile);
-const inputNames = ["request.json", "plan.json", "policy.json"] as const;
-
+const names = ["request.json", "plan.json", "policy.json"] as const;
+const owned = new WeakSet<CandidateWorktree>();
+type Identity = { device: number; inode: number };
+export interface GitSnapshot {
+  head: string;
+  refs: string;
+  status: string;
+}
 export interface CandidateWorktreeInput {
   repositoryRoot: string;
   sourceRepositoryRoot?: string;
+  approvedPlan: ChangePlan;
   changeId: string;
   attemptId: string;
   baselineCommit: string;
@@ -27,9 +29,9 @@ export interface CandidateWorktreeInput {
   planPath: string;
   policyPath: string;
 }
-
 export interface CandidateWorktree {
   path: string;
+  outputDirectory: string;
   repositoryRoot: string;
   sourceRepositoryRoot: string;
   changeId: string;
@@ -37,23 +39,25 @@ export interface CandidateWorktree {
   baselineCommit: string;
   branch: string;
   inputHash: string;
-  mainRef: string;
-  repositoryStatus: string;
-  sourceStatus: string;
+  requestSha256: string;
+  planSha256: string;
+  identity: Identity;
+  repositorySnapshot: GitSnapshot;
+  sourceSnapshot: GitSnapshot;
+  candidateSnapshot: GitSnapshot;
 }
-
-function assertIdentifier(value: string, label: string): void {
-  if (!/^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/u.test(value)) {
-    throw new TypeError(`El ${label} no es seguro para un worktree`);
-  }
-}
-
-function assertCommit(value: string): void {
-  if (!/^[a-f0-9]{40,64}$/u.test(value)) {
+const safeId = (value: string, name: string) => {
+  if (!/^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/u.test(value))
+    throw new TypeError(`El ${name} no es seguro para un worktree`);
+};
+const safeCommit = (value: string) => {
+  if (!/^[a-f0-9]{40,64}$/u.test(value))
     throw new TypeError("El baseline no es un commit válido");
-  }
-}
-
+};
+const inside = (parent: string, child: string) => {
+  const path = relative(parent, child);
+  return path === "" || (!path.startsWith("..") && !isAbsolute(path));
+};
 async function git(root: string, args: string[]): Promise<string> {
   const result = await execFileAsync("git", ["-C", root, ...args], {
     encoding: "utf8",
@@ -61,105 +65,164 @@ async function git(root: string, args: string[]): Promise<string> {
   });
   return result.stdout.trim();
 }
-
-async function trustedRoot(root: string): Promise<string> {
-  const lexical = resolve(root);
+async function root(path: string): Promise<string> {
+  const lexical = resolve(path);
   const entry = await lstat(lexical);
-  if (entry.isSymbolicLink() || !entry.isDirectory()) {
+  if (entry.isSymbolicLink() || !entry.isDirectory())
     throw new TypeError("La raíz del worktree no es un directorio seguro");
-  }
   const canonical = await realpath(lexical);
-  if ((await git(canonical, ["rev-parse", "--show-toplevel"])) !== canonical) {
+  if ((await git(canonical, ["rev-parse", "--show-toplevel"])) !== canonical)
     throw new TypeError("La raíz del worktree no coincide con Git");
-  }
   return canonical;
 }
-
-async function status(root: string): Promise<string> {
-  return await git(root, [
-    "status",
-    "--porcelain=v1",
-    "-z",
-    "--untracked-files=all",
-  ]);
+async function directory(path: string, parent: string): Promise<string> {
+  const expected = resolve(path);
+  if (!inside(parent, expected))
+    throw new TypeError("El directorio de agente escapa de la raíz segura");
+  const entry = await lstat(expected).catch(() => undefined);
+  if (!entry) await mkdir(expected);
+  else if (entry.isSymbolicLink() || !entry.isDirectory())
+    throw new TypeError("El directorio de agente no puede atravesar enlaces");
+  const canonical = await realpath(expected);
+  if (canonical !== expected)
+    throw new TypeError("El directorio de agente no puede atravesar enlaces");
+  return canonical;
 }
-
-async function inputHash(inputDirectory: string): Promise<string> {
+async function vacant(path: string): Promise<void> {
+  if (await lstat(path).catch(() => undefined))
+    throw new TypeError("El target del worktree ya existe u está ocupado");
+}
+async function bytes(path: string): Promise<Buffer> {
+  const entry = await lstat(path);
+  if (entry.isSymbolicLink() || !entry.isFile())
+    throw new TypeError("La entrada aprobada no es un archivo seguro");
+  return await readFile(path);
+}
+function checkedPlan(value: unknown): ChangePlan {
+  const plan = validateSchema<ChangePlan>("change-plan", value);
+  const { planSha256, ...unsigned } = plan;
+  if (planSha256 !== sha256Canonical(unsigned))
+    throw new TypeError("El hash canónico del plan no coincide");
+  return plan;
+}
+function checkedRequest(value: unknown): NormalizedRequest {
+  const request = validateSchema<NormalizedRequest>(
+    "normalized-request",
+    value,
+  );
+  const { inputSha256, ...unsigned } = request;
+  if (inputSha256 !== sha256Canonical(unsigned))
+    throw new TypeError("El hash canónico de la request no coincide");
+  return request;
+}
+async function bindInputs(
+  requestPath: string,
+  planPath: string,
+  policyPath: string,
+  approved: ChangePlan,
+): Promise<void> {
+  const [requestBytes, planBytes, policyBytes] = await Promise.all([
+    bytes(requestPath),
+    bytes(planPath),
+    bytes(policyPath),
+  ]);
+  let request: unknown;
+  let plan: unknown;
+  try {
+    request = JSON.parse(requestBytes.toString("utf8"));
+    plan = JSON.parse(planBytes.toString("utf8"));
+    JSON.parse(policyBytes.toString("utf8"));
+  } catch {
+    throw new TypeError(
+      "La entrada copiada del agente no contiene JSON válido",
+    );
+  }
+  const normalized = checkedRequest(request);
+  const copied = checkedPlan(plan);
+  if (
+    normalized.inputSha256 !== approved.requestSha256 ||
+    copied.planSha256 !== approved.planSha256 ||
+    canonicalJson(copied) !== canonicalJson(approved)
+  ) {
+    throw new TypeError(
+      "La request o el plan copiado no coincide con el plan aprobado",
+    );
+  }
+}
+async function inputHash(path: string): Promise<string> {
   const hash = createHash("sha256");
-  for (const name of inputNames) {
-    const path = join(inputDirectory, name);
-    const entry = await lstat(path);
-    if (entry.isSymbolicLink() || !entry.isFile()) {
-      throw new TypeError("La entrada del agente no es un archivo seguro");
-    }
-    const content = await readFile(path);
+  for (const name of names) {
     hash.update(name);
     hash.update("\0");
-    hash.update(content);
+    hash.update(await bytes(join(path, name)));
     hash.update("\0");
   }
   return hash.digest("hex");
 }
-
-async function copyInput(from: string, destination: string): Promise<void> {
-  const entry = await lstat(from);
-  if (entry.isSymbolicLink() || !entry.isFile()) {
-    throw new TypeError("La entrada aprobada no es un archivo seguro");
-  }
-  await cp(from, destination, { dereference: false, errorOnExist: true });
+export async function gitSnapshot(path: string): Promise<GitSnapshot> {
+  const [head, refs, status] = await Promise.all([
+    git(path, ["rev-parse", "HEAD"]),
+    git(path, ["for-each-ref", "--format=%(refname)%00%(objectname)"]),
+    git(path, ["status", "--porcelain=v1", "-z", "--untracked-files=all"]),
+  ]);
+  return { head, refs, status };
 }
-
-function candidatePath(
-  root: string,
+async function registered(
+  repositoryRoot: string,
+  path: string,
+): Promise<boolean> {
+  return (await git(repositoryRoot, ["worktree", "list", "--porcelain"]))
+    .split("\n")
+    .includes(`worktree ${path}`);
+}
+async function sidecar(
+  rootPath: string,
   changeId: string,
   attemptId: string,
-): string {
-  return join(root, ".agent-worktrees", changeId, attemptId);
+): Promise<string> {
+  const base = await directory(join(rootPath, ".agent-run-output"), rootPath);
+  const change = await directory(join(base, changeId), base);
+  const output = join(change, attemptId);
+  await vacant(output);
+  return await directory(output, change);
 }
-
-function assertCandidatePath(candidate: CandidateWorktree): string {
-  const expected = candidatePath(
-    candidate.repositoryRoot,
-    candidate.changeId,
-    candidate.attemptId,
-  );
-  if (resolve(candidate.path) !== resolve(expected)) {
-    throw new TypeError("La limpieza del worktree no reconoce ese path");
-  }
-  const rootRelative = relative(candidate.repositoryRoot, expected);
-  if (rootRelative.startsWith("..") || rootRelative === "") {
-    throw new TypeError("La limpieza del worktree no reconoce ese path");
-  }
-  return expected;
-}
-
+/** Candidate ownership is only minted after Git registration and identity checks. */
 export async function createCandidateWorktree(
   input: CandidateWorktreeInput,
 ): Promise<CandidateWorktree> {
-  assertIdentifier(input.changeId, "changeId");
-  assertIdentifier(input.attemptId, "attemptId");
-  assertCommit(input.baselineCommit);
-  const repositoryRoot = await trustedRoot(input.repositoryRoot);
-  const sourceRepositoryRoot = await trustedRoot(
+  safeId(input.changeId, "changeId");
+  safeId(input.attemptId, "attemptId");
+  safeCommit(input.baselineCommit);
+  const approved = checkedPlan(input.approvedPlan);
+  if (
+    approved.changeId !== input.changeId ||
+    approved.baselineCommit !== input.baselineCommit
+  )
+    throw new TypeError("El plan aprobado no corresponde al intento candidato");
+  const repositoryRoot = await root(input.repositoryRoot);
+  const sourceRepositoryRoot = await root(
     input.sourceRepositoryRoot ?? input.repositoryRoot,
   );
-  const mainRef = await git(repositoryRoot, [
-    "rev-parse",
-    "--verify",
-    "refs/heads/main^{commit}",
-  ]);
-  if (mainRef !== input.baselineCommit) {
+  if (
+    (await git(repositoryRoot, ["rev-parse", "refs/heads/main"])) !==
+    input.baselineCommit
+  )
     throw new TypeError("El baseline aprobado no coincide con refs/heads/main");
-  }
-  await git(repositoryRoot, [
-    "cat-file",
-    "-e",
-    `${input.baselineCommit}^{commit}`,
-  ]);
-
-  const path = candidatePath(repositoryRoot, input.changeId, input.attemptId);
+  await bindInputs(
+    input.requestPath,
+    input.planPath,
+    input.policyPath,
+    approved,
+  );
+  const base = await directory(
+    join(repositoryRoot, ".agent-worktrees"),
+    repositoryRoot,
+  );
+  const parent = await directory(join(base, input.changeId), base);
+  const path = join(parent, input.attemptId);
+  await vacant(path);
   const branch = `candidate/${input.changeId}/${input.attemptId}`;
-  await mkdir(dirname(path), { recursive: true });
+  let wasRegistered = false;
   try {
     await execFileAsync(
       "git",
@@ -174,92 +237,157 @@ export async function createCandidateWorktree(
       ],
       { encoding: "utf8", env: sanitizedGitEnv() },
     );
+    wasRegistered = await registered(repositoryRoot, path);
+    if (!wasRegistered)
+      throw new TypeError("Git no registró el worktree candidato");
+    const entry = await lstat(path);
+    if (
+      entry.isSymbolicLink() ||
+      !entry.isDirectory() ||
+      (await realpath(path)) !== path
+    )
+      throw new TypeError("El worktree candidato no es seguro");
     await git(path, ["switch", "--quiet", "-c", branch]);
-    const inputDirectory = join(path, ".agent-input");
-    await mkdir(inputDirectory, { recursive: false });
+    const inputs = await directory(join(path, ".agent-input"), path);
     await Promise.all([
-      copyInput(input.requestPath, join(inputDirectory, inputNames[0])),
-      copyInput(input.planPath, join(inputDirectory, inputNames[1])),
-      copyInput(input.policyPath, join(inputDirectory, inputNames[2])),
+      cp(input.requestPath, join(inputs, names[0]), {
+        dereference: false,
+        errorOnExist: true,
+      }),
+      cp(input.planPath, join(inputs, names[1]), {
+        dereference: false,
+        errorOnExist: true,
+      }),
+      cp(input.policyPath, join(inputs, names[2]), {
+        dereference: false,
+        errorOnExist: true,
+      }),
     ]);
-    const hash = await inputHash(inputDirectory);
-    await writeFile(join(inputDirectory, ".sha256"), `${hash}\n`, "utf8");
-    return {
+    await bindInputs(
+      join(inputs, names[0]),
+      join(inputs, names[1]),
+      join(inputs, names[2]),
+      approved,
+    );
+    const candidate: CandidateWorktree = {
       path,
+      outputDirectory: await sidecar(
+        repositoryRoot,
+        input.changeId,
+        input.attemptId,
+      ),
       repositoryRoot,
       sourceRepositoryRoot,
       changeId: input.changeId,
       attemptId: input.attemptId,
       baselineCommit: input.baselineCommit,
       branch,
-      inputHash: hash,
-      mainRef,
-      repositoryStatus: await status(repositoryRoot),
-      sourceStatus: await status(sourceRepositoryRoot),
+      inputHash: await inputHash(inputs),
+      requestSha256: approved.requestSha256,
+      planSha256: approved.planSha256,
+      identity: { device: entry.dev, inode: entry.ino },
+      repositorySnapshot: await gitSnapshot(repositoryRoot),
+      sourceSnapshot: await gitSnapshot(sourceRepositoryRoot),
+      candidateSnapshot: await gitSnapshot(path),
     };
+    owned.add(candidate);
+    return candidate;
   } catch (error) {
-    await removeWorktreeAt(repositoryRoot, path);
+    if (wasRegistered && (await registered(repositoryRoot, path)))
+      await execFileAsync(
+        "git",
+        ["-C", repositoryRoot, "worktree", "remove", "--force", path],
+        { encoding: "utf8", env: sanitizedGitEnv() },
+      ).catch(() => undefined);
     throw error;
   }
 }
-
-async function removeWorktreeAt(
-  repositoryRoot: string,
-  path: string,
-): Promise<void> {
-  try {
-    await execFileAsync(
-      "git",
-      ["-C", repositoryRoot, "worktree", "remove", "--force", path],
-      { encoding: "utf8", env: sanitizedGitEnv() },
-    );
-  } catch {
-    // A failed add may have no registered worktree. Only the exact candidate can be removed.
-    await rm(path, { recursive: true, force: true });
-  }
+const equalIdentity = (a: Identity, b: Identity) =>
+  a.device === b.device && a.inode === b.inode;
+async function assertOwned(candidate: CandidateWorktree): Promise<void> {
+  if (!owned.has(candidate))
+    throw new TypeError("El worktree no pertenece a este servicio");
+  const expected = join(
+    candidate.repositoryRoot,
+    ".agent-worktrees",
+    candidate.changeId,
+    candidate.attemptId,
+  );
+  if (candidate.path !== expected)
+    throw new TypeError("La limpieza no reconoce ese worktree");
+  const entry = await lstat(candidate.path);
+  if (
+    entry.isSymbolicLink() ||
+    !entry.isDirectory() ||
+    !equalIdentity(candidate.identity, {
+      device: entry.dev,
+      inode: entry.ino,
+    }) ||
+    (await realpath(candidate.path)) !== candidate.path ||
+    !(await registered(candidate.repositoryRoot, candidate.path))
+  )
+    throw new TypeError("La identidad del worktree candidato ha cambiado");
 }
-
 export async function removeCandidateWorktree(
   candidate: CandidateWorktree,
 ): Promise<void> {
-  const path = assertCandidatePath(candidate);
-  const entry = await lstat(path).catch(() => undefined);
-  if (entry?.isSymbolicLink()) {
-    throw new TypeError("La limpieza rechaza un worktree enlazado");
-  }
-  await removeWorktreeAt(candidate.repositoryRoot, path);
-}
-
-export async function copiedInputHash(
-  candidate: CandidateWorktree,
-): Promise<string> {
-  assertCandidatePath(candidate);
-  const hash = await inputHash(join(candidate.path, ".agent-input"));
-  const recorded = await readFile(
-    join(candidate.path, ".agent-input", ".sha256"),
-    "utf8",
+  if (!(await lstat(candidate.path).catch(() => undefined))) return;
+  if (!owned.has(candidate))
+    throw new TypeError("El worktree no pertenece a este servicio");
+  await assertOwned(candidate);
+  await execFileAsync(
+    "git",
+    [
+      "-C",
+      candidate.repositoryRoot,
+      "worktree",
+      "remove",
+      "--force",
+      candidate.path,
+    ],
+    { encoding: "utf8", env: sanitizedGitEnv() },
   );
-  if (recorded !== `${candidate.inputHash}\n`) {
-    throw new TypeError("La entrada del agente cambió después del aislamiento");
-  }
-  return hash;
+  owned.delete(candidate);
 }
-
+export async function validateCopiedInputs(
+  candidate: CandidateWorktree,
+  plan: ChangePlan,
+): Promise<void> {
+  await assertOwned(candidate);
+  const approved = checkedPlan(plan);
+  if (
+    approved.planSha256 !== candidate.planSha256 ||
+    approved.requestSha256 !== candidate.requestSha256
+  )
+    throw new TypeError("El plan aprobado no corresponde al candidato");
+  const inputs = join(candidate.path, ".agent-input");
+  await bindInputs(
+    join(inputs, names[0]),
+    join(inputs, names[1]),
+    join(inputs, names[2]),
+    approved,
+  );
+  if ((await inputHash(inputs)) !== candidate.inputHash)
+    throw new TypeError("La entrada del agente cambió después del aislamiento");
+}
 export async function worktreeGit(
   candidate: CandidateWorktree,
   args: string[],
 ): Promise<string> {
-  assertCandidatePath(candidate);
+  await assertOwned(candidate);
   return await git(candidate.path, args);
 }
-
 export async function worktreeStatus(
   candidate: CandidateWorktree,
 ): Promise<string> {
-  assertCandidatePath(candidate);
-  return await status(candidate.path);
+  await assertOwned(candidate);
+  return (await gitSnapshot(candidate.path)).status;
 }
-
-export async function externalStatus(root: string): Promise<string> {
-  return await status(root);
+export async function externalSnapshot(path: string): Promise<GitSnapshot> {
+  return await gitSnapshot(path);
+}
+export async function assertCandidateOwnership(
+  candidate: CandidateWorktree,
+): Promise<void> {
+  await assertOwned(candidate);
 }

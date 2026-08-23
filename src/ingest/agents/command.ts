@@ -1,5 +1,7 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { lstat, readFile, realpath, writeFile } from "node:fs/promises";
+import { isAbsolute, join, relative, resolve } from "node:path";
+
+import { assertOperatorIsolationBroker } from "./isolation.ts";
 
 import {
   runProcess,
@@ -15,14 +17,18 @@ export interface CommandAgentConfig {
   args: string[];
 }
 
-function outputPaths(worktree: string): {
+function outputPaths(input: AgentRunInput): {
   outputDir: string;
   resultPath: string;
   stdoutPath: string;
   stderrPath: string;
   finalMessagePath: string;
 } {
-  const outputDir = join(worktree, ".agent-output");
+  if (input.outputDirectory === undefined)
+    throw new TypeError(
+      "El agente exige un directorio de salida propiedad del servicio",
+    );
+  const outputDir = resolve(input.outputDirectory);
   return {
     outputDir,
     resultPath: join(outputDir, "command-result.json"),
@@ -41,18 +47,48 @@ function assertCommand(config: CommandAgentConfig): void {
   }
 }
 
-function assertEnvironment(env: Record<string, string>): void {
-  for (const [name, value] of Object.entries(env)) {
-    if (
-      !/^[A-Za-z_][A-Za-z0-9_]*$/u.test(name) ||
-      name.toUpperCase().startsWith("GIT_")
-    ) {
-      throw new TypeError("El broker proporcionó un entorno no permitido");
-    }
-    if (typeof value !== "string" || value.includes("\0")) {
-      throw new TypeError("El broker proporcionó un entorno no permitido");
-    }
-  }
+function assertWrapped(value: unknown): asserts value is {
+  command: string;
+  args: string[];
+  env: Record<string, string>;
+} {
+  if (typeof value !== "object" || value === null)
+    throw new TypeError("El broker proporcionó una invocación no válida");
+  const wrapped = value as { command?: unknown; args?: unknown; env?: unknown };
+  if (
+    typeof wrapped.command !== "string" ||
+    wrapped.command === "" ||
+    wrapped.command.includes("\0") ||
+    !Array.isArray(wrapped.args) ||
+    !wrapped.args.every(
+      (item) => typeof item === "string" && !item.includes("\0"),
+    ) ||
+    typeof wrapped.env !== "object" ||
+    wrapped.env === null
+  )
+    throw new TypeError("El broker proporcionó una invocación no válida");
+  const env = wrapped.env as Record<string, unknown>;
+  if (
+    Object.keys(env).length !== 0 ||
+    Object.values(env).some(
+      (item) => typeof item !== "string" || item.includes("\0"),
+    )
+  )
+    throw new TypeError("El broker proporcionó un entorno no permitido");
+}
+
+async function assertOutputDirectory(input: AgentRunInput): Promise<void> {
+  const output = outputPaths(input).outputDir;
+  const relation = relative(resolve(input.worktree), output);
+  if (relation === "" || (!relation.startsWith("..") && !isAbsolute(relation)))
+    throw new TypeError("La salida del agente no puede vivir en el worktree");
+  const entry = await lstat(output);
+  if (
+    entry.isSymbolicLink() ||
+    !entry.isDirectory() ||
+    (await realpath(output)) !== output
+  )
+    throw new TypeError("La salida del agente no es un directorio seguro");
 }
 
 export class CommandAgent implements AgentAdapter {
@@ -66,22 +102,18 @@ export class CommandAgent implements AgentAdapter {
 
   async run(input: AgentRunInput): Promise<AgentRunResult> {
     assertCommand(this.config);
-    if (this.broker === null) {
-      throw new TypeError(
-        "El command adapter exige un isolation broker del operador",
-      );
-    }
+    assertOperatorIsolationBroker(this.broker);
     const wrapped = this.broker.wrap({
       worktree: input.worktree,
       command: this.config.command,
       args: [...this.config.args],
     });
-    assertEnvironment(wrapped.env);
-    const paths = outputPaths(input.worktree);
-    await mkdir(paths.outputDir, { recursive: true });
+    assertWrapped(wrapped);
+    const paths = outputPaths(input);
+    await assertOutputDirectory(input);
     const result = await this.runner(wrapped.command, wrapped.args, {
       cwd: input.worktree,
-      env: { ...wrapped.env },
+      env: { PATH: "/usr/bin:/bin", LANG: "C", LC_ALL: "C" },
       input: JSON.stringify({
         requestPath: input.requestPath,
         planPath: input.planPath,

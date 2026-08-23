@@ -1,11 +1,11 @@
 import type { ChangePlan } from "../domain.ts";
 
 import {
-  copiedInputHash,
-  externalStatus,
+  externalSnapshot,
+  gitSnapshot,
   removeCandidateWorktree,
-  worktreeGit,
   worktreeStatus,
+  validateCopiedInputs,
   type CandidateWorktree,
 } from "./service.ts";
 
@@ -30,8 +30,21 @@ function changedPaths(status: string): string[] {
   return paths;
 }
 
-function isAgentSidecar(path: string): boolean {
-  return path === ".agent-output" || path.startsWith(".agent-output/");
+function safeDescendant(root: string, path: string): boolean {
+  if (!path.startsWith(`${root}/`)) return false;
+  return path
+    .slice(root.length + 1)
+    .split("/")
+    .every((segment) => segment !== "" && segment !== "." && segment !== "..");
+}
+
+function outputAllowed(path: string, plan: ChangePlan): boolean {
+  if (plan.files.some((file) => file.path === path)) return true;
+  const generatedRoots = [
+    `src/components/generated/${plan.changeId}`,
+    `public/generated/${plan.changeId}`,
+  ].filter((root) => plan.files.some((file) => file.path === root));
+  return generatedRoots.some((root) => safeDescendant(root, path));
 }
 
 /**
@@ -62,36 +75,45 @@ async function validateDiff(
       "El plan aprobado no corresponde al worktree candidato",
     );
   }
-  const [head, mainRef, copiedHash, repositoryStatus, sourceStatus] =
+  const [candidateSnapshot, repositorySnapshot, sourceSnapshot] =
     await Promise.all([
-      worktreeGit(candidate, ["rev-parse", "HEAD"]),
-      worktreeGit(candidate, ["rev-parse", "refs/heads/main"]),
-      copiedInputHash(candidate),
-      externalStatus(candidate.repositoryRoot),
-      externalStatus(candidate.sourceRepositoryRoot),
+      gitSnapshot(candidate.path),
+      externalSnapshot(candidate.repositoryRoot),
+      externalSnapshot(candidate.sourceRepositoryRoot),
     ]);
-  if (head !== candidate.baselineCommit) {
+  if (candidateSnapshot.head !== candidate.baselineCommit) {
     throw new TypeError("Se detectó un commit creado por el agente");
   }
-  if (mainRef !== candidate.mainRef || mainRef !== candidate.baselineCommit) {
-    throw new TypeError("Git ref protegido refs/heads/main fue modificado");
+  if (
+    candidateSnapshot.refs !== candidate.candidateSnapshot.refs ||
+    repositorySnapshot.refs !== candidate.repositorySnapshot.refs ||
+    sourceSnapshot.refs !== candidate.sourceSnapshot.refs
+  ) {
+    throw new TypeError("Git ref protegido fue modificado");
   }
-  if (copiedHash !== candidate.inputHash) {
-    throw new TypeError("La entrada del agente cambió después del aislamiento");
-  }
-  if (repositoryStatus !== candidate.repositoryStatus) {
+  if (
+    repositorySnapshot.head !== candidate.repositorySnapshot.head ||
+    repositorySnapshot.status !== candidate.repositorySnapshot.status
+  ) {
     throw new TypeError("El repositorio principal cambió fuera del worktree");
   }
-  if (sourceStatus !== candidate.sourceStatus) {
+  if (
+    sourceSnapshot.head !== candidate.sourceSnapshot.head ||
+    sourceSnapshot.status !== candidate.sourceSnapshot.status
+  ) {
     throw new TypeError("El source sibling cambió fuera del worktree");
   }
+  await validateCopiedInputs(candidate, plan);
 
   const allowed = new Set(plan.files.map((file) => file.path));
+  const initialPaths = new Set(
+    changedPaths(candidate.candidateSnapshot.status),
+  );
   const paths = changedPaths(await worktreeStatus(candidate)).filter(
-    (path) => !path.startsWith(".agent-input/") && !isAgentSidecar(path),
+    (path) => !initialPaths.has(path),
   );
   for (const path of paths) {
-    if (!allowed.has(path)) {
+    if (!allowed.has(path) && !outputAllowed(path, plan)) {
       throw new TypeError(
         `El path ${path} no aprobado fue modificado por el agente`,
       );
