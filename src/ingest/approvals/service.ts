@@ -4,6 +4,7 @@ import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 
 import { canonicalJson, sha256Canonical } from "../canonical-json.ts";
+import { sanitizedGitEnv } from "../git-env.ts";
 import type {
   ApprovalRecord,
   CandidateManifest,
@@ -53,7 +54,7 @@ async function protectedMainBaseline(repositoryRoot: string): Promise<string> {
     const topLevel = await execFileAsync(
       "git",
       ["-C", root, "rev-parse", "--show-toplevel"],
-      { encoding: "utf8" },
+      { encoding: "utf8", env: sanitizedGitEnv() },
     );
     if (topLevel.stdout.trim() !== root) {
       throw new TypeError("El repositorio no tiene una raíz segura");
@@ -61,7 +62,7 @@ async function protectedMainBaseline(repositoryRoot: string): Promise<string> {
     const main = await execFileAsync(
       "git",
       ["-C", root, "rev-parse", "--verify", "refs/heads/main^{commit}"],
-      { encoding: "utf8" },
+      { encoding: "utf8", env: sanitizedGitEnv() },
     );
     const baseline = main.stdout.trim();
     if (!/^[a-f0-9]{40,64}$/u.test(baseline)) {

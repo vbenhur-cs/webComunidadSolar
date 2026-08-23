@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import {
+  lstat,
   mkdtemp,
-  mkdir,
   readFile,
   rm,
   symlink,
@@ -22,13 +22,15 @@ import {
   verifyApproval,
 } from "../../src/ingest/approvals/service.ts";
 import {
-  createFixtureApprovalPrompt,
+  createFixtureApprovalRun,
+  type FixtureApprovalRun,
   type FixtureApprovalPrompt,
 } from "../../src/ingest/approvals/prompt.ts";
 
 const hash = (character: string) => character.repeat(64);
 const defaultBaselineCommit = "b".repeat(40);
 const execFileAsync = promisify(execFile);
+const fixtureRuns = new Map<string, FixtureApprovalRun>();
 
 function plan(overrides: Partial<ChangePlan> = {}): ChangePlan {
   const unsigned = {
@@ -101,18 +103,13 @@ async function fixturePrompt(
     answer?: string;
   },
 ) {
-  const previous = process.env.INGEST_TEST_MODE;
-  process.env.INGEST_TEST_MODE = "true";
-  try {
-    return await createFixtureApprovalPrompt({
-      projectRoot,
-      isTTY: options.isTTY,
-      answer: options.answer ?? "",
-    });
-  } finally {
-    if (previous === undefined) delete process.env.INGEST_TEST_MODE;
-    else process.env.INGEST_TEST_MODE = previous;
-  }
+  const fixture = fixtureRuns.get(projectRoot);
+  if (fixture === undefined)
+    throw new TypeError("No existe un fixture de aprobación para este clon");
+  return fixture.createPrompt({
+    isTTY: options.isTTY,
+    answer: options.answer ?? "",
+  });
 }
 
 async function withFixtureMode(run: () => Promise<void>): Promise<void> {
@@ -126,6 +123,24 @@ async function withFixtureMode(run: () => Promise<void>): Promise<void> {
   }
 }
 
+async function withHostileGitEnvironment(
+  gitDir: string,
+  run: () => Promise<void>,
+): Promise<void> {
+  const previousDir = process.env.GIT_DIR;
+  const previousWorkTree = process.env.GIT_WORK_TREE;
+  process.env.GIT_DIR = gitDir;
+  process.env.GIT_WORK_TREE = "/attacker-controlled-work-tree";
+  try {
+    await run();
+  } finally {
+    if (previousDir === undefined) delete process.env.GIT_DIR;
+    else process.env.GIT_DIR = previousDir;
+    if (previousWorkTree === undefined) delete process.env.GIT_WORK_TREE;
+    else process.env.GIT_WORK_TREE = previousWorkTree;
+  }
+}
+
 async function withStateRoot(
   run: (context: {
     projectRoot: string;
@@ -136,7 +151,7 @@ async function withStateRoot(
   const root = await mkdtemp(join(tmpdir(), "comunidadsolar-approvals-"));
   const origin = join(root, "origin.git");
   const seed = join(root, "seed");
-  const clone = join(root, "clone");
+  let fixture: FixtureApprovalRun | undefined;
   try {
     await execFileAsync("git", [
       "init",
@@ -184,14 +199,14 @@ async function withStateRoot(
       "origin",
       "main",
     ]);
-    await execFileAsync("git", [
-      "clone",
-      "--quiet",
-      "--branch",
-      "main",
-      origin,
-      clone,
-    ]);
+    await withFixtureMode(async () => {
+      fixture = await createFixtureApprovalRun({ fixtureSourceRoot: origin });
+    });
+    const activeFixture = fixture;
+    if (activeFixture === undefined)
+      throw new Error("No se creó el fixture de aprobación");
+    const clone = activeFixture.repositoryRoot;
+    fixtureRuns.set(clone, activeFixture);
     const { stdout } = await execFileAsync("git", [
       "-C",
       clone,
@@ -200,10 +215,14 @@ async function withStateRoot(
     ]);
     await run({
       projectRoot: clone,
-      stateRoot: join(clone, ".change-state"),
+      stateRoot: activeFixture.stateRoot,
       mainCommit: stdout.trim(),
     });
   } finally {
+    if (fixture !== undefined) {
+      fixtureRuns.delete(fixture.repositoryRoot);
+      await fixture.dispose();
+    }
     await rm(root, { force: true, recursive: true });
   }
 }
@@ -267,6 +286,70 @@ test("requires the twelve-character subject hash confirmation", async () => {
       ),
       /confirmaci[oó]n|hash/i,
     );
+  });
+});
+
+test("ignores hostile GIT_DIR and GIT_WORK_TREE for fixtures and main authority", async () => {
+  await withStateRoot(async ({ projectRoot, stateRoot, mainCommit }) => {
+    const attacker = await mkdtemp(join(tmpdir(), "comunidadsolar-attacker-"));
+    try {
+      await execFileAsync("git", [
+        "init",
+        "--quiet",
+        "--initial-branch=main",
+        attacker,
+      ]);
+      await execFileAsync("git", [
+        "-C",
+        attacker,
+        "config",
+        "user.email",
+        "attacker@example.test",
+      ]);
+      await execFileAsync("git", [
+        "-C",
+        attacker,
+        "config",
+        "user.name",
+        "Attacker",
+      ]);
+      await writeFile(join(attacker, "attack.txt"), "attack\n", "utf8");
+      await execFileAsync("git", ["-C", attacker, "add", "attack.txt"]);
+      await execFileAsync("git", [
+        "-C",
+        attacker,
+        "commit",
+        "--quiet",
+        "-m",
+        "attacker main",
+      ]);
+      const approvedPlan = fixturePlan(mainCommit);
+
+      await withHostileGitEnvironment(join(attacker, ".git"), async () => {
+        await withFixtureMode(async () => {
+          const nestedFixture = await createFixtureApprovalRun({
+            fixtureSourceRoot: projectRoot,
+          });
+          await nestedFixture.dispose();
+        });
+        await assert.doesNotReject(
+          approveGate1(
+            {
+              plan: approvedPlan,
+              actor: "test-human",
+              stateRoot,
+              repositoryRoot: projectRoot,
+            },
+            await fixturePrompt(projectRoot, {
+              isTTY: true,
+              answer: approvedPlan.planSha256.slice(0, 12),
+            }),
+          ),
+        );
+      });
+    } finally {
+      await rm(attacker, { force: true, recursive: true });
+    }
   });
 });
 
@@ -415,42 +498,21 @@ test("rejects structural prompts that claim production provenance", async () => 
 test("refuses to create fixture prompts outside explicit test mode", async () => {
   await withStateRoot(async ({ projectRoot }) => {
     await assert.rejects(
-      createFixtureApprovalPrompt({
-        projectRoot,
-        isTTY: true,
-        answer: "irrelevant",
-      }),
+      createFixtureApprovalRun({ fixtureSourceRoot: projectRoot }),
       /INGEST_TEST_MODE|fixture/i,
     );
   });
 });
 
-test("refuses fixture prompts outside a temporary Git worktree", async () => {
-  await withFixtureMode(async () => {
-    await assert.rejects(
-      createFixtureApprovalPrompt({
-        projectRoot: process.cwd(),
-        isTTY: true,
-        answer: "irrelevant",
-      }),
-      /clon temporal|fixture/i,
-    );
-  });
-});
-
-test("refuses a lexical temporary symlink to an agent-worktree-like repository", async () => {
+test("refuses a symlink fixture source", async () => {
   const root = await mkdtemp(join(tmpdir(), "comunidadsolar-symlink-"));
   try {
     const linkedRoot = join(root, "linked-repository");
     await symlink(process.cwd(), linkedRoot);
     await withFixtureMode(async () => {
       await assert.rejects(
-        createFixtureApprovalPrompt({
-          projectRoot: linkedRoot,
-          isTTY: true,
-          answer: "irrelevant",
-        }),
-        /clon temporal|symlink|enlace|fixture/i,
+        createFixtureApprovalRun({ fixtureSourceRoot: linkedRoot }),
+        /fuente|symlink|enlace|fixture/i,
       );
     });
   } finally {
@@ -458,51 +520,108 @@ test("refuses a lexical temporary symlink to an agent-worktree-like repository",
   }
 });
 
-test("refuses linked worktree pointers and generic Git initializations", async () => {
+test("does not mint a fixture capability for a forged initialized source", async () => {
   const root = await mkdtemp(join(tmpdir(), "comunidadsolar-untrusted-"));
-  const worktree = join(root, "linked-worktree");
   const initialized = join(root, "initialized");
+  let fixture: FixtureApprovalRun | undefined;
   try {
-    await mkdir(worktree);
-    await writeFile(
-      join(worktree, ".git"),
-      "gitdir: /outside/worktrees/linked\n",
-    );
-    await execFileAsync("git", ["init", "--quiet", initialized]);
+    await execFileAsync("git", [
+      "init",
+      "--quiet",
+      "--initial-branch=main",
+      initialized,
+    ]);
+    await execFileAsync("git", [
+      "-C",
+      initialized,
+      "config",
+      "user.email",
+      "forged@example.test",
+    ]);
+    await execFileAsync("git", [
+      "-C",
+      initialized,
+      "config",
+      "user.name",
+      "Forged source",
+    ]);
+    await writeFile(join(initialized, "README.md"), "forged\n", "utf8");
+    await execFileAsync("git", ["-C", initialized, "add", "README.md"]);
+    await execFileAsync("git", [
+      "-C",
+      initialized,
+      "commit",
+      "--quiet",
+      "-m",
+      "forged source",
+    ]);
+    await execFileAsync("git", [
+      "-C",
+      initialized,
+      "remote",
+      "add",
+      "origin",
+      "https://example.test/forged.git",
+    ]);
+    await execFileAsync("git", [
+      "-C",
+      initialized,
+      "update-ref",
+      "refs/remotes/origin/main",
+      "HEAD",
+    ]);
     await withFixtureMode(async () => {
-      for (const projectRoot of [worktree, initialized]) {
-        await assert.rejects(
-          createFixtureApprovalPrompt({
-            projectRoot,
-            isTTY: true,
-            answer: "irrelevant",
-          }),
-          /clon temporal|Git|fixture|origin/i,
-        );
-      }
+      fixture = await createFixtureApprovalRun({
+        fixtureSourceRoot: initialized,
+      });
+      const activeFixture = fixture;
+      if (activeFixture === undefined) throw new Error("No se creó el fixture");
+      const { stdout } = await execFileAsync("git", [
+        "-C",
+        activeFixture.repositoryRoot,
+        "rev-parse",
+        "refs/heads/main",
+      ]);
+      const forgedPlan = fixturePlan(stdout.trim());
+      const prompt = await activeFixture.createPrompt({
+        isTTY: true,
+        answer: forgedPlan.planSha256.slice(0, 12),
+      });
+
+      assert.notEqual(activeFixture.repositoryRoot, initialized);
+      await assert.rejects(
+        approveGate1(
+          {
+            plan: forgedPlan,
+            actor: "test-human",
+            stateRoot: join(initialized, ".change-state"),
+            repositoryRoot: initialized,
+          },
+          prompt,
+        ),
+        /solo puede leer main|solo puede escribir estado/i,
+      );
+    });
+    await assert.rejects(lstat(join(initialized, ".change-state")), {
+      code: "ENOENT",
     });
   } finally {
+    await fixture?.dispose();
     await rm(root, { force: true, recursive: true });
   }
 });
 
-test("refuses a fixture root whose state directory is a symlink", async () => {
+test("does not mint fixture prompts through a symlinked state directory", async () => {
   await withStateRoot(async ({ projectRoot }) => {
     const foreignRoot = await mkdtemp(
       join(tmpdir(), "comunidadsolar-state-link-"),
     );
     try {
       await symlink(foreignRoot, join(projectRoot, ".change-state"));
-      await withFixtureMode(async () => {
-        await assert.rejects(
-          createFixtureApprovalPrompt({
-            projectRoot,
-            isTTY: true,
-            answer: "irrelevant",
-          }),
-          /estado|symlink|enlace|fixture/i,
-        );
-      });
+      await assert.rejects(
+        fixturePrompt(projectRoot, { isTTY: true, answer: "irrelevant" }),
+        /estado|symlink|enlace|fixture/i,
+      );
     } finally {
       await rm(foreignRoot, { force: true, recursive: true });
     }
