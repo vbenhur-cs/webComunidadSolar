@@ -20,6 +20,14 @@ export interface PreviewInstance {
   fetch?(url: URL, init?: RequestInit): Promise<Response>;
 }
 
+const internallyBoundedPreviewClose: unique symbol = Symbol(
+  "internallyBoundedPreviewClose",
+);
+
+interface InternallyBoundedPreviewInstance extends PreviewInstance {
+  [internallyBoundedPreviewClose]: true;
+}
+
 export interface PreviewPoolDependencies {
   fetch?: typeof fetch;
   startPreview?: (env: NodeJS.ProcessEnv) => Promise<PreviewInstance>;
@@ -397,8 +405,9 @@ export async function startWorkerPreview(
     closePromise ??= disposePreviewWorker(worker, cleanupTimeoutMs);
     return closePromise;
   };
-  return {
+  const preview: InternallyBoundedPreviewInstance = {
     origin: "http://preview.local",
+    [internallyBoundedPreviewClose]: true,
     async fetch(url, init) {
       try {
         return await withinPreviewTimeout(
@@ -417,6 +426,13 @@ export async function startWorkerPreview(
     },
     close,
   };
+  return preview;
+}
+
+function hasInternallyBoundedPreviewClose(
+  instance: PreviewInstance,
+): instance is InternallyBoundedPreviewInstance {
+  return internallyBoundedPreviewClose in instance;
 }
 
 function terminateProcess(
@@ -514,12 +530,16 @@ export function createPreviewPool(dependencies: PreviewPoolDependencies = {}): {
   }
 
   async function closePreview(instance: PreviewInstance): Promise<void> {
+    if (hasInternallyBoundedPreviewClose(instance)) {
+      await instance.close();
+      return;
+    }
+
     await withinPreviewTimeout(
       "cerrar el preview activo",
       instance.close(),
-      // startWorkerPreview spends its own cleanup budget across dispose and
-      // raw.teardown. The outer pool must leave deterministic room for both
-      // phases instead of racing the inner hard-stop.
+      // Custom PreviewInstance implementations are not required to impose
+      // their own lifecycle deadline, so the pool must bound them here.
       outerCleanupTimeout(cleanupTimeoutMs),
     );
   }

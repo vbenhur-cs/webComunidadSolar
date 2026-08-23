@@ -91,10 +91,41 @@
 
 ## Commit
 
-`npm run verify:independent -- --staged` passed with
-`INDEPENDENT_OK` for the exact staged tree. The tree is paused for cached
-review before the requested commit:
+The original Task 7 tree passed `npm run verify:independent -- --staged` and
+was committed separately as:
 
 ```text
-feat: port Manganáfer quote service
+7d1ee6c5f4dedbfa739160eef38eb152c5f37d00 feat: port Manganáfer quote service
 ```
+
+## Post-commit preview lifecycle correction
+
+- A subsequent archive run exposed a timing race in the cross-task preview
+  helper: while `startWorkerPreview` was still completing its own bounded
+  `dispose` then `raw.teardown` fallback, the pool's competing outer timer
+  could report `cerrar el preview activo` and mask the actionable internal
+  `cerrar el Worker preview` failure.
+- RED: a deterministic event-loop delay made that outer `61 ms` deadline win;
+  a second RED proves that an arbitrary injected `PreviewInstance.close()`
+  that never settles remains bounded by the pool.
+- GREEN: previews made by `startWorkerPreview` carry a module-private Symbol
+  marker and are awaited through their already bounded close lifecycle. The
+  pool retains its outer deadline only for untrusted injected previews. The
+  marker is not exported and does not alter the public `PreviewInstance` API.
+- `npm run test:unit -- tests/helpers/preview-pool.test.ts` passed `22/22` on
+  three consecutive runs, including the delayed-timer and never-settling
+  custom-close cases. `npm run check` passed with 0 errors and the same three
+  inherited hints; targeted Prettier and `git diff --check` passed.
+- Before this correction was staged, two consecutive HEAD archives of the
+  original Task 7 tree passed:
+  `INDEPENDENT_OK source=head tree=4c1b9a2123e12b5c04a4db64f674febd60957103 commands=4`.
+  They establish the original commit's baseline only; they do not verify this
+  uncommitted lifecycle correction. The staged verification for the exact
+  correction tree is recorded separately in the handoff to avoid making the
+  report's own content self-referential.
+- Post-correction source guard remains
+  `SOURCE_OK 68ea294c54dc5e15e20f470fc421a239927565a8 clean`. No task-owned
+  process, archive, `.dev.vars`, or source-worktree file remains. The
+  pre-existing source group `49166` was only observed and remains intact.
+- This correction is prepared as a separate lifecycle-fix commit and is
+  intentionally paused for cached review before committing.

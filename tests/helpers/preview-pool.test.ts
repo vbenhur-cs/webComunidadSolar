@@ -43,6 +43,13 @@ async function settleWithin<T>(
   }
 }
 
+function blockEventLoop(milliseconds: number): void {
+  const deadline = Date.now() + milliseconds;
+  while (Date.now() < deadline) {
+    // Deliberately model archive-load timer delay for lifecycle ordering.
+  }
+}
+
 test("keeps redirect responses observable by HTTP contracts", async () => {
   let requestInit: RequestInit | undefined;
   const pool = createPreviewPool({
@@ -589,6 +596,68 @@ test("lets pool.close finish raw teardown before its outer cleanup deadline", as
     /cerrar el Worker preview/i,
   );
   assert.equal(rawTeardownCompleted, true);
+});
+
+test("preserves a bounded Worker close failure through delayed timer scheduling", async () => {
+  let rawTeardownCompleted = false;
+  const preview = await startWorkerPreview(
+    {},
+    {
+      cleanupTimeoutMs: 30,
+      resolveTopology: async () => ({
+        deployConfigPath: "/fixture/.wrangler/deploy/config.json",
+        wranglerConfigPath: "/fixture/wrangler.json",
+        entryPath: "/fixture/entry.mjs",
+      }),
+      startWorker: async () => ({
+        ready: Promise.resolve(),
+        fetch: async () => new Response("ok"),
+        dispose: async () => new Promise<void>(() => undefined),
+        raw: {
+          teardown: async () => {
+            await new Promise((resolveLater) => setTimeout(resolveLater, 20));
+            rawTeardownCompleted = true;
+          },
+        },
+      }),
+    },
+  );
+  const pool = createPreviewPool({
+    cleanupTimeoutMs: 30,
+    startPreview: async () => preview,
+  });
+
+  assert.equal(await (await pool.requestPreview("/guia-equipo")).text(), "ok");
+  const blocker = new Promise<void>((resolveLater) => {
+    setTimeout(() => {
+      blockEventLoop(45);
+      resolveLater();
+    }, 20);
+  });
+
+  await assert.rejects(
+    () => settleWithin(pool.close(), 300),
+    /cerrar el Worker preview/i,
+  );
+  await blocker;
+  assert.equal(rawTeardownCompleted, true);
+});
+
+test("bounds an untrusted custom preview close that never settles", async () => {
+  const pool = createPreviewPool({
+    cleanupTimeoutMs: 30,
+    startPreview: async () => ({
+      origin: "http://preview.test",
+      close: async () => new Promise<void>(() => undefined),
+      fetch: async () => new Response("ok"),
+    }),
+  });
+
+  assert.equal(await (await pool.requestPreview("/guia-equipo")).text(), "ok");
+  await assert.rejects(
+    () => settleWithin(pool.close(), 150),
+    /cerrar el preview activo/i,
+  );
 });
 
 test("never writes or alters .dev.vars while starting or closing an explicit Worker preview", async () => {
