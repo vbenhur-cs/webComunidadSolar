@@ -13,6 +13,7 @@
     "format:check": "prettier --check .",
     "lint": "eslint \"src/**/*.{ts,tsx,astro}\" \"scripts/**/*.ts\" \"tests/**/*.{ts,mjs}\" \"*.{js,mjs,ts}\"",
     "test:unit": "tsx scripts/run-unit-tests.ts",
+    "test:integration": "tsx scripts/run-unit-tests.ts tests/integration/d1-interest.test.ts",
     "test:http": "tsx scripts/run-http-contracts.ts",
     "test:e2e": "tsx scripts/run-e2e.ts",
     "verify:public": "npm run build && npm run test:http -- --scope public && npm run test:e2e",
@@ -25,7 +26,8 @@
     "parity:http": "tsx scripts/parity-http.ts",
     "parity:visual": "tsx scripts/parity-visual.ts",
     "verify:links": "tsx scripts/verify-links.ts",
-    "verify:independent": "tsx scripts/verify-independent.ts"
+    "verify:independent": "tsx scripts/verify-independent.ts",
+    "db:generate": "drizzle-kit generate"
   },
   "dependencies": {
     "@astrojs/cloudflare": "14.2.3",
@@ -43,6 +45,7 @@
     "@types/node": "22.19.19",
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.4",
+    "drizzle-kit": "0.31.10",
     "eslint": "9.39.4",
     "eslint-plugin-astro": "1.7.0",
     "globals": "17.11.0",
