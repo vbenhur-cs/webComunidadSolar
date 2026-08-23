@@ -1,6 +1,14 @@
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import { cp, lstat, mkdir, readFile, realpath } from "node:fs/promises";
+import {
+  cp,
+  lstat,
+  mkdir,
+  mkdtemp,
+  readFile,
+  realpath,
+} from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { isAbsolute, join, relative, resolve } from "node:path";
 import { promisify } from "node:util";
 
@@ -176,15 +184,15 @@ async function registered(
     .includes(`worktree ${path}`);
 }
 async function sidecar(
-  rootPath: string,
+  _rootPath: string,
   changeId: string,
   attemptId: string,
 ): Promise<string> {
-  const base = await directory(join(rootPath, ".agent-run-output"), rootPath);
-  const change = await directory(join(base, changeId), base);
-  const output = join(change, attemptId);
-  await vacant(output);
-  return await directory(output, change);
+  return await realpath(
+    await mkdtemp(
+      join(tmpdir(), `comunidadsolar-agent-${changeId}-${attemptId}-`),
+    ),
+  );
 }
 /** Candidate ownership is only minted after Git registration and identity checks. */
 export async function createCandidateWorktree(
@@ -203,6 +211,8 @@ export async function createCandidateWorktree(
   const sourceRepositoryRoot = await root(
     input.sourceRepositoryRoot ?? input.repositoryRoot,
   );
+  const beforeRepository = await gitSnapshot(repositoryRoot);
+  const beforeSource = await gitSnapshot(sourceRepositoryRoot);
   if (
     (await git(repositoryRoot, ["rev-parse", "refs/heads/main"])) !==
     input.baselineCommit
@@ -290,15 +300,30 @@ export async function createCandidateWorktree(
       sourceSnapshot: await gitSnapshot(sourceRepositoryRoot),
       candidateSnapshot: await gitSnapshot(path),
     };
+    const candidateRef = `refs/heads/${branch}\0${input.baselineCommit}`;
+    const withoutCandidateRef = (refs: string) =>
+      refs
+        .split("\n")
+        .filter((entry) => entry !== candidateRef)
+        .join("\n");
+    if (
+      withoutCandidateRef(candidate.repositorySnapshot.refs) !==
+        beforeRepository.refs ||
+      candidate.repositorySnapshot.head !== beforeRepository.head ||
+      withoutCandidateRef(candidate.sourceSnapshot.refs) !==
+        beforeSource.refs ||
+      candidate.sourceSnapshot.head !== beforeSource.head
+    ) {
+      throw new TypeError(
+        "Las refs protegidas cambiaron durante la creación del candidato",
+      );
+    }
     owned.add(candidate);
     return candidate;
   } catch (error) {
-    if (wasRegistered && (await registered(repositoryRoot, path)))
-      await execFileAsync(
-        "git",
-        ["-C", repositoryRoot, "worktree", "remove", "--force", path],
-        { encoding: "utf8", env: sanitizedGitEnv() },
-      ).catch(() => undefined);
+    // A partially-created path is quarantined for operator inspection.  Never
+    // delete on a failure path: a pathname may have changed after registration.
+    void wasRegistered;
     throw error;
   }
 }
@@ -337,17 +362,11 @@ export async function removeCandidateWorktree(
   await assertOwned(candidate);
   await execFileAsync(
     "git",
-    [
-      "-C",
-      candidate.repositoryRoot,
-      "worktree",
-      "remove",
-      "--force",
-      candidate.path,
-    ],
+    ["-C", candidate.repositoryRoot, "worktree", "remove", candidate.path],
     { encoding: "utf8", env: sanitizedGitEnv() },
-  );
-  owned.delete(candidate);
+  ).catch(() => undefined);
+  // Dirty or identity-ambiguous candidates remain quarantined for an operator;
+  // never escalate to --force or a recursive filesystem delete.
 }
 export async function validateCopiedInputs(
   candidate: CandidateWorktree,

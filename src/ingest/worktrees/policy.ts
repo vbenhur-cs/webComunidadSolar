@@ -58,7 +58,7 @@ export async function validateWorktreeDiff(
   try {
     return await validateDiff(candidate, plan);
   } catch (error) {
-    await removeCandidateWorktree(candidate);
+    await removeCandidateWorktree(candidate).catch(() => undefined);
     throw error;
   }
 }

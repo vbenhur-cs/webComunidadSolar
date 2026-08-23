@@ -1,4 +1,4 @@
-import { lstat, readFile, realpath, writeFile } from "node:fs/promises";
+import { lstat, realpath, writeFile } from "node:fs/promises";
 import { isAbsolute, join, relative, resolve } from "node:path";
 
 import { assertOperatorIsolationBroker } from "./isolation.ts";
@@ -119,11 +119,11 @@ export class CommandAgent implements AgentAdapter {
         planPath: input.planPath,
         policyPath: input.policyPath,
         resultSchemaPath: input.resultSchemaPath,
-        resultPath: paths.resultPath,
       }),
       shell: false,
     });
     await Promise.all([
+      writeFile(paths.resultPath, result.stdout, "utf8"),
       writeFile(paths.stdoutPath, result.stdout, "utf8"),
       writeFile(paths.stderrPath, result.stderr, "utf8"),
       writeFile(paths.finalMessagePath, result.stdout, "utf8"),
@@ -131,7 +131,7 @@ export class CommandAgent implements AgentAdapter {
     return {
       adapter: this.name,
       exitCode: result.exitCode,
-      generatedFiles: await generatedFiles(paths.resultPath),
+      generatedFiles: await generatedFiles(result.stdout),
       stdoutPath: paths.stdoutPath,
       stderrPath: paths.stderrPath,
       finalMessagePath: paths.finalMessagePath,
@@ -139,18 +139,37 @@ export class CommandAgent implements AgentAdapter {
   }
 }
 
-async function generatedFiles(path: string): Promise<string[]> {
+async function generatedFiles(output: string): Promise<string[]> {
+  let result: unknown;
   try {
-    const result = JSON.parse(await readFile(path, "utf8")) as unknown;
+    result = JSON.parse(output) as unknown;
+  } catch {
+    return [];
+  }
+  {
     const files = (result as { generatedFiles?: unknown })?.generatedFiles;
     if (
       Array.isArray(files) &&
       files.every((file) => typeof file === "string")
     ) {
-      return files;
+      return files.map(assertSafeGeneratedFile);
     }
-  } catch {
-    // The result file is untrusted and may be absent after a failed command.
   }
   return [];
+}
+
+function assertSafeGeneratedFile(path: string): string {
+  if (
+    path.length === 0 ||
+    path.startsWith("/") ||
+    path.includes("\\") ||
+    path.includes("\0") ||
+    path
+      .split("/")
+      .some((segment) => !segment || segment === "." || segment === "..")
+  )
+    throw new TypeError(
+      "El resultado del agente contiene un path generado no seguro",
+    );
+  return path;
 }

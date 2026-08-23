@@ -1,4 +1,5 @@
-import { lstat, readFile, realpath, writeFile } from "node:fs/promises";
+import { constants } from "node:fs";
+import { access, lstat, readFile, realpath, writeFile } from "node:fs/promises";
 import { isAbsolute, join, relative, resolve } from "node:path";
 
 import {
@@ -91,7 +92,7 @@ export class CodexAgent implements AgentAdapter {
     const invocation = codexInvocation(input);
     const paths = outputPaths(input);
     await assertOutputDirectory(input);
-    const result = await this.runner(invocation.command, invocation.args, {
+    const result = await this.runner(await codexExecutable(), invocation.args, {
       cwd: input.worktree,
       env: { PATH: "/usr/bin:/bin", LANG: "C", LC_ALL: "C" },
       input: invocation.input,
@@ -112,9 +113,26 @@ export class CodexAgent implements AgentAdapter {
   }
 }
 
-async function generatedFiles(path: string): Promise<string[]> {
+async function codexExecutable(): Promise<string> {
+  const installed = "/Users/vbenhur/.local/bin/codex";
   try {
-    const parsed = JSON.parse(await readFile(path, "utf8")) as unknown;
+    await access(installed, constants.X_OK);
+    return installed;
+  } catch {
+    throw new TypeError(
+      "No existe un ejecutable Codex aprobado por el operador",
+    );
+  }
+}
+
+async function generatedFiles(path: string): Promise<string[]> {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(await readFile(path, "utf8")) as unknown;
+  } catch {
+    return [];
+  }
+  {
     if (
       typeof parsed === "object" &&
       parsed !== null &&
@@ -123,10 +141,27 @@ async function generatedFiles(path: string): Promise<string[]> {
         (value) => typeof value === "string",
       )
     ) {
-      return (parsed as { generatedFiles: string[] }).generatedFiles;
+      return (parsed as { generatedFiles: string[] }).generatedFiles.map(
+        assertSafeGeneratedFile,
+      );
     }
-  } catch {
-    // Codex's final message is evidence, not an authority; no result means no files.
   }
   return [];
+}
+
+function assertSafeGeneratedFile(path: string): string {
+  if (
+    path.length === 0 ||
+    path.startsWith("/") ||
+    path.includes("\\") ||
+    path.includes("\0") ||
+    path
+      .split("/")
+      .some((segment) => !segment || segment === "." || segment === "..")
+  ) {
+    throw new TypeError(
+      "El resultado del agente contiene un path generado no seguro",
+    );
+  }
+  return path;
 }

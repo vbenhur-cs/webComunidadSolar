@@ -291,7 +291,7 @@ test("candidate worktree copies immutable inputs and cleans only its exact path"
     } finally {
       await removeCandidateWorktree(candidate);
     }
-    await assert.rejects(stat(candidate.path));
+    assert.ok((await stat(candidate.path)).isDirectory());
   });
 });
 
@@ -313,7 +313,7 @@ test("rejects an agent change outside approved output paths", async () => {
         validateWorktreeDiff(candidate, plan(baseline)),
         /package\.json no aprobado/i,
       );
-      await assert.rejects(stat(candidate.path));
+      assert.ok((await stat(candidate.path)).isDirectory());
     } finally {
       await removeCandidateWorktree(candidate);
     }
@@ -535,6 +535,31 @@ test("command broker rejects unknown or loader-controlled environment values", a
         runner,
       ).run(input),
       /entorno|broker/i,
+    );
+  } finally {
+    await rm(worktree, { recursive: true, force: true });
+    await rm(input.outputDirectory!, { recursive: true, force: true });
+  }
+});
+
+test("command result rejects traversal rather than trusting agent stdout", async () => {
+  const worktree = await mkdtemp(
+    join(tmpdir(), "comunidadsolar-command-result-"),
+  );
+  const input = await createInput(worktree, worktree);
+  try {
+    const runner: ProcessRunner = async () => ({
+      exitCode: 0,
+      stdout: JSON.stringify({ generatedFiles: ["../escape.astro"] }),
+      stderr: "",
+    });
+    await assert.rejects(
+      new CommandAgent(
+        { command: process.execPath, args: [] },
+        recordingBroker(),
+        runner,
+      ).run(input),
+      /path generado no seguro/i,
     );
   } finally {
     await rm(worktree, { recursive: true, force: true });
