@@ -1,0 +1,384 @@
+---
+import { ManganaferInterestForm } from "../../islands/ManganaferInterestForm";
+import { ManganaferQuoteForm } from "../../islands/ManganaferQuoteForm";
+import ManganaferLocalMap from "./ManganaferLocalMap.astro";
+---
+
+<main id="contenido-principal" class="manganafer-page" tabindex="-1">
+  <section class="manganafer-hero">
+    <div class="shell manganafer-hero-grid">
+      <div class="manganafer-hero-copy">
+        <div class="manganafer-status-pill">
+          <span aria-hidden="true"></span>
+          Registro de interés abierto
+        </div>
+        <p class="eyebrow">Comunidad energética de proximidad · Manganáfer</p>
+        <h1>
+          Si forma parte de tu paisaje,<Fragment set:html="<!-- -->" />{" "}
+          <span>también debería formar parte de tus beneficios.</span>
+        </h1>
+        <p class="manganafer-hero-lead">
+          Queremos que este proyecto se traduzca en un ahorro real para los
+          vecinos cuyo suministro está, como máximo, a 1 kilómetro.
+        </p>
+        <div class="manganafer-hero-facts">
+          <span>Hasta un 50% de descuento*</span>
+          <span>Máximo 1 km</span>
+          <span>Sin obras</span>
+          <span>Sin inversión inicial</span>
+        </div>
+        <div class="manganafer-hero-actions">
+          <a
+            class="button button-primary"
+            href="#calculadora-manganafer"
+            data-analytics-event="manganafer_calculator_hero"
+          >
+            Calcular con mi CUPS <span aria-hidden="true">→</span>
+          </a>
+          <a class="button button-secondary" href="#beneficios-manganafer">
+            Ver qué recibiré <span aria-hidden="true">→</span>
+          </a>
+        </div>
+        <p class="manganafer-hero-note">
+          Preinscripción gratuita y sin compromiso, reservada a suministros
+          situados a un máximo de 1 km del proyecto.
+        </p>
+      </div>
+
+      <figure class="manganafer-hero-visual">
+        <img
+          src="/media/manganafer-hero-1024x792.png"
+          alt="Una familia contempla un pueblo y un paisaje con energía solar"
+        />
+        <div class="manganafer-hero-saving">
+          <small>Objetivo de ahorro</small>
+          <strong>Hasta un 50%*</strong>
+          <span>durante las horas solares</span>
+        </div>
+        <figcaption>Imagen ilustrativa del proyecto.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="manganafer-trust-strip" aria-label="Estado del proyecto">
+    <div class="shell">
+      <div>
+        <span>01</span>
+        <strong>Escuchamos</strong>
+        <small>Preguntas y prioridades del entorno</small>
+      </div>
+      <div>
+        <span>02</span>
+        <strong>Medimos el interés</strong>
+        <small>Hogares y negocios que quieren participar</small>
+      </div>
+      <div>
+        <span>03</span>
+        <strong>Activamos el beneficio</strong>
+        <small>Cuando las condiciones estén confirmadas</small>
+      </div>
+    </div>
+  </section>
+
+  <section class="section manganafer-why">
+    <div class="shell manganafer-why-grid">
+      <div>
+        <p class="eyebrow">Una respuesta para el territorio</p>
+        <h2>
+          La transición energética solo tiene sentido si también mejora la vida
+          de quienes conviven con ella.
+        </h2>
+      </div>
+      <div class="manganafer-why-copy">
+        <p>
+          Cuando algo va a formar parte del paisaje durante décadas, es
+          razonable preguntarse qué cambia para las familias, los comercios y el
+          pueblo.
+        </p>
+        <p>
+          Nuestra respuesta es sencilla: una parte del valor debe quedarse
+          cerca. Por eso queremos crear una comunidad energética que dé
+          prioridad a los vecinos y convierta la energía renovable en un
+          beneficio cotidiano y comprensible.
+        </p>
+        <blockquote>
+          No te pedimos que confíes a ciegas. Te invitamos a informarte,
+          preguntar y decidir con las condiciones delante.
+        </blockquote>
+      </div>
+    </div>
+  </section>
+
+  <section class="section manganafer-zone" id="zona-manganafer">
+    <div class="shell manganafer-zone-grid">
+      <div class="manganafer-zone-copy">
+        <p class="eyebrow">Una comunidad realmente vecina</p>
+        <h2 id="manganafer-map-title">
+          El beneficio se reserva para quienes están a un máximo de<Fragment
+            set:html="<!-- -->"
+          />{" "}
+          <span>1 kilómetro.</span>
+        </h2>
+        <p>
+          Esta propuesta está reservada a hogares y pequeños negocios situados a
+          un máximo de 1 kilómetro de Manganáfer. Porque si el parque forma
+          parte de tu entorno, sus beneficios también deben llegar hasta ti.
+        </p>
+        <div class="manganafer-zone-distance">
+          <strong>1 km</strong>
+          <span>distancia máxima orientativa desde el proyecto</span>
+        </div>
+        <ul>
+          <li>Tu dirección nos sirve para una primera orientación.</li>
+          <li>El CUPS permitirá confirmar el punto de suministro.</li>
+          <li>Si estás dentro, podrás ver una estimación de tu ahorro.</li>
+        </ul>
+        <a
+          class="button button-primary"
+          href="#calculadora-manganafer"
+          data-analytics-event="manganafer_calculator_zone"
+        >
+          Comprobar mi CUPS <span aria-hidden="true">→</span>
+        </a>
+      </div>
+      <ManganaferLocalMap />
+    </div>
+  </section>
+
+  <section class="section manganafer-calculator" id="calculadora-manganafer">
+    <div class="shell manganafer-calculator-grid">
+      <ManganaferQuoteForm client:load />
+    </div>
+  </section>
+
+  <section class="section manganafer-benefits" id="beneficios-manganafer">
+    <div class="shell">
+      <div class="section-heading section-heading-center">
+        <p class="eyebrow">Lo que recibirán los participantes</p>
+        <h2>Un beneficio fácil de entender y pensado para durar.</h2>
+        <p class="section-copy">
+          Sin instalaciones en casa, sin inversión de entrada y con prioridad
+          para suministros situados a un máximo de 1 km.
+        </p>
+      </div>
+      <div class="manganafer-benefit-grid">
+        <article class="manganafer-benefit-card manganafer-benefit-green">
+          <strong>Hasta un 50%*</strong>
+          <h3>de descuento</h3>
+          <p>Sobre la energía consumida durante las horas solares.</p>
+        </article>
+        <article class="manganafer-benefit-card manganafer-benefit-yellow">
+          <strong>Sin obras</strong>
+          <h3>en tu vivienda</h3>
+          <p>No necesitas instalar paneles ni modificar tu casa o negocio.</p>
+        </article>
+        <article class="manganafer-benefit-card manganafer-benefit-blue">
+          <strong>Sin inversión</strong>
+          <h3>inicial</h3>
+          <p>Apuntarte y participar no requiere un desembolso de entrada.</p>
+        </article>
+        <article class="manganafer-benefit-card manganafer-benefit-mint">
+          <strong>25 años*</strong>
+          <h3>de beneficio</h3>
+          <p>Queremos que el ahorro sea estable, útil y duradero.</p>
+        </article>
+      </div>
+      <p class="manganafer-claims-note">
+        *Objetivo provisional del proyecto. El porcentaje, la duración, el cupo,
+        la cobertura y las condiciones definitivas se confirmarán antes de
+        solicitar cualquier compromiso.
+      </p>
+    </div>
+  </section>
+
+  <section class="section manganafer-process" id="como-avanza">
+    <div class="shell">
+      <div class="manganafer-process-heading">
+        <div>
+          <p class="eyebrow">Cómo avanzará</p>
+          <h2>Primero construimos una comunidad de personas.</h2>
+        </div>
+        <p>
+          Registrar el interés ahora nos permite conocer la demanda real,
+          mantener una conversación directa con el entorno y diseñar una
+          propuesta útil antes de abrir plazas.
+        </p>
+      </div>
+      <ol class="manganafer-process-grid">
+        <li>
+          <span>01</span>
+          <h3>Te apuntas sin compromiso</h3>
+          <p>
+            Nos dices dónde está tu suministro y si participaría tu hogar o tu
+            negocio.
+          </p>
+        </li>
+        <li>
+          <span>02</span>
+          <h3>Confirmamos el radio de 1 km</h3>
+          <p>
+            Comprobamos con el CUPS si el punto de suministro está dentro del
+            ámbito.
+          </p>
+        </li>
+        <li>
+          <span>03</span>
+          <h3>Calculamos tu caso</h3>
+          <p>
+            Preparamos una estimación personalizada para que veas cómo podría
+            quedar tu ahorro.
+          </p>
+        </li>
+        <li>
+          <span>04</span>
+          <h3>Tú decides</h3>
+          <p>
+            Cuando la propuesta sea definitiva, eliges libremente si quieres
+            participar.
+          </p>
+        </li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="section manganafer-voices">
+    <div class="shell manganafer-voices-grid">
+      <div class="manganafer-voices-copy">
+        <p class="eyebrow">Información y participación</p>
+        <h2>Las preguntas no se esquivan. Se responden.</h2>
+        <p>
+          Queremos que cualquier vecino pueda entender la propuesta, conocer qué
+          recibirá y saber qué está confirmado en cada momento. Sin convertir
+          las dudas sobre el territorio en una discusión técnica imposible de
+          seguir.
+        </p>
+        <ul>
+          <li>Información directa, sin depender de rumores.</li>
+          <li>Condiciones comprensibles antes de tomar una decisión.</li>
+          <li>Canal abierto para preguntas y propuestas.</li>
+          <li>Prioridad real dentro del ámbito máximo de 1 km.</li>
+        </ul>
+      </div>
+      <div class="manganafer-local-value">
+        <span>ANTES</span>
+        <strong>La energía se mira desde fuera.</strong>
+        <i aria-hidden="true">↓</i>
+        <span>AHORA</span>
+        <strong>Los vecinos pueden participar en sus beneficios.</strong>
+      </div>
+    </div>
+  </section>
+
+  <section class="section manganafer-faq">
+    <div class="shell manganafer-faq-grid">
+      <div class="manganafer-faq-heading">
+        <p class="eyebrow">Preguntas frecuentes</p>
+        <h2>Lo importante, explicado con claridad.</h2>
+        <p>
+          Si tu pregunta no aparece aquí, déjala en el formulario. La
+          incorporaremos a las próximas actualizaciones.
+        </p>
+      </div>
+      <div class="manganafer-faq-list">
+        <details open>
+          <summary>
+            ¿Qué supone apuntarme?
+            <span aria-hidden="true">+</span>
+          </summary>
+          <p>
+            Registrar tu interés no te obliga a contratar ni implica ningún
+            pago. Nos permite saber que quieres recibir información, comprobar
+            si podrás participar y darte prioridad cuando se abra el cupo.
+          </p>
+        </details>
+        <details>
+          <summary>
+            ¿Cuánto podré ahorrar?
+            <span aria-hidden="true">+</span>
+          </summary>
+          <p>
+            El objetivo es ofrecer hasta un 50% de descuento sobre la energía
+            consumida durante las horas solares. El ahorro real dependerá de tu
+            consumo y de las condiciones definitivas de la comunidad, que
+            conocerás antes de decidir.
+          </p>
+        </details>
+        <details>
+          <summary>
+            ¿Tengo que hacer obras o comprar paneles?
+            <span aria-hidden="true">+</span>
+          </summary>
+          <p>
+            No. La propuesta está pensada para que puedas beneficiarte sin
+            instalar placas en tu vivienda o negocio y sin inversión inicial.
+          </p>
+        </details>
+        <details>
+          <summary>
+            ¿Quién tendrá prioridad?
+            <span aria-hidden="true">+</span>
+          </summary>
+          <p>
+            Los hogares y pequeños negocios cuyo punto de suministro esté, como
+            máximo, a 1 kilómetro del proyecto Manganáfer. La comprobación
+            definitiva se hará con el CUPS de cada suministro y contactaremos
+            por orden de registro.
+          </p>
+        </details>
+        <details>
+          <summary>
+            ¿Cuándo empezará?
+            <span aria-hidden="true">+</span>
+          </summary>
+          <p>
+            Ahora estamos midiendo el interés real del territorio. Te iremos
+            informando de cada avance y solo abriremos la incorporación cuando
+            podamos confirmar condiciones, cobertura y calendario.
+          </p>
+        </details>
+        <details>
+          <summary>
+            ¿Apuntarme significa que apoyo todo el proyecto?
+            <span aria-hidden="true">+</span>
+          </summary>
+          <p>
+            No. Significa únicamente que quieres conocer una oportunidad de
+            ahorro y recibir información directa. Podrás preguntar, valorar las
+            condiciones y decidir libremente cuando exista una propuesta
+            definitiva.
+          </p>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <section class="section manganafer-register" id="registro-manganafer">
+    <div class="shell manganafer-register-grid">
+      <div class="manganafer-register-copy">
+        <p class="eyebrow">Registro de interés</p>
+        <h2>
+          Ayúdanos a demostrar que el territorio también quiere beneficiarse.
+        </h2>
+        <p>
+          Déjanos tus datos y te mantendremos al corriente. No hay pago,
+          contrato ni compromiso: solo prioridad para conocer la propuesta y
+          comprobar si tu suministro está dentro del radio de 1 km.
+        </p>
+        <div class="manganafer-register-proof">
+          <span aria-hidden="true">✓</span>
+          <div>
+            <strong>Tus datos tienen una finalidad concreta.</strong>
+            <small>
+              Solo los utilizaremos para informarte y comprobar tu posible
+              participación en esta comunidad.
+            </small>
+          </div>
+        </div>
+      </div>
+
+      <div class="manganafer-form-card">
+        <ManganaferInterestForm client:load />
+      </div>
+    </div>
+  </section>
+</main>

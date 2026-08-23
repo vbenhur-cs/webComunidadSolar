@@ -1,0 +1,29 @@
+---
+export const prerender = true;
+
+import { ConsentManager } from "../../components/islands/ConsentManager";
+import ManganaferLanding from "../../components/pages/manganafer/ManganaferLanding.astro";
+import Footer from "../../components/site/Footer.astro";
+import { HeaderIsland } from "../../components/site/HeaderIsland";
+import DocumentLayout from "../../layouts/DocumentLayout.astro";
+
+const meta = {
+  title: "Comunidad Energética de Manganáfer",
+  description:
+    "Si forma parte de tu paisaje, también debería formar parte de tus beneficios.",
+  canonical: "/comunidades-energeticas/manganafer",
+  socialImage: {
+    url: "/media/manganafer-hero-1024x792.png",
+    alt: "Familia contemplando un entorno rural con energía solar",
+  },
+};
+---
+
+<DocumentLayout {meta}>
+  <div class="site-root manganafer-root">
+    <HeaderIsland client:load page="comunidades" />
+    <ManganaferLanding />
+    <Footer />
+    <ConsentManager client:idle />
+  </div>
+</DocumentLayout>

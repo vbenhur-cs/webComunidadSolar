@@ -216,9 +216,26 @@ const visualAuthEnvironmentKey: Record<
   equipo: "TEAM_ALLOWED_EMAILS",
   manganafer: "MANGANAFER_ALLOWED_EMAILS",
 };
-const visualSourceEnvironmentKeys = new Set(
-  Object.values(visualAuthEnvironmentKey),
-);
+/**
+ * Public, non-production values used only while a visual reference capture
+ * needs the source quote UI enabled. The source checks only that these values
+ * are valid configuration; initial capture never submits a quote.
+ */
+export const manganaferVisualQuoteEnvironment = {
+  MANGANAFER_ANNUAL_DEGRADATION: "0.005",
+  MANGANAFER_ANNUAL_PANEL_PRODUCTION_KWH: "1500",
+  MANGANAFER_AVAILABLE_PANELS: "100",
+  MANGANAFER_DISCOUNT: "0.5",
+  MANGANAFER_PANEL_FEE_VAT: "0.21",
+  MANGANAFER_PANEL_MONTHLY_FEE: "10",
+  MANGANAFER_PANEL_MONTHLY_FEE_WITHOUT_VAT: "8.2645",
+  MANGANAFER_PANEL_POWER_W: "450",
+  MANGANAFER_QUOTING_BEARER_TOKEN: "visual-parity-synthetic-token",
+} as const;
+const visualSourceEnvironmentKeys = new Set([
+  ...Object.values(visualAuthEnvironmentKey),
+  ...Object.keys(manganaferVisualQuoteEnvironment),
+]);
 let visualSourceEnvironmentTail: Promise<void> = Promise.resolve();
 
 function compareText(left: string, right: string): number {
@@ -757,6 +774,35 @@ export function resolveVisualAuthPlan(
         name === "allowed" ? { [visualAuthEmailHeader]: visualAuthEmail } : {},
     })),
   };
+}
+
+/**
+ * Keeps public route-specific visual setup explicit. The Manganáfer source
+ * renders its quote form only with a complete quote configuration; use the
+ * deterministic synthetic set for that one landing, then restore it per
+ * source fetch through `withVisualSourceEnvironment`.
+ */
+export function resolveVisualRuntimeEnvironment(
+  routes: readonly RouteMatrixEntry[],
+  authPlan: VisualAuthPlan | undefined = undefined,
+): Record<string, string> {
+  const environment: Record<string, string> = {
+    ...(authPlan?.environment ?? {}),
+  };
+  if (
+    routes.some(
+      (route) =>
+        route.path === "/comunidades-energeticas/manganafer" &&
+        route.visualTemplate === "manganafer",
+    )
+  ) {
+    Object.assign(environment, manganaferVisualQuoteEnvironment);
+  }
+  return Object.fromEntries(
+    Object.entries(environment).sort(([left], [right]) =>
+      compareText(left, right),
+    ),
+  );
 }
 
 function parseFixture(value: unknown): CaptureFixture {
@@ -2040,7 +2086,10 @@ export async function runVisualParity(
           });
     const authPlan = resolveVisualAuthPlan(routes, options.authFixtures);
     const authFixtures = authPlan?.fixtures ?? [undefined];
-    const runtimeEnvironment = authPlan?.environment ?? {};
+    const runtimeEnvironment = resolveVisualRuntimeEnvironment(
+      routes,
+      authPlan,
+    );
     await build(root);
     const topology = await withinVisualTimeout(
       "resolver la topología del candidato visual",

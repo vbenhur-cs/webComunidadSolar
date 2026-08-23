@@ -214,6 +214,7 @@ export const templateSelectors: Readonly<Record<string, readonly string[]>> = {
   "private-access": ["body", "header", "main.private-access-page", "footer"],
   "team-guide": ["body", "header", "main.team-guide-page", "footer"],
   socios: ["body", "header", "main.partner-page", "footer"],
+  manganafer: ["body", "header", "main.manganafer-page", "footer"],
 };
 
 function compareText(left: string, right: string): number {

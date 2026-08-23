@@ -1,0 +1,138 @@
+---
+
+---
+
+<figure
+  class="manganafer-zone-map"
+  data-manganafer-map
+  aria-labelledby="manganafer-map-title manganafer-map-caption"
+>
+  <div class="manganafer-map-topline">
+    <span>Mapa orientativo</span>
+    <strong>Área prioritaria · máximo 1 km</strong>
+  </div>
+  <svg
+    viewBox="0 0 900 620"
+    role="img"
+    aria-labelledby="manganafer-map-svg-title manganafer-map-svg-description"
+  >
+    <title id="manganafer-map-svg-title">
+      Zona de proximidad de la Comunidad Energética de Manganáfer
+    </title>
+    <desc id="manganafer-map-svg-description">
+      Representación orientativa del proyecto Manganáfer y del área prioritaria
+      para suministros situados a un máximo de 1 kilómetro.
+    </desc>
+    <defs>
+      <linearGradient id="manganafer-map-land" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0%" stop-color="#eef2dc"></stop>
+        <stop offset="100%" stop-color="#dfe8c9"></stop>
+      </linearGradient>
+      <linearGradient id="manganafer-map-halo" x1="0" y1="0" x2="0.9" y2="1">
+        <stop offset="0%" stop-color="#a8d96f" stop-opacity="0.72"></stop>
+        <stop offset="100%" stop-color="#6cad2e" stop-opacity="0.38"></stop>
+      </linearGradient>
+      <pattern
+        id="manganafer-map-panels"
+        width="17"
+        height="12"
+        patternUnits="userSpaceOnUse"
+      >
+        <rect width="15" height="10" rx="1.5" fill="#184d42"></rect>
+        <path d="M7.5 0v10M0 5h15" stroke="#7da59d" stroke-width="0.7"></path>
+      </pattern>
+      <filter
+        id="manganafer-map-shadow"
+        x="-30%"
+        y="-30%"
+        width="160%"
+        height="160%"
+      >
+        <feDropShadow
+          dx="0"
+          dy="10"
+          stdDeviation="12"
+          flood-color="#173f32"
+          flood-opacity="0.2"></feDropShadow>
+      </filter>
+    </defs>
+
+    <rect width="900" height="620" rx="34" fill="url(#manganafer-map-land)"
+    ></rect>
+
+    <g class="manganafer-map-fields" aria-hidden="true">
+      <path d="M-20 80C140 28 248 55 332 158S512 288 666 206 864 92 940 140"
+      ></path>
+      <path d="M-30 428C130 352 218 365 330 450s234 108 362 38 176-96 248-72"
+      ></path>
+      <path d="M76-20c42 152 126 221 230 260s179 119 201 222 96 154 188 182"
+      ></path>
+      <path d="M645-35c-48 127-37 229 34 307s87 180 38 350"></path>
+    </g>
+
+    <g class="manganafer-map-roads" aria-hidden="true">
+      <path d="M-18 208C154 229 234 192 336 125S563 40 916 98"></path>
+      <path d="M-10 522C172 468 298 483 410 528s261 33 504-55"></path>
+      <path d="M744-18C696 102 694 198 735 285s21 208-41 355"></path>
+      <path d="M175 0c26 104 76 167 153 216s99 126 85 222-5 148 39 202"></path>
+    </g>
+
+    <path
+      class="manganafer-map-halo"
+      d="M190 205C250 125 368 84 484 111c108 25 203 91 225 181 24 98-31 194-127 248-91 51-235 50-331-9-93-57-137-157-103-239 10-27 24-58 42-87Z"
+      fill="url(#manganafer-map-halo)"></path>
+    <path
+      class="manganafer-map-halo-line"
+      d="M190 205C250 125 368 84 484 111c108 25 203 91 225 181 24 98-31 194-127 248-91 51-235 50-331-9-93-57-137-157-103-239 10-27 24-58 42-87Z"
+    ></path>
+
+    <g
+      class="manganafer-map-plant"
+      filter="url(#manganafer-map-shadow)"
+      aria-hidden="true"
+    >
+      <path
+        d="M305 265l158-55 54 118-160 58Z"
+        fill="url(#manganafer-map-panels)"></path>
+      <path
+        d="M445 350l145-49 47 105-146 51Z"
+        fill="url(#manganafer-map-panels)"></path>
+    </g>
+
+    <g class="manganafer-map-project-label">
+      <rect x="330" y="402" width="255" height="65" rx="20"></rect>
+      <circle cx="361" cy="434" r="8"></circle>
+      <text x="381" y="429">PROYECTO MANGANÁFER</text>
+      <text x="381" y="448">punto central orientativo</text>
+    </g>
+
+    <g class="manganafer-map-place manganafer-map-place-belones">
+      <circle cx="741" cy="116" r="6"></circle>
+      <text x="757" y="111">Los Belones</text>
+      <text x="757" y="129">referencia cercana</text>
+    </g>
+    <g class="manganafer-map-place manganafer-map-place-barracas">
+      <circle cx="677" cy="512" r="6"></circle>
+      <text x="693" y="507">Las Barracas</text>
+      <text x="693" y="525">referencia cercana</text>
+    </g>
+
+    <g class="manganafer-map-radius">
+      <path d="M214 164h112"></path>
+      <circle cx="214" cy="164" r="4"></circle>
+      <circle cx="326" cy="164" r="4"></circle>
+      <rect x="210" y="124" width="198" height="31" rx="15.5"></rect>
+      <text x="225" y="144">ÁREA MÁXIMA · 1 km</text>
+    </g>
+
+    <g class="manganafer-map-scale" aria-hidden="true">
+      <path d="M64 556v13h112v-13"></path>
+      <text x="64" y="592">0</text>
+      <text x="145" y="592">1 km</text>
+    </g>
+  </svg>
+  <figcaption id="manganafer-map-caption">
+    Representación visual para explicar el ámbito de la campaña. La distancia y
+    la elegibilidad se confirmarán con el CUPS de cada suministro.
+  </figcaption>
+</figure>

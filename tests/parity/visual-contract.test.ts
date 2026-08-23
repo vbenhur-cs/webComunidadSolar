@@ -29,6 +29,7 @@ import {
   launchChromium,
   parseVisualArguments,
   readVisualFixtures,
+  resolveVisualRuntimeEnvironment,
   runVisualParity,
   resolveVisualAuthPlan,
   runVisualCommand,
@@ -436,6 +437,12 @@ test("declares structural selectors for the remote and editorial templates", () 
     "body",
     "header",
     "main.partner-page",
+    "footer",
+  ]);
+  assert.deepEqual(templateSelectors.manganafer, [
+    "body",
+    "header",
+    "main.manganafer-page",
     "footer",
   ]);
 });
@@ -2772,6 +2779,40 @@ test("requires exact, separate auth fixtures for private visual routes", () => {
       ),
     /privad/i,
   );
+});
+
+test("uses synthetic, valid quote bindings only for the Manganáfer visual landing", async () => {
+  const manganafer = publicVisualMatrix().find(
+    (route) => route.path === "/comunidades-energeticas/manganafer",
+  );
+  assert.ok(manganafer);
+
+  const environment = resolveVisualRuntimeEnvironment([manganafer]);
+  assert.deepEqual(environment, {
+    MANGANAFER_ANNUAL_DEGRADATION: "0.005",
+    MANGANAFER_ANNUAL_PANEL_PRODUCTION_KWH: "1500",
+    MANGANAFER_AVAILABLE_PANELS: "100",
+    MANGANAFER_DISCOUNT: "0.5",
+    MANGANAFER_PANEL_FEE_VAT: "0.21",
+    MANGANAFER_PANEL_MONTHLY_FEE: "10",
+    MANGANAFER_PANEL_MONTHLY_FEE_WITHOUT_VAT: "8.2645",
+    MANGANAFER_PANEL_POWER_W: "450",
+    MANGANAFER_QUOTING_BEARER_TOKEN: "visual-parity-synthetic-token",
+  });
+  assert.deepEqual(resolveVisualRuntimeEnvironment(foundationMatrix()), {});
+
+  const key = "MANGANAFER_QUOTING_BEARER_TOKEN";
+  const previous = process.env[key];
+  try {
+    await withVisualSourceEnvironment(environment, async () => {
+      assert.equal(process.env[key], "visual-parity-synthetic-token");
+      return undefined;
+    });
+    assert.equal(process.env[key], previous);
+  } finally {
+    if (previous === undefined) delete process.env[key];
+    else process.env[key] = previous;
+  }
 });
 
 test("uses the access-wall selectors for any anonymous private page and restores source process bindings after a failed fetch", async () => {
