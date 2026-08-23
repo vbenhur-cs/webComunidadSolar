@@ -13,7 +13,7 @@ function text(value: string): string {
     .replaceAll("[", "\\[")
     .replaceAll("]", "\\]")
     .replaceAll("|", "\\|")
-    .replaceAll("\n", " ");
+    .replace(/[\r\n]+/gu, " ");
 }
 
 function list(values: readonly string[]): string {
@@ -22,8 +22,13 @@ function list(values: readonly string[]): string {
     : values.map((value) => `- ${text(value)}`).join("\n");
 }
 
-function criterionValidation(index: number): string {
-  return `acceptance-criterion-${index + 1}`;
+function criterionValidation(plan: ChangePlan, index: number): string {
+  const expected = `acceptance-criterion-${index + 1}`;
+  const validation = plan.validations.find((id) => id === expected);
+  if (validation === undefined) {
+    throw new TypeError("El plan no contiene evidencia para el criterio");
+  }
+  return validation;
 }
 
 /** Renders a reviewable, inert Markdown view of the exact hash-bound plan. */
@@ -56,10 +61,10 @@ export function renderPlanMarkdown(
           )
           .join("\n");
   const criteria = normalized.acceptanceCriteria
-    .map(
-      (criterion, index) =>
-        `| ${text(criterion)} | ${criterionValidation(index)} | Evidencia automática de ${criterionValidation(index)} |`,
-    )
+    .map((criterion, index) => {
+      const validation = criterionValidation(checkedPlan, index);
+      return `| ${text(criterion)} | ${validation} | Evidencia automática de ${validation} |`;
+    })
     .join("\n");
 
   return `# Plan de cambio: ${text(plan.changeId)}

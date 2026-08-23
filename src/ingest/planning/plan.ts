@@ -18,13 +18,22 @@ import {
   type SourceManifestRoute,
 } from "./route-impact.ts";
 
-export type PlanningPublication = ChangePlan["publication"];
+type PlanningPublication = ChangePlan["publication"];
+
+declare const preparedPublicationBrand: unique symbol;
+
+/** A publication profile returned by the Phase 3 sanitizer in this process. */
+export type PreparedPlanningPublication = PlanningPublication & {
+  readonly [preparedPublicationBrand]: true;
+};
+
+const preparedPublications = new WeakSet<object>();
 
 export interface PlanningContext {
   baselineCommit: string;
   sourceManifestPath: string;
   projectRoot?: string;
-  publication: PlanningPublication;
+  publication: PreparedPlanningPublication;
 }
 
 export interface PublicationPreparation {
@@ -40,6 +49,15 @@ interface SourceManifest {
   routes: SourceManifestRoute[];
 }
 
+const manifestRouteKinds = new Set([
+  "api",
+  "asset",
+  "gone",
+  "page",
+  "private-page",
+  "redirect",
+]);
+
 function isWithin(parent: string, child: string): boolean {
   const path = relative(parent, child);
   return path === "" || (!path.startsWith("..") && !isAbsolute(path));
@@ -50,6 +68,34 @@ function assertBaselineCommit(value: string): string {
     throw new TypeError("El baseline commit no es seguro");
   }
   return value;
+}
+
+function preparedPublication(
+  publication: PlanningPublication,
+): PreparedPlanningPublication {
+  const profile = Object.freeze({
+    adapter: publication.adapter,
+    configSha256: publication.configSha256,
+    environment: publication.environment,
+    siteIndexable: publication.siteIndexable,
+  });
+  preparedPublications.add(profile);
+  return profile as PreparedPlanningPublication;
+}
+
+function assertPreparedPublication(
+  value: unknown,
+): PreparedPlanningPublication {
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    !preparedPublications.has(value)
+  ) {
+    throw new TypeError(
+      "El plan requiere un perfil de publicación preparado por Fase 3",
+    );
+  }
+  return value as PreparedPlanningPublication;
 }
 
 function readSourceManifest(path: string, projectRoot: string): SourceManifest {
@@ -80,9 +126,15 @@ function readSourceManifest(path: string, projectRoot: string): SourceManifest {
       throw new TypeError("El manifiesto contiene una ruta no válida");
     }
     const record = route as { path: string; kind?: unknown };
+    if (
+      typeof record.kind !== "string" ||
+      !manifestRouteKinds.has(record.kind)
+    ) {
+      throw new TypeError("El manifiesto contiene un tipo de ruta no válido");
+    }
     return {
       path: record.path,
-      ...(typeof record.kind === "string" ? { kind: record.kind } : {}),
+      kind: record.kind,
     };
   });
   return { routes };
@@ -122,7 +174,7 @@ function defaultValidations(
  */
 export async function preparePlanningPublication(
   options: PublicationPreparation,
-): Promise<PlanningPublication> {
+): Promise<PreparedPlanningPublication> {
   const adapter = options.adapter ?? "local";
   const projectRoot = resolve(options.projectRoot ?? process.cwd());
   const configPath = resolve(
@@ -151,12 +203,12 @@ export async function preparePlanningPublication(
         "El perfil local debe ser no indexable y no desplegable",
       );
     }
-    return {
+    return preparedPublication({
       adapter: "local",
       configSha256: prepared.sha256,
       environment: null,
       siteIndexable: false,
-    };
+    });
   }
 
   if (options.environment === undefined || options.environment === "") {
@@ -170,12 +222,12 @@ export async function preparePlanningPublication(
       artifactRoot,
     },
   );
-  return {
+  return preparedPublication({
     adapter: "cloudflare",
     configSha256: prepared.sha256,
     environment: prepared.environment,
     siteIndexable: prepared.indexable,
-  };
+  });
 }
 
 /** Builds a closed, deterministic plan; it never writes a page or a route. */
@@ -185,6 +237,7 @@ export function createChangePlan(
 ): ChangePlan {
   const normalized = assertNormalizedRequest(request);
   const baselineCommit = assertBaselineCommit(context.baselineCommit);
+  const publication = assertPreparedPublication(context.publication);
   const manifest = readSourceManifest(
     context.sourceManifestPath,
     resolve(context.projectRoot ?? process.cwd()),
@@ -224,10 +277,10 @@ export function createChangePlan(
       normalized.acceptanceCriteria,
     ),
     publication: {
-      adapter: context.publication.adapter,
-      configSha256: context.publication.configSha256,
-      environment: context.publication.environment,
-      siteIndexable: context.publication.siteIndexable,
+      adapter: publication.adapter,
+      configSha256: publication.configSha256,
+      environment: publication.environment,
+      siteIndexable: publication.siteIndexable,
     },
   };
   const plan: ChangePlan = {

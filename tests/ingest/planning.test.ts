@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
@@ -13,7 +14,10 @@ import {
   type PlanningContext,
 } from "../../src/ingest/planning/plan.ts";
 import { renderPlanMarkdown } from "../../src/ingest/planning/markdown.ts";
-import { outputPaths } from "../../src/ingest/planning/route-impact.ts";
+import {
+  outputPaths,
+  routeExists,
+} from "../../src/ingest/planning/route-impact.ts";
 import { selectMode } from "../../src/ingest/planning/mode.ts";
 import { validateSchema } from "../../src/ingest/schema-validator.ts";
 
@@ -21,7 +25,7 @@ const root = process.cwd();
 const fixtures = join(root, "tests", "fixtures", "ingestion");
 const hash = (character: string) => character.repeat(64);
 
-const context: PlanningContext = {
+const forgedContext = {
   baselineCommit: "b".repeat(40),
   sourceManifestPath: join(root, "parity", "source-manifest.json"),
   publication: {
@@ -31,6 +35,23 @@ const context: PlanningContext = {
     siteIndexable: false,
   },
 };
+
+async function trustedContext(): Promise<PlanningContext> {
+  const artifactRoot = join(root, ".change-state", "planning-test-local");
+  await rm(artifactRoot, { recursive: true, force: true });
+  try {
+    return {
+      ...forgedContext,
+      publication: await preparePlanningPublication({
+        adapter: "local",
+        projectRoot: root,
+        stateArtifactRoot: artifactRoot,
+      }),
+    };
+  } finally {
+    await rm(artifactRoot, { recursive: true, force: true });
+  }
+}
 
 function request(
   overrides: Partial<NormalizedRequest> = {},
@@ -82,6 +103,22 @@ test("auto chooses hybrid for a supplied page using site chrome", () => {
   );
 });
 
+test("auto classifies a markup-bearing textual request with page semantics", () => {
+  assert.equal(
+    selectMode(
+      request({
+        mode: "auto",
+        content: '<main class="site-root">contenido</main>',
+      }),
+    ),
+    "hybrid",
+  );
+  assert.equal(
+    selectMode(request({ mode: "auto", content: "<main>contenido</main>" })),
+    "freeform",
+  );
+});
+
 test("explicit mode wins over automatic mode detection", () => {
   assert.equal(
     selectMode(pageRequest({ mode: "freeform", content: "<SiteLayout />" })),
@@ -89,8 +126,11 @@ test("explicit mode wins over automatic mode detection", () => {
   );
 });
 
-test("marks an existing route as an explicit overwrite", () => {
-  const plan = createChangePlan(request({ targetPath: "/baterias" }), context);
+test("marks an existing route as an explicit overwrite", async () => {
+  const plan = createChangePlan(
+    request({ targetPath: "/baterias" }),
+    await trustedContext(),
+  );
 
   assert.equal(plan.overwritesExistingRoute, true);
   assert.ok(plan.validations.includes("existing-route-visual-parity"));
@@ -98,6 +138,32 @@ test("marks an existing route as an explicit overwrite", () => {
     path: "src/pages/baterias.astro",
     operation: "modify",
   });
+});
+
+test("only known renderable manifest route kinds authorize overwrites", () => {
+  assert.equal(
+    routeExists("/baterias", [{ path: "/baterias", kind: "page" }]),
+    true,
+  );
+  assert.equal(
+    routeExists("/baterias", [{ path: "/baterias", kind: "private-page" }]),
+    true,
+  );
+  for (const kind of [
+    undefined,
+    "Page",
+    "api",
+    "asset",
+    "gone",
+    "redirect",
+    "unknown",
+  ]) {
+    assert.equal(
+      routeExists("/baterias", [{ path: "/baterias", kind }]),
+      false,
+      kind,
+    );
+  }
 });
 
 test("always plans the five safe generated outputs without directory expansion", () => {
@@ -123,7 +189,7 @@ test("produces a closed hash-bound JSON plan and complete Markdown for a request
   const fixture = await importRequest(
     join(fixtures, "detailed-request", "request.json"),
   );
-  const plan = createChangePlan(fixture, context);
+  const plan = createChangePlan(fixture, await trustedContext());
   const { planSha256, ...unsigned } = plan;
 
   assert.deepEqual(validateSchema("change-plan", plan), plan);
@@ -163,6 +229,7 @@ test("plans the supplied page fixture deterministically without writing site rou
     join(fixtures, "supplied-page"),
     join(fixtures, "page-meta.yaml"),
   );
+  const context = await trustedContext();
   const first = createChangePlan(fixture, context);
   const second = createChangePlan(fixture, context);
 
@@ -170,10 +237,93 @@ test("plans the supplied page fixture deterministically without writing site rou
   assert.equal(first.planSha256, second.planSha256);
   assert.equal(first.overwritesExistingRoute, false);
   assert.equal(first.files[0]?.operation, "create");
+  assert.deepEqual(validateSchema("change-plan", first), first);
+  const markdown = renderPlanMarkdown(first, fixture);
+  assert.match(markdown, /## Resumen de entrada/u);
+  assert.match(markdown, /## Matriz de aceptación/u);
+  assert.match(markdown, /solar\.svg/u);
   assert.equal(
     await readFile(join(root, "src", "pages", "index.astro"), "utf8"),
     before,
   );
+});
+
+test("neutralizes CR and LF in every untrusted Markdown interpolation context", async () => {
+  const fixture = request({
+    intent: "entrada\r## injected",
+    claims: ["claim\n## injected"],
+    references: ["https://example.test/\r## injected"],
+    allowedExternalLinks: ["https://example.test/\n## injected"],
+    assets: [
+      {
+        path: "asset\r## injected",
+        mediaType: "text/plain\n## injected",
+        sha256: "a".repeat(64),
+      },
+    ],
+    seo: { title: "SEO\r## injected", description: null, index: true },
+    acceptanceCriteria: ["criterio\n## injected"],
+  });
+  const plan = createChangePlan(fixture, await trustedContext());
+  const markdown = renderPlanMarkdown(plan, fixture);
+
+  assert.doesNotMatch(markdown, /\r|^## injected$/mu);
+});
+
+test("binds plans only to real Phase 3 local and Cloudflare profiles", async () => {
+  const local = await trustedContext();
+  assert.doesNotThrow(() => createChangePlan(request(), local));
+  assert.throws(
+    () => createChangePlan(request(), forgedContext as PlanningContext),
+    /perfil de publicaci[oó]n preparado/i,
+  );
+
+  const cloudRoot = await mkdtemp(join(tmpdir(), "planning-cloudflare-"));
+  try {
+    await mkdir(join(cloudRoot, "dist", "server"), { recursive: true });
+    await mkdir(join(cloudRoot, "drizzle"), { recursive: true });
+    await writeFile(
+      join(cloudRoot, "wrangler.jsonc"),
+      JSON.stringify({
+        name: "comunidad-solar-preview",
+        main: "./dist/server/entry.mjs",
+        compatibility_date: "2026-08-21",
+        compatibility_flags: ["nodejs_compat"],
+        assets: {
+          binding: "ASSETS",
+          directory: "./dist",
+          run_worker_first: true,
+        },
+        d1_databases: [
+          {
+            binding: "DB",
+            database_name: "comunidad-solar-preview",
+            database_id: "11111111-2222-4333-8444-555555555555",
+            migrations_dir: "./drizzle",
+          },
+        ],
+        vars: { SITE_INDEXABLE: "true" },
+        env: { preview: { vars: { SITE_INDEXABLE: "false" } } },
+      }),
+      "utf8",
+    );
+    const cloudflare = await preparePlanningPublication({
+      adapter: "cloudflare",
+      projectRoot: cloudRoot,
+      environment: "preview",
+      stateArtifactRoot: join(cloudRoot, ".change-state", "profiles"),
+    });
+    const plan = createChangePlan(request(), {
+      ...forgedContext,
+      publication: cloudflare,
+    });
+    assert.deepEqual(plan.publication, cloudflare);
+    assert.match(plan.publication.configSha256, /^[a-f0-9]{64}$/u);
+    assert.equal(plan.publication.environment, "preview");
+    assert.equal(plan.publication.siteIndexable, false);
+  } finally {
+    await rm(cloudRoot, { recursive: true, force: true });
+  }
 });
 
 test("prepares a non-deployable local profile only under change state", async () => {

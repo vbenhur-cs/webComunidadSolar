@@ -16,6 +16,8 @@ export interface SourceManifestRoute {
   kind?: string;
 }
 
+const renderableRouteKinds = new Set(["page", "private-page"]);
+
 function isSafeRelativePath(path: string): boolean {
   return (
     path.length > 0 &&
@@ -70,7 +72,7 @@ export function routeExists(
   return routes.some(
     (route) =>
       route.path === targetPath &&
-      route.kind !== "api" &&
-      route.kind !== "asset",
+      route.kind !== undefined &&
+      renderableRouteKinds.has(route.kind),
   );
 }
