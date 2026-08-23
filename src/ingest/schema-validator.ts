@@ -9,7 +9,8 @@ export type IngestionSchemaName =
   | "change-plan"
   | "approval"
   | "attempt"
-  | "candidate";
+  | "candidate"
+  | "agent-result";
 
 function readSchema(name: IngestionSchemaName): object {
   const file = new URL(
@@ -26,6 +27,7 @@ const schemas: Record<IngestionSchemaName, object> = {
   approval: readSchema("approval"),
   attempt: readSchema("attempt"),
   candidate: readSchema("candidate"),
+  "agent-result": readSchema("agent-result"),
 };
 
 const ajv = new Ajv({

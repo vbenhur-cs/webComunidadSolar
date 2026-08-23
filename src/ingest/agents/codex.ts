@@ -10,6 +10,7 @@ import {
   type ProcessRunner,
 } from "./types.ts";
 import { resolveAgentRunContext } from "../worktrees/service.ts";
+import { validateSchema } from "../schema-validator.ts";
 
 export interface CodexInvocation {
   command: "codex";
@@ -137,17 +138,11 @@ async function generatedFiles(path: string): Promise<string[]> {
     return [];
   }
   {
-    if (
-      typeof parsed === "object" &&
-      parsed !== null &&
-      Array.isArray((parsed as { generatedFiles?: unknown }).generatedFiles) &&
-      (parsed as { generatedFiles: unknown[] }).generatedFiles.every(
-        (value) => typeof value === "string",
-      )
-    ) {
-      return (parsed as { generatedFiles: string[] }).generatedFiles.map(
-        assertSafeGeneratedFile,
-      );
+    if (typeof parsed === "object" && parsed !== null) {
+      return validateSchema<{ generatedFiles: string[] }>(
+        "agent-result",
+        parsed,
+      ).generatedFiles.map(assertSafeGeneratedFile);
     }
   }
   return [];

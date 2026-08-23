@@ -3,6 +3,7 @@ import { isAbsolute, join, relative, resolve } from "node:path";
 
 import { assertOperatorIsolationBroker } from "./isolation.ts";
 import { resolveAgentRunContext } from "../worktrees/service.ts";
+import { validateSchema } from "../schema-validator.ts";
 
 import {
   runProcess,
@@ -151,13 +152,11 @@ async function generatedFiles(output: string): Promise<string[]> {
     return [];
   }
   {
-    const files = (result as { generatedFiles?: unknown })?.generatedFiles;
-    if (
-      Array.isArray(files) &&
-      files.every((file) => typeof file === "string")
-    ) {
-      return files.map(assertSafeGeneratedFile);
-    }
+    const validated = validateSchema<{ generatedFiles: string[] }>(
+      "agent-result",
+      result,
+    );
+    return validated.generatedFiles.map(assertSafeGeneratedFile);
   }
   return [];
 }

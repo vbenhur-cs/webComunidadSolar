@@ -292,7 +292,7 @@ test("candidate worktree copies immutable inputs and cleans only its exact path"
     } finally {
       await removeCandidateWorktree(candidate);
     }
-    assert.ok((await stat(candidate.path)).isDirectory());
+    await assert.rejects(stat(candidate.path));
   });
 });
 
@@ -314,7 +314,7 @@ test("rejects an agent change outside approved output paths", async () => {
         validateWorktreeDiff(candidate, plan(baseline)),
         /package\.json no aprobado/i,
       );
-      assert.ok((await stat(candidate.path)).isDirectory());
+      await assert.rejects(stat(candidate.path));
     } finally {
       await removeCandidateWorktree(candidate);
     }
@@ -560,7 +560,7 @@ test("command result rejects traversal rather than trusting agent stdout", async
         recordingBroker(),
         runner,
       ).run(input),
-      /path generado no seguro/i,
+      /(path generado no seguro|schema agent-result)/i,
     );
   } finally {
     await rm(worktree, { recursive: true, force: true });

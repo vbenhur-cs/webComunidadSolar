@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import {
   cp,
   lstat,
@@ -7,6 +7,8 @@ import {
   mkdtemp,
   readFile,
   realpath,
+  rename,
+  rm,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { isAbsolute, join, relative, resolve } from "node:path";
@@ -363,13 +365,43 @@ export async function removeCandidateWorktree(
   if (!owned.has(candidate))
     throw new TypeError("El worktree no pertenece a este servicio");
   await assertOwned(candidate);
+  const quarantineBase = await directory(
+    join(candidate.repositoryRoot, ".agent-quarantine"),
+    candidate.repositoryRoot,
+  );
+  const quarantineChange = await directory(
+    join(quarantineBase, candidate.changeId),
+    quarantineBase,
+  );
+  const quarantined = join(
+    quarantineChange,
+    `${candidate.attemptId}-${randomUUID()}`,
+  );
+  // Atomic same-filesystem move: a swapped leaf is quarantined, never erased.
+  await rename(candidate.path, quarantined).catch(() => undefined);
   await execFileAsync(
     "git",
-    ["-C", candidate.repositoryRoot, "worktree", "remove", candidate.path],
+    ["-C", candidate.repositoryRoot, "worktree", "prune"],
     { encoding: "utf8", env: sanitizedGitEnv() },
   ).catch(() => undefined);
-  // Dirty or identity-ambiguous candidates remain quarantined for an operator;
-  // never escalate to --force or a recursive filesystem delete.
+  const ref = `refs/heads/${candidate.branch}`;
+  const oid = await git(candidate.repositoryRoot, [
+    "rev-parse",
+    "--verify",
+    ref,
+  ]).catch(() => "");
+  if (oid === candidate.baselineCommit) {
+    await git(candidate.repositoryRoot, [
+      "update-ref",
+      "-d",
+      ref,
+      candidate.baselineCommit,
+    ]).catch(() => undefined);
+  }
+  await rm(candidate.outputDirectory, { recursive: true, force: false }).catch(
+    () => undefined,
+  );
+  owned.delete(candidate);
 }
 export async function validateCopiedInputs(
   candidate: CandidateWorktree,
