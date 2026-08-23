@@ -1,0 +1,507 @@
+---
+import {
+  allianceFacts,
+  documentCategories,
+  executiveSummary,
+  financialMetrics,
+  grantedSubsidies,
+  growthEngines,
+  milestoneAgenda,
+  partnerUpdate,
+  potentialSubsidies,
+  publishedMaterials,
+  roadmapPhases,
+  teamUpdates,
+} from "../../content/partner-data";
+import { signOutPath } from "../../lib/auth/private-area";
+import { HeaderIsland } from "../site/HeaderIsland";
+import Footer from "../site/Footer.astro";
+
+interface Props {
+  displayName: string;
+  email: string;
+}
+
+const { displayName, email } = Astro.props;
+const signOutHref = signOutPath("/");
+---
+
+<div class="site-root partner-root">
+  <HeaderIsland client:load page="socios" />
+  <main id="contenido-principal" class="partner-page" tabindex="-1">
+    <section class="partner-hero">
+      <div class="shell partner-hero-grid">
+        <div>
+          <div class="partner-private-label">
+            <span aria-hidden="true">●</span>
+            Área privada · socios fundadores
+          </div>
+          <p class="eyebrow">Actualización de compañía</p>
+          <h1>Una nueva etapa para <span>Comunidad Solar.</span></h1>
+          <p class="partner-hero-lead">
+            Dónde estamos, qué hemos conseguido y qué vamos a ejecutar durante
+            los próximos meses, contado con claridad y con el nivel de certeza
+            de cada decisión.
+          </p>
+          <div class="partner-hero-actions">
+            <a class="button button-primary" href="#resumen">
+              Ver el resumen ejecutivo <span aria-hidden="true">↓</span>
+            </a>
+            <a class="button button-secondary" href="#agenda">
+              Próximos hitos <span aria-hidden="true">↓</span>
+            </a>
+          </div>
+        </div>
+        <aside class="partner-account-card">
+          <span class="partner-account-kicker">Sesión verificada</span>
+          <strong>{displayName}</strong>
+          <small>{email}</small>
+          <dl>
+            <div>
+              <dt>Edición</dt>
+              <dd>{partnerUpdate.edition}</dd>
+            </div>
+            <div>
+              <dt>Corte</dt>
+              <dd>
+                <time datetime={partnerUpdate.isoDate}>
+                  {partnerUpdate.publishedAt}
+                </time>
+              </dd>
+            </div>
+            <div>
+              <dt>Audiencia</dt>
+              <dd>Socios fundadores autorizados</dd>
+            </div>
+          </dl>
+          <a href={signOutHref}>Cerrar sesión →</a>
+        </aside>
+      </div>
+    </section>
+
+    <nav class="partner-section-nav" aria-label="Secciones del área privada">
+      <div class="shell">
+        <a href="#resumen">Resumen</a>
+        <a href="#agenda">Agenda</a>
+        <a href="#roadmap">Roadmap</a>
+        <a href="#finanzas">Finanzas</a>
+        <a href="#crecimiento">Crecimiento</a>
+        <a href="#equipo">Equipo</a>
+        <a href="#documentos">Documentos</a>
+      </div>
+    </nav>
+
+    <div class="shell partner-confidentiality">
+      <strong>Confidencial · socios fundadores</strong>
+      <p>
+        Esta actualización no sustituye las comunicaciones societarias formales.
+        Los objetivos y ventanas de ejecución se distinguen de los acuerdos,
+        fechas e importes ya confirmados.
+      </p>
+    </div>
+
+    <section class="partner-section partner-pulse" id="resumen">
+      <div class="shell">
+        <div class="partner-section-heading">
+          <div>
+            <p class="eyebrow">Resumen ejecutivo</p>
+            <h2>La lectura completa de este momento</h2>
+          </div>
+          <time datetime={partnerUpdate.isoDate}>
+            Corte · <!-- -->{partnerUpdate.publishedAt}
+          </time>
+        </div>
+
+        <div class="partner-founder-note">
+          <div class="partner-founder-signature" aria-hidden="true">PR</div>
+          <div>
+            <span>Una nota de Paco</span>
+            <p>
+              Durante estos años hemos construido mucho más que una
+              comercializadora: activos, proyectos, tecnología y una nueva forma
+              de compartir energía solar. Ese esfuerzo ha generado tensiones de
+              caja, pero los resultados de 2025 confirman que debajo existe un
+              negocio operativo rentable.
+            </p>
+            <p>
+              La etapa que empieza ahora consiste en convertir esa base en una
+              compañía más sólida: menos deuda cara, más financiación externa
+              para construir, más control y una capacidad comercial renovada.
+            </p>
+          </div>
+        </div>
+
+        <div class="partner-summary-grid">
+          {
+            executiveSummary.map((item) => (
+              <article>
+                <div>
+                  <span>{item.label}</span>
+                  <span class={`partner-status partner-status-${item.tone}`}>
+                    {item.tone === "confirmed" ? "Confirmado" : "En ejecución"}
+                  </span>
+                </div>
+                <h3>{item.title}</h3>
+                <p>{item.copy}</p>
+              </article>
+            ))
+          }
+        </div>
+      </div>
+    </section>
+
+    <section class="partner-section partner-agenda" id="agenda">
+      <div class="shell">
+        <div class="partner-section-heading">
+          <div>
+            <p class="eyebrow">Agenda de hitos</p>
+            <h2>Las próximas fechas que pueden cambiar el plan</h2>
+          </div>
+          <p>
+            Incluimos acontecimientos materiales, no reuniones ordinarias. Las
+            fechas confirmadas y las ventanas objetivo se muestran de forma
+            diferente.
+          </p>
+        </div>
+        <div class="partner-agenda-list">
+          {
+            milestoneAgenda.map((milestone) => (
+              <article>
+                <time datetime={milestone.isoDate}>
+                  <strong>{milestone.date}</strong>
+                  <span>{milestone.year}</span>
+                </time>
+                <div class="partner-agenda-body">
+                  <span
+                    class={`partner-status partner-status-${milestone.tone}`}
+                  >
+                    {milestone.kind}
+                  </span>
+                  <h3>{milestone.title}</h3>
+                  <p>{milestone.copy}</p>
+                  <small>{milestone.impact}</small>
+                </div>
+              </article>
+            ))
+          }
+        </div>
+      </div>
+    </section>
+
+    <section class="partner-section partner-roadmap" id="roadmap">
+      <div class="shell">
+        <div class="partner-section-heading">
+          <div>
+            <p class="eyebrow">Roadmap 2026–2027</p>
+            <h2>Estabilizar, acelerar y escalar</h2>
+          </div>
+          <p>
+            El documento de ejecución se resume aquí en tres horizontes,
+            preservando la diferencia entre trabajo en curso y objetivos.
+          </p>
+        </div>
+        <div class="partner-roadmap-grid">
+          {
+            roadmapPhases.map((phase, index) => (
+              <article>
+                <div class="partner-roadmap-top">
+                  <span>{String(index + 1).padStart(2, "0")}</span>
+                  <span class={`partner-status partner-status-${phase.tone}`}>
+                    {phase.status}
+                  </span>
+                </div>
+                <small>{phase.period}</small>
+                <h3>{phase.title}</h3>
+                <ul>
+                  {phase.items.map((item) => (
+                    <li>{item}</li>
+                  ))}
+                </ul>
+              </article>
+            ))
+          }
+        </div>
+      </div>
+    </section>
+
+    <section class="partner-section partner-finance" id="finanzas">
+      <div class="shell">
+        <div class="partner-section-heading">
+          <div>
+            <p class="eyebrow">Resultados y posición de partida</p>
+            <h2>Un negocio rentable puede sufrir tensiones de caja</h2>
+          </div>
+          <p>
+            La rentabilidad operativa y la liquidez son dos lecturas distintas.
+            Esta es la explicación que une ambas.
+          </p>
+        </div>
+
+        <div
+          class="partner-metric-grid"
+          aria-label="Resultados agrupados de 2025"
+        >
+          {
+            financialMetrics.map((metric) => (
+              <article>
+                <strong>{metric.value}</strong>
+                <span>{metric.label}</span>
+                <small>{metric.note}</small>
+              </article>
+            ))
+          }
+        </div>
+        <p class="partner-financial-disclaimer">
+          Magnitudes agrupadas de gestión obtenidas mediante la suma de las
+          cuentas individuales de las sociedades del grupo. No son cuentas
+          consolidadas y todavía no eliminan las operaciones y saldos entre las
+          propias compañías.
+        </p>
+
+        <div class="partner-cash-bridge">
+          <div>
+            <span>01</span>
+            <strong>EBITDA operativo</strong>
+          </div>
+          <i aria-hidden="true">→</i>
+          <div>
+            <span>02</span>
+            <strong>Activos y tecnología</strong>
+          </div>
+          <i aria-hidden="true">→</i>
+          <div>
+            <span>03</span>
+            <strong>Coste financiero</strong>
+          </div>
+          <i aria-hidden="true">→</i>
+          <div>
+            <span>04</span>
+            <strong>Caja disponible</strong>
+          </div>
+        </div>
+        <div class="partner-finance-reading">
+          <p>
+            Una parte importante de los recursos se ha destinado a desarrollar
+            proyectos, construir activos y crear Helios. Al mismo tiempo, parte
+            de la deuda disponible tenía un coste alto.
+          </p>
+          <p>
+            El objetivo de esta etapa es transformar la rentabilidad operativa
+            en caja recurrente: reordenar deuda, contener costes y financiar los
+            nuevos proyectos mediante ayudas, PPAs y recursos de terceros.
+          </p>
+        </div>
+
+        <div class="partner-alliance">
+          <div class="partner-alliance-heading">
+            <p class="eyebrow">FIEE y Cubierta Solar</p>
+            <h3>
+              La integración societaria no se hizo. La alianza operativa sí.
+            </h3>
+            <p>
+              El acuerdo permite crecer sin financiar directamente toda la
+              construcción y sin diluir ahora a los socios.
+            </p>
+          </div>
+          <div class="partner-alliance-grid">
+            {
+              allianceFacts.map((fact) => (
+                <article>
+                  <strong>{fact.value}</strong>
+                  <h4>{fact.title}</h4>
+                  <p>{fact.copy}</p>
+                </article>
+              ))
+            }
+          </div>
+        </div>
+
+        <div class="partner-subsidy-heading">
+          <div>
+            <p class="eyebrow">Subvenciones</p>
+            <h3>Una cartera con dos niveles de certeza</h3>
+          </div>
+          <p>
+            Aproximadamente 1,922 M€ concedidos y 6,05 M€ adicionales asociados
+            a adquisiciones u opciones todavía sujetas a ejecución.
+          </p>
+        </div>
+        <div class="partner-subsidy-grid">
+          <article>
+            <div>
+              <span>Concedidas</span>
+              <strong>≈ 1,922 M€</strong>
+            </div>
+            <ul>
+              {
+                grantedSubsidies.map((item) => (
+                  <li>
+                    <span>{item.project}</span>
+                    <strong>{item.amount}</strong>
+                  </li>
+                ))
+              }
+            </ul>
+          </article>
+          <article>
+            <div>
+              <span>Potencial adicional</span>
+              <strong>6,05 M€</strong>
+            </div>
+            <ul>
+              {
+                potentialSubsidies.map((item) => (
+                  <li>
+                    <span>{item.project}</span>
+                    <strong>{item.amount}</strong>
+                  </li>
+                ))
+              }
+            </ul>
+            <small>
+              No se presentan como caja disponible ni como subvenciones ya
+              incorporadas al balance.
+            </small>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="partner-section partner-growth" id="crecimiento">
+      <div class="shell partner-growth-grid">
+        <div>
+          <p class="eyebrow">Motores de crecimiento</p>
+          <h2>Cuatro piezas que se refuerzan entre sí</h2>
+          <p class="partner-section-copy">
+            Nuevos productos, financiación externa y una infraestructura digital
+            común convierten la cartera de proyectos en una plataforma
+            escalable.
+          </p>
+        </div>
+        <div class="partner-engine-list">
+          {
+            growthEngines.map((engine) => (
+              <article
+                class={
+                  "featured" in engine && engine.featured
+                    ? "partner-engine-helios"
+                    : undefined
+                }
+              >
+                <span>{engine.marker}</span>
+                <div>
+                  <h3>{engine.title}</h3>
+                  <p>{engine.copy}</p>
+                </div>
+              </article>
+            ))
+          }
+        </div>
+      </div>
+    </section>
+
+    <section class="partner-section partner-team" id="equipo">
+      <div class="shell">
+        <div class="partner-section-heading">
+          <div>
+            <p class="eyebrow">El equipo para esta nueva etapa</p>
+            <h2>Más capacidad financiera y comercial</h2>
+          </div>
+          <p>
+            No es un organigrama: son las incorporaciones que cambian nuestra
+            capacidad de ejecutar el plan.
+          </p>
+        </div>
+        <div class="partner-team-grid">
+          {
+            teamUpdates.map((person) => (
+              <article>
+                <div class="partner-team-initials" aria-hidden="true">
+                  {person.initials}
+                </div>
+                <div class="partner-team-copy">
+                  <span>{person.role}</span>
+                  <h3>{person.name}</h3>
+                  <strong>{person.title}</strong>
+                  <p>{person.copy}</p>
+                  <small>{person.mandate}</small>
+                </div>
+              </article>
+            ))
+          }
+        </div>
+      </div>
+    </section>
+
+    <section class="partner-section partner-documents" id="documentos">
+      <div class="shell">
+        <div class="partner-section-heading">
+          <div>
+            <p class="eyebrow">Biblioteca societaria</p>
+            <h2>La información importante, ordenada y protegida</h2>
+          </div>
+          <p>
+            Los materiales de esta edición ya están reunidos aquí. Las actas y
+            documentos formales se incorporarán únicamente cuando estén
+            aprobados y con descarga protegida por la misma autorización.
+          </p>
+        </div>
+        <div class="partner-material-list">
+          {
+            publishedMaterials.map((material) => (
+              <a href={material.href}>
+                <time>{material.date}</time>
+                <div>
+                  <span>{material.kind}</span>
+                  <h3>{material.title}</h3>
+                  <p>{material.copy}</p>
+                </div>
+                <strong>{material.action} →</strong>
+              </a>
+            ))
+          }
+        </div>
+        <div class="partner-document-policy">
+          <div>
+            <span>Qué tendrá cabida</span>
+            <h3>Una biblioteca útil, no un almacén de borradores</h3>
+          </div>
+          <div class="partner-document-categories">
+            {
+              documentCategories.map((category) => (
+                <article>
+                  <h4>{category.title}</h4>
+                  <p>{category.copy}</p>
+                </article>
+              ))
+            }
+          </div>
+          <p>
+            Solo se publicarán versiones aprobadas o firmadas. Los documentos
+            reservados al Consejo, los borradores y los materiales de due
+            diligence no formarán parte de esta biblioteca.
+          </p>
+        </div>
+
+        <div class="partner-contact-card">
+          <div>
+            <span>Canal directo con Paco</span>
+            <h2>¿Qué decisión o dato quieres que expliquemos mejor?</h2>
+            <p>
+              Las preguntas de los socios fundadores nos ayudan a mejorar las
+              siguientes actualizaciones y a llegar mejor preparados a los
+              órganos societarios.
+            </p>
+          </div>
+          <a
+            class="button button-primary"
+            href="mailto:paco@comunidad.solar?subject=Pregunta%20desde%20el%20%C3%A1rea%20de%20socios%20fundadores"
+          >
+            Escribir a Paco <span aria-hidden="true">→</span>
+          </a>
+        </div>
+      </div>
+    </section>
+  </main>
+  <Footer />
+</div>

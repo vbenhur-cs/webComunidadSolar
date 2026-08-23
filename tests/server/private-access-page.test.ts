@@ -30,7 +30,7 @@ test("renders the source-faithful anonymous, denied, and unconfigured private-ac
       astro,
       ["build", "--root", fixtureRoot, "--outDir", outputDirectory],
       {
-        cwd: projectRoot,
+        cwd: fixtureRoot,
         env: {
           ...process.env,
           PRIVATE_ACCESS_FIXTURE_CACHE_DIR: join(outputDirectory, "cache"),

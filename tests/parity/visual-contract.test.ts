@@ -432,6 +432,12 @@ test("declares structural selectors for the remote and editorial templates", () 
     "main.team-guide-page",
     "footer",
   ]);
+  assert.deepEqual(templateSelectors.socios, [
+    "body",
+    "header",
+    "main.partner-page",
+    "footer",
+  ]);
 });
 
 test("serves exact archive assets before the source worker and delegates absent paths", async () => {
@@ -2472,6 +2478,22 @@ function privateGuideVisualMatrix(): RouteMatrixEntry[] {
   ];
 }
 
+function privatePartnerVisualMatrix(): RouteMatrixEntry[] {
+  return [
+    {
+      path: "/socios",
+      kind: "private-page",
+      sourceFile: "app/socios/page.tsx",
+      fixtureId: null,
+      expectedStatus: 200,
+      expectedLocation: null,
+      privateArea: "socios",
+      visualTemplate: "socios",
+      status: "pending",
+    },
+  ];
+}
+
 function lifecycleDependencies(options: {
   failCapture?: boolean;
   failReport?: boolean;
@@ -2752,8 +2774,9 @@ test("requires exact, separate auth fixtures for private visual routes", () => {
   );
 });
 
-test("uses the access-wall selectors for an anonymous guide and restores source process bindings after a failed fetch", async () => {
+test("uses the access-wall selectors for any anonymous private page and restores source process bindings after a failed fetch", async () => {
   const [guide] = privateGuideVisualMatrix();
+  const [partner] = privatePartnerVisualMatrix();
   assert.deepEqual(
     selectVisualCaptureSelectors(guide, { name: "anonymous", headers: {} }),
     ["body", "header", "main.private-access-page", "footer"],
@@ -2764,6 +2787,17 @@ test("uses the access-wall selectors for an anonymous guide and restores source 
       headers: { "oai-authenticated-user-email": "visual-parity-auth@example.test" },
     }),
     ["body", "header", "main.team-guide-page", "footer"],
+  );
+  assert.deepEqual(
+    selectVisualCaptureSelectors(partner, { name: "anonymous", headers: {} }),
+    ["body", "header", "main.private-access-page", "footer"],
+  );
+  assert.deepEqual(
+    selectVisualCaptureSelectors(partner, {
+      name: "allowed",
+      headers: { "oai-authenticated-user-email": "visual-parity-auth@example.test" },
+    }),
+    ["body", "header", "main.partner-page", "footer"],
   );
 
   const key = "TEAM_ALLOWED_EMAILS";

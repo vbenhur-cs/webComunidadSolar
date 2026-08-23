@@ -1,0 +1,59 @@
+---
+import { env } from "cloudflare:workers";
+
+import PrivateAccessPage from "../components/private/PrivateAccessPage.astro";
+import DocumentLayout from "../layouts/DocumentLayout.astro";
+import { readIdentity } from "../lib/auth/identity.ts";
+import {
+  readAccessEnv,
+  resolvePrivateAccess,
+} from "../lib/auth/private-area.ts";
+
+export const prerender = false;
+
+const returnTo = "/socios";
+const identity = readIdentity(Astro.request.headers);
+const decision = resolvePrivateAccess(
+  "socios",
+  identity,
+  readAccessEnv(env as unknown as Record<string, unknown>),
+);
+let PartnerDashboard:
+  typeof import("../components/private/PartnerDashboard.astro").default | null =
+  null;
+if (decision.allowed) {
+  ({ default: PartnerDashboard } =
+    await import("../components/private/PartnerDashboard.astro"));
+}
+const blockedDecision = decision.allowed ? null : decision;
+const meta = {
+  title: "Área privada de socios fundadores",
+  description:
+    "Información estratégica y actualizaciones anticipadas para socios fundadores de Comunidad Solar Power.",
+  canonical: null,
+  robots: {
+    index: false,
+    follow: false,
+    noarchive: true,
+    noimageindex: true,
+  },
+};
+---
+
+<DocumentLayout {meta}>
+  {
+    PartnerDashboard ? (
+      <PartnerDashboard
+        displayName={identity?.displayName ?? ""}
+        email={identity?.email ?? ""}
+      />
+    ) : (
+      <PrivateAccessPage
+        area="socios"
+        {returnTo}
+        state={blockedDecision!.state}
+        userEmail={identity?.email}
+      />
+    )
+  }
+</DocumentLayout>

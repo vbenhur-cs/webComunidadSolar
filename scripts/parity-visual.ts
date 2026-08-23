@@ -1636,7 +1636,7 @@ export function selectVisualCaptureSelectors(
     throw new Error(`La ruta ${route.path} no tiene template visual`);
   }
   const selectedTemplate =
-    template === "team-guide" && authFixture?.name === "anonymous"
+    route.kind === "private-page" && authFixture?.name === "anonymous"
       ? "private-access"
       : template;
   const selectors = templateSelectors[selectedTemplate];

@@ -213,6 +213,7 @@ export const templateSelectors: Readonly<Record<string, readonly string[]>> = {
   "legal-page": ["body", "header", "main", "main .legal-document", "footer"],
   "private-access": ["body", "header", "main.private-access-page", "footer"],
   "team-guide": ["body", "header", "main.team-guide-page", "footer"],
+  socios: ["body", "header", "main.partner-page", "footer"],
 };
 
 function compareText(left: string, right: string): number {
