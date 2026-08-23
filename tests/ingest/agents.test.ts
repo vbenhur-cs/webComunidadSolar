@@ -29,6 +29,7 @@ import type {
 } from "../../src/ingest/agents/types.ts";
 import {
   createCandidateWorktree,
+  createTestAgentRunContext,
   removeCandidateWorktree,
 } from "../../src/ingest/worktrees/service.ts";
 import { validateWorktreeDiff } from "../../src/ingest/worktrees/policy.ts";
@@ -141,7 +142,7 @@ async function createInput(
     writeFile(policyPath, "{}", "utf8"),
     writeFile(resultSchemaPath, "{}", "utf8"),
   ]);
-  return {
+  return createTestAgentRunContext({
     changeId: "agent-isolation",
     attemptId: "attempt-000001",
     worktree: candidatePath,
@@ -150,7 +151,7 @@ async function createInput(
     policyPath,
     resultSchemaPath,
     outputDirectory,
-  };
+  });
 }
 
 function recordingRunner(): {
@@ -567,6 +568,28 @@ test("command result rejects traversal rather than trusting agent stdout", async
   }
 });
 
+test("adapters reject a forged structural run input before spawning", async () => {
+  const { runner, calls } = recordingRunner();
+  await assert.rejects(
+    new CommandAgent(
+      { command: process.execPath, args: [] },
+      recordingBroker(),
+      runner,
+    ).run({
+      changeId: "agent-isolation",
+      attemptId: "attempt-000001",
+      worktree: "/tmp/nope",
+      requestPath: "/tmp/request",
+      planPath: "/tmp/plan",
+      policyPath: "/tmp/policy",
+      resultSchemaPath: "/tmp/schema",
+      outputDirectory: "/tmp/output",
+    }),
+    /contexto de ejecución/i,
+  );
+  assert.equal(calls.length, 0);
+});
+
 test("fixture agents are bound to one owned disposable candidate", async () => {
   await withRepository(async ({ root, baseline }) => {
     const candidate = await createCandidateWorktree({
@@ -586,7 +609,7 @@ test("fixture agents are bound to one owned disposable candidate", async () => {
       stderrPath: join(candidate.outputDirectory, "stderr"),
       finalMessagePath: join(candidate.outputDirectory, "final"),
     }));
-    const input = {
+    const input = createTestAgentRunContext({
       changeId: candidate.changeId,
       attemptId: candidate.attemptId,
       worktree: candidate.path,
@@ -595,7 +618,7 @@ test("fixture agents are bound to one owned disposable candidate", async () => {
       policyPath: join(candidate.path, ".agent-input", "policy.json"),
       resultSchemaPath: join(root, "schema.json"),
       outputDirectory: candidate.outputDirectory,
-    };
+    });
     try {
       assert.equal((await run.agent.run(input)).adapter, "fixture");
       await run.dispose();

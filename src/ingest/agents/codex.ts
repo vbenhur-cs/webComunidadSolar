@@ -9,6 +9,7 @@ import {
   type AgentRunResult,
   type ProcessRunner,
 } from "./types.ts";
+import { resolveAgentRunContext } from "../worktrees/service.ts";
 
 export interface CodexInvocation {
   command: "codex";
@@ -89,15 +90,18 @@ export class CodexAgent implements AgentAdapter {
   constructor(private readonly runner: ProcessRunner = runProcess) {}
 
   async run(input: AgentRunInput): Promise<AgentRunResult> {
+    input = await resolveAgentRunContext(input);
     const invocation = codexInvocation(input);
     const paths = outputPaths(input);
     await assertOutputDirectory(input);
+    await resolveAgentRunContext(input);
     const result = await this.runner(await codexExecutable(), invocation.args, {
       cwd: input.worktree,
       env: { PATH: "/usr/bin:/bin", LANG: "C", LC_ALL: "C" },
       input: invocation.input,
       shell: false,
     });
+    await resolveAgentRunContext(input);
     await Promise.all([
       writeFile(paths.stdoutPath, result.stdout, "utf8"),
       writeFile(paths.stderrPath, result.stderr, "utf8"),

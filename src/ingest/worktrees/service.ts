@@ -20,6 +20,7 @@ import { validateSchema } from "../schema-validator.ts";
 const execFileAsync = promisify(execFile);
 const names = ["request.json", "plan.json", "policy.json"] as const;
 const owned = new WeakSet<CandidateWorktree>();
+const runContexts = new WeakMap<object, CandidateWorktree | null>();
 type Identity = { device: number; inode: number };
 export interface GitSnapshot {
   head: string;
@@ -53,6 +54,7 @@ export interface CandidateWorktree {
   repositorySnapshot: GitSnapshot;
   sourceSnapshot: GitSnapshot;
   candidateSnapshot: GitSnapshot;
+  approvedPlan: ChangePlan;
 }
 const safeId = (value: string, name: string) => {
   if (!/^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/u.test(value))
@@ -299,6 +301,7 @@ export async function createCandidateWorktree(
       repositorySnapshot: await gitSnapshot(repositoryRoot),
       sourceSnapshot: await gitSnapshot(sourceRepositoryRoot),
       candidateSnapshot: await gitSnapshot(path),
+      approvedPlan: approved,
     };
     const candidateRef = `refs/heads/${branch}\0${input.baselineCommit}`;
     const withoutCandidateRef = (refs: string) =>
@@ -409,4 +412,66 @@ export async function assertCandidateOwnership(
   candidate: CandidateWorktree,
 ): Promise<void> {
   await assertOwned(candidate);
+}
+
+/** Mint the only adapter input accepted at runtime for this owned candidate. */
+export async function createAgentRunContext(
+  candidate: CandidateWorktree,
+  resultSchemaPath: string,
+): Promise<import("../agents/types.ts").AgentRunInput> {
+  await assertOwned(candidate);
+  await validateCopiedInputs(candidate, candidate.approvedPlan);
+  const output = await realpath(candidate.outputDirectory);
+  const entry = await lstat(output);
+  if (
+    entry.isSymbolicLink() ||
+    !entry.isDirectory() ||
+    output !== candidate.outputDirectory
+  )
+    throw new TypeError("La salida del agente no es un directorio seguro");
+  const value = Object.freeze({
+    changeId: candidate.changeId,
+    attemptId: candidate.attemptId,
+    worktree: candidate.path,
+    requestPath: join(candidate.path, ".agent-input", names[0]),
+    planPath: join(candidate.path, ".agent-input", names[1]),
+    policyPath: join(candidate.path, ".agent-input", names[2]),
+    resultSchemaPath,
+    outputDirectory: candidate.outputDirectory,
+  });
+  runContexts.set(value, candidate);
+  return value;
+}
+
+export async function resolveAgentRunContext(
+  value: import("../agents/types.ts").AgentRunInput,
+): Promise<import("../agents/types.ts").AgentRunInput> {
+  const candidate = runContexts.get(value);
+  if (candidate === undefined)
+    throw new TypeError(
+      "El contexto de ejecución del agente no fue emitido por el servicio",
+    );
+  if (candidate === null) return value;
+  await assertOwned(candidate);
+  await validateCopiedInputs(candidate, candidate.approvedPlan);
+  const output = await realpath(candidate.outputDirectory);
+  const entry = await lstat(output);
+  if (
+    entry.isSymbolicLink() ||
+    !entry.isDirectory() ||
+    output !== candidate.outputDirectory
+  )
+    throw new TypeError("La salida del agente no es un directorio seguro");
+  return value;
+}
+
+/** Test-only adapter capability; unavailable outside explicit test mode. */
+export function createTestAgentRunContext(
+  input: import("../agents/types.ts").AgentRunInput,
+): import("../agents/types.ts").AgentRunInput {
+  if (process.env.INGEST_TEST_MODE !== "true")
+    throw new TypeError("El contexto fixture exige modo de prueba");
+  const value = Object.freeze({ ...input });
+  runContexts.set(value, null);
+  return value;
 }

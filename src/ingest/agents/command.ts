@@ -2,6 +2,7 @@ import { lstat, realpath, writeFile } from "node:fs/promises";
 import { isAbsolute, join, relative, resolve } from "node:path";
 
 import { assertOperatorIsolationBroker } from "./isolation.ts";
+import { resolveAgentRunContext } from "../worktrees/service.ts";
 
 import {
   runProcess,
@@ -103,6 +104,7 @@ export class CommandAgent implements AgentAdapter {
   async run(input: AgentRunInput): Promise<AgentRunResult> {
     assertCommand(this.config);
     assertOperatorIsolationBroker(this.broker);
+    input = await resolveAgentRunContext(input);
     const wrapped = this.broker.wrap({
       worktree: input.worktree,
       command: this.config.command,
@@ -111,6 +113,7 @@ export class CommandAgent implements AgentAdapter {
     assertWrapped(wrapped);
     const paths = outputPaths(input);
     await assertOutputDirectory(input);
+    await resolveAgentRunContext(input);
     const result = await this.runner(wrapped.command, wrapped.args, {
       cwd: input.worktree,
       env: { PATH: "/usr/bin:/bin", LANG: "C", LC_ALL: "C" },
@@ -122,6 +125,7 @@ export class CommandAgent implements AgentAdapter {
       }),
       shell: false,
     });
+    await resolveAgentRunContext(input);
     await Promise.all([
       writeFile(paths.resultPath, result.stdout, "utf8"),
       writeFile(paths.stdoutPath, result.stdout, "utf8"),

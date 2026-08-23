@@ -3,6 +3,7 @@ import { lstat, realpath } from "node:fs/promises";
 import {
   assertCandidateOwnership,
   removeCandidateWorktree,
+  resolveAgentRunContext,
   type CandidateWorktree,
 } from "../worktrees/service.ts";
 
@@ -57,6 +58,7 @@ export async function createFixtureAgentRun(
         input.worktree !== current.candidate.path
       )
         throw new TypeError("La capacidad FixtureAgent no es válida");
+      await resolveAgentRunContext(input);
       const actual = await lstat(current.candidate.path);
       if (
         actual.isSymbolicLink() ||
