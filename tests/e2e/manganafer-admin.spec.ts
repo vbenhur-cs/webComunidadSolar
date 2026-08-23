@@ -122,15 +122,21 @@ test("@manganafer keeps private admin walls data-free before D1 and renders orde
         3,
       );
     },
-    { syntheticBindings: { MANGANAFER_ALLOWED_EMAILS: allowedEmail } },
+    {
+      syntheticBindings: { MANGANAFER_ALLOWED_EMAILS: allowedEmail },
+      useExistingBuild: true,
+    },
   );
 
-  await withLocalD1Worker(async ({ fetch }) => {
-    const unconfigured = await render(fetch, identityHeaders(allowedEmail));
-    assert.equal(unconfigured.status, 200);
-    const unconfiguredHtml = await unconfigured.text();
-    assert.equal(unconfiguredHtml.includes("manganafer-admin-page"), false);
-    await page.setContent(unconfiguredHtml);
-    await expect(page.locator("main.private-access-page")).toBeVisible();
-  }, {});
+  await withLocalD1Worker(
+    async ({ fetch }) => {
+      const unconfigured = await render(fetch, identityHeaders(allowedEmail));
+      assert.equal(unconfigured.status, 200);
+      const unconfiguredHtml = await unconfigured.text();
+      assert.equal(unconfiguredHtml.includes("manganafer-admin-page"), false);
+      await page.setContent(unconfiguredHtml);
+      await expect(page.locator("main.private-access-page")).toBeVisible();
+    },
+    { useExistingBuild: true },
+  );
 });

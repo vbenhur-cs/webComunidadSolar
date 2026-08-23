@@ -223,6 +223,34 @@ test("can deliberately start an empty local D1 without preapplying migrations", 
   );
 });
 
+test("can reuse an already validated emitted build without rebuilding its shared dist", async () => {
+  const commands: string[][] = [];
+  const dependencies = successfulDependencies({
+    runCommand: async (_command, args) => {
+      commands.push(args);
+      return { code: 0, stdout: "[]", stderr: "" };
+    },
+  });
+
+  await withLocalD1Worker(
+    async () => undefined,
+    { root: "/project", useExistingBuild: true },
+    dependencies,
+  );
+
+  assert.equal(
+    commands.some((args) => args[0] === "run" && args[1] === "build"),
+    false,
+  );
+  assert.equal(
+    commands.some(
+      (args) =>
+        args[0] === "d1" && args[1] === "migrations" && args[2] === "apply",
+    ),
+    true,
+  );
+});
+
 test("fails promptly when spawning the local Worker fails instead of waiting for readiness", async () => {
   let waitedForReady = false;
   let closed = false;

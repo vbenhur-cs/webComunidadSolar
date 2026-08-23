@@ -8,7 +8,7 @@
     "expectedLocation": null,
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/api/manganafer-interest/export",
@@ -19,7 +19,7 @@
     "expectedLocation": null,
     "privateArea": "manganafer",
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/api/manganafer-quote",
@@ -30,7 +30,7 @@
     "expectedLocation": null,
     "privateArea": null,
     "visualTemplate": null,
-    "status": "pending"
+    "status": "verified"
   },
   {
     "path": "/comunidad-solar-evolucion.png",

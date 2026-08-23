@@ -12,7 +12,7 @@ const bundles = {
   guide: ["src/content/guide-content.md"],
   "legacy-routes": ["src/lib/routing/legacy.ts"],
   "legal-content": ["src/content/legal-content.ts"],
-  robots: ["src/pages/robots.txt.ts"],
+  robots: ["src/pages/robots.txt.ts", "src/lib/site/robots.ts"],
 } as const;
 
 export type MigratedSourceName = keyof typeof bundles;

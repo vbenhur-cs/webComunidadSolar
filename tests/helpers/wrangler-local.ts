@@ -31,6 +31,8 @@ export interface LocalD1Worker {
 
 export interface WithLocalD1WorkerOptions {
   root?: string;
+  /** Reuses an emitted build already owned and validated by the caller. */
+  useExistingBuild?: boolean;
   /** Leaves D1 empty so an integration test can exercise endpoint bootstrapping. */
   applyMigrations?: boolean;
   /**
@@ -477,13 +479,15 @@ export async function withLocalD1Worker<T>(
   let value: T | undefined;
   let primaryFailure: unknown;
   try {
-    await runCommand(npmExecutable(), ["run", "build"], {
-      cwd: root,
-      timeoutMs: buildTimeoutMs,
-      env: environment,
-      platform,
-      killProcess,
-    });
+    if (!options.useExistingBuild) {
+      await runCommand(npmExecutable(), ["run", "build"], {
+        cwd: root,
+        timeoutMs: buildTimeoutMs,
+        env: environment,
+        platform,
+        killProcess,
+      });
+    }
     const topology = await resolveTopology(root);
     const wrangler = wranglerExecutable(root);
     const envArguments = environmentArguments(environment);

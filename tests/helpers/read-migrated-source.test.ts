@@ -26,6 +26,26 @@ test("orders migrated source files by deterministic lexical path", async () => {
   }
 });
 
+test("reads the robots route together with its effective policy module", async () => {
+  const root = await mkdtemp(join(tmpdir(), "comunidadsolar-robots-source-"));
+  try {
+    await mkdir(join(root, "src", "pages"), { recursive: true });
+    await mkdir(join(root, "src", "lib", "site"), { recursive: true });
+    await writeFile(
+      join(root, "src", "pages", "robots.txt.ts"),
+      "export { buildRobotsPolicy } from '../lib/site/robots.ts';",
+    );
+    await writeFile(
+      join(root, "src", "lib", "site", "robots.ts"),
+      'export const excluded = ["/socios"];',
+    );
+
+    assert.match(await readMigratedSource("robots", root), /"\/socios"/);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("reads regular local assets but rejects an intermediate symlink escape", async () => {
   const root = await mkdtemp(join(tmpdir(), "comunidadsolar-assets-"));
   const outside = join(root, "outside");

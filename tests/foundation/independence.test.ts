@@ -12,7 +12,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { promisify } from "node:util";
 
 import {
@@ -31,6 +31,27 @@ interface GitFixture {
 }
 
 const fixtures: GitFixture[] = [];
+
+const task9EnvExample = `${[
+  "CLOUDFLARE_CONFIG_PATH",
+  "CLOUDFLARE_ENV",
+  "SOCIOS_ALLOWED_EMAILS",
+  "TEAM_ALLOWED_EMAILS",
+  "MANGANAFER_ALLOWED_EMAILS",
+  "SITE_INDEXABLE",
+  "MANGANAFER_QUOTING_BEARER_TOKEN",
+  "MANGANAFER_PANEL_MONTHLY_FEE",
+  "MANGANAFER_PANEL_MONTHLY_FEE_WITHOUT_VAT",
+  "MANGANAFER_PANEL_FEE_VAT",
+  "MANGANAFER_AVAILABLE_PANELS",
+  "MANGANAFER_ANNUAL_PANEL_PRODUCTION_KWH",
+  "MANGANAFER_DISCOUNT",
+  "MANGANAFER_PANEL_POWER_W",
+  "MANGANAFER_ANNUAL_DEGRADATION",
+  "MANGANAFER_MAXIMUM_PANELS_PER_QUOTE",
+]
+  .map((key) => `${key}=`)
+  .join("\n")}\n`;
 
 async function git(repository: string, args: string[]): Promise<string> {
   const { stdout } = await execFileAsync("git", args, {
@@ -447,6 +468,107 @@ test("verifier rejects local-only material tracked by the selected tree", async 
     },
   );
   assert.deepEqual(await sessionEntries(fixture), []);
+});
+
+test("archives only the canonical empty root .env.example template", async () => {
+  const fixture = await createRepository();
+  await writeFile(join(fixture.repository, ".env.example"), task9EnvExample);
+  await git(fixture.repository, ["add", ".env.example"]);
+  await git(fixture.repository, ["commit", "-m", "add environment template"]);
+
+  const result = await verifyIndependent(
+    { execute: false, source: "head" },
+    {
+      repositoryRoot: fixture.repository,
+      temporaryDirectory: fixture.sessions,
+    },
+  );
+
+  assert.equal(result.archiveHasGitDirectory, false);
+  assert.equal(result.archiveHasSiblingCheckout, false);
+  assert.deepEqual(await sessionEntries(fixture), []);
+});
+
+test("rejects every noncanonical .env template or local environment file", async () => {
+  const invalidEntries = [
+    [".env", task9EnvExample],
+    [".env.local", task9EnvExample],
+    ["nested/.env.example", task9EnvExample],
+    [
+      ".env.example",
+      task9EnvExample.replace("CLOUDFLARE_ENV=\n", "CLOUDFLARE_ENV=preview\n"),
+    ],
+    [".env.example", `# comment\n${task9EnvExample}`],
+    [
+      ".env.example",
+      task9EnvExample.replace("CLOUDFLARE_ENV=\n", "CLOUDFLARE_ENV=\n\n"),
+    ],
+    [".env.example", `${task9EnvExample}SITE_INDEXABLE=\n`],
+    [".env.example", `${task9EnvExample}\u0001`],
+  ] as const;
+
+  for (const [path, contents] of invalidEntries) {
+    const fixture = await createRepository();
+    await mkdir(dirname(join(fixture.repository, path)), { recursive: true });
+    await writeFile(join(fixture.repository, path), contents);
+    await git(fixture.repository, ["add", path]);
+    await git(fixture.repository, ["commit", "-m", `add ${path}`]);
+
+    await assert.rejects(
+      verifyIndependent(
+        { execute: false, source: "head" },
+        {
+          repositoryRoot: fixture.repository,
+          temporaryDirectory: fixture.sessions,
+        },
+      ),
+      /\.env|template|material local/i,
+    );
+    assert.deepEqual(await sessionEntries(fixture), []);
+  }
+});
+
+test("rejects a symlinked root .env.example and an untracked automatic template", async () => {
+  const symlinkFixture = await createRepository();
+  const externalTemplate = join(symlinkFixture.cleanupRoot, "template");
+  await writeFile(externalTemplate, task9EnvExample);
+  await symlink(
+    externalTemplate,
+    join(symlinkFixture.repository, ".env.example"),
+  );
+  await git(symlinkFixture.repository, ["add", ".env.example"]);
+  await git(symlinkFixture.repository, [
+    "commit",
+    "-m",
+    "add symlinked template",
+  ]);
+
+  await assert.rejects(
+    verifyIndependent(
+      { execute: false, source: "head" },
+      {
+        repositoryRoot: symlinkFixture.repository,
+        temporaryDirectory: symlinkFixture.sessions,
+      },
+    ),
+    /\.env\.example|symlink/i,
+  );
+
+  const stagedFixture = await createRepository();
+  await writeFile(
+    join(stagedFixture.repository, ".env.example"),
+    task9EnvExample,
+  );
+  await assert.rejects(
+    verifyIndependent(
+      { execute: false, source: "staged" },
+      {
+        repositoryRoot: stagedFixture.repository,
+        temporaryDirectory: stagedFixture.sessions,
+      },
+    ),
+    /sin stage.*\.env\.example/i,
+  );
 });
 
 test("verifier rejects a tracked archive symlink before extraction", async () => {

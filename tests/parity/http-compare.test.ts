@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
+import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
+import { existsSync } from "node:fs";
 import {
   mkdtemp,
   mkdir,
@@ -9,7 +11,8 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { promisify } from "node:util";
 import test from "node:test";
 
 import {
@@ -34,6 +37,210 @@ import {
   selectPublicContracts,
   writeMatrixToDisk,
 } from "../../scripts/parity-http.ts";
+import { prepareCloudflareConfig } from "../../scripts/prepare-cloudflare-config.ts";
+
+const externalPreviewD1Id = "22222222-3333-4444-8555-666666666666";
+const execFileAsync = promisify(execFile);
+
+interface DeployRedirectSnapshot {
+  bytes: Buffer | null;
+  configTargetExists: boolean;
+  exists: boolean;
+}
+
+interface ExternalPreparedProfileBuildOptions {
+  failAfterGeneratedTopologyCheck?: boolean;
+}
+
+function externalPreviewProfile(): string {
+  return JSON.stringify({
+    name: "comunidad-solar-preview",
+    main: "./src/worker.ts",
+    compatibility_date: "2026-08-21",
+    compatibility_flags: ["nodejs_compat"],
+    assets: {
+      binding: "ASSETS",
+      directory: "./dist",
+      run_worker_first: true,
+    },
+    d1_databases: [
+      {
+        binding: "DB",
+        database_name: "comunidad-solar-preview",
+        database_id: "11111111-2222-4333-8444-555555555555",
+        migrations_dir: "./drizzle",
+      },
+    ],
+    vars: { SITE_INDEXABLE: "true" },
+    env: {
+      preview: {
+        d1_databases: [
+          {
+            binding: "DB",
+            database_name: "comunidad-solar-preview",
+            database_id: externalPreviewD1Id,
+            migrations_dir: "./drizzle",
+          },
+        ],
+        vars: { SITE_INDEXABLE: "false" },
+      },
+    },
+  });
+}
+
+async function readDeployRedirectSnapshot(
+  projectRoot: string,
+): Promise<DeployRedirectSnapshot> {
+  const redirectPath = join(projectRoot, ".wrangler", "deploy", "config.json");
+  try {
+    const bytes = await readFile(redirectPath);
+    const redirect = JSON.parse(bytes.toString("utf8")) as {
+      configPath?: unknown;
+    };
+    if (typeof redirect.configPath !== "string") {
+      throw new Error("El redirect de Wrangler no define configPath");
+    }
+    return {
+      bytes,
+      configTargetExists: existsSync(
+        resolve(dirname(redirectPath), redirect.configPath),
+      ),
+      exists: true,
+    };
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return { bytes: null, configTargetExists: false, exists: false };
+    }
+    throw error;
+  }
+}
+
+function assertDeployRedirectRestored(
+  expected: DeployRedirectSnapshot,
+  actual: DeployRedirectSnapshot,
+): void {
+  assert.equal(actual.exists, expected.exists);
+  assert.deepEqual(actual.bytes, expected.bytes);
+  assert.equal(actual.configTargetExists, expected.configTargetExists);
+}
+
+async function restoreDeployRedirect(
+  projectRoot: string,
+  snapshot: DeployRedirectSnapshot,
+): Promise<void> {
+  const redirectPath = join(projectRoot, ".wrangler", "deploy", "config.json");
+  if (!snapshot.exists) {
+    await rm(redirectPath, { force: true });
+    return;
+  }
+  await mkdir(dirname(redirectPath), { recursive: true });
+  await writeFile(redirectPath, snapshot.bytes!);
+}
+
+function throwExternalProfileFailure(
+  primaryFailure: unknown,
+  cleanupFailures: unknown[],
+): never {
+  if (primaryFailure !== undefined) {
+    if (cleanupFailures.length === 0) throw primaryFailure;
+    throw new AggregateError(
+      [primaryFailure, ...cleanupFailures],
+      "La build externa dejó una limpieza incompleta",
+    );
+  }
+  if (cleanupFailures.length === 1) throw cleanupFailures[0];
+  throw new AggregateError(
+    cleanupFailures,
+    "La build externa dejó una limpieza incompleta",
+  );
+}
+
+async function assertExternalPreparedProfileBuilds(
+  options: ExternalPreparedProfileBuildOptions = {},
+): Promise<void> {
+  const externalRoot = await mkdtemp(
+    join(tmpdir(), "comunidadsolar-cloudflare-profile-"),
+  );
+  const projectRoot = resolve(process.cwd());
+  const artifactRoot = join(
+    projectRoot,
+    ".artifacts",
+    `cloudflare-build-${externalRoot.split("/").at(-1)}`,
+  );
+  const outputDirectory = join(externalRoot, "astro-dist");
+  const inputPath = join(externalRoot, "operator.jsonc");
+  const redirectBefore = await readDeployRedirectSnapshot(projectRoot);
+  let primaryFailure: unknown;
+  try {
+    await writeFile(inputPath, externalPreviewProfile(), "utf8");
+    const prepared = await prepareCloudflareConfig(inputPath, "preview", {
+      artifactRoot,
+      projectRoot,
+    });
+    await execFileAsync(
+      join(projectRoot, "node_modules", ".bin", "astro"),
+      ["build", "--outDir", outputDirectory],
+      {
+        cwd: projectRoot,
+        env: {
+          ...process.env,
+          CLOUDFLARE_CONFIG_PATH: prepared.outputPath,
+          CLOUDFLARE_ENV: "preview",
+        },
+        timeout: 90_000,
+        maxBuffer: 1024 * 1024,
+      },
+    );
+    const generatedPath = join(outputDirectory, "server", "wrangler.json");
+    const generated = JSON.parse(await readFile(generatedPath, "utf8")) as {
+      compatibility_date?: unknown;
+      compatibility_flags?: unknown;
+      configPath?: unknown;
+      definedEnvironments?: unknown;
+      d1_databases?: unknown;
+      targetEnvironment?: unknown;
+      vars?: unknown;
+    };
+    assert.equal(generated.configPath, prepared.outputPath);
+    assert.equal(generated.compatibility_date, "2026-08-21");
+    assert.deepEqual(generated.compatibility_flags, ["nodejs_compat"]);
+    assert.deepEqual(generated.definedEnvironments, ["preview"]);
+    assert.equal(generated.targetEnvironment, "preview");
+    const database = (generated.d1_databases as unknown[])[0] as {
+      binding?: unknown;
+      database_id?: unknown;
+      migrations_dir?: unknown;
+    };
+    assert.equal(database.binding, "DB");
+    assert.equal(database.database_id, externalPreviewD1Id);
+    assert.equal(typeof database.migrations_dir, "string");
+    assert.equal(
+      resolve(dirname(generatedPath), database.migrations_dir as string),
+      join(projectRoot, "drizzle"),
+    );
+    assert.deepEqual(generated.vars, { SITE_INDEXABLE: "false" });
+    if (options.failAfterGeneratedTopologyCheck === true) {
+      throw new Error("synthetic external profile assertion failure");
+    }
+  } catch (error) {
+    primaryFailure = error;
+  }
+  const cleanupFailures: unknown[] = [];
+  for (const cleanup of [
+    () => rm(artifactRoot, { recursive: true, force: true }),
+    () => rm(externalRoot, { recursive: true, force: true }),
+    () => restoreDeployRedirect(projectRoot, redirectBefore),
+  ]) {
+    try {
+      await cleanup();
+    } catch (error) {
+      cleanupFailures.push(error);
+    }
+  }
+  if (primaryFailure !== undefined || cleanupFailures.length > 0) {
+    throwExternalProfileFailure(primaryFailure, cleanupFailures);
+  }
+}
 
 function capturedContract(
   overrides: Partial<Extract<HttpContract, { bodyCapture: "captured" }>> = {},
@@ -896,11 +1103,15 @@ test(
   { timeout: 120_000 },
   async () => {
     const result = await runHttpParity({ scope: "foundation" });
+    const server = await runHttpParity(
+      { scope: "server" },
+      { build: async () => undefined },
+    );
 
     assert.deepEqual(result.diffs, []);
     assert.equal(result.checkedContracts, 225);
-    assert.equal(result.verifiedRoutes, 268);
-    assert.equal(result.pendingRoutes, 3);
+    assert.equal(result.verifiedRoutes, 271);
+    assert.equal(result.pendingRoutes, 0);
     assert.equal(result.runtimeDisposed, true);
     assert.match(
       result.topology.deployConfigPath,
@@ -913,6 +1124,30 @@ test(
     assert.equal(
       JSON.parse(await readFile(result.topology.wranglerConfigPath, "utf8")).main,
       "entry.mjs",
+    );
+    assert.deepEqual(server.diffs, []);
+    assert.equal(server.checkedContracts, 6);
+    assert.equal(server.verifiedRoutes, 271);
+    assert.equal(server.pendingRoutes, 0);
+    const redirectBeforeExternalProfile = await readDeployRedirectSnapshot(
+      process.cwd(),
+    );
+    assert.equal(redirectBeforeExternalProfile.exists, true);
+    assert.equal(redirectBeforeExternalProfile.configTargetExists, true);
+    await assertExternalPreparedProfileBuilds();
+    assertDeployRedirectRestored(
+      redirectBeforeExternalProfile,
+      await readDeployRedirectSnapshot(process.cwd()),
+    );
+    await assert.rejects(
+      assertExternalPreparedProfileBuilds({
+        failAfterGeneratedTopologyCheck: true,
+      }),
+      /synthetic external profile assertion failure/,
+    );
+    assertDeployRedirectRestored(
+      redirectBeforeExternalProfile,
+      await readDeployRedirectSnapshot(process.cwd()),
     );
   },
 );

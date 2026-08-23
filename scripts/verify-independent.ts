@@ -17,6 +17,27 @@ import { promisify } from "node:util";
 const execFileAsync = promisify(execFile);
 const maximumArchiveBytes = 128 * 1024 * 1024;
 const archivePrefix = "comunidadsolar-independent-";
+const rootEnvExamplePath = ".env.example";
+const canonicalEnvExample = `${[
+  "CLOUDFLARE_CONFIG_PATH",
+  "CLOUDFLARE_ENV",
+  "SOCIOS_ALLOWED_EMAILS",
+  "TEAM_ALLOWED_EMAILS",
+  "MANGANAFER_ALLOWED_EMAILS",
+  "SITE_INDEXABLE",
+  "MANGANAFER_QUOTING_BEARER_TOKEN",
+  "MANGANAFER_PANEL_MONTHLY_FEE",
+  "MANGANAFER_PANEL_MONTHLY_FEE_WITHOUT_VAT",
+  "MANGANAFER_PANEL_FEE_VAT",
+  "MANGANAFER_AVAILABLE_PANELS",
+  "MANGANAFER_ANNUAL_PANEL_PRODUCTION_KWH",
+  "MANGANAFER_DISCOUNT",
+  "MANGANAFER_PANEL_POWER_W",
+  "MANGANAFER_ANNUAL_DEGRADATION",
+  "MANGANAFER_MAXIMUM_PANELS_PER_QUOTE",
+]
+  .map((key) => `${key}=`)
+  .join("\n")}\n`;
 
 export type IndependentSource = "head" | "staged";
 
@@ -304,7 +325,9 @@ async function stagedTree(
 }
 
 function isExcludedArchivePath(path: string): boolean {
-  const segments = portablePath(path).split("/");
+  const portable = portablePath(path);
+  if (portable === rootEnvExamplePath) return false;
+  const segments = portable.split("/");
   return segments.some(
     (segment) =>
       segment === "node_modules" ||
@@ -316,6 +339,33 @@ function isExcludedArchivePath(path: string): boolean {
       segment === ".dev.vars" ||
       segment.startsWith(".dev.vars."),
   );
+}
+
+async function assertCanonicalEnvExample(
+  entries: GitTreeEntry[],
+  repositoryRoot: string,
+  tree: string,
+  environment: NodeJS.ProcessEnv,
+): Promise<void> {
+  const entry = entries.find(
+    (candidate) => portablePath(candidate.path) === rootEnvExamplePath,
+  );
+  if (entry === undefined) return;
+  if (entry.mode !== "100644" || entry.type !== "blob") {
+    throw new Error(
+      "El template .env.example debe ser un archivo regular canónico",
+    );
+  }
+  const contents = await gitBuffer(
+    repositoryRoot,
+    ["show", `${tree}:${rootEnvExamplePath}`],
+    environment,
+  );
+  if (!contents.equals(Buffer.from(canonicalEnvExample, "utf8"))) {
+    throw new Error(
+      "El template .env.example debe contener sólo las claves canónicas vacías",
+    );
+  }
 }
 
 async function listArchiveTree(
@@ -354,6 +404,7 @@ async function assertArchiveTreeIsSafe(
       `El archive autónomo no debe archivar material local: ${excluded.join(", ")}`,
     );
   }
+  await assertCanonicalEnvExample(entries, repositoryRoot, tree, environment);
   const symlinks = entries
     .filter((entry) => entry.mode === "120000")
     .map((entry) => entry.path)

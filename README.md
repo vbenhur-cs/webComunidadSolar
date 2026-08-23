@@ -13,8 +13,9 @@ npm run build
 `npm run source:check` protects the immutable reference checkout. The sibling
 is a read-only parity oracle only: production, builds, previews and the
 autonomous verifier do not depend on it. The generated Wrangler topology is
-checked by `npm run check`; `npm run deploy:dry` runs Cloudflare's strict local
-dry-run validation and never publishes anything.
+checked by `npm run check`; `npm run deploy:dry` prepares a deterministic local
+Cloudflare profile, builds it, and checks the emitted topology without invoking
+a deploy command or network client.
 
 Parity evidence is versioned and can be refreshed or checked with:
 

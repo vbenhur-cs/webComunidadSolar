@@ -25,9 +25,18 @@ import type { SourceRef } from "./lib/source-reference.ts";
 import { isPhase2PublicRoute } from "../src/lib/site/public-route-closure.ts";
 
 const foundationKinds = new Set(["gone", "redirect"]);
+const serverKinds = new Set(["api", "private-page"]);
+const knownRouteKinds = new Set([
+  "api",
+  "asset",
+  "gone",
+  "page",
+  "private-page",
+  "redirect",
+]);
 const localWorkerOrigin = "http://localhost";
 
-export type HttpParityScope = "foundation" | "routing" | "public";
+export type HttpParityScope = "foundation" | "routing" | "public" | "server";
 
 export interface HttpDiff {
   routeKey: string;
@@ -82,6 +91,11 @@ export interface HttpParityDependencies {
   startRuntime?(
     topology: DeploymentTopology,
     root: string,
+  ): Promise<FoundationRuntime>;
+  startServerRuntime?(
+    topology: DeploymentTopology,
+    root: string,
+    bindings: Readonly<Record<string, string>>,
   ): Promise<FoundationRuntime>;
   writeMatrix?(entries: RouteMatrixEntry[]): Promise<void>;
   matrixFileSystem?: MatrixFileSystem;
@@ -272,6 +286,73 @@ export function selectFoundationContracts(
 }
 
 /**
+ * Server parity is deliberately closed over the route-kind vocabulary of the
+ * canonical matrix. A new kind must be classified explicitly before it can be
+ * excluded from the server gate.
+ */
+export function isServerRoute(entry: { kind: string; path: string }): boolean {
+  if (serverKinds.has(entry.kind)) return true;
+  if (knownRouteKinds.has(entry.kind)) return false;
+  throw new Error(
+    `Tipo de ruta de matriz no clasificado para servidor: ${entry.kind} (${entry.path})`,
+  );
+}
+
+/**
+ * Returns exactly the captured API contracts represented by the matrix.
+ * Private-page success bodies are deliberately excluded: they are suppressed
+ * when allowed, their source capture omits the Next edge headers, and their
+ * framework serialization is validated by the private HTTP/E2E/visual gates.
+ * API rows without a captured contract still fail closed here, so this scope
+ * cannot promote a route merely because it is classified as server.
+ */
+export function selectServerApiContracts(
+  baseline: Pick<HttpBaseline, "contracts">,
+  matrix: RouteMatrixEntry[],
+): HttpContract[] {
+  const matrixByRouteKey = new Map<string, RouteMatrixEntry>();
+  for (const entry of matrix) {
+    isServerRoute(entry);
+    const key = routeMatrixKey(entry);
+    if (matrixByRouteKey.has(key)) {
+      throw new Error(`La matriz duplica la ruta de servidor: ${key}`);
+    }
+    matrixByRouteKey.set(key, entry);
+  }
+
+  const contracts: HttpContract[] = [];
+  const contractRouteKeys = new Set<string>();
+  for (const contract of baseline.contracts) {
+    const parsed = parseHttpRouteKey(contract.routeKey);
+    if (!knownRouteKinds.has(parsed.kind)) {
+      throw new Error(
+        `Tipo de contrato HTTP no clasificado para servidor: ${parsed.kind} (${contract.routeKey})`,
+      );
+    }
+    const key = `${parsed.kind}:${parsed.path}`;
+    const entry = matrixByRouteKey.get(key);
+    if (parsed.kind === "api") {
+      if (entry === undefined) {
+        throw new Error(
+          `Contrato HTTP de servidor sin fila de matriz: ${contract.routeKey}`,
+        );
+      }
+      contracts.push(contract);
+      contractRouteKeys.add(key);
+    }
+  }
+
+  for (const entry of matrix) {
+    if (entry.kind === "api" && !contractRouteKeys.has(routeMatrixKey(entry))) {
+      throw new Error(
+        `API de servidor sin contrato HTTP capturado: ${routeMatrixKey(entry)}`,
+      );
+    }
+  }
+  return contracts;
+}
+
+/**
  * Public parity is declared by the route matrix, rather than inferred from a
  * URL shape. That keeps private/API routes and the explicit Phase 3 deferment
  * out of the public gate, while refusing an unmapped public baseline route.
@@ -328,6 +409,20 @@ export function applyPublicMatrixResults(
   });
 }
 
+/** Only contract-proven API routes may transition to verified in this scope. */
+export function applyServerMatrixResults(
+  matrix: RouteMatrixEntry[],
+  verifiedRouteKeys: ReadonlySet<string>,
+): RouteMatrixEntry[] {
+  return matrix.map((entry) => {
+    const key = routeMatrixKey(entry);
+    if (entry.kind !== "api" || !verifiedRouteKeys.has(key)) {
+      return { ...entry };
+    }
+    return { ...entry, status: "verified" };
+  });
+}
+
 function parseHttpRouteKey(routeKey: string): ParsedHttpRouteKey {
   const [route, method, identity, variant, extra] = routeKey.split("|");
   const separator = route?.indexOf(":") ?? -1;
@@ -369,12 +464,74 @@ function requestForHttpContract(
   scope: HttpParityScope,
 ): Request {
   const parsed = parseHttpRouteKey(contract.routeKey);
-  if (parsed.method !== "GET") {
+  const headers = new Headers({
+    accept: parsed.path.startsWith("/api/") ? "application/json" : "text/html",
+    ...identityHeadersForContract(parsed.identity),
+  });
+  const body = requestBodyForContract(parsed, scope);
+  if (body !== undefined) headers.set("content-type", "application/json");
+  if (parsed.method !== "GET" && parsed.method !== "POST") {
     throw new Error(`Contrato fuera del scope ${scope}: ${contract.routeKey}`);
   }
-  return new Request(`${localWorkerOrigin}${parsed.path}${parsed.search}`, {
-    method: parsed.method,
-  });
+  return new Request(
+    `${localWorkerOrigin}${parsed.path}${parsed.search}`,
+    body === undefined
+      ? { method: parsed.method, headers }
+      : { method: parsed.method, headers, body },
+  );
+}
+
+function identityHeadersForContract(identity: string): Record<string, string> {
+  if (identity === "anonymous") return {};
+  if (
+    identity !== "allowed" &&
+    identity !== "denied" &&
+    identity !== "unconfigured"
+  ) {
+    throw new Error(`Identidad HTTP desconocida: ${identity}`);
+  }
+  return {
+    "oai-authenticated-user-email":
+      identity === "allowed" ? "allowed@example.test" : "denied@example.test",
+    "oai-authenticated-user-full-name": "Fixture%20User",
+    "oai-authenticated-user-full-name-encoding": "percent-encoded-utf-8",
+  };
+}
+
+function requestBodyForContract(
+  parsed: ParsedHttpRouteKey,
+  scope: HttpParityScope,
+): string | undefined {
+  if (parsed.method === "GET") return undefined;
+  if (parsed.method !== "POST") {
+    throw new Error(
+      `Contrato fuera del scope ${scope}: método ${parsed.method}`,
+    );
+  }
+  if (
+    parsed.path === "/api/manganafer-interest" &&
+    parsed.identity === "anonymous" &&
+    parsed.variant === "invalid-form"
+  ) {
+    return "{";
+  }
+  if (
+    parsed.path === "/api/manganafer-quote" &&
+    parsed.identity === "anonymous" &&
+    parsed.variant === "invalid-cups"
+  ) {
+    return JSON.stringify({ cups: "ES123" });
+  }
+  if (
+    parsed.path === "/api/manganafer-quote" &&
+    parsed.identity === "anonymous" &&
+    parsed.variant === "unconfigured"
+  ) {
+    return JSON.stringify({ cups: "ES1234567890123456AB" });
+  }
+  throw new Error(
+    `Solicitud HTTP de servidor no declarada: ${parsed.path}|${parsed.method}|${parsed.identity}|${parsed.variant}`,
+  );
 }
 
 function contractRouteKey(contract: HttpContract): string {
@@ -424,6 +581,86 @@ export async function runPublicParity(
   }
 }
 
+function accessBindingForArea(area: RouteMatrixEntry["privateArea"]): string {
+  if (area === "equipo") return "TEAM_ALLOWED_EMAILS";
+  if (area === "manganafer") return "MANGANAFER_ALLOWED_EMAILS";
+  if (area === "socios") return "SOCIOS_ALLOWED_EMAILS";
+  throw new Error(`Área privada de servidor no declarada: ${String(area)}`);
+}
+
+function serverBindingsForContract(
+  contract: HttpContract,
+  matrixByRouteKey: ReadonlyMap<string, RouteMatrixEntry>,
+): Readonly<Record<string, string>> {
+  const parsed = parseHttpRouteKey(contract.routeKey);
+  if (parsed.identity === "anonymous" || parsed.identity === "unconfigured") {
+    return {};
+  }
+  if (parsed.identity !== "allowed" && parsed.identity !== "denied") {
+    throw new Error(`Identidad HTTP desconocida: ${parsed.identity}`);
+  }
+  const entry = matrixByRouteKey.get(`${parsed.kind}:${parsed.path}`);
+  if (entry === undefined || entry.privateArea === null) return {};
+  return { [accessBindingForArea(entry.privateArea)]: "allowed@example.test" };
+}
+
+function bindingKey(bindings: Readonly<Record<string, string>>): string {
+  return JSON.stringify(
+    Object.entries(bindings).sort(([left], [right]) =>
+      compareText(left, right),
+    ),
+  );
+}
+
+export async function runServerParity(
+  baseline: Pick<HttpBaseline, "contracts">,
+  matrix: RouteMatrixEntry[],
+  topology: DeploymentTopology,
+  root: string,
+  startRuntime: (
+    topology: DeploymentTopology,
+    root: string,
+    bindings: Readonly<Record<string, string>>,
+  ) => Promise<FoundationRuntime>,
+): Promise<FoundationParityResult> {
+  const contracts = selectServerApiContracts(baseline, matrix);
+  const matrixByRouteKey = new Map(
+    matrix.map((entry) => [routeMatrixKey(entry), entry]),
+  );
+  const groups = new Map<
+    string,
+    { bindings: Readonly<Record<string, string>>; contracts: HttpContract[] }
+  >();
+  for (const contract of contracts) {
+    const bindings = serverBindingsForContract(contract, matrixByRouteKey);
+    const key = bindingKey(bindings);
+    const group = groups.get(key);
+    if (group === undefined) {
+      groups.set(key, { bindings, contracts: [contract] });
+    } else {
+      group.contracts.push(contract);
+    }
+  }
+
+  const diffs: HttpDiff[] = [];
+  const verifiedRouteKeys = new Set<string>();
+  for (const { bindings, contracts: groupContracts } of groups.values()) {
+    const runtime = await startRuntime(topology, root, bindings);
+    const parity = await runContractParity(groupContracts, runtime, "server", {
+      root,
+    });
+    diffs.push(...parity.diffs);
+    for (const routeKey of parity.verifiedRouteKeys) {
+      verifiedRouteKeys.add(routeKey);
+    }
+  }
+  return {
+    checkedContracts: contracts.length,
+    diffs,
+    verifiedRouteKeys,
+  };
+}
+
 async function runContractParity(
   contracts: HttpContract[],
   runtime: FoundationRuntime,
@@ -435,17 +672,16 @@ async function runContractParity(
 
   try {
     for (const expected of contracts) {
-      if (expected.bodyCapture !== "captured") {
-        throw new Error(
-          `Contrato ${scope} sin body capturado: ${expected.routeKey}`,
-        );
-      }
       const response = await runtime.fetch(
         requestForHttpContract(expected, scope),
       );
       const actual = await captureHttpContract(expected.routeKey, response, {
         root: options.root,
-        bodyComparison: expected.bodyComparison,
+        suppressBody: expected.bodyCapture === "suppressed-private-success",
+        bodyComparison:
+          expected.bodyCapture === "captured"
+            ? expected.bodyComparison
+            : undefined,
         artifactNamespace: "candidate",
       });
       const contractDiffs = compareHttpContract(expected, actual);
@@ -893,11 +1129,20 @@ async function buildCandidate(root: string): Promise<void> {
 
 async function startBuiltWorker(
   topology: DeploymentTopology,
+  bindings: Readonly<Record<string, string>> = {},
 ): Promise<FoundationRuntime> {
   const { unstable_startWorker } = await import("wrangler");
+  const workerBindings = Object.fromEntries(
+    Object.entries(bindings)
+      .sort(([left], [right]) => compareText(left, right))
+      .map(([name, value]) => [name, { type: "secret_text", value } as const]),
+  );
   const worker = await unstable_startWorker({
     config: topology.wranglerConfigPath,
     entrypoint: topology.entryPath,
+    ...(Object.keys(workerBindings).length === 0
+      ? {}
+      : { bindings: workerBindings }),
     dev: {
       server: { hostname: "127.0.0.1", port: 0, secure: false },
       logLevel: "error",
@@ -914,13 +1159,17 @@ async function startBuiltWorker(
   }
   return {
     fetch: async (request) => {
-      if (request.method !== "GET") {
-        throw new Error("El runtime foundation solo admite solicitudes GET");
-      }
       // The harness is a fetch client, so redirects would otherwise be followed
       // and conceal the response contract emitted by the built Worker.
+      const body =
+        request.method === "GET" || request.method === "HEAD"
+          ? undefined
+          : await request.text();
       return (await worker.fetch(request.url, {
         redirect: "manual",
+        method: request.method,
+        headers: request.headers,
+        ...(body === undefined ? {} : { body }),
       })) as unknown as Response;
     },
     dispose: async () => worker.dispose(),
@@ -938,7 +1187,8 @@ export async function runHttpParity(
   if (
     options.scope !== "foundation" &&
     options.scope !== "routing" &&
-    options.scope !== "public"
+    options.scope !== "public" &&
+    options.scope !== "server"
   ) {
     throw new Error(`Scope HTTP no soportado: ${options.scope}`);
   }
@@ -948,7 +1198,18 @@ export async function runHttpParity(
     dependencies.resolveTopology ?? resolveDeploymentTopology;
   const readBaseline = dependencies.readBaseline ?? readBaselineFromDisk;
   const readMatrix = dependencies.readMatrix ?? readMatrixFromDisk;
-  const startRuntime = dependencies.startRuntime ?? startBuiltWorker;
+  const startRuntime: (
+    topology: DeploymentTopology,
+    root: string,
+  ) => Promise<FoundationRuntime> =
+    dependencies.startRuntime ?? ((topology) => startBuiltWorker(topology));
+  const startServerRuntime: (
+    topology: DeploymentTopology,
+    root: string,
+    bindings: Readonly<Record<string, string>>,
+  ) => Promise<FoundationRuntime> =
+    dependencies.startServerRuntime ??
+    ((topology, _root, bindings) => startBuiltWorker(topology, bindings));
   const writeMatrix =
     dependencies.writeMatrix ??
     (async (entries: RouteMatrixEntry[]) =>
@@ -960,17 +1221,29 @@ export async function runHttpParity(
     readBaseline(root),
     readMatrix(root),
   ]);
-  const runtime = await startRuntime(topology, root);
   const parity =
-    options.scope === "foundation" || options.scope === "routing"
-      ? await runFoundationParity(baseline, runtime, { root })
-      : await runPublicParity(baseline, matrix, runtime, { root });
+    options.scope === "server"
+      ? await runServerParity(
+          baseline,
+          matrix,
+          topology,
+          root,
+          startServerRuntime,
+        )
+      : await (async () => {
+          const runtime = await startRuntime(topology, root);
+          return options.scope === "foundation" || options.scope === "routing"
+            ? runFoundationParity(baseline, runtime, { root })
+            : runPublicParity(baseline, matrix, runtime, { root });
+        })();
   const updatedMatrix =
     options.scope === "foundation"
       ? applyFoundationMatrixResults(matrix, parity.verifiedRouteKeys)
       : options.scope === "public"
         ? applyPublicMatrixResults(matrix, parity.verifiedRouteKeys)
-        : matrix;
+        : options.scope === "server"
+          ? applyServerMatrixResults(matrix, parity.verifiedRouteKeys)
+          : matrix;
 
   if (options.scope !== "routing" && parity.diffs.length === 0) {
     await writeMatrix(updatedMatrix);
@@ -1006,11 +1279,16 @@ export function parseHttpParityArguments(args: string[]): RunHttpParityOptions {
   if (
     args.length === 2 &&
     args[0] === "--scope" &&
-    (args[1] === "foundation" || args[1] === "routing" || args[1] === "public")
+    (args[1] === "foundation" ||
+      args[1] === "routing" ||
+      args[1] === "public" ||
+      args[1] === "server")
   ) {
     return { scope: args[1] };
   }
-  throw new Error("Uso: parity-http.ts --scope foundation|routing|public");
+  throw new Error(
+    "Uso: parity-http.ts --scope foundation|routing|public|server",
+  );
 }
 
 async function main(args: string[]): Promise<void> {
