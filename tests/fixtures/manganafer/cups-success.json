@@ -1,0 +1,18 @@
+{
+  "periodo_inicio": "2026-01-01",
+  "periodo_fin": "2026-01-31",
+  "dias_facturados": 30,
+  "tarifa_acceso": "2.0TD",
+  "pot_p1_kw": 4.6,
+  "pot_p2_kw": 4.6,
+  "imp_ele": 5.1127,
+  "iva": 21,
+  "alq_eq_dia": 0.0266,
+  "suministro_lat": 37.61395,
+  "suministro_lon": -0.78202,
+  "consumo_p1_kwh": 120,
+  "consumo_p2_kwh": 80,
+  "importe_factura": 62.5,
+  "comercializadora": "Comercializadora sintética",
+  "distribuidora": "Distribuidora sintética"
+}

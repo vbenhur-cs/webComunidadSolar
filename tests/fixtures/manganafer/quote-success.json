@@ -1,0 +1,17 @@
+{
+  "resultados_kpi": {
+    "ahorro_anual_medio": 210,
+    "ahorro_mensual_medio": 17.5,
+    "pct_ahorro_anual": 23,
+    "factura_anual_actual": 900,
+    "factura_anual_cecs": 690,
+    "cuota_alquiler_mensual": 18,
+    "produccion_ar_anual_kwh": 1200
+  },
+  "proyeccion_financiera": {
+    "tabla_cashflow": [
+      { "ahorro_acumulado": 210 },
+      { "ahorro_acumulado": 5250 }
+    ]
+  }
+}
