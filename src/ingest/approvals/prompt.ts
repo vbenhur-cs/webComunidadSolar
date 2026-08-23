@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
-import { lstat } from "node:fs/promises";
+import { lstat, realpath } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, relative, resolve } from "node:path";
+import { isAbsolute, join, relative, resolve } from "node:path";
 import { stdin, stdout } from "node:process";
 import { createInterface } from "node:readline/promises";
 import { promisify } from "node:util";
@@ -37,15 +37,86 @@ const fixturePrompts = new WeakMap<FixtureApprovalPrompt, ApprovalPrompt>();
 
 function isWithin(parent: string, child: string): boolean {
   const path = relative(parent, child);
-  return path === "" || (!path.startsWith("..") && !path.startsWith("/"));
+  return path === "" || (!path.startsWith("..") && !isAbsolute(path));
 }
 
-async function assertTemporaryFixtureClone(projectRoot: string): Promise<void> {
-  const root = resolve(projectRoot);
+async function assertNoSymlinkDescendants(
+  parent: string,
+  child: string,
+): Promise<void> {
+  let cursor = child;
+  while (cursor !== parent) {
+    const entry = await lstat(cursor);
+    if (entry.isSymbolicLink()) {
+      throw new TypeError(
+        "El clon fixture no puede atravesar enlaces simbólicos",
+      );
+    }
+    const parent = resolve(cursor, "..");
+    cursor = parent;
+  }
+}
+
+async function assertSafeStateRoot(root: string): Promise<void> {
+  const stateRoot = join(root, ".change-state");
+  try {
+    const entry = await lstat(stateRoot);
+    if (entry.isSymbolicLink() || !entry.isDirectory()) {
+      throw new TypeError(
+        "El estado fixture no puede atravesar enlaces simbólicos",
+      );
+    }
+  } catch (error: unknown) {
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      error.code === "ENOENT"
+    ) {
+      return;
+    }
+    throw error;
+  }
+}
+
+async function gitOutput(root: string, args: string[]): Promise<string> {
+  try {
+    const result = await execFileAsync("git", ["-C", root, ...args], {
+      encoding: "utf8",
+    });
+    return result.stdout.trim();
+  } catch {
+    throw new TypeError("El clon temporal fixture no tiene Git válido");
+  }
+}
+
+async function assertTemporaryFixtureClone(
+  projectRoot: string,
+): Promise<string> {
+  const lexicalRoot = resolve(projectRoot);
+  const lexicalTemporaryRoot = resolve(tmpdir());
+  if (!isWithin(lexicalTemporaryRoot, lexicalRoot)) {
+    throw new TypeError(
+      "El prompt fixture exige un clon temporal fuera de worktrees de agente",
+    );
+  }
+  const relativeRoot = relative(lexicalTemporaryRoot, lexicalRoot);
+  const [root, temporaryRoot] = await Promise.all([
+    realpath(lexicalRoot),
+    realpath(tmpdir()),
+  ]);
   if (
-    !isWithin(resolve(tmpdir()), root) ||
+    root !== resolve(temporaryRoot, relativeRoot) ||
+    !isWithin(temporaryRoot, root) ||
     root.split(/[\\/]+/u).includes(".agent-worktrees")
   ) {
+    throw new TypeError(
+      "El prompt fixture exige un clon temporal fuera de worktrees de agente",
+    );
+  }
+  try {
+    await assertNoSymlinkDescendants(temporaryRoot, root);
+  } catch {
     throw new TypeError(
       "El prompt fixture exige un clon temporal fuera de worktrees de agente",
     );
@@ -53,21 +124,41 @@ async function assertTemporaryFixtureClone(projectRoot: string): Promise<void> {
 
   try {
     const gitEntry = await lstat(join(root, ".git"));
-    if (!gitEntry.isDirectory() && !gitEntry.isFile()) {
+    if (!gitEntry.isDirectory() || gitEntry.isSymbolicLink()) {
       throw new TypeError("El clon temporal fixture no tiene Git válido");
     }
-    const result = await execFileAsync(
-      "git",
-      ["-C", root, "rev-parse", "--is-inside-work-tree"],
-      { encoding: "utf8" },
-    );
-    if (result.stdout.trim() !== "true") {
+    if ((await realpath(join(root, ".git"))) !== join(root, ".git")) {
       throw new TypeError("El clon temporal fixture no tiene Git válido");
     }
+    if ((await gitOutput(root, ["rev-parse", "--show-toplevel"])) !== root) {
+      throw new TypeError("El clon temporal fixture no tiene Git válido");
+    }
+    const head = await gitOutput(root, [
+      "rev-parse",
+      "--verify",
+      "HEAD^{commit}",
+    ]);
+    const origin = await gitOutput(root, ["remote", "get-url", "origin"]);
+    const trackedMain = await gitOutput(root, [
+      "rev-parse",
+      "--verify",
+      "refs/remotes/origin/main^{commit}",
+    ]);
+    if (
+      !/^[a-f0-9]{40,64}$/u.test(head) ||
+      origin === "" ||
+      trackedMain !== head
+    ) {
+      throw new TypeError(
+        "El clon temporal fixture no tiene origen verificable",
+      );
+    }
+    await assertSafeStateRoot(root);
   } catch (error: unknown) {
     if (error instanceof TypeError) throw error;
     throw new TypeError("El clon temporal fixture no tiene Git válido");
   }
+  return root;
 }
 
 export async function createFixtureApprovalPrompt(
@@ -78,14 +169,14 @@ export async function createFixtureApprovalPrompt(
       "El prompt fixture exige INGEST_TEST_MODE=true explícitamente",
     );
   }
-  await assertTemporaryFixtureClone(options.projectRoot);
+  const projectRoot = await assertTemporaryFixtureClone(options.projectRoot);
   const capability = Object.freeze({
     [fixturePromptBrand]: true as const,
   }) as FixtureApprovalPrompt;
   fixturePrompts.set(capability, {
     isTTY: options.isTTY,
     environment: "test",
-    fixtureProjectRoot: resolve(options.projectRoot),
+    fixtureProjectRoot: projectRoot,
     confirm: async () => options.answer,
   });
   return capability;
@@ -123,18 +214,35 @@ export function approvalPrompt(
   return prompt;
 }
 
-export function assertPromptStateRoot(
+export async function assertPromptStateRoot(
   prompt: ReturnType<typeof approvalPrompt>,
-  options: { projectRoot?: string; stateRoot?: string },
-): void {
+  options: {
+    projectRoot?: string;
+    repositoryRoot?: string;
+    stateRoot?: string;
+  },
+): Promise<void> {
   if (prompt.fixtureProjectRoot === null) return;
   const stateRoot = resolve(
     options.stateRoot ??
       join(options.projectRoot ?? process.cwd(), ".change-state"),
   );
-  if (stateRoot !== join(prompt.fixtureProjectRoot, ".change-state")) {
+  const expectedStateRoot = resolve(
+    options.repositoryRoot ?? "",
+    ".change-state",
+  );
+  if (stateRoot !== expectedStateRoot) {
     throw new TypeError(
       "El prompt fixture solo puede escribir estado en su clon temporal",
     );
   }
+  if (
+    options.repositoryRoot === undefined ||
+    (await realpath(options.repositoryRoot)) !== prompt.fixtureProjectRoot
+  ) {
+    throw new TypeError(
+      "El prompt fixture solo puede leer main desde su clon temporal",
+    );
+  }
+  await assertSafeStateRoot(prompt.fixtureProjectRoot);
 }

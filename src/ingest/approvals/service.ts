@@ -1,5 +1,7 @@
-import { lstat, readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { execFile } from "node:child_process";
+import { lstat, readFile, realpath } from "node:fs/promises";
+import { join, resolve } from "node:path";
+import { promisify } from "node:util";
 
 import { canonicalJson, sha256Canonical } from "../canonical-json.ts";
 import type {
@@ -19,8 +21,11 @@ import {
 
 export type ApprovalStorageOptions = IngestPathOptions;
 
+const execFileAsync = promisify(execFile);
+
 interface ApprovalOptions extends ApprovalStorageOptions {
   actor: string;
+  repositoryRoot: string;
   now?: () => Date;
 }
 
@@ -31,7 +36,53 @@ export interface Gate1ApprovalInput extends ApprovalOptions {
 export interface Gate2ApprovalInput extends ApprovalOptions {
   plan: ChangePlan;
   candidate: CandidateManifest;
-  currentBaseline: string;
+}
+
+async function protectedMainBaseline(repositoryRoot: string): Promise<string> {
+  const lexicalRoot = resolve(repositoryRoot);
+  try {
+    const lexicalEntry = await lstat(lexicalRoot);
+    if (lexicalEntry.isSymbolicLink() || !lexicalEntry.isDirectory()) {
+      throw new TypeError("El repositorio no tiene una raíz segura");
+    }
+    const root = await realpath(lexicalRoot);
+    const git = await lstat(join(root, ".git"));
+    if (git.isSymbolicLink() || !git.isDirectory()) {
+      throw new TypeError("El repositorio no tiene Git seguro");
+    }
+    const topLevel = await execFileAsync(
+      "git",
+      ["-C", root, "rev-parse", "--show-toplevel"],
+      { encoding: "utf8" },
+    );
+    if (topLevel.stdout.trim() !== root) {
+      throw new TypeError("El repositorio no tiene una raíz segura");
+    }
+    const main = await execFileAsync(
+      "git",
+      ["-C", root, "rev-parse", "--verify", "refs/heads/main^{commit}"],
+      { encoding: "utf8" },
+    );
+    const baseline = main.stdout.trim();
+    if (!/^[a-f0-9]{40,64}$/u.test(baseline)) {
+      throw new TypeError("La referencia main no es un commit válido");
+    }
+    return baseline;
+  } catch (error: unknown) {
+    if (error instanceof TypeError) throw error;
+    throw new TypeError("No se pudo leer la referencia protegida main");
+  }
+}
+
+async function assertIssuanceBaseline(
+  plan: ChangePlan,
+  repositoryRoot: string,
+): Promise<string> {
+  const baseline = await protectedMainBaseline(repositoryRoot);
+  if (plan.baselineCommit !== baseline) {
+    throw new TypeError("El baseline de main no coincide con el plan aprobado");
+  }
+  return baseline;
 }
 
 function assertActor(actor: string): void {
@@ -153,9 +204,10 @@ export async function approveGate1(
   fixturePrompt?: FixtureApprovalPrompt,
 ): Promise<ApprovalRecord> {
   assertActor(input.actor);
-  const prompt = approvalPrompt(fixturePrompt);
-  assertPromptStateRoot(prompt, input);
   const subjectSha256 = planSubject(input.plan);
+  await assertIssuanceBaseline(input.plan, input.repositoryRoot);
+  const prompt = approvalPrompt(fixturePrompt);
+  await assertPromptStateRoot(prompt, input);
   await confirm(
     prompt,
     1,
@@ -182,11 +234,15 @@ export async function approveGate2(
   fixturePrompt?: FixtureApprovalPrompt,
 ): Promise<ApprovalRecord> {
   assertActor(input.actor);
-  const prompt = approvalPrompt(fixturePrompt);
-  assertPromptStateRoot(prompt, input);
   const approvedPlanSha256 = planSubject(input.plan);
+  const currentBaseline = await assertIssuanceBaseline(
+    input.plan,
+    input.repositoryRoot,
+  );
+  const prompt = approvalPrompt(fixturePrompt);
+  await assertPromptStateRoot(prompt, input);
   const gate1 = await persistedGate1(input);
-  verifyApproval(gate1, input.plan, input.currentBaseline);
+  verifyApproval(gate1, input.plan, currentBaseline);
   if (gate1.environment !== prompt.environment) {
     throw new TypeError(
       "Gate 2 requiere una aprobación Gate 1 de la misma procedencia",

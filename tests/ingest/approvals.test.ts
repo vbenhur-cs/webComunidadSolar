@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import {
+  mkdtemp,
+  mkdir,
+  readFile,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -20,14 +27,14 @@ import {
 } from "../../src/ingest/approvals/prompt.ts";
 
 const hash = (character: string) => character.repeat(64);
-const baselineCommit = "b".repeat(40);
+const defaultBaselineCommit = "b".repeat(40);
 const execFileAsync = promisify(execFile);
 
 function plan(overrides: Partial<ChangePlan> = {}): ChangePlan {
   const unsigned = {
     schemaVersion: 1 as const,
     changeId: "nueva-pagina-autoconsumo",
-    baselineCommit,
+    baselineCommit: defaultBaselineCommit,
     requestSha256: hash("a"),
     selectedMode: "blocks" as const,
     targetPath: "/autoconsumo-compartido" as const,
@@ -69,7 +76,7 @@ function candidate(
     attemptId: "attempt-000001",
     requestSha256: hash("a"),
     planSha256: plan().planSha256,
-    baselineCommit,
+    baselineCommit: defaultBaselineCommit,
     candidateCommit: "c".repeat(40),
     artifactSha256: hash("f"),
     buildProfile: plan().publication,
@@ -108,21 +115,126 @@ async function fixturePrompt(
   }
 }
 
+async function withFixtureMode(run: () => Promise<void>): Promise<void> {
+  const previous = process.env.INGEST_TEST_MODE;
+  process.env.INGEST_TEST_MODE = "true";
+  try {
+    await run();
+  } finally {
+    if (previous === undefined) delete process.env.INGEST_TEST_MODE;
+    else process.env.INGEST_TEST_MODE = previous;
+  }
+}
+
 async function withStateRoot(
-  run: (context: { projectRoot: string; stateRoot: string }) => Promise<void>,
+  run: (context: {
+    projectRoot: string;
+    stateRoot: string;
+    mainCommit: string;
+  }) => Promise<void>,
 ): Promise<void> {
   const root = await mkdtemp(join(tmpdir(), "comunidadsolar-approvals-"));
+  const origin = join(root, "origin.git");
+  const seed = join(root, "seed");
+  const clone = join(root, "clone");
   try {
-    await execFileAsync("git", ["init", "--quiet", root]);
-    await run({ projectRoot: root, stateRoot: join(root, ".change-state") });
+    await execFileAsync("git", [
+      "init",
+      "--bare",
+      "--quiet",
+      "--initial-branch=main",
+      origin,
+    ]);
+    await execFileAsync("git", [
+      "init",
+      "--quiet",
+      "--initial-branch=main",
+      seed,
+    ]);
+    await execFileAsync("git", [
+      "-C",
+      seed,
+      "config",
+      "user.email",
+      "fixture@example.test",
+    ]);
+    await execFileAsync("git", [
+      "-C",
+      seed,
+      "config",
+      "user.name",
+      "Fixture Human",
+    ]);
+    await writeFile(join(seed, "README.md"), "fixture clone\n", "utf8");
+    await execFileAsync("git", ["-C", seed, "add", "README.md"]);
+    await execFileAsync("git", [
+      "-C",
+      seed,
+      "commit",
+      "--quiet",
+      "-m",
+      "fixture baseline",
+    ]);
+    await execFileAsync("git", ["-C", seed, "remote", "add", "origin", origin]);
+    await execFileAsync("git", [
+      "-C",
+      seed,
+      "push",
+      "--quiet",
+      "origin",
+      "main",
+    ]);
+    await execFileAsync("git", [
+      "clone",
+      "--quiet",
+      "--branch",
+      "main",
+      origin,
+      clone,
+    ]);
+    const { stdout } = await execFileAsync("git", [
+      "-C",
+      clone,
+      "rev-parse",
+      "HEAD",
+    ]);
+    await run({
+      projectRoot: clone,
+      stateRoot: join(clone, ".change-state"),
+      mainCommit: stdout.trim(),
+    });
   } finally {
     await rm(root, { force: true, recursive: true });
   }
 }
 
+function fixturePlan(
+  mainCommit: string,
+  overrides: Partial<ChangePlan> = {},
+): ChangePlan {
+  return plan({ baselineCommit: mainCommit, ...overrides });
+}
+
+function fixtureCandidate(
+  mainCommit: string,
+  approvedPlan: ChangePlan,
+  overrides: Partial<CandidateManifest> = {},
+): CandidateManifest {
+  return candidate({
+    baselineCommit: mainCommit,
+    planSha256: approvedPlan.planSha256,
+    ...overrides,
+  });
+}
+
 test("refuses approval without a human TTY", async () => {
-  await withStateRoot(async ({ projectRoot, stateRoot }) => {
-    const input = { plan: plan(), actor: "test-human", stateRoot };
+  await withStateRoot(async ({ projectRoot, stateRoot, mainCommit }) => {
+    const input = {
+      plan: fixturePlan(mainCommit),
+      actor: "test-human",
+      stateRoot,
+      repositoryRoot: projectRoot,
+    };
 
     await assert.rejects(
       approveGate1(input, await fixturePrompt(projectRoot, { isTTY: false })),
@@ -137,8 +249,13 @@ test("refuses approval without a human TTY", async () => {
 });
 
 test("requires the twelve-character subject hash confirmation", async () => {
-  await withStateRoot(async ({ projectRoot, stateRoot }) => {
-    const input = { plan: plan(), actor: "test-human", stateRoot };
+  await withStateRoot(async ({ projectRoot, stateRoot, mainCommit }) => {
+    const input = {
+      plan: fixturePlan(mainCommit),
+      actor: "test-human",
+      stateRoot,
+      repositoryRoot: projectRoot,
+    };
 
     await assert.rejects(
       approveGate1(
@@ -154,31 +271,41 @@ test("requires the twelve-character subject hash confirmation", async () => {
 });
 
 test("invalidates Gate 1 after any plan change", async () => {
-  await withStateRoot(async ({ projectRoot, stateRoot }) => {
-    const approvedPlan = plan();
+  await withStateRoot(async ({ projectRoot, stateRoot, mainCommit }) => {
+    const approvedPlan = fixturePlan(mainCommit);
     const gate1 = await approveGate1(
-      { plan: approvedPlan, actor: "test-human", stateRoot },
+      {
+        plan: approvedPlan,
+        actor: "test-human",
+        stateRoot,
+        repositoryRoot: projectRoot,
+      },
       await fixturePrompt(projectRoot, {
         isTTY: true,
         answer: approvedPlan.planSha256.slice(0, 12),
       }),
     );
-    const changedPlan = plan({
+    const changedPlan = fixturePlan(mainCommit, {
       validations: ["npm run check", "npm run lint"],
     });
 
     assert.throws(
-      () => verifyApproval(gate1, changedPlan, baselineCommit),
+      () => verifyApproval(gate1, changedPlan, mainCommit),
       /hash aprobado no coincide/i,
     );
   });
 });
 
 test("invalidates approval when main no longer equals its baseline", async () => {
-  await withStateRoot(async ({ projectRoot, stateRoot }) => {
-    const approvedPlan = plan();
+  await withStateRoot(async ({ projectRoot, stateRoot, mainCommit }) => {
+    const approvedPlan = fixturePlan(mainCommit);
     const gate1 = await approveGate1(
-      { plan: approvedPlan, actor: "test-human", stateRoot },
+      {
+        plan: approvedPlan,
+        actor: "test-human",
+        stateRoot,
+        repositoryRoot: projectRoot,
+      },
       await fixturePrompt(projectRoot, {
         isTTY: true,
         answer: approvedPlan.planSha256.slice(0, 12),
@@ -193,13 +320,16 @@ test("invalidates approval when main no longer equals its baseline", async () =>
 });
 
 test("Gate 2 binds canonical candidate, commit, and artifact digest", async () => {
-  await withStateRoot(async ({ projectRoot, stateRoot }) => {
-    const approvedPlan = plan();
-    const approvedCandidate = candidate({
-      planSha256: approvedPlan.planSha256,
-    });
+  await withStateRoot(async ({ projectRoot, stateRoot, mainCommit }) => {
+    const approvedPlan = fixturePlan(mainCommit);
+    const approvedCandidate = fixtureCandidate(mainCommit, approvedPlan);
     await approveGate1(
-      { plan: approvedPlan, actor: "test-human", stateRoot },
+      {
+        plan: approvedPlan,
+        actor: "test-human",
+        stateRoot,
+        repositoryRoot: projectRoot,
+      },
       await fixturePrompt(projectRoot, {
         isTTY: true,
         answer: approvedPlan.planSha256.slice(0, 12),
@@ -211,7 +341,7 @@ test("Gate 2 binds canonical candidate, commit, and artifact digest", async () =
         candidate: approvedCandidate,
         actor: "test-human",
         stateRoot,
-        currentBaseline: baselineCommit,
+        repositoryRoot: projectRoot,
       },
       await fixturePrompt(projectRoot, {
         isTTY: true,
@@ -223,7 +353,7 @@ test("Gate 2 binds canonical candidate, commit, and artifact digest", async () =
     assert.equal(gate2.candidateCommit, approvedCandidate.candidateCommit);
     assert.equal(gate2.artifactSha256, approvedCandidate.artifactSha256);
     assert.doesNotThrow(() =>
-      verifyApproval(gate2, approvedCandidate, baselineCommit),
+      verifyApproval(gate2, approvedCandidate, mainCommit),
     );
 
     const paths = await ingestPaths(approvedPlan.changeId, { stateRoot });
@@ -237,12 +367,17 @@ test("Gate 2 binds canonical candidate, commit, and artifact digest", async () =
 });
 
 test("rejects anonymous and agent actors", async () => {
-  await withStateRoot(async ({ projectRoot, stateRoot }) => {
+  await withStateRoot(async ({ projectRoot, stateRoot, mainCommit }) => {
     for (const actor of ["", "agent", "codex", "fixture", "ab"]) {
-      const approvedPlan = plan();
+      const approvedPlan = fixturePlan(mainCommit);
       await assert.rejects(
         approveGate1(
-          { plan: approvedPlan, actor, stateRoot },
+          {
+            plan: approvedPlan,
+            actor,
+            stateRoot,
+            repositoryRoot: projectRoot,
+          },
           await fixturePrompt(projectRoot, {
             isTTY: true,
             answer: approvedPlan.planSha256.slice(0, 12),
@@ -255,15 +390,23 @@ test("rejects anonymous and agent actors", async () => {
 });
 
 test("rejects structural prompts that claim production provenance", async () => {
-  await withStateRoot(async ({ stateRoot }) => {
-    const approvedPlan = plan();
+  await withStateRoot(async ({ projectRoot, stateRoot, mainCommit }) => {
+    const approvedPlan = fixturePlan(mainCommit);
 
     await assert.rejects(
-      approveGate1({ plan: approvedPlan, actor: "test-human", stateRoot }, {
-        isTTY: true,
-        environment: "production",
-        confirm: async () => approvedPlan.planSha256.slice(0, 12),
-      } as unknown as FixtureApprovalPrompt),
+      approveGate1(
+        {
+          plan: approvedPlan,
+          actor: "test-human",
+          stateRoot,
+          repositoryRoot: projectRoot,
+        },
+        {
+          isTTY: true,
+          environment: "production",
+          confirm: async () => approvedPlan.planSha256.slice(0, 12),
+        } as unknown as FixtureApprovalPrompt,
+      ),
       /prompt|fixture|producci[oó]n/i,
     );
   });
@@ -283,9 +426,7 @@ test("refuses to create fixture prompts outside explicit test mode", async () =>
 });
 
 test("refuses fixture prompts outside a temporary Git worktree", async () => {
-  const previous = process.env.INGEST_TEST_MODE;
-  process.env.INGEST_TEST_MODE = "true";
-  try {
+  await withFixtureMode(async () => {
     await assert.rejects(
       createFixtureApprovalPrompt({
         projectRoot: process.cwd(),
@@ -294,25 +435,94 @@ test("refuses fixture prompts outside a temporary Git worktree", async () => {
       }),
       /clon temporal|fixture/i,
     );
+  });
+});
+
+test("refuses a lexical temporary symlink to an agent-worktree-like repository", async () => {
+  const root = await mkdtemp(join(tmpdir(), "comunidadsolar-symlink-"));
+  try {
+    const linkedRoot = join(root, "linked-repository");
+    await symlink(process.cwd(), linkedRoot);
+    await withFixtureMode(async () => {
+      await assert.rejects(
+        createFixtureApprovalPrompt({
+          projectRoot: linkedRoot,
+          isTTY: true,
+          answer: "irrelevant",
+        }),
+        /clon temporal|symlink|enlace|fixture/i,
+      );
+    });
   } finally {
-    if (previous === undefined) delete process.env.INGEST_TEST_MODE;
-    else process.env.INGEST_TEST_MODE = previous;
+    await rm(root, { force: true, recursive: true });
   }
 });
 
+test("refuses linked worktree pointers and generic Git initializations", async () => {
+  const root = await mkdtemp(join(tmpdir(), "comunidadsolar-untrusted-"));
+  const worktree = join(root, "linked-worktree");
+  const initialized = join(root, "initialized");
+  try {
+    await mkdir(worktree);
+    await writeFile(
+      join(worktree, ".git"),
+      "gitdir: /outside/worktrees/linked\n",
+    );
+    await execFileAsync("git", ["init", "--quiet", initialized]);
+    await withFixtureMode(async () => {
+      for (const projectRoot of [worktree, initialized]) {
+        await assert.rejects(
+          createFixtureApprovalPrompt({
+            projectRoot,
+            isTTY: true,
+            answer: "irrelevant",
+          }),
+          /clon temporal|Git|fixture|origin/i,
+        );
+      }
+    });
+  } finally {
+    await rm(root, { force: true, recursive: true });
+  }
+});
+
+test("refuses a fixture root whose state directory is a symlink", async () => {
+  await withStateRoot(async ({ projectRoot }) => {
+    const foreignRoot = await mkdtemp(
+      join(tmpdir(), "comunidadsolar-state-link-"),
+    );
+    try {
+      await symlink(foreignRoot, join(projectRoot, ".change-state"));
+      await withFixtureMode(async () => {
+        await assert.rejects(
+          createFixtureApprovalPrompt({
+            projectRoot,
+            isTTY: true,
+            answer: "irrelevant",
+          }),
+          /estado|symlink|enlace|fixture/i,
+        );
+      });
+    } finally {
+      await rm(foreignRoot, { force: true, recursive: true });
+    }
+  });
+});
+
 test("fixture prompts cannot write approval state outside their temporary clone", async () => {
-  await withStateRoot(async ({ projectRoot, stateRoot }) => {
+  await withStateRoot(async ({ projectRoot, stateRoot, mainCommit }) => {
     const foreignRoot = await mkdtemp(
       join(tmpdir(), "comunidadsolar-foreign-"),
     );
     try {
-      const approvedPlan = plan();
+      const approvedPlan = fixturePlan(mainCommit);
       await assert.rejects(
         approveGate1(
           {
             plan: approvedPlan,
             actor: "test-human",
             stateRoot: join(foreignRoot, ".change-state"),
+            repositoryRoot: projectRoot,
           },
           await fixturePrompt(projectRoot, {
             isTTY: true,
@@ -341,11 +551,9 @@ test("fixture prompts cannot write approval state outside their temporary clone"
 });
 
 test("Gate 2 requires a persisted, valid Gate 1 approval", async () => {
-  await withStateRoot(async ({ projectRoot, stateRoot }) => {
-    const approvedPlan = plan();
-    const approvedCandidate = candidate({
-      planSha256: approvedPlan.planSha256,
-    });
+  await withStateRoot(async ({ projectRoot, stateRoot, mainCommit }) => {
+    const approvedPlan = fixturePlan(mainCommit);
+    const approvedCandidate = fixtureCandidate(mainCommit, approvedPlan);
 
     await assert.rejects(
       approveGate2(
@@ -354,7 +562,7 @@ test("Gate 2 requires a persisted, valid Gate 1 approval", async () => {
           candidate: approvedCandidate,
           actor: "test-human",
           stateRoot,
-          currentBaseline: baselineCommit,
+          repositoryRoot: projectRoot,
         },
         await fixturePrompt(projectRoot, {
           isTTY: true,
@@ -366,19 +574,36 @@ test("Gate 2 requires a persisted, valid Gate 1 approval", async () => {
   });
 });
 
-test("Gate 2 rejects an advanced current baseline", async () => {
-  await withStateRoot(async ({ projectRoot, stateRoot }) => {
-    const approvedPlan = plan();
-    const approvedCandidate = candidate({
-      planSha256: approvedPlan.planSha256,
-    });
+test("Gate 2 reads advanced main instead of a caller-supplied old baseline", async () => {
+  await withStateRoot(async ({ projectRoot, stateRoot, mainCommit }) => {
+    const approvedPlan = fixturePlan(mainCommit);
+    const approvedCandidate = fixtureCandidate(mainCommit, approvedPlan);
     await approveGate1(
-      { plan: approvedPlan, actor: "test-human", stateRoot },
+      {
+        plan: approvedPlan,
+        actor: "test-human",
+        stateRoot,
+        repositoryRoot: projectRoot,
+      },
       await fixturePrompt(projectRoot, {
         isTTY: true,
         answer: approvedPlan.planSha256.slice(0, 12),
       }),
     );
+    const gate2Prompt = await fixturePrompt(projectRoot, {
+      isTTY: true,
+      answer: sha256Canonical(approvedCandidate).slice(0, 12),
+    });
+    await writeFile(join(projectRoot, "advanced.txt"), "advanced\n", "utf8");
+    await execFileAsync("git", ["-C", projectRoot, "add", "advanced.txt"]);
+    await execFileAsync("git", [
+      "-C",
+      projectRoot,
+      "commit",
+      "--quiet",
+      "-m",
+      "advance main",
+    ]);
 
     await assert.rejects(
       approveGate2(
@@ -387,23 +612,46 @@ test("Gate 2 rejects an advanced current baseline", async () => {
           candidate: approvedCandidate,
           actor: "test-human",
           stateRoot,
-          currentBaseline: "a".repeat(40),
+          repositoryRoot: projectRoot,
         },
-        await fixturePrompt(projectRoot, {
-          isTTY: true,
-          answer: sha256Canonical(approvedCandidate).slice(0, 12),
-        }),
+        gate2Prompt,
       ),
       /baseline/i,
     );
   });
 });
 
+test("approval issuance fails closed for missing repository roots", async () => {
+  await withStateRoot(async ({ projectRoot, stateRoot, mainCommit }) => {
+    const approvedPlan = fixturePlan(mainCommit);
+    await assert.rejects(
+      approveGate1(
+        {
+          plan: approvedPlan,
+          actor: "test-human",
+          stateRoot,
+          repositoryRoot: join(projectRoot, "missing"),
+        },
+        await fixturePrompt(projectRoot, {
+          isTTY: true,
+          answer: approvedPlan.planSha256.slice(0, 12),
+        }),
+      ),
+      /repositorio|main|Git/i,
+    );
+  });
+});
+
 test("Gate 2 rejects candidates from a different request or build profile", async () => {
-  await withStateRoot(async ({ projectRoot, stateRoot }) => {
-    const approvedPlan = plan();
+  await withStateRoot(async ({ projectRoot, stateRoot, mainCommit }) => {
+    const approvedPlan = fixturePlan(mainCommit);
     await approveGate1(
-      { plan: approvedPlan, actor: "test-human", stateRoot },
+      {
+        plan: approvedPlan,
+        actor: "test-human",
+        stateRoot,
+        repositoryRoot: projectRoot,
+      },
       await fixturePrompt(projectRoot, {
         isTTY: true,
         answer: approvedPlan.planSha256.slice(0, 12),
@@ -411,12 +659,10 @@ test("Gate 2 rejects candidates from a different request or build profile", asyn
     );
 
     for (const invalidCandidate of [
-      candidate({
-        planSha256: approvedPlan.planSha256,
+      fixtureCandidate(mainCommit, approvedPlan, {
         requestSha256: hash("d"),
       }),
-      candidate({
-        planSha256: approvedPlan.planSha256,
+      fixtureCandidate(mainCommit, approvedPlan, {
         buildProfile: { ...approvedPlan.publication, configSha256: hash("e") },
       }),
     ]) {
@@ -427,7 +673,7 @@ test("Gate 2 rejects candidates from a different request or build profile", asyn
             candidate: invalidCandidate,
             actor: "test-human",
             stateRoot,
-            currentBaseline: baselineCommit,
+            repositoryRoot: projectRoot,
           },
           await fixturePrompt(projectRoot, {
             isTTY: true,
@@ -450,7 +696,7 @@ test("verification rejects persisted non-human actor names", () => {
     actor: "test-human",
     approvedAt: "2026-08-23T10:00:00.000Z",
     subjectSha256: approvedPlan.planSha256,
-    baselineCommit,
+    baselineCommit: defaultBaselineCommit,
     candidateCommit: null,
     artifactSha256: null,
   };
@@ -458,7 +704,11 @@ test("verification rejects persisted non-human actor names", () => {
   for (const actor of ["", "agent", "codex", "fixture", " test-human "]) {
     assert.throws(
       () =>
-        verifyApproval({ ...validRecord, actor }, approvedPlan, baselineCommit),
+        verifyApproval(
+          { ...validRecord, actor },
+          approvedPlan,
+          defaultBaselineCommit,
+        ),
       /actor|identidad/i,
     );
   }
