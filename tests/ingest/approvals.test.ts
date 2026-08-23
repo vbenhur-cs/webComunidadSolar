@@ -678,6 +678,85 @@ test("revokes a fixture capability when its run is disposed", async () => {
   });
 });
 
+test("dispose waits for a paused fixture approval and removes its state", async () => {
+  await withStateRoot(async ({ projectRoot, stateRoot, mainCommit }) => {
+    const approvedPlan = fixturePlan(mainCommit);
+    const fixture = fixtureRuns.get(projectRoot);
+    if (fixture === undefined) throw new Error("No se creó el fixture");
+    let markPersistEntered: (() => void) | undefined;
+    const persistEntered = new Promise<void>((resolve) => {
+      markPersistEntered = resolve;
+    });
+    let releasePersist: (() => void) | undefined;
+    const persistReleased = new Promise<void>((resolve) => {
+      releasePersist = resolve;
+    });
+    const promptOptions = {
+      isTTY: true,
+      answer: approvedPlan.planSha256.slice(0, 12),
+      beforePersist: async () => {
+        markPersistEntered?.();
+        await persistReleased;
+      },
+    };
+    const prompt = await fixture.createPrompt(promptOptions);
+    const { stdout: origin } = await execFileAsync("git", [
+      "-C",
+      projectRoot,
+      "remote",
+      "get-url",
+      "origin",
+    ]);
+    const approval = approveGate1(
+      {
+        plan: approvedPlan,
+        actor: "test-human",
+        stateRoot,
+        repositoryRoot: projectRoot,
+      },
+      prompt,
+    );
+    const phase = await Promise.race([
+      approval.then(() => "approved"),
+      persistEntered.then(() => "paused"),
+    ]);
+    assert.equal(phase, "paused");
+    await rm(projectRoot, { force: true, recursive: true });
+    await execFileAsync("git", [
+      "clone",
+      "--quiet",
+      "--branch",
+      "main",
+      origin.trim(),
+      projectRoot,
+    ]);
+
+    let disposeResolved = false;
+    const disposal = fixture.dispose().then(() => {
+      disposeResolved = true;
+    });
+    await new Promise(setImmediate);
+    assert.equal(disposeResolved, false);
+    releasePersist?.();
+
+    await approval;
+    await disposal;
+    await assert.rejects(lstat(projectRoot), { code: "ENOENT" });
+    await assert.rejects(
+      approveGate1(
+        {
+          plan: approvedPlan,
+          actor: "test-human",
+          stateRoot,
+          repositoryRoot: projectRoot,
+        },
+        prompt,
+      ),
+      /prompt de aprobaci[oó]n|capacidad/i,
+    );
+  });
+});
+
 test("rejects a fixture capability after its clone path is recreated", async () => {
   await withStateRoot(async ({ projectRoot, stateRoot, mainCommit }) => {
     const approvedPlan = fixturePlan(mainCommit);

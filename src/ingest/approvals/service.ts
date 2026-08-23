@@ -15,8 +15,10 @@ import { validateSchema } from "../schema-validator.ts";
 import { writeAtomic } from "../state-store.ts";
 
 import {
+  acquireApprovalLease,
   approvalPrompt,
   assertPromptStateRoot,
+  beforeApprovalPersist,
   type FixtureApprovalPrompt,
 } from "./prompt.ts";
 
@@ -215,6 +217,7 @@ async function persistApproval(
   prompt: ReturnType<typeof approvalPrompt>,
 ): Promise<ApprovalRecord> {
   await assertPromptStateRoot(prompt, options);
+  await beforeApprovalPersist(prompt);
   const paths = await ingestPaths(approval.changeId, options);
   const filename = `gate-${approval.gate}.json`;
   await writeAtomic(
@@ -231,27 +234,32 @@ export async function approveGate1(
   assertActor(input.actor);
   const subjectSha256 = planSubject(input.plan);
   const prompt = approvalPrompt(fixturePrompt);
-  await assertPromptStateRoot(prompt, input);
-  await assertIssuanceBaseline(input.plan, input.repositoryRoot);
-  await confirm(
-    prompt,
-    1,
-    subjectSha256,
-    `Cambio ${input.plan.changeId}; baseline ${input.plan.baselineCommit}; ruta ${input.plan.targetPath}.`,
-  );
-  const approval = validateSchema<ApprovalRecord>("approval", {
-    schemaVersion: 1,
-    environment: prompt.environment,
-    gate: 1,
-    changeId: input.plan.changeId,
-    actor: input.actor,
-    approvedAt: approvedAt(input.now),
-    subjectSha256,
-    baselineCommit: input.plan.baselineCommit,
-    candidateCommit: null,
-    artifactSha256: null,
-  });
-  return persistApproval(approval, input, prompt);
+  const releaseLease = await acquireApprovalLease(prompt);
+  try {
+    await assertPromptStateRoot(prompt, input);
+    await assertIssuanceBaseline(input.plan, input.repositoryRoot);
+    await confirm(
+      prompt,
+      1,
+      subjectSha256,
+      `Cambio ${input.plan.changeId}; baseline ${input.plan.baselineCommit}; ruta ${input.plan.targetPath}.`,
+    );
+    const approval = validateSchema<ApprovalRecord>("approval", {
+      schemaVersion: 1,
+      environment: prompt.environment,
+      gate: 1,
+      changeId: input.plan.changeId,
+      actor: input.actor,
+      approvedAt: approvedAt(input.now),
+      subjectSha256,
+      baselineCommit: input.plan.baselineCommit,
+      candidateCommit: null,
+      artifactSha256: null,
+    });
+    return await persistApproval(approval, input, prompt);
+  } finally {
+    releaseLease();
+  }
 }
 
 export async function approveGate2(
@@ -261,39 +269,48 @@ export async function approveGate2(
   assertActor(input.actor);
   const approvedPlanSha256 = planSubject(input.plan);
   const prompt = approvalPrompt(fixturePrompt);
-  await assertPromptStateRoot(prompt, input);
-  const currentBaseline = await assertIssuanceBaseline(
-    input.plan,
-    input.repositoryRoot,
-  );
-  const gate1 = await persistedGate1(input);
-  verifyApproval(gate1, input.plan, currentBaseline);
-  if (gate1.environment !== prompt.environment) {
-    throw new TypeError(
-      "Gate 2 requiere una aprobación Gate 1 de la misma procedencia",
+  const releaseLease = await acquireApprovalLease(prompt);
+  try {
+    await assertPromptStateRoot(prompt, input);
+    const currentBaseline = await assertIssuanceBaseline(
+      input.plan,
+      input.repositoryRoot,
     );
+    const gate1 = await persistedGate1(input);
+    verifyApproval(gate1, input.plan, currentBaseline);
+    if (gate1.environment !== prompt.environment) {
+      throw new TypeError(
+        "Gate 2 requiere una aprobación Gate 1 de la misma procedencia",
+      );
+    }
+    assertCandidateBelongsToPlan(
+      input.candidate,
+      input.plan,
+      approvedPlanSha256,
+    );
+    const subjectSha256 = candidateSubject(input.candidate);
+    await confirm(
+      prompt,
+      2,
+      subjectSha256,
+      `Cambio ${input.candidate.changeId}; candidato ${input.candidate.candidateCommit}; artefacto ${input.candidate.artifactSha256}.`,
+    );
+    const approval = validateSchema<ApprovalRecord>("approval", {
+      schemaVersion: 1,
+      environment: prompt.environment,
+      gate: 2,
+      changeId: input.candidate.changeId,
+      actor: input.actor,
+      approvedAt: approvedAt(input.now),
+      subjectSha256,
+      baselineCommit: input.candidate.baselineCommit,
+      candidateCommit: input.candidate.candidateCommit,
+      artifactSha256: input.candidate.artifactSha256,
+    });
+    return await persistApproval(approval, input, prompt);
+  } finally {
+    releaseLease();
   }
-  assertCandidateBelongsToPlan(input.candidate, input.plan, approvedPlanSha256);
-  const subjectSha256 = candidateSubject(input.candidate);
-  await confirm(
-    prompt,
-    2,
-    subjectSha256,
-    `Cambio ${input.candidate.changeId}; candidato ${input.candidate.candidateCommit}; artefacto ${input.candidate.artifactSha256}.`,
-  );
-  const approval = validateSchema<ApprovalRecord>("approval", {
-    schemaVersion: 1,
-    environment: prompt.environment,
-    gate: 2,
-    changeId: input.candidate.changeId,
-    actor: input.actor,
-    approvedAt: approvedAt(input.now),
-    subjectSha256,
-    baselineCommit: input.candidate.baselineCommit,
-    candidateCommit: input.candidate.candidateCommit,
-    artifactSha256: input.candidate.artifactSha256,
-  });
-  return persistApproval(approval, input, prompt);
 }
 
 export function verifyApproval(

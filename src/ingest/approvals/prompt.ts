@@ -23,6 +23,8 @@ interface ApprovalPrompt {
   readonly fixtureProjectRoot: string | null;
   confirm(confirmation: ApprovalConfirmation): Promise<string>;
   revalidate(): Promise<void>;
+  acquireLease(): Promise<() => void>;
+  beforePersist?: () => Promise<void>;
 }
 
 export interface FixtureApprovalPrompt {
@@ -35,6 +37,7 @@ export interface FixtureApprovalRun {
   createPrompt(options: {
     isTTY: boolean;
     answer: string;
+    beforePersist?: () => Promise<void>;
   }): Promise<FixtureApprovalPrompt>;
   dispose(): Promise<void>;
 }
@@ -209,7 +212,10 @@ export async function createFixtureApprovalRun(
     join(temporaryRoot, "comunidadsolar-approval-fixture-"),
   );
   const repositoryRoot = join(parent, "clone");
-  let disposed = false;
+  let closing = false;
+  let activeLeases = 0;
+  let resolveIdleLeases: (() => void) | undefined;
+  let disposePromise: Promise<void> | undefined;
   const capabilities = new Set<FixtureApprovalPrompt>();
   let identity: FixtureRootIdentity;
   try {
@@ -237,8 +243,16 @@ export async function createFixtureApprovalRun(
   return Object.freeze({
     repositoryRoot,
     stateRoot: join(repositoryRoot, ".change-state"),
-    async createPrompt({ isTTY, answer }: { isTTY: boolean; answer: string }) {
-      if (disposed)
+    async createPrompt({
+      isTTY,
+      answer,
+      beforePersist,
+    }: {
+      isTTY: boolean;
+      answer: string;
+      beforePersist?: () => Promise<void>;
+    }) {
+      if (closing)
         throw new TypeError("El fixture de aprobación ya fue liberado");
       await assertOwnedFixtureClone(repositoryRoot, identity);
       const capability = Object.freeze({
@@ -250,8 +264,21 @@ export async function createFixtureApprovalRun(
         environment: "test",
         fixtureProjectRoot: repositoryRoot,
         confirm: async () => answer,
+        beforePersist,
+        async acquireLease() {
+          if (closing)
+            throw new TypeError("El fixture de aprobación ya fue liberado");
+          activeLeases += 1;
+          let released = false;
+          return () => {
+            if (released) return;
+            released = true;
+            activeLeases -= 1;
+            if (activeLeases === 0) resolveIdleLeases?.();
+          };
+        },
         async revalidate() {
-          if (disposed)
+          if (closing)
             throw new TypeError("El fixture de aprobación ya fue liberado");
           try {
             await assertOwnedFixtureClone(repositoryRoot, identity);
@@ -264,11 +291,24 @@ export async function createFixtureApprovalRun(
       return capability;
     },
     async dispose() {
-      if (disposed) return;
-      disposed = true;
+      if (disposePromise !== undefined) return disposePromise;
+      closing = true;
       for (const capability of capabilities) fixturePrompts.delete(capability);
       capabilities.clear();
-      await rm(parent, { force: true, recursive: true });
+      disposePromise = (async () => {
+        if (activeLeases > 0) {
+          await new Promise<void>((resolve) => {
+            resolveIdleLeases = resolve;
+          });
+        }
+        await rm(parent, {
+          force: true,
+          maxRetries: 3,
+          recursive: true,
+          retryDelay: 10,
+        });
+      })();
+      return disposePromise;
     },
   });
 }
@@ -279,6 +319,9 @@ function createProductionApprovalPrompt(): ApprovalPrompt {
     environment: "production",
     fixtureProjectRoot: null,
     async revalidate() {},
+    async acquireLease() {
+      return () => {};
+    },
     async confirm({ gate, subjectSha256, summary }): Promise<string> {
       stdout.write(`\nGate ${gate}\n${summary}\nHash: ${subjectSha256}\n`);
       const prompt = createInterface({ input: stdin, output: stdout });
@@ -303,6 +346,18 @@ export function approvalPrompt(
       "El prompt de aprobación debe ser una capacidad fixture autorizada",
     );
   return prompt;
+}
+
+export async function acquireApprovalLease(
+  prompt: ReturnType<typeof approvalPrompt>,
+): Promise<() => void> {
+  return prompt.acquireLease();
+}
+
+export async function beforeApprovalPersist(
+  prompt: ReturnType<typeof approvalPrompt>,
+): Promise<void> {
+  await prompt.beforePersist?.();
 }
 
 export async function assertPromptStateRoot(
