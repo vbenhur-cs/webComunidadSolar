@@ -87,6 +87,27 @@ function pageRequest(
   return request({ inputKind: "page", ...overrides });
 }
 
+function assertCompleteMarkdown(markdown: string, planSha256: string): void {
+  for (const heading of [
+    "Resumen de entrada",
+    "Ruta y overwrite",
+    "Modo de composición",
+    "Archivos previstos",
+    "Componentes reutilizados y nuevos",
+    "Islas",
+    "Assets",
+    "Claims, enlaces e integraciones",
+    "Impacto SEO, privacidad y navegación",
+    "Dependencias",
+    "Riesgos",
+    "Matriz de aceptación",
+  ]) {
+    assert.match(markdown, new RegExp(`## ${heading}`, "u"));
+  }
+  assert.match(markdown, new RegExp(planSha256, "u"));
+  assert.match(markdown, /\| Criterio \| Validación \| Evidencia \|/u);
+}
+
 test("auto chooses blocks for a textual request", () => {
   assert.equal(selectMode(request({ mode: "auto" })), "blocks");
 });
@@ -116,6 +137,24 @@ test("auto classifies a markup-bearing textual request with page semantics", () 
   assert.equal(
     selectMode(request({ mode: "auto", content: "<main>contenido</main>" })),
     "freeform",
+  );
+});
+
+test("auto recognizes comments doctypes and JSX fragments as markup", () => {
+  for (const content of [
+    "<!-- página aportada -->",
+    "<!doctype html>",
+    "<>contenido</>",
+  ]) {
+    assert.equal(selectMode(request({ mode: "auto", content })), "freeform");
+  }
+  assert.equal(
+    selectMode(request({ mode: "auto", content: "<incomplete" })),
+    "freeform",
+  );
+  assert.equal(
+    selectMode(request({ mode: "auto", content: "1 < 2" })),
+    "blocks",
   );
 });
 
@@ -200,23 +239,7 @@ test("produces a closed hash-bound JSON plan and complete Markdown for a request
   assert.equal(plan.files.length, 5);
 
   const markdown = renderPlanMarkdown(plan, fixture);
-  for (const heading of [
-    "Resumen de entrada",
-    "Ruta y overwrite",
-    "Modo de composición",
-    "Archivos previstos",
-    "Componentes reutilizados y nuevos",
-    "Islas",
-    "Assets",
-    "Claims, enlaces e integraciones",
-    "Impacto SEO, privacidad y navegación",
-    "Dependencias",
-    "Riesgos",
-    "Matriz de aceptación",
-  ]) {
-    assert.match(markdown, new RegExp(`## ${heading}`, "u"));
-  }
-  assert.match(markdown, new RegExp(plan.planSha256, "u"));
+  assertCompleteMarkdown(markdown, plan.planSha256);
   assert.match(markdown, /La ruta responde 200/u);
 });
 
@@ -239,8 +262,8 @@ test("plans the supplied page fixture deterministically without writing site rou
   assert.equal(first.files[0]?.operation, "create");
   assert.deepEqual(validateSchema("change-plan", first), first);
   const markdown = renderPlanMarkdown(first, fixture);
-  assert.match(markdown, /## Resumen de entrada/u);
-  assert.match(markdown, /## Matriz de aceptación/u);
+  assertCompleteMarkdown(markdown, first.planSha256);
+  assert.match(markdown, /La ruta aporta una estructura principal accesible/u);
   assert.match(markdown, /solar\.svg/u);
   assert.equal(
     await readFile(join(root, "src", "pages", "index.astro"), "utf8"),
