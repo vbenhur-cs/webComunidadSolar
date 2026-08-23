@@ -1,4 +1,5 @@
 import { constants } from "node:fs";
+import { createHash } from "node:crypto";
 import { access, lstat, readFile, realpath, writeFile } from "node:fs/promises";
 import { isAbsolute, join, relative, resolve } from "node:path";
 
@@ -16,6 +17,34 @@ export interface CodexInvocation {
   command: "codex";
   args: string[];
   input: string;
+}
+
+export interface CodexExecutableCapability {
+  readonly name: "codex-executable";
+}
+const executables = new WeakMap<
+  CodexExecutableCapability,
+  { path: string; dev: number; ino: number; digest: string }
+>();
+export async function createCodexExecutableCapability(
+  path: string,
+): Promise<CodexExecutableCapability> {
+  const entry = await lstat(path);
+  if (entry.isSymbolicLink() || !entry.isFile())
+    throw new TypeError("El ejecutable Codex debe ser un archivo regular");
+  await access(path, constants.X_OK);
+  if ((await realpath(path)) !== path)
+    throw new TypeError("El ejecutable Codex no puede ser un enlace");
+  const capability = Object.freeze({ name: "codex-executable" as const });
+  executables.set(capability, {
+    path,
+    dev: entry.dev,
+    ino: entry.ino,
+    digest: createHash("sha256")
+      .update(await readFile(path))
+      .digest("hex"),
+  });
+  return capability;
 }
 
 function outputPaths(input: AgentRunInput): {
@@ -88,7 +117,10 @@ export function codexInvocation(input: AgentRunInput): CodexInvocation {
 export class CodexAgent implements AgentAdapter {
   readonly name = "codex";
 
-  constructor(private readonly runner: ProcessRunner = runProcess) {}
+  constructor(
+    private readonly executable: CodexExecutableCapability | null = null,
+    private readonly runner: ProcessRunner = runProcess,
+  ) {}
 
   async run(input: AgentRunInput): Promise<AgentRunResult> {
     input = await resolveAgentRunContext(input);
@@ -96,12 +128,16 @@ export class CodexAgent implements AgentAdapter {
     const paths = outputPaths(input);
     await assertOutputDirectory(input);
     await resolveAgentRunContext(input);
-    const result = await this.runner(await codexExecutable(), invocation.args, {
-      cwd: input.worktree,
-      env: { PATH: "/usr/bin:/bin", LANG: "C", LC_ALL: "C" },
-      input: invocation.input,
-      shell: false,
-    });
+    const result = await this.runner(
+      await codexExecutable(this.executable),
+      invocation.args,
+      {
+        cwd: input.worktree,
+        env: { PATH: "/usr/bin:/bin", LANG: "C", LC_ALL: "C" },
+        input: invocation.input,
+        shell: false,
+      },
+    );
     await resolveAgentRunContext(input);
     await Promise.all([
       writeFile(paths.stdoutPath, result.stdout, "utf8"),
@@ -118,16 +154,28 @@ export class CodexAgent implements AgentAdapter {
   }
 }
 
-async function codexExecutable(): Promise<string> {
-  const installed = "/Users/vbenhur/.local/bin/codex";
-  try {
-    await access(installed, constants.X_OK);
-    return installed;
-  } catch {
+async function codexExecutable(
+  capability: CodexExecutableCapability | null,
+): Promise<string> {
+  const expected =
+    capability === null ? undefined : executables.get(capability);
+  if (!expected)
     throw new TypeError(
       "No existe un ejecutable Codex aprobado por el operador",
     );
-  }
+  const entry = await lstat(expected.path);
+  if (
+    entry.isSymbolicLink() ||
+    !entry.isFile() ||
+    entry.dev !== expected.dev ||
+    entry.ino !== expected.ino ||
+    createHash("sha256")
+      .update(await readFile(expected.path))
+      .digest("hex") !== expected.digest
+  )
+    throw new TypeError("La identidad del ejecutable Codex cambió");
+  await access(expected.path, constants.X_OK);
+  return expected.path;
 }
 
 async function generatedFiles(path: string): Promise<string[]> {

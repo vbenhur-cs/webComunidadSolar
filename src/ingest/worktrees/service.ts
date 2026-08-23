@@ -22,6 +22,7 @@ import { validateSchema } from "../schema-validator.ts";
 const execFileAsync = promisify(execFile);
 const names = ["request.json", "plan.json", "policy.json"] as const;
 const owned = new WeakSet<CandidateWorktree>();
+const records = new WeakMap<CandidateWorktree, Readonly<CandidateWorktree>>();
 const runContexts = new WeakMap<object, CandidateWorktree | null>();
 type Identity = { device: number; inode: number };
 export interface GitSnapshot {
@@ -323,8 +324,10 @@ export async function createCandidateWorktree(
         "Las refs protegidas cambiaron durante la creación del candidato",
       );
     }
-    owned.add(candidate);
-    return candidate;
+    const projection = Object.freeze({ ...candidate });
+    records.set(projection, Object.freeze({ ...candidate }));
+    owned.add(projection);
+    return projection;
   } catch (error) {
     // A partially-created path is quarantined for operator inspection.  Never
     // delete on a failure path: a pathname may have changed after registration.
@@ -335,8 +338,10 @@ export async function createCandidateWorktree(
 const equalIdentity = (a: Identity, b: Identity) =>
   a.device === b.device && a.inode === b.inode;
 async function assertOwned(candidate: CandidateWorktree): Promise<void> {
-  if (!owned.has(candidate))
+  const record = records.get(candidate);
+  if (!owned.has(candidate) || record === undefined)
     throw new TypeError("El worktree no pertenece a este servicio");
+  candidate = record;
   const expected = join(
     candidate.repositoryRoot,
     ".agent-worktrees",
@@ -402,6 +407,7 @@ export async function removeCandidateWorktree(
     () => undefined,
   );
   owned.delete(candidate);
+  records.delete(candidate);
 }
 export async function validateCopiedInputs(
   candidate: CandidateWorktree,
