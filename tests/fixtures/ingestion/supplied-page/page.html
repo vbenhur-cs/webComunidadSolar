@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="refresh" content="0;url=https://invalid.example.test" />
+    <link rel="stylesheet" href="./styles.css" />
+    <title>Página solar aportada</title>
+  </head>
+  <body onload="globalThis.__suppliedPageExecuted = true">
+    <main
+      class="supplied-page"
+      onclick="globalThis.__suppliedPageClicked = true"
+    >
+      <h1>Una comunidad solar local</h1>
+      <p>El contenido aportado se inspecciona sin ejecutarse.</p>
+      <img src="solar.svg" alt="Sol sobre una comunidad" />
+      <script>
+        globalThis.__suppliedPageExecuted = true;
+      </script>
+      <object data="unsafe.bin"></object>
+      <embed src="unsafe.bin" />
+      <template>
+        <script>
+          globalThis.__suppliedPageExecuted = true;
+        </script>
+      </template>
+    </main>
+  </body>
+</html>

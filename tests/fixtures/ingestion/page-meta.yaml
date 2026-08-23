@@ -1,0 +1,8 @@
+changeId: pagina-aportada-solar
+intent: Presentar una comunidad solar local aportada por un operador
+targetPath: /pagina-aportada-solar
+audience: Comunidades locales
+acceptanceCriteria:
+  - La ruta aporta una estructura principal accesible
+  - Los recursos locales se inventarían con hash y tipo
+  - El contenido no ejecuta scripts durante la inspección

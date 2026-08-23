@@ -107,7 +107,10 @@ export function parseSafeYaml(source: string): unknown {
   }
 }
 
-export function normalizeRequestInput(value: unknown): NormalizedRequest {
+export function normalizeRequestInput(
+  value: unknown,
+  inputKind: NormalizedRequest["inputKind"] = "request",
+): NormalizedRequest {
   const input = validateSchema<RequestInput>(
     "request-input",
     normalizedData(value),
@@ -120,7 +123,7 @@ export function normalizeRequestInput(value: unknown): NormalizedRequest {
   const withoutHash = {
     schemaVersion: 1 as const,
     changeId: input.changeId,
-    inputKind: "request" as const,
+    inputKind,
     intent: input.intent,
     audience: input.audience ?? null,
     targetPath: input.targetPath,
@@ -313,7 +316,9 @@ async function readExistingRawArtifact(
       !opened.isFile() ||
       opened.dev !== current.dev ||
       opened.ino !== current.ino ||
-      opened.size !== expected.byteLength
+      opened.size !== expected.byteLength ||
+      (opened.mode & 0o777) !== 0o600 ||
+      (current.mode & 0o777) !== 0o600
     ) {
       throw unsafeArtifactPath(path);
     }
