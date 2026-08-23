@@ -2,6 +2,8 @@ import { createHash } from "node:crypto";
 import { lstat, realpath } from "node:fs/promises";
 import { extname, isAbsolute, relative, sep } from "node:path";
 
+import { parse as parseAstro } from "@astrojs/compiler/sync";
+import type { Node as AstroNode } from "@astrojs/compiler/types";
 import { parseFragment, type DefaultTreeAdapterTypes } from "parse5";
 import ts from "typescript";
 
@@ -397,7 +399,7 @@ function hasMagicBytes(path: string, bytes: Uint8Array): boolean {
   }
 }
 
-function staticImportSpecifiers(source: string): string[] {
+function tsImportSpecifiers(source: string): string[] {
   const specifiers = new Set<string>();
   const sourceFile = ts.createSourceFile(
     "supplied.tsx",
@@ -461,6 +463,46 @@ function staticImportSpecifiers(source: string): string[] {
   );
 }
 
+function astroImportSources(source: string): string[] {
+  const result = parseAstro(source, { position: false });
+  const sources: string[] = [];
+  const visit = (node: AstroNode): void => {
+    if (node.type === "frontmatter") {
+      sources.push(node.value);
+      return;
+    }
+    if (node.type === "element" && node.name.toLowerCase() === "script") {
+      sources.push(
+        node.children
+          .filter(
+            (child): child is Extract<AstroNode, { type: "text" }> =>
+              child.type === "text",
+          )
+          .map((child) => child.value)
+          .join(""),
+      );
+      return;
+    }
+    if ("children" in node) {
+      for (const child of node.children) {
+        visit(child);
+      }
+    }
+  };
+  visit(result.ast);
+  return sources;
+}
+
+function staticImportSpecifiers(path: string, source: string): string[] {
+  const sources =
+    extname(path).toLowerCase() === ".astro"
+      ? astroImportSources(source)
+      : [source];
+  return [
+    ...new Set(sources.flatMap((candidate) => tsImportSpecifiers(candidate))),
+  ].sort((left, right) => (left < right ? -1 : left > right ? 1 : 0));
+}
+
 function resolveLocalImport(
   importerPath: string,
   specifier: string,
@@ -506,7 +548,7 @@ function inventoryLocalSourceImports(
       return;
     }
     const source = decodeText(file.bytes, "El archivo importado");
-    for (const specifier of staticImportSpecifiers(source)) {
+    for (const specifier of staticImportSpecifiers(file.path, source)) {
       const path = resolveLocalImport(file.path, specifier);
       if (path === undefined) {
         continue;

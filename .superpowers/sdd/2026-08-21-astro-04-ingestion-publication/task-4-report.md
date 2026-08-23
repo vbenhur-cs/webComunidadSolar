@@ -122,3 +122,21 @@
   explicitly directed focused verification and handoff rather than another
   prolonged run. This is recorded as a verification limitation, not a passing
   full-suite claim.
+
+## Fix round 2
+
+- RED: the focused importer suite completed 64/66. A valid Astro `script`
+  block silently omitted its multiline static and comment-separated literal
+  dynamic local imports, and a true comment-separated dynamic expression in
+  the same context was accepted.
+- GREEN: Astro source is now parsed inertly with the Astro compiler parser.
+  Only frontmatter and `script` text are passed to the existing TypeScript AST
+  inventory; supplied modules are never imported, transformed, or evaluated.
+  Literal local imports are inventoried and true dynamic expressions remain
+  fail-closed.
+- Fresh focused importer suite: PASS 66/66. Formatting, lint, and Astro check:
+  PASS with the same three inherited informational hints. Per controller
+  direction, the full suite was not run in this round.
+- Self-review found the change limited to source analysis and two public
+  importer regressions; archive, secret, raw-publication, and path policy are
+  unchanged.

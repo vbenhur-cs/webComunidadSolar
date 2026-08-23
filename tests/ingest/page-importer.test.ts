@@ -926,6 +926,73 @@ test("imports Astro as inert text without evaluating it", async () => {
   });
 });
 
+test("inventories local imports inside an inert Astro script block", async () => {
+  await withTemporaryPackage(async (root, artifactRoot) => {
+    await writeFile(
+      join(root, "page.astro"),
+      [
+        "<script>",
+        "import {",
+        "  Card,",
+        "} from './Card.tsx';",
+        'void import /* inert inventory */ ("./Widget.tsx");',
+        "</script>",
+        "<main>Página Astro</main>",
+      ].join("\n"),
+      "utf8",
+    );
+    await writeFile(
+      join(root, "Card.tsx"),
+      "export const Card = () => null;",
+      "utf8",
+    );
+    await writeFile(
+      join(root, "Widget.tsx"),
+      "export default () => null;",
+      "utf8",
+    );
+    const metadataPath = join(dirname(root), "metadata.yaml");
+    await writeFile(
+      metadataPath,
+      `${metadata}\nentrypoint: page.astro\n`,
+      "utf8",
+    );
+
+    const result = await importPage(root, metadataPath, { artifactRoot });
+    assert.deepEqual(
+      result.assets.map((asset) => asset.path),
+      ["Card.tsx", "Widget.tsx"],
+    );
+  });
+});
+
+test("rejects a genuinely dynamic import inside an Astro script block", async () => {
+  await withTemporaryPackage(async (root, artifactRoot) => {
+    await writeFile(
+      join(root, "page.astro"),
+      [
+        "<script>",
+        'const componentPath = "./Card.tsx";',
+        "void import /* inert inventory */ (componentPath);",
+        "</script>",
+        "<main>Página Astro</main>",
+      ].join("\n"),
+      "utf8",
+    );
+    const metadataPath = join(dirname(root), "metadata.yaml");
+    await writeFile(
+      metadataPath,
+      `${metadata}\nentrypoint: page.astro\n`,
+      "utf8",
+    );
+
+    await assert.rejects(
+      importPage(root, metadataPath, { artifactRoot }),
+      /importación.*dinámica/i,
+    );
+  });
+});
+
 test("imports one supplied page file with external metadata", async () => {
   await withTemporaryPackage(async (root, artifactRoot) => {
     const pagePath = join(root, "single.html");
