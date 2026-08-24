@@ -1,14 +1,11 @@
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
-import { constants } from "node:fs";
 import {
   cp,
   lstat,
   mkdir,
   mkdtemp,
-  open,
   readFile,
-  readdir,
   realpath,
   rename,
   rm,
@@ -57,12 +54,25 @@ const agentResultSchema = fileURLToPath(
     import.meta.url,
   ),
 );
+const manifestScanner = fileURLToPath(
+  new URL("./manifest-scanner.mjs", import.meta.url),
+);
 interface WorktreeTestHooks {
   afterRegistration?(): Promise<void> | void;
   beforeSidecarDelete?(path: string): Promise<void> | void;
   beforeSetupSnapshot?(): Promise<void> | void;
   beforeServiceDirectoryRead?(path: string): Promise<void> | void;
   afterServiceDirectoryRead?(path: string): Promise<void> | void;
+  afterServiceDirectoryEntry?(path: string): Promise<void> | void;
+  beforeServiceChildTraversal?(
+    parent: string,
+    child: string,
+  ): Promise<void> | void;
+  afterServiceChildTraversal?(
+    parent: string,
+    child: string,
+  ): Promise<void> | void;
+  afterServiceFileRead?(path: string): Promise<void> | void;
 }
 let testHooks: WorktreeTestHooks = {};
 /** Test-only deterministic fault/race injection; unavailable to production. */
@@ -280,92 +290,325 @@ async function inputHash(path: string): Promise<string> {
   }
   return hash.digest("hex");
 }
+type ScannerIdentity = { device: string; inode: string };
+type ScannerDirectory = ScannerIdentity & {
+  mtimeNs: string;
+  ctimeNs: string;
+  nlink: string;
+};
+type ScannerEntry = ScannerIdentity & {
+  name: string;
+  type: "D" | "F" | "S" | "X";
+};
+type ScannerDirectoryResult = {
+  kind: "directory";
+  directory: ScannerDirectory;
+  entries: ScannerEntry[];
+};
+type ScannerLeafResult = { kind: "leaf"; digest: string };
+const scannerIdentity = (identity: {
+  device: number | string;
+  inode: number | string;
+}): ScannerIdentity => ({
+  device: String(identity.device),
+  inode: String(identity.inode),
+});
+const safeScannerName = (value: unknown): value is string =>
+  typeof value === "string" &&
+  value !== "" &&
+  value !== "." &&
+  value !== ".." &&
+  !value.includes("/") &&
+  !value.includes("\0");
+const equalScannerIdentity = (left: ScannerIdentity, right: ScannerIdentity) =>
+  left.device === right.device && left.inode === right.inode;
+const scannerObject = (value: unknown): Record<string, unknown> => {
+  if (!value || typeof value !== "object" || Array.isArray(value))
+    throw new TypeError("El scanner de servicio devolvió un objeto no válido");
+  return value as Record<string, unknown>;
+};
+const closedKeys = (value: Record<string, unknown>, keys: string[]) => {
+  if (
+    Object.keys(value).length !== keys.length ||
+    keys.some((key) => !(key in value))
+  )
+    throw new TypeError("El scanner de servicio devolvió campos no válidos");
+};
+const scannerIdentityValue = (value: unknown): ScannerIdentity => {
+  const object = scannerObject(value);
+  closedKeys(object, ["device", "inode"]);
+  if (
+    typeof object.device !== "string" ||
+    !/^\d+$/u.test(object.device) ||
+    typeof object.inode !== "string" ||
+    !/^\d+$/u.test(object.inode)
+  )
+    throw new TypeError(
+      "El scanner de servicio devolvió una identidad no válida",
+    );
+  return { device: object.device, inode: object.inode };
+};
+async function runManifestScanner(
+  cwd: string,
+  input: Record<string, unknown>,
+  afterRead?: () => Promise<void> | void,
+): Promise<unknown> {
+  return await new Promise((resolveResult, rejectResult) => {
+    const child = spawn(process.execPath, [manifestScanner], {
+      cwd,
+      env: { LANG: "C", LC_ALL: "C" },
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    let stdout = "";
+    let stderr = "";
+    let result: unknown;
+    let settled = false;
+    const reject = (error: unknown) => {
+      if (settled) return;
+      settled = true;
+      child.kill();
+      rejectResult(error);
+    };
+    const line = (raw: string) => {
+      let value: unknown;
+      try {
+        value = JSON.parse(raw);
+      } catch {
+        reject(new TypeError("El scanner de servicio no devolvió JSON válido"));
+        return;
+      }
+      const object = scannerObject(value);
+      if (object.event === "after-read") {
+        if (!afterRead) {
+          reject(
+            new TypeError("El scanner de servicio pidió una pausa no válida"),
+          );
+          return;
+        }
+        Promise.resolve(afterRead()).then(
+          () => child.stdin.end("continue\n"),
+          reject,
+        );
+        return;
+      }
+      result = value;
+    };
+    child.stdout.setEncoding("utf8");
+    child.stdout.on("data", (chunk: string) => {
+      stdout += chunk;
+      let newline = stdout.indexOf("\n");
+      while (newline >= 0) {
+        const raw = stdout.slice(0, newline);
+        stdout = stdout.slice(newline + 1);
+        if (raw) line(raw);
+        newline = stdout.indexOf("\n");
+      }
+    });
+    child.stderr.setEncoding("utf8");
+    child.stderr.on("data", (chunk: string) => {
+      stderr += chunk;
+    });
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if (settled) return;
+      settled = true;
+      let object: Record<string, unknown> | undefined;
+      try {
+        object = result === undefined ? undefined : scannerObject(result);
+      } catch (error) {
+        rejectResult(error);
+        return;
+      }
+      const scannerError = object?.error;
+      if (code !== 0 || scannerError)
+        rejectResult(
+          new TypeError(
+            typeof scannerError === "string"
+              ? scannerError
+              : `El scanner de servicio falló: ${stderr || code}`,
+          ),
+        );
+      else if (result === undefined)
+        rejectResult(
+          new TypeError("El scanner de servicio no devolvió resultado"),
+        );
+      else resolveResult(result);
+    });
+    child.stdin.write(`${JSON.stringify(input)}\n`);
+    if (!afterRead) child.stdin.end();
+  });
+}
+async function scanDirectory(
+  path: string,
+  expected: ScannerIdentity,
+): Promise<ScannerDirectoryResult> {
+  const value = scannerObject(
+    await runManifestScanner(path, { action: "directory", expected }),
+  );
+  closedKeys(value, ["kind", "directory", "entries"]);
+  if (value.kind !== "directory" || !Array.isArray(value.entries))
+    throw new TypeError(
+      "El scanner de directorio devolvió un resultado no válido",
+    );
+  const directory = scannerObject(value.directory);
+  closedKeys(directory, ["device", "inode", "mtimeNs", "ctimeNs", "nlink"]);
+  const identity = scannerIdentityValue({
+    device: directory.device,
+    inode: directory.inode,
+  });
+  if (
+    !equalScannerIdentity(identity, expected) ||
+    ![directory.mtimeNs, directory.ctimeNs, directory.nlink].every(
+      (field) => typeof field === "string" && /^\d+$/u.test(field),
+    )
+  )
+    throw new TypeError("La identidad del directorio de servicio cambió");
+  const entries = value.entries.map((value): ScannerEntry => {
+    const entry = scannerObject(value);
+    closedKeys(entry, ["name", "type", "device", "inode"]);
+    const entryIdentity = scannerIdentityValue({
+      device: entry.device,
+      inode: entry.inode,
+    });
+    if (
+      !safeScannerName(entry.name) ||
+      !["D", "F", "S", "X"].includes(String(entry.type))
+    )
+      throw new TypeError(
+        "El scanner de servicio devolvió una entrada no válida",
+      );
+    return {
+      name: entry.name,
+      type: entry.type as ScannerEntry["type"],
+      ...entryIdentity,
+    };
+  });
+  if (new Set(entries.map((entry) => entry.name)).size !== entries.length)
+    throw new TypeError("El scanner de servicio devolvió nombres duplicados");
+  return {
+    kind: "directory",
+    directory: { ...identity, ...directory } as ScannerDirectory,
+    entries,
+  };
+}
+async function scanLeaf(
+  parent: string,
+  parentIdentity: ScannerIdentity,
+  entry: ScannerEntry,
+  afterRead?: () => Promise<void> | void,
+): Promise<ScannerLeafResult> {
+  const value = scannerObject(
+    await runManifestScanner(
+      parent,
+      {
+        action: "leaf",
+        name: entry.name,
+        expected: scannerIdentity(entry),
+        cwdExpected: parentIdentity,
+        pause: afterRead !== undefined,
+      },
+      afterRead,
+    ),
+  );
+  closedKeys(value, ["kind", "digest"]);
+  if (
+    value.kind !== "leaf" ||
+    typeof value.digest !== "string" ||
+    !/^[a-f0-9]{64}$/u.test(value.digest)
+  )
+    throw new TypeError(
+      "El scanner de archivo devolvió un resultado no válido",
+    );
+  return { kind: "leaf", digest: value.digest };
+}
+const sameDirectoryScan = (
+  left: ScannerDirectoryResult,
+  right: ScannerDirectoryResult,
+) =>
+  left.directory.device === right.directory.device &&
+  left.directory.inode === right.directory.inode &&
+  left.directory.mtimeNs === right.directory.mtimeNs &&
+  left.directory.ctimeNs === right.directory.ctimeNs &&
+  left.directory.nlink === right.directory.nlink &&
+  JSON.stringify(left.entries) === JSON.stringify(right.entries);
 async function serviceEntries(
   repositoryRoot: string,
   excluded: string[],
 ): Promise<string> {
   const lines: string[] = [];
   const skip = excluded.map((path) => resolve(path));
-  const assertDirectory = async (path: string, identity: Identity) => {
-    const entry = await lstat(path);
-    if (
-      entry.isSymbolicLink() ||
-      !entry.isDirectory() ||
-      !equalIdentity(identity, { device: entry.dev, inode: entry.ino }) ||
-      (await realpath(path)) !== path
-    )
-      throw new TypeError("La identidad del directorio de servicio cambió");
-  };
-  const regularDigest = async (path: string, identity: Identity) => {
-    const before = await lstat(path);
-    if (
-      before.isSymbolicLink() ||
-      !before.isFile() ||
-      !equalIdentity(identity, { device: before.dev, inode: before.ino })
-    )
-      throw new TypeError("La identidad del archivo de servicio cambió");
-    const handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW);
-    let content: Buffer;
-    try {
-      content = await handle.readFile();
-    } finally {
-      await handle.close();
-    }
-    const after = await lstat(path);
-    if (
-      after.isSymbolicLink() ||
-      !after.isFile() ||
-      !equalIdentity(identity, { device: after.dev, inode: after.ino })
-    )
-      throw new TypeError("La identidad del archivo de servicio cambió");
-    return createHash("sha256").update(content).digest("hex");
-  };
-  const visit = async (path: string): Promise<boolean> => {
-    if (skip.some((root) => path === root || path.startsWith(`${root}/`)))
+  const repository = await lstat(repositoryRoot);
+  if (repository.isSymbolicLink() || !repository.isDirectory())
+    throw new TypeError("La raíz del manifiesto de servicio no es segura");
+  const rootScan = await scanDirectory(
+    repositoryRoot,
+    scannerIdentity({ device: repository.dev, inode: repository.ino }),
+  );
+  const visit = async (
+    parentPath: string,
+    parent: ScannerDirectoryResult,
+    label: string,
+    entry: ScannerEntry,
+  ): Promise<boolean> => {
+    if (skip.some((root) => label === root || label.startsWith(`${root}/`)))
       return false;
-    const entry = await lstat(path);
-    const identity = { device: entry.dev, inode: entry.ino };
-    if (entry.isSymbolicLink()) {
+    if (entry.type === "S") {
       lines.push(
-        `S\0${relative(repositoryRoot, path)}\0${entry.dev}\0${entry.ino}`,
+        `S\0${relative(repositoryRoot, label)}\0${entry.device}\0${entry.inode}`,
       );
       return true;
     }
-    if (!entry.isDirectory()) {
-      if (!entry.isFile())
-        throw new TypeError(
-          "El manifiesto de servicio contiene una entrada no regular",
-        );
+    if (entry.type === "X")
+      throw new TypeError(
+        "El manifiesto de servicio contiene una entrada no regular",
+      );
+    if (entry.type === "F") {
+      const leaf = await scanLeaf(
+        parentPath,
+        parent.directory,
+        entry,
+        testHooks.afterServiceFileRead
+          ? () => testHooks.afterServiceFileRead!(label)
+          : undefined,
+      );
       lines.push(
-        `F\0${relative(repositoryRoot, path)}\0${entry.dev}\0${entry.ino}\0${await regularDigest(path, identity)}`,
+        `F\0${relative(repositoryRoot, label)}\0${entry.device}\0${entry.inode}\0${leaf.digest}`,
       );
       return true;
     }
-    await assertDirectory(path, identity);
-    await testHooks.beforeServiceDirectoryRead?.(path);
-    await assertDirectory(path, identity);
-    const children = await readdir(path);
-    await assertDirectory(path, identity);
-    await testHooks.afterServiceDirectoryRead?.(path);
-    await assertDirectory(path, identity);
-    for (const child of children) {
-      await assertDirectory(path, identity);
-      await visit(join(path, child));
-      await assertDirectory(path, identity);
+    const path = join(parentPath, entry.name);
+    const initial = await scanDirectory(path, scannerIdentity(entry));
+    const recheck = async () => {
+      const current = await scanDirectory(path, scannerIdentity(entry));
+      if (!sameDirectoryScan(initial, current))
+        throw new TypeError("La enumeración del directorio de servicio cambió");
+    };
+    await testHooks.beforeServiceDirectoryRead?.(label);
+    await recheck();
+    await testHooks.afterServiceDirectoryRead?.(label);
+    await recheck();
+    for (const child of initial.entries) {
+      await recheck();
+      await testHooks.beforeServiceChildTraversal?.(label, child.name);
+      try {
+        await recheck();
+        await visit(path, initial, join(label, child.name), child);
+      } finally {
+        await testHooks.afterServiceChildTraversal?.(label, child.name);
+      }
+      await recheck();
     }
-    // Directories are first-class manifest entries, including empty service
-    // directories and ancestors containing only an owned excluded leaf. This
-    // keeps a pre-existing service parent stable while still exposing any
-    // unowned empty sibling or identity change.
-    await assertDirectory(path, identity);
+    await recheck();
     lines.push(
-      `D\0${relative(repositoryRoot, path)}\0${entry.dev}\0${entry.ino}`,
+      `D\0${relative(repositoryRoot, label)}\0${entry.device}\0${entry.inode}`,
     );
+    await testHooks.afterServiceDirectoryEntry?.(label);
     return true;
   };
-  for (const root of [".agent-worktrees", ".agent-quarantine"]) {
-    const path = join(repositoryRoot, root);
-    if (await lstat(path).catch(() => undefined)) await visit(path);
+  for (const name of [".agent-worktrees", ".agent-quarantine"]) {
+    const entry = rootScan.entries.find((entry) => entry.name === name);
+    if (entry)
+      await visit(repositoryRoot, rootScan, join(repositoryRoot, name), entry);
   }
   return lines.sort().join("\n");
 }

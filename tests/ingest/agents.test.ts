@@ -7,6 +7,7 @@ import {
   mkdtemp,
   readFile,
   realpath,
+  rename,
   rm,
   stat,
   symlink,
@@ -37,6 +38,7 @@ import {
   createCandidateWorktree,
   createAgentRunContext,
   createTestAgentRunContext,
+  gitSnapshot,
   removeCandidateWorktree,
   setWorktreeTestHooks,
 } from "../../src/ingest/worktrees/service.ts";
@@ -552,7 +554,7 @@ test("service manifest rejects a directory swapped to a symlink during enumerati
           planPath: await writeInput(root, "plan.json"),
           policyPath: await writeInput(root, "policy.json"),
         }),
-        /identidad del directorio de servicio/i,
+        /identidad del directorio (de servicio|del scanner)/i,
       );
     } finally {
       restore();
@@ -586,7 +588,7 @@ test("service manifest rejects an empty directory swapped after enumeration", as
     let reads = 0;
     const restore = setWorktreeTestHooks({
       afterServiceDirectoryRead: async (path) => {
-        if (path !== canonicalEvil || ++reads !== 2) return;
+        if (path !== canonicalEvil || ++reads !== 1) return;
         await rm(path, { recursive: true, force: false });
         await symlink(outside, path);
       },
@@ -594,7 +596,7 @@ test("service manifest rejects an empty directory swapped after enumeration", as
     try {
       await assert.rejects(
         validateWorktreeDiff(candidate, plan(baseline)),
-        /identidad del directorio de servicio/i,
+        /identidad del directorio (de servicio|del scanner)/i,
       );
     } finally {
       restore();
@@ -632,7 +634,7 @@ test("service manifest rejects a parent swapped before child traversal", async (
     let reads = 0;
     const restore = setWorktreeTestHooks({
       afterServiceDirectoryRead: async (path) => {
-        if (path !== canonicalEvil || ++reads !== 2) return;
+        if (path !== canonicalEvil || ++reads !== 1) return;
         await rm(path, { recursive: true, force: false });
         await symlink(outside, path);
       },
@@ -640,7 +642,7 @@ test("service manifest rejects a parent swapped before child traversal", async (
     try {
       await assert.rejects(
         validateWorktreeDiff(candidate, plan(baseline)),
-        /identidad del directorio de servicio/i,
+        /(identidad del directorio (de servicio|del scanner)|enumeración del directorio de servicio)/i,
       );
     } finally {
       restore();
@@ -680,6 +682,149 @@ test("service manifest commits ignored regular-file content", async () => {
         /manifiesto de servicio/i,
       );
     } finally {
+      await removeCandidateWorktree(candidate).catch(() => undefined);
+    }
+  });
+});
+
+test("service manifest rejects a child added after directory enumeration", async () => {
+  await withRepository(async ({ root, baseline }) => {
+    await writeFile(
+      join(root, ".git", "info", "exclude"),
+      ".agent-worktrees/\n",
+    );
+    const evil = join(root, ".agent-worktrees", "evil");
+    await mkdir(evil, { recursive: true });
+    const candidate = await createCandidateWorktree({
+      repositoryRoot: root,
+      approvedPlan: plan(baseline),
+      changeId: "agent-isolation",
+      attemptId: "attempt-000001",
+      baselineCommit: baseline,
+      requestPath: await writeInput(root, "request.json"),
+      planPath: await writeInput(root, "plan.json"),
+      policyPath: await writeInput(root, "policy.json"),
+    });
+    const canonicalEvil = await realpath(evil);
+    const scannerRoot = await realpath(root);
+    let reads = 0;
+    const restore = setWorktreeTestHooks({
+      afterServiceDirectoryRead: async (path) => {
+        if (path !== canonicalEvil || ++reads !== 1) return;
+        await writeFile(join(path, "late-marker"), "late", "utf8");
+      },
+      afterServiceDirectoryEntry: async (path) => {
+        if (path !== canonicalEvil || reads !== 1) return;
+        await rm(join(path, "late-marker"), { force: false });
+      },
+    });
+    try {
+      await assert.rejects(
+        gitSnapshot(scannerRoot, [candidate.path]),
+        /identidad|enumeración del directorio de servicio/i,
+      );
+    } finally {
+      restore();
+      await removeCandidateWorktree(candidate).catch(() => undefined);
+    }
+  });
+});
+
+test("service manifest anchors child traversal across a transient parent swap", async () => {
+  await withRepository(async ({ root, baseline }) => {
+    await writeFile(
+      join(root, ".git", "info", "exclude"),
+      ".agent-worktrees/\n",
+    );
+    const evil = join(root, ".agent-worktrees", "evil");
+    const marker = join(evil, "marker");
+    const held = join(root, "held-evil");
+    const outside = await mkdtemp(
+      join(tmpdir(), "comunidadsolar-manifest-outside-"),
+    );
+    await mkdir(evil, { recursive: true });
+    await writeFile(marker, "inside", "utf8");
+    await writeFile(join(outside, "marker"), "outside", "utf8");
+    const candidate = await createCandidateWorktree({
+      repositoryRoot: root,
+      approvedPlan: plan(baseline),
+      changeId: "agent-isolation",
+      attemptId: "attempt-000001",
+      baselineCommit: baseline,
+      requestPath: await writeInput(root, "request.json"),
+      planPath: await writeInput(root, "plan.json"),
+      policyPath: await writeInput(root, "policy.json"),
+    });
+    const canonicalEvil = await realpath(evil);
+    const scannerRoot = await realpath(root);
+    let reads = 0;
+    let swapped = false;
+    const restore = setWorktreeTestHooks({
+      afterServiceDirectoryRead: (path) => {
+        if (path === canonicalEvil) reads += 1;
+      },
+      beforeServiceChildTraversal: async (parent, child) => {
+        if (parent !== canonicalEvil || child !== "marker" || reads !== 1)
+          return;
+        await rename(parent, held);
+        await symlink(outside, parent);
+        swapped = true;
+      },
+      afterServiceChildTraversal: async (parent, child) => {
+        if (!swapped || parent !== canonicalEvil || child !== "marker") return;
+        await rm(parent, { recursive: true, force: false });
+        await rename(held, parent);
+      },
+    });
+    try {
+      await assert.rejects(
+        gitSnapshot(scannerRoot, [candidate.path]),
+        /identidad del directorio (de servicio|del scanner)/i,
+      );
+    } finally {
+      restore();
+      await removeCandidateWorktree(candidate).catch(() => undefined);
+      await rm(held, { recursive: true, force: true });
+      await rm(outside, { recursive: true, force: true });
+    }
+  });
+});
+
+test("service manifest rejects a leaf changed transiently during descriptor read", async () => {
+  await withRepository(async ({ root, baseline }) => {
+    await writeFile(
+      join(root, ".git", "info", "exclude"),
+      ".agent-worktrees/\n",
+    );
+    const marker = join(root, ".agent-worktrees", "evil", "marker");
+    await mkdir(dirname(marker), { recursive: true });
+    await writeFile(marker, "before", "utf8");
+    const candidate = await createCandidateWorktree({
+      repositoryRoot: root,
+      approvedPlan: plan(baseline),
+      changeId: "agent-isolation",
+      attemptId: "attempt-000001",
+      baselineCommit: baseline,
+      requestPath: await writeInput(root, "request.json"),
+      planPath: await writeInput(root, "plan.json"),
+      policyPath: await writeInput(root, "policy.json"),
+    });
+    const scannerRoot = await realpath(root);
+    let reads = 0;
+    const restore = setWorktreeTestHooks({
+      afterServiceFileRead: async (path) => {
+        if (!path.endsWith("/evil/marker") || ++reads !== 1) return;
+        await writeFile(path, "middle", "utf8");
+        await writeFile(path, "before", "utf8");
+      },
+    });
+    try {
+      await assert.rejects(
+        gitSnapshot(scannerRoot, [candidate.path]),
+        /identidad (del archivo|del directorio) de servicio/i,
+      );
+    } finally {
+      restore();
       await removeCandidateWorktree(candidate).catch(() => undefined);
     }
   });
