@@ -158,7 +158,6 @@ async function generatedFiles(output: string): Promise<string[]> {
     );
     return validated.generatedFiles.map(assertSafeGeneratedFile);
   }
-  return [];
 }
 
 function assertSafeGeneratedFile(path: string): string {

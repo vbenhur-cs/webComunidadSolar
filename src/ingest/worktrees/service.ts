@@ -22,7 +22,12 @@ import { validateSchema } from "../schema-validator.ts";
 const execFileAsync = promisify(execFile);
 const names = ["request.json", "plan.json", "policy.json"] as const;
 const owned = new WeakSet<CandidateWorktree>();
-const records = new WeakMap<CandidateWorktree, Readonly<CandidateWorktree>>();
+interface CandidateRecord extends CandidateWorktree {
+  outputIdentity: Identity;
+  inputDirectoryIdentity: Identity;
+  inputIdentities: Readonly<Record<(typeof names)[number], Identity>>;
+}
+const records = new WeakMap<CandidateWorktree, Readonly<CandidateRecord>>();
 const runContexts = new WeakMap<object, CandidateWorktree | null>();
 type Identity = { device: number; inode: number };
 export interface GitSnapshot {
@@ -110,6 +115,18 @@ async function bytes(path: string): Promise<Buffer> {
   if (entry.isSymbolicLink() || !entry.isFile())
     throw new TypeError("La entrada aprobada no es un archivo seguro");
   return await readFile(path);
+}
+async function fileIdentity(path: string): Promise<Identity> {
+  const entry = await lstat(path);
+  if (entry.isSymbolicLink() || !entry.isFile())
+    throw new TypeError("La entrada aprobada no es un archivo seguro");
+  return { device: entry.dev, inode: entry.ino };
+}
+async function directoryIdentity(path: string): Promise<Identity> {
+  const entry = await lstat(path);
+  if (entry.isSymbolicLink() || !entry.isDirectory())
+    throw new TypeError("El directorio de entrada no es seguro");
+  return { device: entry.dev, inode: entry.ino };
 }
 function checkedPlan(value: unknown): ChangePlan {
   const plan = validateSchema<ChangePlan>("change-plan", value);
@@ -284,13 +301,24 @@ export async function createCandidateWorktree(
       join(inputs, names[2]),
       approved,
     );
+    const outputDirectory = await sidecar(
+      repositoryRoot,
+      input.changeId,
+      input.attemptId,
+    );
+    const outputEntry = await lstat(outputDirectory);
+    const inputDirectoryIdentity = await directoryIdentity(inputs);
+    const inputIdentities = Object.fromEntries(
+      await Promise.all(
+        names.map(async (name) => [
+          name,
+          await fileIdentity(join(inputs, name)),
+        ]),
+      ),
+    ) as Record<(typeof names)[number], Identity>;
     const candidate: CandidateWorktree = {
       path,
-      outputDirectory: await sidecar(
-        repositoryRoot,
-        input.changeId,
-        input.attemptId,
-      ),
+      outputDirectory,
       repositoryRoot,
       sourceRepositoryRoot,
       changeId: input.changeId,
@@ -325,7 +353,15 @@ export async function createCandidateWorktree(
       );
     }
     const projection = Object.freeze({ ...candidate });
-    records.set(projection, Object.freeze({ ...candidate }));
+    records.set(
+      projection,
+      Object.freeze({
+        ...candidate,
+        outputIdentity: { device: outputEntry.dev, inode: outputEntry.ino },
+        inputDirectoryIdentity,
+        inputIdentities,
+      }),
+    );
     owned.add(projection);
     return projection;
   } catch (error) {
@@ -362,6 +398,51 @@ async function assertOwned(candidate: CandidateWorktree): Promise<void> {
     !(await registered(candidate.repositoryRoot, candidate.path))
   )
     throw new TypeError("La identidad del worktree candidato ha cambiado");
+}
+async function assertOwnedOutput(candidate: CandidateWorktree): Promise<void> {
+  const record = records.get(candidate);
+  if (!owned.has(candidate) || record === undefined)
+    throw new TypeError("El worktree no pertenece a este servicio");
+  const output = await realpath(record.outputDirectory);
+  const entry = await lstat(output);
+  if (
+    entry.isSymbolicLink() ||
+    !entry.isDirectory() ||
+    output !== record.outputDirectory ||
+    !equalIdentity(record.outputIdentity, {
+      device: entry.dev,
+      inode: entry.ino,
+    })
+  ) {
+    throw new TypeError("La identidad de la salida del agente ha cambiado");
+  }
+}
+async function assertOwnedInputs(candidate: CandidateWorktree): Promise<void> {
+  const record = records.get(candidate);
+  if (!owned.has(candidate) || record === undefined)
+    throw new TypeError("El worktree no pertenece a este servicio");
+  const inputs = join(record.path, ".agent-input");
+  const entry = await lstat(inputs);
+  if (
+    entry.isSymbolicLink() ||
+    !entry.isDirectory() ||
+    (await realpath(inputs)) !== inputs ||
+    !equalIdentity(record.inputDirectoryIdentity, {
+      device: entry.dev,
+      inode: entry.ino,
+    })
+  ) {
+    throw new TypeError("La identidad de la entrada del agente ha cambiado");
+  }
+  for (const name of names) {
+    if (
+      !equalIdentity(
+        record.inputIdentities[name],
+        await fileIdentity(join(inputs, name)),
+      )
+    )
+      throw new TypeError("La identidad de la entrada del agente ha cambiado");
+  }
 }
 export async function removeCandidateWorktree(
   candidate: CandidateWorktree,
@@ -414,6 +495,7 @@ export async function validateCopiedInputs(
   plan: ChangePlan,
 ): Promise<void> {
   await assertOwned(candidate);
+  await assertOwnedInputs(candidate);
   const approved = checkedPlan(plan);
   if (
     approved.planSha256 !== candidate.planSha256 ||
@@ -459,14 +541,7 @@ export async function createAgentRunContext(
 ): Promise<import("../agents/types.ts").AgentRunInput> {
   await assertOwned(candidate);
   await validateCopiedInputs(candidate, candidate.approvedPlan);
-  const output = await realpath(candidate.outputDirectory);
-  const entry = await lstat(output);
-  if (
-    entry.isSymbolicLink() ||
-    !entry.isDirectory() ||
-    output !== candidate.outputDirectory
-  )
-    throw new TypeError("La salida del agente no es un directorio seguro");
+  await assertOwnedOutput(candidate);
   const value = Object.freeze({
     changeId: candidate.changeId,
     attemptId: candidate.attemptId,
@@ -492,14 +567,7 @@ export async function resolveAgentRunContext(
   if (candidate === null) return value;
   await assertOwned(candidate);
   await validateCopiedInputs(candidate, candidate.approvedPlan);
-  const output = await realpath(candidate.outputDirectory);
-  const entry = await lstat(output);
-  if (
-    entry.isSymbolicLink() ||
-    !entry.isDirectory() ||
-    output !== candidate.outputDirectory
-  )
-    throw new TypeError("La salida del agente no es un directorio seguro");
+  await assertOwnedOutput(candidate);
   return value;
 }
 

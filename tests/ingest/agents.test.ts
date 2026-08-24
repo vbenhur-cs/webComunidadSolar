@@ -18,7 +18,11 @@ import { promisify } from "node:util";
 import { sha256Canonical } from "../../src/ingest/canonical-json.ts";
 import type { ChangePlan } from "../../src/ingest/domain.ts";
 import { CommandAgent } from "../../src/ingest/agents/command.ts";
-import { codexInvocation } from "../../src/ingest/agents/codex.ts";
+import {
+  CodexAgent,
+  codexInvocation,
+  createCodexExecutableCapability,
+} from "../../src/ingest/agents/codex.ts";
 import { createOperatorIsolationBroker } from "../../src/ingest/agents/isolation.ts";
 import { createFixtureAgentRun } from "../../src/ingest/agents/fixture.ts";
 import type {
@@ -29,6 +33,7 @@ import type {
 } from "../../src/ingest/agents/types.ts";
 import {
   createCandidateWorktree,
+  createAgentRunContext,
   createTestAgentRunContext,
   removeCandidateWorktree,
 } from "../../src/ingest/worktrees/service.ts";
@@ -590,6 +595,169 @@ test("adapters reject a forged structural run input before spawning", async () =
   assert.equal(calls.length, 0);
 });
 
+test("frozen candidate projection cannot redirect a minted run context", async () => {
+  await withRepository(async ({ root, baseline }) => {
+    const candidate = await createCandidateWorktree({
+      repositoryRoot: root,
+      approvedPlan: plan(baseline),
+      changeId: "agent-isolation",
+      attemptId: "attempt-000001",
+      baselineCommit: baseline,
+      requestPath: await writeInput(root, "request.json"),
+      planPath: await writeInput(root, "plan.json"),
+      policyPath: await writeInput(root, "policy.json"),
+    });
+    try {
+      const context = await createAgentRunContext(
+        candidate,
+        join(process.cwd(), "schemas", "ingestion", "agent-result.schema.json"),
+      );
+      assert.throws(() => {
+        (candidate as { outputDirectory: string }).outputDirectory =
+          "/tmp/forged";
+      });
+      const { runner, calls } = recordingRunner();
+      await new CommandAgent(
+        { command: process.execPath, args: [] },
+        recordingBroker(),
+        runner,
+      ).run(context);
+      assert.deepEqual(JSON.parse(calls[0]!.options.input), {
+        requestPath: join(candidate.path, ".agent-input", "request.json"),
+        planPath: join(candidate.path, ".agent-input", "plan.json"),
+        policyPath: join(candidate.path, ".agent-input", "policy.json"),
+        resultSchemaPath: join(
+          process.cwd(),
+          "schemas",
+          "ingestion",
+          "agent-result.schema.json",
+        ),
+      });
+      assert.equal(
+        await readFile(
+          join(candidate.outputDirectory, "command.stdout.log"),
+          "utf8",
+        ),
+        "ok",
+      );
+    } finally {
+      await removeCandidateWorktree(candidate);
+    }
+  });
+});
+
+test("owned run context rejects a replaced sidecar before spawning", async () => {
+  await withRepository(async ({ root, baseline }) => {
+    const candidate = await createCandidateWorktree({
+      repositoryRoot: root,
+      approvedPlan: plan(baseline),
+      changeId: "agent-isolation",
+      attemptId: "attempt-000001",
+      baselineCommit: baseline,
+      requestPath: await writeInput(root, "request.json"),
+      planPath: await writeInput(root, "plan.json"),
+      policyPath: await writeInput(root, "policy.json"),
+    });
+    try {
+      const context = await createAgentRunContext(
+        candidate,
+        join(process.cwd(), "schemas", "ingestion", "agent-result.schema.json"),
+      );
+      await rm(candidate.outputDirectory, { recursive: true, force: false });
+      await mkdir(candidate.outputDirectory);
+      const { runner, calls } = recordingRunner();
+      await assert.rejects(
+        new CommandAgent(
+          { command: process.execPath, args: [] },
+          recordingBroker(),
+          runner,
+        ).run(context),
+        /salida.*cambi|identidad/i,
+      );
+      assert.equal(calls.length, 0);
+    } finally {
+      await removeCandidateWorktree(candidate);
+    }
+  });
+});
+
+test("owned run context rejects a same-content copied input replacement", async () => {
+  await withRepository(async ({ root, baseline }) => {
+    const candidate = await createCandidateWorktree({
+      repositoryRoot: root,
+      approvedPlan: plan(baseline),
+      changeId: "agent-isolation",
+      attemptId: "attempt-000001",
+      baselineCommit: baseline,
+      requestPath: await writeInput(root, "request.json"),
+      planPath: await writeInput(root, "plan.json"),
+      policyPath: await writeInput(root, "policy.json"),
+    });
+    try {
+      const context = await createAgentRunContext(
+        candidate,
+        join(process.cwd(), "schemas", "ingestion", "agent-result.schema.json"),
+      );
+      const copiedRequest = join(
+        candidate.path,
+        ".agent-input",
+        "request.json",
+      );
+      const content = await readFile(copiedRequest);
+      await rm(copiedRequest);
+      await writeFile(copiedRequest, content);
+      const { runner, calls } = recordingRunner();
+      await assert.rejects(
+        new CommandAgent(
+          { command: process.execPath, args: [] },
+          recordingBroker(),
+          runner,
+        ).run(context),
+        /entrada.*cambi|identidad/i,
+      );
+      assert.equal(calls.length, 0);
+    } finally {
+      await removeCandidateWorktree(candidate);
+    }
+  });
+});
+
+test("operator Codex capability rejects replacement before executing", async () => {
+  const root = await mkdtemp(
+    join(tmpdir(), "comunidadsolar-codex-capability-"),
+  );
+  const executable = join(root, "codex-fixture");
+  const link = join(root, "codex-link");
+  try {
+    await writeFile(executable, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+    const capability = await createCodexExecutableCapability(
+      await realpath(executable),
+    );
+    await symlink(executable, link);
+    await assert.rejects(
+      createCodexExecutableCapability(link),
+      /regular|enlace/i,
+    );
+    await writeFile(join(root, "not-executable"), "x", { mode: 0o644 });
+    await assert.rejects(
+      createCodexExecutableCapability(join(root, "not-executable")),
+      /EACCES|permission/i,
+    );
+    await assert.rejects(createCodexExecutableCapability(root), /regular/i);
+    await writeFile(executable, "#!/bin/sh\nexit 1\n", { mode: 0o755 });
+    const input = await createInput(root, root);
+    const { runner, calls } = recordingRunner();
+    await assert.rejects(
+      new CodexAgent(capability, runner).run(input),
+      /identidad.*cambi/i,
+    );
+    assert.equal(calls.length, 0);
+    await rm(input.outputDirectory!, { recursive: true, force: true });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("fixture agents are bound to one owned disposable candidate", async () => {
   await withRepository(async ({ root, baseline }) => {
     const candidate = await createCandidateWorktree({
@@ -641,8 +809,11 @@ test("agent adapters reject a sidecar symlink outside the owned output root", as
     `${worktree.split("/").at(-1)}-output-link`,
   );
   await symlink(outside, output);
-  const input = await createInput(worktree, worktree);
-  input.outputDirectory = output;
+  const original = await createInput(worktree, worktree);
+  const input = createTestAgentRunContext({
+    ...original,
+    outputDirectory: output,
+  });
   try {
     await assert.rejects(
       new CommandAgent(
@@ -653,7 +824,8 @@ test("agent adapters reject a sidecar symlink outside the owned output root", as
       /salida.*seguro/i,
     );
   } finally {
-    await rm(input.outputDirectory!, { force: true });
+    await rm(original.outputDirectory!, { recursive: true, force: true });
+    await rm(output, { force: true });
     await rm(worktree, { recursive: true, force: true });
     await rm(outside, { recursive: true, force: true });
   }
