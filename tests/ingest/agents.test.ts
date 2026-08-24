@@ -36,6 +36,7 @@ import {
   createAgentRunContext,
   createTestAgentRunContext,
   removeCandidateWorktree,
+  setWorktreeTestHooks,
 } from "../../src/ingest/worktrees/service.ts";
 import { validateWorktreeDiff } from "../../src/ingest/worktrees/policy.ts";
 
@@ -328,6 +329,110 @@ test("candidate ref reservation preserves collisions and permits a released retr
   });
 });
 
+test("post-registration setup failure reconciles the reserved worktree and ref", async () => {
+  await withRepository(async ({ root, baseline }) => {
+    const input = {
+      repositoryRoot: root,
+      approvedPlan: plan(baseline),
+      changeId: "agent-isolation",
+      attemptId: "attempt-000001",
+      baselineCommit: baseline,
+      requestPath: await writeInput(root, "request.json"),
+      planPath: await writeInput(root, "plan.json"),
+      policyPath: await writeInput(root, "policy.json"),
+    };
+    const restore = setWorktreeTestHooks({
+      afterRegistration: () => {
+        throw new Error("injected sidecar setup failure");
+      },
+    });
+    try {
+      await assert.rejects(createCandidateWorktree(input), /injected sidecar/i);
+    } finally {
+      restore();
+    }
+    await assert.rejects(
+      stat(join(root, ".agent-worktrees", "agent-isolation", "attempt-000001")),
+    );
+    await assert.rejects(
+      git(root, ["rev-parse", "candidate/agent-isolation/attempt-000001"]),
+    );
+    const retry = await createCandidateWorktree(input);
+    await removeCandidateWorktree(retry);
+  });
+});
+
+test("setup status drift is rejected and candidate state is reconciled", async () => {
+  await withRepository(async ({ root, baseline }) => {
+    const restore = setWorktreeTestHooks({
+      beforeSetupSnapshot: async () => {
+        await writeFile(join(root, "setup-drift.txt"), "drift", "utf8");
+      },
+    });
+    try {
+      await assert.rejects(
+        createCandidateWorktree({
+          repositoryRoot: root,
+          approvedPlan: plan(baseline),
+          changeId: "agent-isolation",
+          attemptId: "attempt-000001",
+          baselineCommit: baseline,
+          requestPath: await writeInput(root, "request.json"),
+          planPath: await writeInput(root, "plan.json"),
+          policyPath: await writeInput(root, "policy.json"),
+        }),
+        /refs protegidas|creación/i,
+      );
+    } finally {
+      restore();
+    }
+    assert.equal(
+      await readFile(join(root, "setup-drift.txt"), "utf8"),
+      "drift",
+    );
+    await assert.rejects(
+      git(root, ["rev-parse", "candidate/agent-isolation/attempt-000001"]),
+    );
+  });
+});
+
+test("sidecar cleanup retains a replaced quarantined leaf", async () => {
+  await withRepository(async ({ root, baseline }) => {
+    const candidate = await createCandidateWorktree({
+      repositoryRoot: root,
+      approvedPlan: plan(baseline),
+      changeId: "agent-isolation",
+      attemptId: "attempt-000001",
+      baselineCommit: baseline,
+      requestPath: await writeInput(root, "request.json"),
+      planPath: await writeInput(root, "plan.json"),
+      policyPath: await writeInput(root, "policy.json"),
+    });
+    let moved = "";
+    const restore = setWorktreeTestHooks({
+      beforeSidecarDelete: async (path) => {
+        moved = path;
+        await rm(path, { recursive: true, force: false });
+        await mkdir(path);
+        await writeFile(join(path, "do-not-delete"), "external", "utf8");
+      },
+    });
+    try {
+      await assert.rejects(
+        removeCandidateWorktree(candidate),
+        /cuarentena de salida/i,
+      );
+      assert.equal(
+        await readFile(join(moved, "do-not-delete"), "utf8"),
+        "external",
+      );
+    } finally {
+      restore();
+      if (moved) await rm(dirname(moved), { recursive: true, force: true });
+    }
+  });
+});
+
 test("private snapshots and schema authority cannot be replaced through candidate input", async () => {
   await withRepository(async ({ root, baseline }) => {
     const candidate = await createCandidateWorktree({
@@ -413,12 +518,21 @@ test("rejects an agent-created commit or changed protected ref", async () => {
         "-m",
         "agent commit",
       ]);
+      const agentCommit = await git(candidate.path, ["rev-parse", "HEAD"]);
       await assert.rejects(
         validateWorktreeDiff(candidate, plan(baseline)),
         /commit creado por el agente/i,
       );
+      assert.equal(
+        await git(root, [
+          "rev-parse",
+          "candidate/agent-isolation/attempt-000001",
+        ]),
+        agentCommit,
+      );
+      await assert.rejects(stat(candidate.path));
     } finally {
-      await removeCandidateWorktree(candidate);
+      await assert.rejects(removeCandidateWorktree(candidate), /cuarentena/i);
     }
   });
 });

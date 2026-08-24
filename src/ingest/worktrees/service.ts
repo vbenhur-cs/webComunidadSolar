@@ -32,7 +32,7 @@ interface CandidateRecord extends CandidateWorktree {
   readonly repositorySnapshot: GitSnapshot;
   readonly sourceSnapshot: GitSnapshot;
   readonly candidateSnapshot: GitSnapshot;
-  outputIdentity: Identity;
+  outputIdentity?: Identity;
   inputDirectoryIdentity?: Identity;
   inputIdentities?: Readonly<Record<(typeof names)[number], Identity>>;
 }
@@ -53,6 +53,21 @@ const agentResultSchema = fileURLToPath(
     import.meta.url,
   ),
 );
+interface WorktreeTestHooks {
+  afterRegistration?(): Promise<void> | void;
+  beforeSidecarDelete?(path: string): Promise<void> | void;
+  beforeSetupSnapshot?(): Promise<void> | void;
+}
+let testHooks: WorktreeTestHooks = {};
+/** Test-only deterministic fault/race injection; unavailable to production. */
+export function setWorktreeTestHooks(hooks: WorktreeTestHooks): () => void {
+  if (process.env.INGEST_TEST_MODE !== "true")
+    throw new TypeError("Los hooks de worktree solo existen en pruebas");
+  testHooks = hooks;
+  return () => {
+    testHooks = {};
+  };
+}
 export interface GitSnapshot {
   head: string;
   refs: string;
@@ -172,6 +187,15 @@ async function assertSchemaIdentity(schema: SchemaIdentity): Promise<void> {
 }
 const frozenSnapshot = (snapshot: GitSnapshot): GitSnapshot =>
   Object.freeze({ ...snapshot });
+const withoutServiceWorktrees = (status: string): string =>
+  status
+    .split("\0")
+    .filter(
+      (entry) =>
+        !entry.slice(3).startsWith(".agent-worktrees/") &&
+        !entry.slice(3).startsWith(".agent-quarantine/"),
+    )
+    .join("\0");
 function checkedPlan(value: unknown): ChangePlan {
   const plan = validateSchema<ChangePlan>("change-plan", value);
   const { planSha256, ...unsigned } = plan;
@@ -320,15 +344,9 @@ export async function createCandidateWorktree(
       (await realpath(path)) !== path
     )
       throw new TypeError("El worktree candidato no es seguro");
-    const outputDirectory = await sidecar(
-      repositoryRoot,
-      input.changeId,
-      input.attemptId,
-    );
-    const outputEntry = await lstat(outputDirectory);
-    candidate = Object.freeze({
+    candidate = {
       path,
-      outputDirectory,
+      outputDirectory: "",
       repositoryRoot,
       sourceRepositoryRoot,
       changeId: input.changeId,
@@ -338,7 +356,7 @@ export async function createCandidateWorktree(
       inputHash: "",
       requestSha256: approved.requestSha256,
       planSha256: approved.planSha256,
-    });
+    };
     // This record exists before any post-add work. All failure paths below use
     // the same reconciled cleanup rather than forgetting a registered worktree.
     records.set(
@@ -350,10 +368,23 @@ export async function createCandidateWorktree(
         repositorySnapshot: frozenSnapshot(await gitSnapshot(repositoryRoot)),
         sourceSnapshot: frozenSnapshot(await gitSnapshot(sourceRepositoryRoot)),
         candidateSnapshot: frozenSnapshot(await gitSnapshot(path)),
-        outputIdentity: { device: outputEntry.dev, inode: outputEntry.ino },
       }),
     );
     owned.add(candidate);
+    await testHooks.afterRegistration?.();
+    const outputDirectory = await sidecar(
+      repositoryRoot,
+      input.changeId,
+      input.attemptId,
+    );
+    const outputEntry = await lstat(outputDirectory);
+    candidate.outputDirectory = outputDirectory;
+    const withSidecar = Object.freeze({
+      ...(records.get(candidate) as CandidateRecord),
+      outputDirectory,
+      outputIdentity: { device: outputEntry.dev, inode: outputEntry.ino },
+    });
+    records.set(candidate, withSidecar);
     const inputs = await directory(join(path, ".agent-input"), path);
     await Promise.all([
       cp(input.requestPath, join(inputs, names[0]), {
@@ -384,9 +415,10 @@ export async function createCandidateWorktree(
         ]),
       ),
     ) as Record<(typeof names)[number], Identity>;
+    candidate.inputHash = await inputHash(inputs);
+    await testHooks.beforeSetupSnapshot?.();
     const complete = Object.freeze({
       ...candidate,
-      inputHash: await inputHash(inputs),
       identity: { device: entry.dev, inode: entry.ino },
       approvedPlan: Object.freeze({ ...approved }),
       repositorySnapshot: frozenSnapshot(await gitSnapshot(repositoryRoot)),
@@ -406,14 +438,19 @@ export async function createCandidateWorktree(
       withoutCandidateRef(complete.repositorySnapshot.refs) !==
         beforeRepository.refs ||
       complete.repositorySnapshot.head !== beforeRepository.head ||
+      withoutServiceWorktrees(complete.repositorySnapshot.status) !==
+        withoutServiceWorktrees(beforeRepository.status) ||
       withoutCandidateRef(complete.sourceSnapshot.refs) !== beforeSource.refs ||
-      complete.sourceSnapshot.head !== beforeSource.head
+      complete.sourceSnapshot.head !== beforeSource.head ||
+      withoutServiceWorktrees(complete.sourceSnapshot.status) !==
+        withoutServiceWorktrees(beforeSource.status)
     ) {
       throw new TypeError(
         "Las refs protegidas cambiaron durante la creación del candidato",
       );
     }
     records.set(candidate, complete);
+    Object.freeze(candidate);
     return candidate;
   } catch (error) {
     if (candidate) {
@@ -475,6 +512,8 @@ async function assertOwnedOutput(candidate: CandidateWorktree): Promise<void> {
   const record = records.get(candidate);
   if (!owned.has(candidate) || record === undefined)
     throw new TypeError("El worktree no pertenece a este servicio");
+  if (!record.outputIdentity)
+    throw new TypeError("La salida del candidato aún no fue reconciliada");
   const output = await realpath(record.outputDirectory);
   const entry = await lstat(output);
   if (
@@ -521,6 +560,10 @@ async function assertOwnedInputs(candidate: CandidateWorktree): Promise<void> {
 async function removeOwnedSidecar(
   record: Readonly<CandidateRecord>,
 ): Promise<void> {
+  if (!record.outputIdentity) return;
+  const quarantine = await realpath(
+    await mkdtemp(join(dirname(record.outputDirectory), ".agent-sidecar-")),
+  );
   const entry = await lstat(record.outputDirectory);
   if (
     entry.isSymbolicLink() ||
@@ -534,11 +577,20 @@ async function removeOwnedSidecar(
     throw new TypeError("La identidad de la salida del agente ha cambiado");
   // Keep the target on the same filesystem as the sidecar, then delete only
   // the atomically moved, service-owned leaf.
-  const quarantine = await realpath(
-    await mkdtemp(join(dirname(record.outputDirectory), ".agent-sidecar-")),
-  );
   const moved = join(quarantine, "sidecar");
   await rename(record.outputDirectory, moved);
+  await testHooks.beforeSidecarDelete?.(moved);
+  const movedEntry = await lstat(moved);
+  if (
+    movedEntry.isSymbolicLink() ||
+    !movedEntry.isDirectory() ||
+    !equalIdentity(record.outputIdentity, {
+      device: movedEntry.dev,
+      inode: movedEntry.ino,
+    }) ||
+    (await realpath(moved)) !== moved
+  )
+    throw new TypeError("La cuarentena de salida del agente ha cambiado");
   await rm(moved, { recursive: true, force: false });
   await rmdir(quarantine);
 }
@@ -574,7 +626,7 @@ export async function removeCandidateWorktree(
     )
       throw new TypeError("La cuarentena del worktree candidato ha cambiado");
   }
-  await assertOwnedOutput(candidate);
+  if (record.outputIdentity) await assertOwnedOutput(candidate);
   const quarantineBase = await directory(
     join(record.repositoryRoot, ".agent-quarantine"),
     record.repositoryRoot,
@@ -605,9 +657,13 @@ export async function removeCandidateWorktree(
     "--verify",
     ref,
   ]).catch(() => "");
-  if (oid) {
+  if (oid === record.baselineCommit) {
     await git(record.repositoryRoot, ["update-ref", "-d", ref, oid]);
   }
+  if (oid && oid !== record.baselineCommit)
+    throw new TypeError(
+      "La ref candidata cambió y quedó en cuarentena sin reconciliar",
+    );
   const residual = await git(record.repositoryRoot, [
     "rev-parse",
     "--verify",
