@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import {
+  link,
   lstat,
   mkdir,
   mkdtemp,
@@ -556,6 +557,130 @@ test("service manifest rejects a directory swapped to a symlink during enumerati
     } finally {
       restore();
       await rm(outside, { recursive: true, force: true });
+    }
+  });
+});
+
+test("service manifest rejects an empty directory swapped after enumeration", async () => {
+  await withRepository(async ({ root, baseline }) => {
+    await writeFile(
+      join(root, ".git", "info", "exclude"),
+      ".agent-worktrees/\n",
+    );
+    const evil = join(root, ".agent-worktrees", "evil");
+    const outside = await mkdtemp(
+      join(tmpdir(), "comunidadsolar-manifest-outside-"),
+    );
+    await mkdir(evil, { recursive: true });
+    const candidate = await createCandidateWorktree({
+      repositoryRoot: root,
+      approvedPlan: plan(baseline),
+      changeId: "agent-isolation",
+      attemptId: "attempt-000001",
+      baselineCommit: baseline,
+      requestPath: await writeInput(root, "request.json"),
+      planPath: await writeInput(root, "plan.json"),
+      policyPath: await writeInput(root, "policy.json"),
+    });
+    const canonicalEvil = await realpath(evil);
+    let reads = 0;
+    const restore = setWorktreeTestHooks({
+      afterServiceDirectoryRead: async (path) => {
+        if (path !== canonicalEvil || ++reads !== 2) return;
+        await rm(path, { recursive: true, force: false });
+        await symlink(outside, path);
+      },
+    });
+    try {
+      await assert.rejects(
+        validateWorktreeDiff(candidate, plan(baseline)),
+        /identidad del directorio de servicio/i,
+      );
+    } finally {
+      restore();
+      await removeCandidateWorktree(candidate).catch(() => undefined);
+      await rm(outside, { recursive: true, force: true });
+    }
+  });
+});
+
+test("service manifest rejects a parent swapped before child traversal", async () => {
+  await withRepository(async ({ root, baseline }) => {
+    await writeFile(
+      join(root, ".git", "info", "exclude"),
+      ".agent-worktrees/\n",
+    );
+    const evil = join(root, ".agent-worktrees", "evil");
+    const marker = join(evil, "marker");
+    const outside = await mkdtemp(
+      join(tmpdir(), "comunidadsolar-manifest-outside-"),
+    );
+    await mkdir(evil, { recursive: true });
+    await writeFile(marker, "same inode", "utf8");
+    await link(marker, join(outside, "marker"));
+    const candidate = await createCandidateWorktree({
+      repositoryRoot: root,
+      approvedPlan: plan(baseline),
+      changeId: "agent-isolation",
+      attemptId: "attempt-000001",
+      baselineCommit: baseline,
+      requestPath: await writeInput(root, "request.json"),
+      planPath: await writeInput(root, "plan.json"),
+      policyPath: await writeInput(root, "policy.json"),
+    });
+    const canonicalEvil = await realpath(evil);
+    let reads = 0;
+    const restore = setWorktreeTestHooks({
+      afterServiceDirectoryRead: async (path) => {
+        if (path !== canonicalEvil || ++reads !== 2) return;
+        await rm(path, { recursive: true, force: false });
+        await symlink(outside, path);
+      },
+    });
+    try {
+      await assert.rejects(
+        validateWorktreeDiff(candidate, plan(baseline)),
+        /identidad del directorio de servicio/i,
+      );
+    } finally {
+      restore();
+      await removeCandidateWorktree(candidate).catch(() => undefined);
+      await rm(outside, { recursive: true, force: true });
+    }
+  });
+});
+
+test("service manifest commits ignored regular-file content", async () => {
+  await withRepository(async ({ root, baseline }) => {
+    await writeFile(
+      join(root, ".git", "info", "exclude"),
+      ".agent-worktrees/\n",
+    );
+    const marker = join(root, ".agent-worktrees", "evil", "marker");
+    await mkdir(dirname(marker), { recursive: true });
+    await writeFile(marker, "before", "utf8");
+    const original = await lstat(marker);
+    const candidate = await createCandidateWorktree({
+      repositoryRoot: root,
+      approvedPlan: plan(baseline),
+      changeId: "agent-isolation",
+      attemptId: "attempt-000001",
+      baselineCommit: baseline,
+      requestPath: await writeInput(root, "request.json"),
+      planPath: await writeInput(root, "plan.json"),
+      policyPath: await writeInput(root, "policy.json"),
+    });
+    try {
+      await writeFile(marker, "after!", "utf8");
+      const changed = await lstat(marker);
+      assert.equal(changed.dev, original.dev);
+      assert.equal(changed.ino, original.ino);
+      await assert.rejects(
+        validateWorktreeDiff(candidate, plan(baseline)),
+        /manifiesto de servicio/i,
+      );
+    } finally {
+      await removeCandidateWorktree(candidate).catch(() => undefined);
     }
   });
 });

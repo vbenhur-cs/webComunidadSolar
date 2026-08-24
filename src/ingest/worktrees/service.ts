@@ -1,10 +1,12 @@
 import { execFile } from "node:child_process";
 import { createHash, randomUUID } from "node:crypto";
+import { constants } from "node:fs";
 import {
   cp,
   lstat,
   mkdir,
   mkdtemp,
+  open,
   readFile,
   readdir,
   realpath,
@@ -60,6 +62,7 @@ interface WorktreeTestHooks {
   beforeSidecarDelete?(path: string): Promise<void> | void;
   beforeSetupSnapshot?(): Promise<void> | void;
   beforeServiceDirectoryRead?(path: string): Promise<void> | void;
+  afterServiceDirectoryRead?(path: string): Promise<void> | void;
 }
 let testHooks: WorktreeTestHooks = {};
 /** Test-only deterministic fault/race injection; unavailable to production. */
@@ -283,34 +286,78 @@ async function serviceEntries(
 ): Promise<string> {
   const lines: string[] = [];
   const skip = excluded.map((path) => resolve(path));
+  const assertDirectory = async (path: string, identity: Identity) => {
+    const entry = await lstat(path);
+    if (
+      entry.isSymbolicLink() ||
+      !entry.isDirectory() ||
+      !equalIdentity(identity, { device: entry.dev, inode: entry.ino }) ||
+      (await realpath(path)) !== path
+    )
+      throw new TypeError("La identidad del directorio de servicio cambió");
+  };
+  const regularDigest = async (path: string, identity: Identity) => {
+    const before = await lstat(path);
+    if (
+      before.isSymbolicLink() ||
+      !before.isFile() ||
+      !equalIdentity(identity, { device: before.dev, inode: before.ino })
+    )
+      throw new TypeError("La identidad del archivo de servicio cambió");
+    const handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW);
+    let content: Buffer;
+    try {
+      content = await handle.readFile();
+    } finally {
+      await handle.close();
+    }
+    const after = await lstat(path);
+    if (
+      after.isSymbolicLink() ||
+      !after.isFile() ||
+      !equalIdentity(identity, { device: after.dev, inode: after.ino })
+    )
+      throw new TypeError("La identidad del archivo de servicio cambió");
+    return createHash("sha256").update(content).digest("hex");
+  };
   const visit = async (path: string): Promise<boolean> => {
     if (skip.some((root) => path === root || path.startsWith(`${root}/`)))
       return false;
     const entry = await lstat(path);
     const identity = { device: entry.dev, inode: entry.ino };
-    if (entry.isSymbolicLink() || !entry.isDirectory()) {
+    if (entry.isSymbolicLink()) {
       lines.push(
-        `${entry.isSymbolicLink() ? "S" : "F"}\0${relative(repositoryRoot, path)}\0${entry.dev}\0${entry.ino}`,
+        `S\0${relative(repositoryRoot, path)}\0${entry.dev}\0${entry.ino}`,
       );
       return true;
     }
-    if ((await realpath(path)) !== path)
-      throw new TypeError("El manifiesto de servicio atravesó un enlace");
+    if (!entry.isDirectory()) {
+      if (!entry.isFile())
+        throw new TypeError(
+          "El manifiesto de servicio contiene una entrada no regular",
+        );
+      lines.push(
+        `F\0${relative(repositoryRoot, path)}\0${entry.dev}\0${entry.ino}\0${await regularDigest(path, identity)}`,
+      );
+      return true;
+    }
+    await assertDirectory(path, identity);
     await testHooks.beforeServiceDirectoryRead?.(path);
+    await assertDirectory(path, identity);
     const children = await readdir(path);
-    const after = await lstat(path);
-    if (
-      after.isSymbolicLink() ||
-      !after.isDirectory() ||
-      !equalIdentity(identity, { device: after.dev, inode: after.ino }) ||
-      (await realpath(path)) !== path
-    )
-      throw new TypeError("La identidad del directorio de servicio cambió");
-    await Promise.all(children.map((child) => visit(join(path, child))));
+    await assertDirectory(path, identity);
+    await testHooks.afterServiceDirectoryRead?.(path);
+    await assertDirectory(path, identity);
+    for (const child of children) {
+      await assertDirectory(path, identity);
+      await visit(join(path, child));
+      await assertDirectory(path, identity);
+    }
     // Directories are first-class manifest entries, including empty service
     // directories and ancestors containing only an owned excluded leaf. This
     // keeps a pre-existing service parent stable while still exposing any
     // unowned empty sibling or identity change.
+    await assertDirectory(path, identity);
     lines.push(
       `D\0${relative(repositoryRoot, path)}\0${entry.dev}\0${entry.ino}`,
     );
