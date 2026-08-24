@@ -610,6 +610,12 @@ async function serviceEntries(
     if (entry)
       await visit(repositoryRoot, rootScan, join(repositoryRoot, name), entry);
   }
+  const finalRoot = await scanDirectory(
+    repositoryRoot,
+    scannerIdentity(rootScan.directory),
+  );
+  if (!sameDirectoryScan(rootScan, finalRoot))
+    throw new TypeError("La enumeración del directorio de servicio cambió");
   return lines.sort().join("\n");
 }
 export async function gitSnapshot(

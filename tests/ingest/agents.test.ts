@@ -730,6 +730,42 @@ test("service manifest rejects a child added after directory enumeration", async
   });
 });
 
+test("service manifest rejects a service root created after its sibling traversal", async () => {
+  await withRepository(async ({ root, baseline }) => {
+    const candidate = await createCandidateWorktree({
+      repositoryRoot: root,
+      approvedPlan: plan(baseline),
+      changeId: "agent-isolation",
+      attemptId: "attempt-000001",
+      baselineCommit: baseline,
+      requestPath: await writeInput(root, "request.json"),
+      planPath: await writeInput(root, "plan.json"),
+      policyPath: await writeInput(root, "policy.json"),
+    });
+    const scannerRoot = await realpath(root);
+    const worktrees = join(scannerRoot, ".agent-worktrees");
+    let created = false;
+    const restore = setWorktreeTestHooks({
+      afterServiceDirectoryEntry: async (path) => {
+        if (path !== worktrees || created) return;
+        created = true;
+        await mkdir(join(scannerRoot, ".agent-quarantine", "evil"), {
+          recursive: true,
+        });
+      },
+    });
+    try {
+      await assert.rejects(
+        gitSnapshot(scannerRoot, [candidate.path]),
+        /enumeración del directorio de servicio/i,
+      );
+    } finally {
+      restore();
+      await removeCandidateWorktree(candidate).catch(() => undefined);
+    }
+  });
+});
+
 test("service manifest anchors child traversal across a transient parent swap", async () => {
   await withRepository(async ({ root, baseline }) => {
     await writeFile(
