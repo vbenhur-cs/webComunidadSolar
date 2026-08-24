@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import {
+  chmod,
   link,
   lstat,
   mkdir,
@@ -517,7 +518,7 @@ test("validation rejects an unowned ignored empty service directory after setup"
       await mkdir(join(root, ".agent-worktrees", "evil"));
       await assert.rejects(
         validateWorktreeDiff(candidate, plan(baseline)),
-        /manifiesto de servicio/i,
+        /manifiesto de servicio|repositorio principal/i,
       );
     } finally {
       await removeCandidateWorktree(candidate);
@@ -679,7 +680,7 @@ test("service manifest commits ignored regular-file content", async () => {
       assert.equal(changed.ino, original.ino);
       await assert.rejects(
         validateWorktreeDiff(candidate, plan(baseline)),
-        /manifiesto de servicio/i,
+        /manifiesto de servicio|repositorio principal/i,
       );
     } finally {
       await removeCandidateWorktree(candidate).catch(() => undefined);
@@ -791,7 +792,7 @@ test("service manifest rejects a nested service entry created after traversal", 
     try {
       await assert.rejects(
         gitSnapshot(scannerRoot, [candidate.path]),
-        /manifiesto de servicio/i,
+        /manifiesto de servicio|enumeración del directorio de servicio/i,
       );
     } finally {
       restore();
@@ -831,7 +832,86 @@ test("service manifest rejects a leaf changed after its first digest", async () 
     try {
       await assert.rejects(
         gitSnapshot(await realpath(root), [candidate.path]),
-        /manifiesto de servicio/i,
+        /manifiesto de servicio|enumeración del directorio de servicio/i,
+      );
+    } finally {
+      restore();
+      await removeCandidateWorktree(candidate).catch(() => undefined);
+    }
+  });
+});
+
+test("service manifest commits directory mode across complete captures", async () => {
+  await withRepository(async ({ root, baseline }) => {
+    await writeFile(
+      join(root, ".git", "info", "exclude"),
+      ".agent-worktrees/\n",
+    );
+    const evil = join(root, ".agent-worktrees", "evil");
+    await mkdir(evil, { recursive: true });
+    await chmod(evil, 0o755);
+    const candidate = await createCandidateWorktree({
+      repositoryRoot: root,
+      approvedPlan: plan(baseline),
+      changeId: "agent-isolation",
+      attemptId: "attempt-000001",
+      baselineCommit: baseline,
+      requestPath: await writeInput(root, "request.json"),
+      planPath: await writeInput(root, "plan.json"),
+      policyPath: await writeInput(root, "policy.json"),
+    });
+    const worktrees = join(await realpath(root), ".agent-worktrees");
+    let changed = false;
+    const restore = setWorktreeTestHooks({
+      afterServiceDirectoryEntry: async (path) => {
+        if (path !== worktrees || changed) return;
+        changed = true;
+        await chmod(evil, 0o700);
+      },
+    });
+    try {
+      await assert.rejects(
+        gitSnapshot(await realpath(root), [candidate.path]),
+        /manifiesto de servicio|enumeración del directorio de servicio/i,
+      );
+    } finally {
+      restore();
+      await removeCandidateWorktree(candidate).catch(() => undefined);
+    }
+  });
+});
+
+test("validation rechecks refs moved during service capture", async () => {
+  await withRepository(async ({ root, baseline }) => {
+    const candidate = await createCandidateWorktree({
+      repositoryRoot: root,
+      approvedPlan: plan(baseline),
+      changeId: "agent-isolation",
+      attemptId: "attempt-000001",
+      baselineCommit: baseline,
+      requestPath: await writeInput(root, "request.json"),
+      planPath: await writeInput(root, "plan.json"),
+      policyPath: await writeInput(root, "policy.json"),
+    });
+    const worktrees = join(await realpath(root), ".agent-worktrees");
+    let moved = false;
+    const restore = setWorktreeTestHooks({
+      afterServiceDirectoryEntry: async (path) => {
+        if (path !== worktrees || moved) return;
+        moved = true;
+        await git(root, [
+          "commit",
+          "--allow-empty",
+          "--quiet",
+          "-m",
+          "move main during snapshot",
+        ]);
+      },
+    });
+    try {
+      await assert.rejects(
+        validateWorktreeDiff(candidate, plan(baseline)),
+        /ref protegido|repositorio principal|enumeración del directorio de servicio/i,
       );
     } finally {
       restore();

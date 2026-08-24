@@ -14,6 +14,8 @@ const identity = (entry) => ({
 
 const state = (entry) => ({
   ...identity(entry),
+  mode: String(entry.mode),
+  size: String(entry.size),
   mtimeNs: String(entry.mtimeNs),
   ctimeNs: String(entry.ctimeNs),
   nlink: String(entry.nlink),
@@ -58,7 +60,7 @@ const directory = async (expected) => {
     const entries = [];
     for (const name of names) {
       if (!validName(name)) fail("El scanner recibió un nombre inseguro");
-      const entry = await lstat(name);
+      const entry = await lstat(name, { bigint: true });
       entries.push({
         name,
         type: entry.isDirectory()
@@ -68,7 +70,7 @@ const directory = async (expected) => {
             : entry.isSymbolicLink()
               ? "S"
               : "X",
-        ...identity(entry),
+        ...state(entry),
       });
     }
     const observed = (await readdir(".")).sort();
@@ -122,6 +124,7 @@ const leaf = async (name, expected, cwdExpected, pause, nextLine) => {
     return {
       kind: "leaf",
       digest: createHash("sha256").update(content).digest("hex"),
+      metadata: state(before),
     };
   } finally {
     await handle.close();

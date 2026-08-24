@@ -3,12 +3,11 @@ import type { ChangePlan } from "../domain.ts";
 import {
   assertCandidateServiceManifest,
   candidateRecord,
-  externalSnapshot,
-  gitSnapshot,
+  candidateValidationSnapshots,
   removeCandidateWorktree,
-  worktreeStatus,
   validateCopiedInputs,
   type CandidateWorktree,
+  type GitSnapshot,
 } from "./service.ts";
 
 function changedPaths(status: string): string[] {
@@ -49,6 +48,39 @@ function outputAllowed(path: string, plan: ChangePlan): boolean {
   return generatedRoots.some((root) => safeDescendant(root, path));
 }
 
+function assertProtectedSnapshots(
+  record: Awaited<ReturnType<typeof candidateRecord>>,
+  candidateSnapshot: GitSnapshot,
+  repositorySnapshot: GitSnapshot,
+  sourceSnapshot: GitSnapshot,
+): void {
+  if (candidateSnapshot.head !== record.baselineCommit) {
+    throw new TypeError("Se detectó un commit creado por el agente");
+  }
+  if (
+    candidateSnapshot.refs !== record.candidateSnapshot.refs ||
+    repositorySnapshot.refs !== record.repositorySnapshot.refs ||
+    sourceSnapshot.refs !== record.sourceSnapshot.refs
+  ) {
+    throw new TypeError("Git ref protegido fue modificado");
+  }
+  if (
+    repositorySnapshot.head !== record.repositorySnapshot.head ||
+    repositorySnapshot.status !== record.repositorySnapshot.status ||
+    repositorySnapshot.serviceEntries !==
+      record.repositorySnapshot.serviceEntries
+  ) {
+    throw new TypeError("El repositorio principal cambió fuera del worktree");
+  }
+  if (
+    sourceSnapshot.head !== record.sourceSnapshot.head ||
+    sourceSnapshot.status !== record.sourceSnapshot.status ||
+    sourceSnapshot.serviceEntries !== record.sourceSnapshot.serviceEntries
+  ) {
+    throw new TypeError("El source sibling cambió fuera del worktree");
+  }
+}
+
 /**
  * Reject all effects that an agent cannot authorize: commits, protected refs,
  * mutable copied inputs, external worktree changes, and unplanned paths.
@@ -79,39 +111,27 @@ async function validateDiff(
   }
   const record = await candidateRecord(candidate);
   const [candidateSnapshot, repositorySnapshot, sourceSnapshot] =
-    await Promise.all([
-      gitSnapshot(record.path),
-      externalSnapshot(record.repositoryRoot),
-      externalSnapshot(record.sourceRepositoryRoot),
-    ]);
-  if (candidateSnapshot.head !== record.baselineCommit) {
-    throw new TypeError("Se detectó un commit creado por el agente");
-  }
-  if (
-    candidateSnapshot.refs !== record.candidateSnapshot.refs ||
-    repositorySnapshot.refs !== record.repositorySnapshot.refs ||
-    sourceSnapshot.refs !== record.sourceSnapshot.refs
-  ) {
-    throw new TypeError("Git ref protegido fue modificado");
-  }
-  if (
-    repositorySnapshot.head !== record.repositorySnapshot.head ||
-    repositorySnapshot.status !== record.repositorySnapshot.status
-  ) {
-    throw new TypeError("El repositorio principal cambió fuera del worktree");
-  }
-  if (
-    sourceSnapshot.head !== record.sourceSnapshot.head ||
-    sourceSnapshot.status !== record.sourceSnapshot.status
-  ) {
-    throw new TypeError("El source sibling cambió fuera del worktree");
-  }
+    await candidateValidationSnapshots(candidate);
+  assertProtectedSnapshots(
+    record,
+    candidateSnapshot,
+    repositorySnapshot,
+    sourceSnapshot,
+  );
   await validateCopiedInputs(candidate, plan);
   await assertCandidateServiceManifest(candidate);
 
   const allowed = new Set(plan.files.map((file) => file.path));
   const initialPaths = new Set(changedPaths(record.candidateSnapshot.status));
-  const paths = changedPaths(await worktreeStatus(candidate)).filter(
+  const [finalCandidateSnapshot, finalRepositorySnapshot, finalSourceSnapshot] =
+    await candidateValidationSnapshots(candidate);
+  assertProtectedSnapshots(
+    record,
+    finalCandidateSnapshot,
+    finalRepositorySnapshot,
+    finalSourceSnapshot,
+  );
+  const paths = changedPaths(finalCandidateSnapshot.status).filter(
     (path) => !initialPaths.has(path),
   );
   for (const path of paths) {

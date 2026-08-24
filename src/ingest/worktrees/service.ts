@@ -229,6 +229,24 @@ function withoutOwnedStatusPaths(
     })
     .join("\0");
 }
+function withoutCandidateAncestorMetadata(
+  manifest: string,
+  repositoryRoot: string,
+  candidatePath: string,
+): string {
+  return manifest
+    .split("\n")
+    .filter((entry) => {
+      const [type, path] = entry.split("\0", 2);
+      if (type !== "D" || !path) return true;
+      const absolute = resolve(repositoryRoot, path);
+      return !(
+        absolute.startsWith(`${repositoryRoot}/.agent-worktrees`) &&
+        candidatePath.startsWith(`${absolute}/`)
+      );
+    })
+    .join("\n");
+}
 function checkedPlan(value: unknown): ChangePlan {
   const plan = validateSchema<ChangePlan>("change-plan", value);
   const { planSha256, ...unsigned } = plan;
@@ -291,12 +309,15 @@ async function inputHash(path: string): Promise<string> {
   return hash.digest("hex");
 }
 type ScannerIdentity = { device: string; inode: string };
-type ScannerDirectory = ScannerIdentity & {
+type ScannerMetadata = ScannerIdentity & {
+  mode: string;
+  size: string;
   mtimeNs: string;
   ctimeNs: string;
   nlink: string;
 };
-type ScannerEntry = ScannerIdentity & {
+type ScannerDirectory = ScannerMetadata;
+type ScannerEntry = ScannerMetadata & {
   name: string;
   type: "D" | "F" | "S" | "X";
 };
@@ -305,7 +326,11 @@ type ScannerDirectoryResult = {
   directory: ScannerDirectory;
   entries: ScannerEntry[];
 };
-type ScannerLeafResult = { kind: "leaf"; digest: string };
+type ScannerLeafResult = {
+  kind: "leaf";
+  digest: string;
+  metadata: ScannerMetadata;
+};
 const scannerIdentity = (identity: {
   device: number | string;
   inode: number | string;
@@ -348,6 +373,48 @@ const scannerIdentityValue = (value: unknown): ScannerIdentity => {
     );
   return { device: object.device, inode: object.inode };
 };
+const scannerMetadataValue = (value: unknown): ScannerMetadata => {
+  const object = scannerObject(value);
+  closedKeys(object, [
+    "device",
+    "inode",
+    "mode",
+    "size",
+    "mtimeNs",
+    "ctimeNs",
+    "nlink",
+  ]);
+  const identity = scannerIdentityValue({
+    device: object.device,
+    inode: object.inode,
+  });
+  if (
+    ![
+      object.mode,
+      object.size,
+      object.mtimeNs,
+      object.ctimeNs,
+      object.nlink,
+    ].every((field) => typeof field === "string" && /^\d+$/u.test(field))
+  )
+    throw new TypeError("El scanner de servicio devolvió metadatos no válidos");
+  return {
+    ...identity,
+    mode: object.mode as string,
+    size: object.size as string,
+    mtimeNs: object.mtimeNs as string,
+    ctimeNs: object.ctimeNs as string,
+    nlink: object.nlink as string,
+  };
+};
+const sameScannerMetadata = (left: ScannerMetadata, right: ScannerMetadata) =>
+  left.device === right.device &&
+  left.inode === right.inode &&
+  left.mode === right.mode &&
+  left.size === right.size &&
+  left.mtimeNs === right.mtimeNs &&
+  left.ctimeNs === right.ctimeNs &&
+  left.nlink === right.nlink;
 async function runManifestScanner(
   cwd: string,
   input: Record<string, unknown>,
@@ -451,24 +518,30 @@ async function scanDirectory(
       "El scanner de directorio devolvió un resultado no válido",
     );
   const directory = scannerObject(value.directory);
-  closedKeys(directory, ["device", "inode", "mtimeNs", "ctimeNs", "nlink"]);
-  const identity = scannerIdentityValue({
-    device: directory.device,
-    inode: directory.inode,
-  });
-  if (
-    !equalScannerIdentity(identity, expected) ||
-    ![directory.mtimeNs, directory.ctimeNs, directory.nlink].every(
-      (field) => typeof field === "string" && /^\d+$/u.test(field),
-    )
-  )
+  const metadata = scannerMetadataValue(directory);
+  if (!equalScannerIdentity(metadata, expected))
     throw new TypeError("La identidad del directorio de servicio cambió");
   const entries = value.entries.map((value): ScannerEntry => {
     const entry = scannerObject(value);
-    closedKeys(entry, ["name", "type", "device", "inode"]);
-    const entryIdentity = scannerIdentityValue({
+    closedKeys(entry, [
+      "name",
+      "type",
+      "device",
+      "inode",
+      "mode",
+      "size",
+      "mtimeNs",
+      "ctimeNs",
+      "nlink",
+    ]);
+    const entryMetadata = scannerMetadataValue({
       device: entry.device,
       inode: entry.inode,
+      mode: entry.mode,
+      size: entry.size,
+      mtimeNs: entry.mtimeNs,
+      ctimeNs: entry.ctimeNs,
+      nlink: entry.nlink,
     });
     if (
       !safeScannerName(entry.name) ||
@@ -480,14 +553,14 @@ async function scanDirectory(
     return {
       name: entry.name,
       type: entry.type as ScannerEntry["type"],
-      ...entryIdentity,
+      ...entryMetadata,
     };
   });
   if (new Set(entries.map((entry) => entry.name)).size !== entries.length)
     throw new TypeError("El scanner de servicio devolvió nombres duplicados");
   return {
     kind: "directory",
-    directory: { ...identity, ...directory } as ScannerDirectory,
+    directory: metadata,
     entries,
   };
 }
@@ -510,7 +583,7 @@ async function scanLeaf(
       afterRead,
     ),
   );
-  closedKeys(value, ["kind", "digest"]);
+  closedKeys(value, ["kind", "digest", "metadata"]);
   if (
     value.kind !== "leaf" ||
     typeof value.digest !== "string" ||
@@ -519,18 +592,27 @@ async function scanLeaf(
     throw new TypeError(
       "El scanner de archivo devolvió un resultado no válido",
     );
-  return { kind: "leaf", digest: value.digest };
+  const metadata = scannerMetadataValue(value.metadata);
+  if (!sameScannerMetadata(metadata, entry))
+    throw new TypeError("Los metadatos del archivo de servicio cambiaron");
+  return { kind: "leaf", digest: value.digest, metadata };
 }
 const sameDirectoryScan = (
   left: ScannerDirectoryResult,
   right: ScannerDirectoryResult,
 ) =>
-  left.directory.device === right.directory.device &&
-  left.directory.inode === right.directory.inode &&
-  left.directory.mtimeNs === right.directory.mtimeNs &&
-  left.directory.ctimeNs === right.directory.ctimeNs &&
-  left.directory.nlink === right.directory.nlink &&
+  sameScannerMetadata(left.directory, right.directory) &&
   JSON.stringify(left.entries) === JSON.stringify(right.entries);
+const manifestMetadata = (metadata: ScannerMetadata) =>
+  [
+    metadata.device,
+    metadata.inode,
+    metadata.mode,
+    metadata.size,
+    metadata.mtimeNs,
+    metadata.ctimeNs,
+    metadata.nlink,
+  ].join("\0");
 async function captureServiceEntries(
   repositoryRoot: string,
   excluded: string[],
@@ -555,7 +637,7 @@ async function captureServiceEntries(
       return false;
     if (entry.type === "S") {
       lines.push(
-        `S\0${relative(repositoryRoot, label)}\0${entry.device}\0${entry.inode}`,
+        `S\0${relative(repositoryRoot, label)}\0${manifestMetadata(entry)}`,
       );
       return true;
     }
@@ -573,7 +655,7 @@ async function captureServiceEntries(
           : undefined,
       );
       lines.push(
-        `F\0${relative(repositoryRoot, label)}\0${entry.device}\0${entry.inode}\0${leaf.digest}`,
+        `F\0${relative(repositoryRoot, label)}\0${manifestMetadata(leaf.metadata)}\0${leaf.digest}`,
       );
       return true;
     }
@@ -601,7 +683,7 @@ async function captureServiceEntries(
     }
     await recheck();
     lines.push(
-      `D\0${relative(repositoryRoot, label)}\0${entry.device}\0${entry.inode}`,
+      `D\0${relative(repositoryRoot, label)}\0${manifestMetadata(entry)}`,
     );
     await hooks?.afterServiceDirectoryEntry?.(label);
     return true;
@@ -637,22 +719,24 @@ export async function gitSnapshot(
   path: string,
   excludedServicePaths: string[] = [],
 ): Promise<GitSnapshot> {
-  const [head, refs, status] = await Promise.all([
-    git(path, ["rev-parse", "HEAD"]),
-    git(path, ["for-each-ref", "--format=%(refname)%00%(objectname)"]),
-    git(path, [
-      "status",
-      "--porcelain=v1",
-      "-z",
-      "--untracked-files=all",
-      "--ignored=matching",
-    ]),
+  const entries = await serviceEntries(path, excludedServicePaths);
+  const head = await git(path, ["rev-parse", "HEAD"]);
+  const refs = await git(path, [
+    "for-each-ref",
+    "--format=%(refname)%00%(objectname)",
+  ]);
+  const status = await git(path, [
+    "status",
+    "--porcelain=v1",
+    "-z",
+    "--untracked-files=all",
+    "--ignored=matching",
   ]);
   return {
     head,
     refs,
     status,
-    serviceEntries: await serviceEntries(path, excludedServicePaths),
+    serviceEntries: entries,
   };
 }
 async function registered(
@@ -853,8 +937,16 @@ export async function createCandidateWorktree(
           path,
           ...ownedQuarantines,
         ]),
-      complete.repositorySnapshot.serviceEntries !==
-        beforeRepository.serviceEntries,
+      withoutCandidateAncestorMetadata(
+        complete.repositorySnapshot.serviceEntries,
+        repositoryRoot,
+        path,
+      ) !==
+        withoutCandidateAncestorMetadata(
+          beforeRepository.serviceEntries,
+          repositoryRoot,
+          path,
+        ),
       withoutCandidateRef(complete.sourceSnapshot.refs) !== beforeSource.refs,
       complete.sourceSnapshot.head !== beforeSource.head,
       withoutOwnedStatusPaths(
@@ -866,7 +958,16 @@ export async function createCandidateWorktree(
           path,
           ...ownedQuarantines,
         ]),
-      complete.sourceSnapshot.serviceEntries !== beforeSource.serviceEntries,
+      withoutCandidateAncestorMetadata(
+        complete.sourceSnapshot.serviceEntries,
+        sourceRepositoryRoot,
+        path,
+      ) !==
+        withoutCandidateAncestorMetadata(
+          beforeSource.serviceEntries,
+          sourceRepositoryRoot,
+          path,
+        ),
     ];
     if (setupDrift.some(Boolean)) {
       throw new TypeError(
@@ -1141,6 +1242,21 @@ export async function validateCopiedInputs(
   );
   if ((await inputHash(inputs)) !== record.inputHash)
     throw new TypeError("La entrada del agente cambió después del aislamiento");
+}
+export async function candidateValidationSnapshots(
+  candidate: CandidateWorktree,
+): Promise<[GitSnapshot, GitSnapshot, GitSnapshot]> {
+  const record = await candidateRecord(candidate);
+  return await Promise.all([
+    gitSnapshot(record.path),
+    gitSnapshot(record.repositoryRoot, [record.path, ...ownedQuarantines]),
+    gitSnapshot(
+      record.sourceRepositoryRoot,
+      record.sourceRepositoryRoot === record.repositoryRoot
+        ? [record.path, ...ownedQuarantines]
+        : [],
+    ),
+  ]);
 }
 export async function worktreeGit(
   candidate: CandidateWorktree,
