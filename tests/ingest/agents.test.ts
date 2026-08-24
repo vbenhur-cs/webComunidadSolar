@@ -766,6 +766,80 @@ test("service manifest rejects a service root created after its sibling traversa
   });
 });
 
+test("service manifest rejects a nested service entry created after traversal", async () => {
+  await withRepository(async ({ root, baseline }) => {
+    const candidate = await createCandidateWorktree({
+      repositoryRoot: root,
+      approvedPlan: plan(baseline),
+      changeId: "agent-isolation",
+      attemptId: "attempt-000001",
+      baselineCommit: baseline,
+      requestPath: await writeInput(root, "request.json"),
+      planPath: await writeInput(root, "plan.json"),
+      policyPath: await writeInput(root, "policy.json"),
+    });
+    const scannerRoot = await realpath(root);
+    const worktrees = join(scannerRoot, ".agent-worktrees");
+    let created = false;
+    const restore = setWorktreeTestHooks({
+      afterServiceDirectoryEntry: async (path) => {
+        if (path !== worktrees || created) return;
+        created = true;
+        await mkdir(join(worktrees, "evil"), { recursive: true });
+      },
+    });
+    try {
+      await assert.rejects(
+        gitSnapshot(scannerRoot, [candidate.path]),
+        /manifiesto de servicio/i,
+      );
+    } finally {
+      restore();
+      await removeCandidateWorktree(candidate).catch(() => undefined);
+    }
+  });
+});
+
+test("service manifest rejects a leaf changed after its first digest", async () => {
+  await withRepository(async ({ root, baseline }) => {
+    await writeFile(
+      join(root, ".git", "info", "exclude"),
+      ".agent-worktrees/\n",
+    );
+    const marker = join(root, ".agent-worktrees", "evil", "marker");
+    await mkdir(dirname(marker), { recursive: true });
+    await writeFile(marker, "before", "utf8");
+    const candidate = await createCandidateWorktree({
+      repositoryRoot: root,
+      approvedPlan: plan(baseline),
+      changeId: "agent-isolation",
+      attemptId: "attempt-000001",
+      baselineCommit: baseline,
+      requestPath: await writeInput(root, "request.json"),
+      planPath: await writeInput(root, "plan.json"),
+      policyPath: await writeInput(root, "policy.json"),
+    });
+    const canonicalEvil = await realpath(dirname(marker));
+    let changed = false;
+    const restore = setWorktreeTestHooks({
+      afterServiceChildTraversal: async (parent, child) => {
+        if (parent !== canonicalEvil || child !== "marker" || changed) return;
+        changed = true;
+        await writeFile(marker, "after", "utf8");
+      },
+    });
+    try {
+      await assert.rejects(
+        gitSnapshot(await realpath(root), [candidate.path]),
+        /manifiesto de servicio/i,
+      );
+    } finally {
+      restore();
+      await removeCandidateWorktree(candidate).catch(() => undefined);
+    }
+  });
+});
+
 test("service manifest anchors child traversal across a transient parent swap", async () => {
   await withRepository(async ({ root, baseline }) => {
     await writeFile(

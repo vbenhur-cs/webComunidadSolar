@@ -531,9 +531,10 @@ const sameDirectoryScan = (
   left.directory.ctimeNs === right.directory.ctimeNs &&
   left.directory.nlink === right.directory.nlink &&
   JSON.stringify(left.entries) === JSON.stringify(right.entries);
-async function serviceEntries(
+async function captureServiceEntries(
   repositoryRoot: string,
   excluded: string[],
+  hooks?: WorktreeTestHooks,
 ): Promise<string> {
   const lines: string[] = [];
   const skip = excluded.map((path) => resolve(path));
@@ -567,8 +568,8 @@ async function serviceEntries(
         parentPath,
         parent.directory,
         entry,
-        testHooks.afterServiceFileRead
-          ? () => testHooks.afterServiceFileRead!(label)
+        hooks?.afterServiceFileRead
+          ? () => hooks.afterServiceFileRead!(label)
           : undefined,
       );
       lines.push(
@@ -583,18 +584,18 @@ async function serviceEntries(
       if (!sameDirectoryScan(initial, current))
         throw new TypeError("La enumeración del directorio de servicio cambió");
     };
-    await testHooks.beforeServiceDirectoryRead?.(label);
+    await hooks?.beforeServiceDirectoryRead?.(label);
     await recheck();
-    await testHooks.afterServiceDirectoryRead?.(label);
+    await hooks?.afterServiceDirectoryRead?.(label);
     await recheck();
     for (const child of initial.entries) {
       await recheck();
-      await testHooks.beforeServiceChildTraversal?.(label, child.name);
+      await hooks?.beforeServiceChildTraversal?.(label, child.name);
       try {
         await recheck();
         await visit(path, initial, join(label, child.name), child);
       } finally {
-        await testHooks.afterServiceChildTraversal?.(label, child.name);
+        await hooks?.afterServiceChildTraversal?.(label, child.name);
       }
       await recheck();
     }
@@ -602,7 +603,7 @@ async function serviceEntries(
     lines.push(
       `D\0${relative(repositoryRoot, label)}\0${entry.device}\0${entry.inode}`,
     );
-    await testHooks.afterServiceDirectoryEntry?.(label);
+    await hooks?.afterServiceDirectoryEntry?.(label);
     return true;
   };
   for (const name of [".agent-worktrees", ".agent-quarantine"]) {
@@ -617,6 +618,20 @@ async function serviceEntries(
   if (!sameDirectoryScan(rootScan, finalRoot))
     throw new TypeError("La enumeración del directorio de servicio cambió");
   return lines.sort().join("\n");
+}
+async function serviceEntries(
+  repositoryRoot: string,
+  excluded: string[],
+): Promise<string> {
+  const first = await captureServiceEntries(
+    repositoryRoot,
+    excluded,
+    testHooks,
+  );
+  const second = await captureServiceEntries(repositoryRoot, excluded);
+  if (first !== second)
+    throw new TypeError("El manifiesto de servicio cambió durante la captura");
+  return first;
 }
 export async function gitSnapshot(
   path: string,
