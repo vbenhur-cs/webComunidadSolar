@@ -201,8 +201,14 @@ function withoutOwnedStatusPaths(
     .filter((entry) => {
       if (entry.length < 4) return true;
       const path = entry.slice(3);
+      // Git can collapse ignored service roots into a marker that cannot be
+      // matched safely to a leaf. The ignored-inclusive canonical manifest is
+      // compared separately and is the authority for every descendant.
+      if (path === ".agent-worktrees/" || path === ".agent-quarantine/")
+        return false;
       // Exempt only a recorded candidate or a previously atomically moved,
-      // service-owned quarantine leaf. Unowned siblings remain observable.
+      // service-owned quarantine leaf. Unowned siblings remain observable in
+      // both porcelain (when expanded) and the canonical manifest.
       return !roots.some(
         (root) => path === root || path.startsWith(`${root}/`),
       );
@@ -352,8 +358,13 @@ export async function createCandidateWorktree(
   const sourceRepositoryRoot = await root(
     input.sourceRepositoryRoot ?? input.repositoryRoot,
   );
-  const beforeRepository = await gitSnapshot(repositoryRoot);
-  const beforeSource = await gitSnapshot(sourceRepositoryRoot);
+  const beforeRepository = await gitSnapshot(repositoryRoot, [
+    ...ownedQuarantines,
+  ]);
+  const beforeSource = await gitSnapshot(
+    sourceRepositoryRoot,
+    sourceRepositoryRoot === repositoryRoot ? [...ownedQuarantines] : [],
+  );
   if (
     (await git(repositoryRoot, ["rev-parse", "refs/heads/main"])) !==
     input.baselineCommit
@@ -473,12 +484,14 @@ export async function createCandidateWorktree(
       identity: { device: entry.dev, inode: entry.ino },
       approvedPlan: Object.freeze({ ...approved }),
       repositorySnapshot: frozenSnapshot(
-        await gitSnapshot(repositoryRoot, [path]),
+        await gitSnapshot(repositoryRoot, [path, ...ownedQuarantines]),
       ),
       sourceSnapshot: frozenSnapshot(
         await gitSnapshot(
           sourceRepositoryRoot,
-          sourceRepositoryRoot === repositoryRoot ? [path] : [],
+          sourceRepositoryRoot === repositoryRoot
+            ? [path, ...ownedQuarantines]
+            : [],
         ),
       ),
       candidateSnapshot: frozenSnapshot(await gitSnapshot(path)),
