@@ -401,6 +401,154 @@ test("setup status drift is rejected and candidate state is reconciled", async (
   });
 });
 
+test("candidate Git authority rejects a replaced gitfile before candidate snapshots", async () => {
+  await withRepository(async ({ root, baseline }) => {
+    const candidate = await createCandidateWorktree({
+      repositoryRoot: root,
+      approvedPlan: plan(baseline),
+      changeId: "agent-isolation",
+      attemptId: "attempt-000001",
+      baselineCommit: baseline,
+      requestPath: await writeInput(root, "request.json"),
+      planPath: await writeInput(root, "plan.json"),
+      policyPath: await writeInput(root, "policy.json"),
+    });
+    let candidateSnapshotReached = false;
+    const restore = setWorktreeTestHooks({
+      beforeGitSnapshotStatus: (path) => {
+        if (path === candidate.path) candidateSnapshotReached = true;
+      },
+    });
+    try {
+      await writeFile(
+        join(candidate.path, ".git"),
+        `gitdir: ${join(root, ".git")}\n`,
+        "utf8",
+      );
+      await assert.rejects(
+        validateWorktreeDiff(candidate, plan(baseline)),
+        /autoridad Git|gitdir candidato/i,
+      );
+      assert.equal(candidateSnapshotReached, false);
+    } finally {
+      restore();
+      await removeCandidateWorktree(candidate).catch(() => undefined);
+    }
+  });
+});
+
+test("snapshot rejects a protected ref move between refs and status", async () => {
+  await withRepository(async ({ root, baseline }) => {
+    const alternate = await git(root, [
+      "commit-tree",
+      `${baseline}^{tree}`,
+      "-p",
+      baseline,
+      "-m",
+      "mid-snapshot",
+    ]);
+    let moved = false;
+    const restore = setWorktreeTestHooks({
+      beforeGitSnapshotStatus: async (path) => {
+        if (!moved && path === root) {
+          moved = true;
+          await git(root, [
+            "update-ref",
+            "refs/heads/main",
+            alternate,
+            baseline,
+          ]);
+        }
+      },
+    });
+    try {
+      await assert.rejects(gitSnapshot(root), /estado Git.*snapshot/i);
+      assert.equal(moved, true);
+    } finally {
+      restore();
+    }
+  });
+});
+
+test("sequential candidate validation rejects ref movement while another authority is read", async () => {
+  await withRepository(async ({ root, baseline }) => {
+    const candidate = await createCandidateWorktree({
+      repositoryRoot: root,
+      approvedPlan: plan(baseline),
+      changeId: "agent-isolation",
+      attemptId: "attempt-000001",
+      baselineCommit: baseline,
+      requestPath: await writeInput(root, "request.json"),
+      planPath: await writeInput(root, "plan.json"),
+      policyPath: await writeInput(root, "policy.json"),
+    });
+    let moved = false;
+    const restore = setWorktreeTestHooks({
+      afterCandidateValidationSnapshot: async (kind) => {
+        if (!moved && kind === "repository") {
+          moved = true;
+          await git(root, [
+            "commit",
+            "--allow-empty",
+            "--quiet",
+            "-m",
+            "between-authorities",
+          ]);
+        }
+      },
+    });
+    try {
+      await assert.rejects(
+        validateWorktreeDiff(candidate, plan(baseline)),
+        /snapshots Git protegidos|ref protegido/i,
+      );
+      assert.equal(moved, true);
+    } finally {
+      restore();
+      await removeCandidateWorktree(candidate).catch(() => undefined);
+    }
+  });
+});
+
+test("candidate cleanup quarantines a replacement before pruning Git registration", async () => {
+  await withRepository(async ({ root, baseline }) => {
+    const candidate = await createCandidateWorktree({
+      repositoryRoot: root,
+      approvedPlan: plan(baseline),
+      changeId: "agent-isolation",
+      attemptId: "attempt-000001",
+      baselineCommit: baseline,
+      requestPath: await writeInput(root, "request.json"),
+      planPath: await writeInput(root, "plan.json"),
+      policyPath: await writeInput(root, "policy.json"),
+    });
+    let quarantined = "";
+    const restore = setWorktreeTestHooks({
+      afterCandidateQuarantine: async (path) => {
+        quarantined = path;
+        await rm(path, { recursive: true, force: false });
+        await mkdir(path);
+        await writeFile(join(path, "external.txt"), "preserve", "utf8");
+      },
+    });
+    try {
+      await assert.rejects(removeCandidateWorktree(candidate), /cuarentena/i);
+      assert.equal(
+        await readFile(join(quarantined, "external.txt"), "utf8"),
+        "preserve",
+      );
+      assert.ok(
+        (await git(root, ["worktree", "list", "--porcelain"])).includes(
+          `worktree ${candidate.path}`,
+        ),
+      );
+    } finally {
+      restore();
+      if (quarantined) await rm(quarantined, { recursive: true, force: true });
+    }
+  });
+});
+
 test("setup rejects unowned worktree-root contents instead of filtering their prefix", async () => {
   await withRepository(async ({ root, baseline }) => {
     const evil = join(root, ".agent-worktrees", "evil", "marker");

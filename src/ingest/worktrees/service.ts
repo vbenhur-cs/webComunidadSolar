@@ -29,6 +29,7 @@ const quarantinedCandidates = new WeakMap<CandidateWorktree, string>();
 const ownedQuarantines = new Set<string>();
 interface CandidateRecord extends CandidateWorktree {
   readonly identity: Identity;
+  readonly gitAuthority: CandidateGitAuthority;
   readonly approvedPlan: ChangePlan;
   readonly repositorySnapshot: GitSnapshot;
   readonly sourceSnapshot: GitSnapshot;
@@ -42,6 +43,18 @@ interface SchemaIdentity extends Identity {
   readonly path: string;
   readonly digest: string;
 }
+interface CandidateGitAuthority {
+  readonly gitFile: string;
+  readonly gitFileIdentity: Identity;
+  readonly gitFileDigest: string;
+  readonly gitDirectory: string;
+  readonly gitDirectoryIdentity: Identity;
+  readonly commonDirectory: string;
+  readonly commonDirectoryIdentity: Identity;
+}
+type CandidateGitScope = Readonly<
+  Pick<CandidateRecord, "path" | "repositoryRoot" | "gitAuthority">
+>;
 interface RunContextRecord {
   readonly candidate: CandidateWorktree;
   readonly schema: SchemaIdentity;
@@ -73,6 +86,11 @@ interface WorktreeTestHooks {
     child: string,
   ): Promise<void> | void;
   afterServiceFileRead?(path: string): Promise<void> | void;
+  afterCandidateQuarantine?(path: string): Promise<void> | void;
+  beforeGitSnapshotStatus?(path: string): Promise<void> | void;
+  afterCandidateValidationSnapshot?(
+    kind: "candidate" | "repository" | "source",
+  ): Promise<void> | void;
 }
 let testHooks: WorktreeTestHooks = {};
 /** Test-only deterministic fault/race injection; unavailable to production. */
@@ -171,6 +189,108 @@ async function fileIdentity(path: string): Promise<Identity> {
   if (entry.isSymbolicLink() || !entry.isFile())
     throw new TypeError("La entrada aprobada no es un archivo seguro");
   return { device: entry.dev, inode: entry.ino };
+}
+async function regularFile(
+  path: string,
+): Promise<{ identity: Identity; bytes: Buffer }> {
+  const entry = await lstat(path);
+  if (entry.isSymbolicLink() || !entry.isFile())
+    throw new TypeError(
+      "La autoridad Git del candidato no es un archivo seguro",
+    );
+  if ((await realpath(path)) !== path)
+    throw new TypeError("La autoridad Git del candidato no es canónica");
+  return {
+    identity: { device: entry.dev, inode: entry.ino },
+    bytes: await readFile(path),
+  };
+}
+async function canonicalDirectoryAuthority(path: string): Promise<Identity> {
+  const entry = await lstat(path);
+  if (
+    entry.isSymbolicLink() ||
+    !entry.isDirectory() ||
+    (await realpath(path)) !== path
+  )
+    throw new TypeError(
+      "La autoridad Git del candidato no es un directorio seguro",
+    );
+  return { device: entry.dev, inode: entry.ino };
+}
+const authorityText = (bytes: Buffer, label: string): string => {
+  const text = bytes.toString("utf8");
+  if (text.includes("\0"))
+    throw new TypeError(`La autoridad Git ${label} contiene NUL`);
+  return text.trimEnd();
+};
+async function candidateGitAuthority(
+  repositoryRoot: string,
+  candidatePath: string,
+): Promise<CandidateGitAuthority> {
+  const repositoryGitDirectory = await realpath(
+    await git(repositoryRoot, ["rev-parse", "--absolute-git-dir"]),
+  );
+  await canonicalDirectoryAuthority(repositoryGitDirectory);
+  const gitFile = join(candidatePath, ".git");
+  const file = await regularFile(gitFile);
+  const match = /^gitdir: (.+)$/u.exec(authorityText(file.bytes, "gitdir"));
+  if (!match || !isAbsolute(match[1]))
+    throw new TypeError(
+      "La autoridad Git del candidato no tiene gitdir válido",
+    );
+  const gitDirectory = resolve(match[1]);
+  if (!inside(join(repositoryGitDirectory, "worktrees"), gitDirectory))
+    throw new TypeError("El gitdir candidato escapa del repositorio principal");
+  const gitDirectoryIdentity = await canonicalDirectoryAuthority(gitDirectory);
+  const commonFile = await regularFile(join(gitDirectory, "commondir"));
+  const commonDirectory = await realpath(
+    resolve(gitDirectory, authorityText(commonFile.bytes, "commondir")),
+  );
+  if (commonDirectory !== repositoryGitDirectory)
+    throw new TypeError("El gitdir candidato no enlaza al common dir esperado");
+  const commonDirectoryIdentity =
+    await canonicalDirectoryAuthority(commonDirectory);
+  const backlink = await regularFile(join(gitDirectory, "gitdir"));
+  if (
+    resolve(gitDirectory, authorityText(backlink.bytes, "backlink")) !== gitFile
+  )
+    throw new TypeError("El gitdir candidato no enlaza al worktree esperado");
+  return Object.freeze({
+    gitFile,
+    gitFileIdentity: file.identity,
+    gitFileDigest: createHash("sha256").update(file.bytes).digest("hex"),
+    gitDirectory,
+    gitDirectoryIdentity,
+    commonDirectory,
+    commonDirectoryIdentity,
+  });
+}
+async function assertCandidateGitAuthority(
+  record: CandidateGitScope,
+): Promise<void> {
+  const current = await candidateGitAuthority(
+    record.repositoryRoot,
+    record.path,
+  );
+  if (
+    current.gitFile !== record.gitAuthority.gitFile ||
+    !equalIdentity(
+      current.gitFileIdentity,
+      record.gitAuthority.gitFileIdentity,
+    ) ||
+    current.gitFileDigest !== record.gitAuthority.gitFileDigest ||
+    current.gitDirectory !== record.gitAuthority.gitDirectory ||
+    !equalIdentity(
+      current.gitDirectoryIdentity,
+      record.gitAuthority.gitDirectoryIdentity,
+    ) ||
+    current.commonDirectory !== record.gitAuthority.commonDirectory ||
+    !equalIdentity(
+      current.commonDirectoryIdentity,
+      record.gitAuthority.commonDirectoryIdentity,
+    )
+  )
+    throw new TypeError("La autoridad Git del candidato ha cambiado");
 }
 async function directoryIdentity(path: string): Promise<Identity> {
   const entry = await lstat(path);
@@ -703,7 +823,7 @@ async function captureServiceEntries(
 }
 async function serviceEntries(
   repositoryRoot: string,
-  excluded: string[],
+  excluded: string[] = [],
 ): Promise<string> {
   const first = await captureServiceEntries(
     repositoryRoot,
@@ -725,6 +845,7 @@ export async function gitSnapshot(
     "for-each-ref",
     "--format=%(refname)%00%(objectname)",
   ]);
+  await testHooks.beforeGitSnapshotStatus?.(path);
   const status = await git(path, [
     "status",
     "--porcelain=v1",
@@ -732,12 +853,76 @@ export async function gitSnapshot(
     "--untracked-files=all",
     "--ignored=matching",
   ]);
+  const finalHead = await git(path, ["rev-parse", "HEAD"]);
+  const finalRefs = await git(path, [
+    "for-each-ref",
+    "--format=%(refname)%00%(objectname)",
+  ]);
+  if (head !== finalHead || refs !== finalRefs)
+    throw new TypeError("El estado Git cambió durante el snapshot");
   return {
     head,
     refs,
     status,
     serviceEntries: entries,
   };
+}
+async function candidateGit(
+  record: CandidateGitScope,
+  args: string[],
+): Promise<string> {
+  await assertCandidateGitAuthority(record);
+  const result = await execFileAsync(
+    "git",
+    [
+      "-c",
+      "core.hooksPath=/dev/null",
+      "-c",
+      "core.fsmonitor=false",
+      "--git-dir",
+      record.gitAuthority.gitDirectory,
+      "--work-tree",
+      record.path,
+      ...args,
+    ],
+    {
+      encoding: "utf8",
+      env: {
+        ...sanitizedGitEnv(),
+        GIT_CONFIG_NOSYSTEM: "1",
+        GIT_CONFIG_GLOBAL: "/dev/null",
+        GIT_TERMINAL_PROMPT: "0",
+      },
+    },
+  );
+  return result.stdout.trim();
+}
+async function candidateGitSnapshot(
+  record: CandidateGitScope,
+): Promise<GitSnapshot> {
+  await assertCandidateGitAuthority(record);
+  const service = await serviceEntries(record.path);
+  const head = await candidateGit(record, ["rev-parse", "HEAD"]);
+  const refs = await candidateGit(record, [
+    "for-each-ref",
+    "--format=%(refname)%00%(objectname)",
+  ]);
+  await testHooks.beforeGitSnapshotStatus?.(record.path);
+  const status = await candidateGit(record, [
+    "status",
+    "--porcelain=v1",
+    "-z",
+    "--untracked-files=all",
+    "--ignored=matching",
+  ]);
+  const finalHead = await candidateGit(record, ["rev-parse", "HEAD"]);
+  const finalRefs = await candidateGit(record, [
+    "for-each-ref",
+    "--format=%(refname)%00%(objectname)",
+  ]);
+  if (head !== finalHead || refs !== finalRefs)
+    throw new TypeError("El estado Git candidato cambió durante el snapshot");
+  return { head, refs, status, serviceEntries: service };
 }
 async function registered(
   repositoryRoot: string,
@@ -825,6 +1010,7 @@ export async function createCandidateWorktree(
       (await realpath(path)) !== path
     )
       throw new TypeError("El worktree candidato no es seguro");
+    const gitAuthority = await candidateGitAuthority(repositoryRoot, path);
     candidate = {
       path,
       outputDirectory: "",
@@ -845,10 +1031,13 @@ export async function createCandidateWorktree(
       Object.freeze({
         ...candidate,
         identity: { device: entry.dev, inode: entry.ino },
+        gitAuthority,
         approvedPlan: Object.freeze({ ...approved }),
         repositorySnapshot: frozenSnapshot(await gitSnapshot(repositoryRoot)),
         sourceSnapshot: frozenSnapshot(await gitSnapshot(sourceRepositoryRoot)),
-        candidateSnapshot: frozenSnapshot(await gitSnapshot(path)),
+        candidateSnapshot: frozenSnapshot(
+          await candidateGitSnapshot({ path, repositoryRoot, gitAuthority }),
+        ),
       }),
     );
     owned.add(candidate);
@@ -901,6 +1090,7 @@ export async function createCandidateWorktree(
     const complete = Object.freeze({
       ...candidate,
       identity: { device: entry.dev, inode: entry.ino },
+      gitAuthority,
       approvedPlan: Object.freeze({ ...approved }),
       repositorySnapshot: frozenSnapshot(
         await gitSnapshot(repositoryRoot, [path, ...ownedQuarantines]),
@@ -913,7 +1103,9 @@ export async function createCandidateWorktree(
             : [],
         ),
       ),
-      candidateSnapshot: frozenSnapshot(await gitSnapshot(path)),
+      candidateSnapshot: frozenSnapshot(
+        await candidateGitSnapshot({ path, repositoryRoot, gitAuthority }),
+      ),
       outputIdentity: { device: outputEntry.dev, inode: outputEntry.ino },
       inputDirectoryIdentity,
       inputIdentities,
@@ -1032,6 +1224,7 @@ async function assertOwned(candidate: CandidateWorktree): Promise<void> {
     !(await registered(record.repositoryRoot, record.path))
   )
     throw new TypeError("La identidad del worktree candidato ha cambiado");
+  await assertCandidateGitAuthority(record);
 }
 async function assertOwnedOutput(candidate: CandidateWorktree): Promise<void> {
   const record = records.get(candidate);
@@ -1119,6 +1312,19 @@ async function removeOwnedSidecar(
   await rm(moved, { recursive: true, force: false });
   await rmdir(quarantine);
 }
+async function assertQuarantinedCandidate(
+  record: Readonly<CandidateRecord>,
+  path: string,
+): Promise<void> {
+  const entry = await lstat(path);
+  if (
+    entry.isSymbolicLink() ||
+    !entry.isDirectory() ||
+    !equalIdentity(record.identity, { device: entry.dev, inode: entry.ino }) ||
+    (await realpath(path)) !== path
+  )
+    throw new TypeError("La cuarentena del worktree candidato ha cambiado");
+}
 export async function candidateRecord(
   candidate: CandidateWorktree,
 ): Promise<Readonly<CandidateRecord>> {
@@ -1158,17 +1364,7 @@ export async function removeCandidateWorktree(
     : await candidateRecord(candidate);
   if (!record) throw new TypeError("El worktree no pertenece a este servicio");
   if (moved) {
-    const entry = await lstat(moved);
-    if (
-      entry.isSymbolicLink() ||
-      !entry.isDirectory() ||
-      !equalIdentity(record.identity, {
-        device: entry.dev,
-        inode: entry.ino,
-      }) ||
-      (await realpath(moved)) !== moved
-    )
-      throw new TypeError("La cuarentena del worktree candidato ha cambiado");
+    await assertQuarantinedCandidate(record, moved);
   }
   if (record.outputIdentity) await assertOwnedOutput(candidate);
   const quarantineBase = await directory(
@@ -1188,6 +1384,10 @@ export async function removeCandidateWorktree(
     await rename(record.path, quarantined);
     quarantinedCandidates.set(candidate, quarantined);
     ownedQuarantines.add(quarantined);
+    await testHooks.afterCandidateQuarantine?.(quarantined);
+    // Do not prune Git metadata, release a ref, or touch the sidecar until the
+    // atomically moved leaf is proved to retain the record's exact identity.
+    await assertQuarantinedCandidate(record, quarantined);
   }
   await execFileAsync(
     "git",
@@ -1247,29 +1447,46 @@ export async function candidateValidationSnapshots(
   candidate: CandidateWorktree,
 ): Promise<[GitSnapshot, GitSnapshot, GitSnapshot]> {
   const record = await candidateRecord(candidate);
-  return await Promise.all([
-    gitSnapshot(record.path),
-    gitSnapshot(record.repositoryRoot, [record.path, ...ownedQuarantines]),
-    gitSnapshot(
+  const capture = async (
+    hooks: boolean,
+  ): Promise<[GitSnapshot, GitSnapshot, GitSnapshot]> => {
+    const candidateSnapshot = await candidateGitSnapshot(record);
+    if (hooks) await testHooks.afterCandidateValidationSnapshot?.("candidate");
+    const repositorySnapshot = await gitSnapshot(record.repositoryRoot, [
+      record.path,
+      ...ownedQuarantines,
+    ]);
+    if (hooks) await testHooks.afterCandidateValidationSnapshot?.("repository");
+    const sourceSnapshot = await gitSnapshot(
       record.sourceRepositoryRoot,
       record.sourceRepositoryRoot === record.repositoryRoot
         ? [record.path, ...ownedQuarantines]
         : [],
-    ),
-  ]);
+    );
+    if (hooks) await testHooks.afterCandidateValidationSnapshot?.("source");
+    return [candidateSnapshot, repositorySnapshot, sourceSnapshot];
+  };
+  // A single stable read for each repository is insufficient: another state
+  // may move while a later authority is being inspected. Require the complete
+  // ordered triple to repeat unchanged immediately before paths are derived.
+  const first = await capture(true);
+  const second = await capture(false);
+  if (JSON.stringify(first) !== JSON.stringify(second))
+    throw new TypeError(
+      "Los snapshots Git protegidos cambiaron durante la validación",
+    );
+  return second;
 }
 export async function worktreeGit(
   candidate: CandidateWorktree,
   args: string[],
 ): Promise<string> {
-  await assertOwned(candidate);
-  return await git(candidate.path, args);
+  return await candidateGit(await candidateRecord(candidate), args);
 }
 export async function worktreeStatus(
   candidate: CandidateWorktree,
 ): Promise<string> {
-  await assertOwned(candidate);
-  return (await gitSnapshot(candidate.path)).status;
+  return (await candidateGitSnapshot(await candidateRecord(candidate))).status;
 }
 export async function externalSnapshot(path: string): Promise<GitSnapshot> {
   return await gitSnapshot(path);
