@@ -396,6 +396,36 @@ test("setup status drift is rejected and candidate state is reconciled", async (
   });
 });
 
+test("setup rejects unowned worktree-root contents instead of filtering their prefix", async () => {
+  await withRepository(async ({ root, baseline }) => {
+    const evil = join(root, ".agent-worktrees", "evil", "marker");
+    const restore = setWorktreeTestHooks({
+      beforeSetupSnapshot: async () => {
+        await mkdir(dirname(evil), { recursive: true });
+        await writeFile(evil, "external", "utf8");
+      },
+    });
+    try {
+      await assert.rejects(
+        createCandidateWorktree({
+          repositoryRoot: root,
+          approvedPlan: plan(baseline),
+          changeId: "agent-isolation",
+          attemptId: "attempt-000001",
+          baselineCommit: baseline,
+          requestPath: await writeInput(root, "request.json"),
+          planPath: await writeInput(root, "plan.json"),
+          policyPath: await writeInput(root, "policy.json"),
+        }),
+        /refs protegidas|creación/i,
+      );
+    } finally {
+      restore();
+    }
+    assert.equal(await readFile(evil, "utf8"), "external");
+  });
+});
+
 test("sidecar cleanup retains a replaced quarantined leaf", async () => {
   await withRepository(async ({ root, baseline }) => {
     const candidate = await createCandidateWorktree({

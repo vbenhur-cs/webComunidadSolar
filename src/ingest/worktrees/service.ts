@@ -6,6 +6,7 @@ import {
   mkdir,
   mkdtemp,
   readFile,
+  readdir,
   realpath,
   rename,
   rm,
@@ -26,6 +27,7 @@ const names = ["request.json", "plan.json", "policy.json"] as const;
 const owned = new WeakSet<CandidateWorktree>();
 const released = new WeakSet<CandidateWorktree>();
 const quarantinedCandidates = new WeakMap<CandidateWorktree, string>();
+const ownedQuarantines = new Set<string>();
 interface CandidateRecord extends CandidateWorktree {
   readonly identity: Identity;
   readonly approvedPlan: ChangePlan;
@@ -72,6 +74,7 @@ export interface GitSnapshot {
   head: string;
   refs: string;
   status: string;
+  serviceEntries: string;
 }
 export interface CandidateWorktreeInput {
   repositoryRoot: string;
@@ -187,15 +190,25 @@ async function assertSchemaIdentity(schema: SchemaIdentity): Promise<void> {
 }
 const frozenSnapshot = (snapshot: GitSnapshot): GitSnapshot =>
   Object.freeze({ ...snapshot });
-const withoutServiceWorktrees = (status: string): string =>
-  status
+function withoutOwnedStatusPaths(
+  status: string,
+  repositoryRoot: string,
+  ownedPaths: string[],
+): string {
+  const roots = ownedPaths.map((path) => relative(repositoryRoot, path));
+  return status
     .split("\0")
-    .filter(
-      (entry) =>
-        !entry.slice(3).startsWith(".agent-worktrees/") &&
-        !entry.slice(3).startsWith(".agent-quarantine/"),
-    )
+    .filter((entry) => {
+      if (entry.length < 4) return true;
+      const path = entry.slice(3);
+      // Exempt only a recorded candidate or a previously atomically moved,
+      // service-owned quarantine leaf. Unowned siblings remain observable.
+      return !roots.some(
+        (root) => path === root || path.startsWith(`${root}/`),
+      );
+    })
     .join("\0");
+}
 function checkedPlan(value: unknown): ChangePlan {
   const plan = validateSchema<ChangePlan>("change-plan", value);
   const { planSha256, ...unsigned } = plan;
@@ -257,13 +270,51 @@ async function inputHash(path: string): Promise<string> {
   }
   return hash.digest("hex");
 }
-export async function gitSnapshot(path: string): Promise<GitSnapshot> {
+async function serviceEntries(
+  repositoryRoot: string,
+  excluded: string[],
+): Promise<string> {
+  const lines: string[] = [];
+  const skip = excluded.map((path) => resolve(path));
+  const visit = async (path: string): Promise<void> => {
+    if (skip.some((root) => path === root || path.startsWith(`${root}/`)))
+      return;
+    const entry = await lstat(path);
+    if (entry.isSymbolicLink() || !entry.isDirectory()) {
+      lines.push(
+        `${relative(repositoryRoot, path)}\0${entry.dev}\0${entry.ino}`,
+      );
+      return;
+    }
+    for (const child of await readdir(path)) await visit(join(path, child));
+  };
+  for (const root of [".agent-worktrees", ".agent-quarantine"]) {
+    const path = join(repositoryRoot, root);
+    if (await lstat(path).catch(() => undefined)) await visit(path);
+  }
+  return lines.sort().join("\n");
+}
+export async function gitSnapshot(
+  path: string,
+  excludedServicePaths: string[] = [],
+): Promise<GitSnapshot> {
   const [head, refs, status] = await Promise.all([
     git(path, ["rev-parse", "HEAD"]),
     git(path, ["for-each-ref", "--format=%(refname)%00%(objectname)"]),
-    git(path, ["status", "--porcelain=v1", "-z", "--untracked-files=all"]),
+    git(path, [
+      "status",
+      "--porcelain=v1",
+      "-z",
+      "--untracked-files=all",
+      "--ignored=matching",
+    ]),
   ]);
-  return { head, refs, status };
+  return {
+    head,
+    refs,
+    status,
+    serviceEntries: await serviceEntries(path, excludedServicePaths),
+  };
 }
 async function registered(
   repositoryRoot: string,
@@ -421,8 +472,15 @@ export async function createCandidateWorktree(
       ...candidate,
       identity: { device: entry.dev, inode: entry.ino },
       approvedPlan: Object.freeze({ ...approved }),
-      repositorySnapshot: frozenSnapshot(await gitSnapshot(repositoryRoot)),
-      sourceSnapshot: frozenSnapshot(await gitSnapshot(sourceRepositoryRoot)),
+      repositorySnapshot: frozenSnapshot(
+        await gitSnapshot(repositoryRoot, [path]),
+      ),
+      sourceSnapshot: frozenSnapshot(
+        await gitSnapshot(
+          sourceRepositoryRoot,
+          sourceRepositoryRoot === repositoryRoot ? [path] : [],
+        ),
+      ),
       candidateSnapshot: frozenSnapshot(await gitSnapshot(path)),
       outputIdentity: { device: outputEntry.dev, inode: outputEntry.ino },
       inputDirectoryIdentity,
@@ -434,17 +492,35 @@ export async function createCandidateWorktree(
         .split("\n")
         .filter((entry) => entry !== candidateRef)
         .join("\n");
-    if (
+    const setupDrift = [
       withoutCandidateRef(complete.repositorySnapshot.refs) !==
-        beforeRepository.refs ||
-      complete.repositorySnapshot.head !== beforeRepository.head ||
-      withoutServiceWorktrees(complete.repositorySnapshot.status) !==
-        withoutServiceWorktrees(beforeRepository.status) ||
-      withoutCandidateRef(complete.sourceSnapshot.refs) !== beforeSource.refs ||
-      complete.sourceSnapshot.head !== beforeSource.head ||
-      withoutServiceWorktrees(complete.sourceSnapshot.status) !==
-        withoutServiceWorktrees(beforeSource.status)
-    ) {
+        beforeRepository.refs,
+      complete.repositorySnapshot.head !== beforeRepository.head,
+      withoutOwnedStatusPaths(
+        complete.repositorySnapshot.status,
+        repositoryRoot,
+        [path, ...ownedQuarantines],
+      ) !==
+        withoutOwnedStatusPaths(beforeRepository.status, repositoryRoot, [
+          path,
+          ...ownedQuarantines,
+        ]),
+      complete.repositorySnapshot.serviceEntries !==
+        beforeRepository.serviceEntries,
+      withoutCandidateRef(complete.sourceSnapshot.refs) !== beforeSource.refs,
+      complete.sourceSnapshot.head !== beforeSource.head,
+      withoutOwnedStatusPaths(
+        complete.sourceSnapshot.status,
+        sourceRepositoryRoot,
+        [path, ...ownedQuarantines],
+      ) !==
+        withoutOwnedStatusPaths(beforeSource.status, sourceRepositoryRoot, [
+          path,
+          ...ownedQuarantines,
+        ]),
+      complete.sourceSnapshot.serviceEntries !== beforeSource.serviceEntries,
+    ];
+    if (setupDrift.some(Boolean)) {
       throw new TypeError(
         "Las refs protegidas cambiaron durante la creación del candidato",
       );
@@ -643,6 +719,7 @@ export async function removeCandidateWorktree(
     // Atomic same-filesystem move: a swapped leaf is quarantined, never erased.
     await rename(record.path, quarantined);
     quarantinedCandidates.set(candidate, quarantined);
+    ownedQuarantines.add(quarantined);
   }
   await execFileAsync(
     "git",
