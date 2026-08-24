@@ -9,9 +9,11 @@ import {
   realpath,
   rename,
   rm,
+  rmdir,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { isAbsolute, join, relative, resolve } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
 import { canonicalJson, sha256Canonical } from "../canonical-json.ts";
@@ -22,14 +24,35 @@ import { validateSchema } from "../schema-validator.ts";
 const execFileAsync = promisify(execFile);
 const names = ["request.json", "plan.json", "policy.json"] as const;
 const owned = new WeakSet<CandidateWorktree>();
+const released = new WeakSet<CandidateWorktree>();
+const quarantinedCandidates = new WeakMap<CandidateWorktree, string>();
 interface CandidateRecord extends CandidateWorktree {
+  readonly identity: Identity;
+  readonly approvedPlan: ChangePlan;
+  readonly repositorySnapshot: GitSnapshot;
+  readonly sourceSnapshot: GitSnapshot;
+  readonly candidateSnapshot: GitSnapshot;
   outputIdentity: Identity;
-  inputDirectoryIdentity: Identity;
-  inputIdentities: Readonly<Record<(typeof names)[number], Identity>>;
+  inputDirectoryIdentity?: Identity;
+  inputIdentities?: Readonly<Record<(typeof names)[number], Identity>>;
 }
 const records = new WeakMap<CandidateWorktree, Readonly<CandidateRecord>>();
-const runContexts = new WeakMap<object, CandidateWorktree | null>();
+interface SchemaIdentity extends Identity {
+  readonly path: string;
+  readonly digest: string;
+}
+interface RunContextRecord {
+  readonly candidate: CandidateWorktree;
+  readonly schema: SchemaIdentity;
+}
+const runContexts = new WeakMap<object, RunContextRecord | null>();
 type Identity = { device: number; inode: number };
+const agentResultSchema = fileURLToPath(
+  new URL(
+    "../../../schemas/ingestion/agent-result.schema.json",
+    import.meta.url,
+  ),
+);
 export interface GitSnapshot {
   head: string;
   refs: string;
@@ -58,11 +81,6 @@ export interface CandidateWorktree {
   inputHash: string;
   requestSha256: string;
   planSha256: string;
-  identity: Identity;
-  repositorySnapshot: GitSnapshot;
-  sourceSnapshot: GitSnapshot;
-  candidateSnapshot: GitSnapshot;
-  approvedPlan: ChangePlan;
 }
 const safeId = (value: string, name: string) => {
   if (!/^[a-z0-9](?:[a-z0-9-]{0,62}[a-z0-9])?$/u.test(value))
@@ -128,6 +146,32 @@ async function directoryIdentity(path: string): Promise<Identity> {
     throw new TypeError("El directorio de entrada no es seguro");
   return { device: entry.dev, inode: entry.ino };
 }
+async function schemaIdentity(): Promise<SchemaIdentity> {
+  const path = await realpath(agentResultSchema);
+  const entry = await lstat(path);
+  if (entry.isSymbolicLink() || !entry.isFile() || path !== agentResultSchema)
+    throw new TypeError("El schema de resultado no es un archivo seguro");
+  return {
+    path,
+    device: entry.dev,
+    inode: entry.ino,
+    digest: createHash("sha256")
+      .update(await readFile(path))
+      .digest("hex"),
+  };
+}
+async function assertSchemaIdentity(schema: SchemaIdentity): Promise<void> {
+  const current = await schemaIdentity();
+  if (
+    current.path !== schema.path ||
+    current.device !== schema.device ||
+    current.inode !== schema.inode ||
+    current.digest !== schema.digest
+  )
+    throw new TypeError("La identidad del schema de resultado ha cambiado");
+}
+const frozenSnapshot = (snapshot: GitSnapshot): GitSnapshot =>
+  Object.freeze({ ...snapshot });
 function checkedPlan(value: unknown): ChangePlan {
   const plan = validateSchema<ChangePlan>("change-plan", value);
   const { planSha256, ...unsigned } = plan;
@@ -254,23 +298,20 @@ export async function createCandidateWorktree(
   const path = join(parent, input.attemptId);
   await vacant(path);
   const branch = `candidate/${input.changeId}/${input.attemptId}`;
-  let wasRegistered = false;
+  const ref = `refs/heads/${branch}`;
+  let candidate: CandidateWorktree | undefined;
+  let reserved = false;
   try {
+    // Reserve the exact ref before worktree creation: no post-registration
+    // switch/create step can collide with another candidate attempt.
+    await git(repositoryRoot, ["update-ref", ref, input.baselineCommit, ""]);
+    reserved = true;
     await execFileAsync(
       "git",
-      [
-        "-C",
-        repositoryRoot,
-        "worktree",
-        "add",
-        "--detach",
-        path,
-        input.baselineCommit,
-      ],
+      ["-C", repositoryRoot, "worktree", "add", path, branch],
       { encoding: "utf8", env: sanitizedGitEnv() },
     );
-    wasRegistered = await registered(repositoryRoot, path);
-    if (!wasRegistered)
+    if (!(await registered(repositoryRoot, path)))
       throw new TypeError("Git no registró el worktree candidato");
     const entry = await lstat(path);
     if (
@@ -279,7 +320,40 @@ export async function createCandidateWorktree(
       (await realpath(path)) !== path
     )
       throw new TypeError("El worktree candidato no es seguro");
-    await git(path, ["switch", "--quiet", "-c", branch]);
+    const outputDirectory = await sidecar(
+      repositoryRoot,
+      input.changeId,
+      input.attemptId,
+    );
+    const outputEntry = await lstat(outputDirectory);
+    candidate = Object.freeze({
+      path,
+      outputDirectory,
+      repositoryRoot,
+      sourceRepositoryRoot,
+      changeId: input.changeId,
+      attemptId: input.attemptId,
+      baselineCommit: input.baselineCommit,
+      branch,
+      inputHash: "",
+      requestSha256: approved.requestSha256,
+      planSha256: approved.planSha256,
+    });
+    // This record exists before any post-add work. All failure paths below use
+    // the same reconciled cleanup rather than forgetting a registered worktree.
+    records.set(
+      candidate,
+      Object.freeze({
+        ...candidate,
+        identity: { device: entry.dev, inode: entry.ino },
+        approvedPlan: Object.freeze({ ...approved }),
+        repositorySnapshot: frozenSnapshot(await gitSnapshot(repositoryRoot)),
+        sourceSnapshot: frozenSnapshot(await gitSnapshot(sourceRepositoryRoot)),
+        candidateSnapshot: frozenSnapshot(await gitSnapshot(path)),
+        outputIdentity: { device: outputEntry.dev, inode: outputEntry.ino },
+      }),
+    );
+    owned.add(candidate);
     const inputs = await directory(join(path, ".agent-input"), path);
     await Promise.all([
       cp(input.requestPath, join(inputs, names[0]), {
@@ -301,12 +375,6 @@ export async function createCandidateWorktree(
       join(inputs, names[2]),
       approved,
     );
-    const outputDirectory = await sidecar(
-      repositoryRoot,
-      input.changeId,
-      input.attemptId,
-    );
-    const outputEntry = await lstat(outputDirectory);
     const inputDirectoryIdentity = await directoryIdentity(inputs);
     const inputIdentities = Object.fromEntries(
       await Promise.all(
@@ -316,24 +384,18 @@ export async function createCandidateWorktree(
         ]),
       ),
     ) as Record<(typeof names)[number], Identity>;
-    const candidate: CandidateWorktree = {
-      path,
-      outputDirectory,
-      repositoryRoot,
-      sourceRepositoryRoot,
-      changeId: input.changeId,
-      attemptId: input.attemptId,
-      baselineCommit: input.baselineCommit,
-      branch,
+    const complete = Object.freeze({
+      ...candidate,
       inputHash: await inputHash(inputs),
-      requestSha256: approved.requestSha256,
-      planSha256: approved.planSha256,
       identity: { device: entry.dev, inode: entry.ino },
-      repositorySnapshot: await gitSnapshot(repositoryRoot),
-      sourceSnapshot: await gitSnapshot(sourceRepositoryRoot),
-      candidateSnapshot: await gitSnapshot(path),
-      approvedPlan: approved,
-    };
+      approvedPlan: Object.freeze({ ...approved }),
+      repositorySnapshot: frozenSnapshot(await gitSnapshot(repositoryRoot)),
+      sourceSnapshot: frozenSnapshot(await gitSnapshot(sourceRepositoryRoot)),
+      candidateSnapshot: frozenSnapshot(await gitSnapshot(path)),
+      outputIdentity: { device: outputEntry.dev, inode: outputEntry.ino },
+      inputDirectoryIdentity,
+      inputIdentities,
+    });
     const candidateRef = `refs/heads/${branch}\0${input.baselineCommit}`;
     const withoutCandidateRef = (refs: string) =>
       refs
@@ -341,33 +403,44 @@ export async function createCandidateWorktree(
         .filter((entry) => entry !== candidateRef)
         .join("\n");
     if (
-      withoutCandidateRef(candidate.repositorySnapshot.refs) !==
+      withoutCandidateRef(complete.repositorySnapshot.refs) !==
         beforeRepository.refs ||
-      candidate.repositorySnapshot.head !== beforeRepository.head ||
-      withoutCandidateRef(candidate.sourceSnapshot.refs) !==
-        beforeSource.refs ||
-      candidate.sourceSnapshot.head !== beforeSource.head
+      complete.repositorySnapshot.head !== beforeRepository.head ||
+      withoutCandidateRef(complete.sourceSnapshot.refs) !== beforeSource.refs ||
+      complete.sourceSnapshot.head !== beforeSource.head
     ) {
       throw new TypeError(
         "Las refs protegidas cambiaron durante la creación del candidato",
       );
     }
-    const projection = Object.freeze({ ...candidate });
-    records.set(
-      projection,
-      Object.freeze({
-        ...candidate,
-        outputIdentity: { device: outputEntry.dev, inode: outputEntry.ino },
-        inputDirectoryIdentity,
-        inputIdentities,
-      }),
-    );
-    owned.add(projection);
-    return projection;
+    records.set(candidate, complete);
+    return candidate;
   } catch (error) {
-    // A partially-created path is quarantined for operator inspection.  Never
-    // delete on a failure path: a pathname may have changed after registration.
-    void wasRegistered;
+    if (candidate) {
+      try {
+        await removeCandidateWorktree(candidate);
+      } catch (cleanup) {
+        throw new AggregateError(
+          [error, cleanup],
+          `La preparación del candidato falló y requiere reconciliación: ${path}`,
+        );
+      }
+    } else if (reserved) {
+      // Ref reservation happened before the worktree existed. Delete only the
+      // exact baseline-valued reservation; an unexpected value is retained.
+      const oid = await git(repositoryRoot, [
+        "rev-parse",
+        "--verify",
+        ref,
+      ]).catch(() => "");
+      if (oid === input.baselineCommit)
+        await git(repositoryRoot, [
+          "update-ref",
+          "-d",
+          ref,
+          input.baselineCommit,
+        ]);
+    }
     throw error;
   }
 }
@@ -377,25 +450,24 @@ async function assertOwned(candidate: CandidateWorktree): Promise<void> {
   const record = records.get(candidate);
   if (!owned.has(candidate) || record === undefined)
     throw new TypeError("El worktree no pertenece a este servicio");
-  candidate = record;
   const expected = join(
-    candidate.repositoryRoot,
+    record.repositoryRoot,
     ".agent-worktrees",
-    candidate.changeId,
-    candidate.attemptId,
+    record.changeId,
+    record.attemptId,
   );
-  if (candidate.path !== expected)
+  if (record.path !== expected)
     throw new TypeError("La limpieza no reconoce ese worktree");
-  const entry = await lstat(candidate.path);
+  const entry = await lstat(record.path);
   if (
     entry.isSymbolicLink() ||
     !entry.isDirectory() ||
-    !equalIdentity(candidate.identity, {
+    !equalIdentity(record.identity, {
       device: entry.dev,
       inode: entry.ino,
     }) ||
-    (await realpath(candidate.path)) !== candidate.path ||
-    !(await registered(candidate.repositoryRoot, candidate.path))
+    (await realpath(record.path)) !== record.path ||
+    !(await registered(record.repositoryRoot, record.path))
   )
     throw new TypeError("La identidad del worktree candidato ha cambiado");
 }
@@ -421,6 +493,8 @@ async function assertOwnedInputs(candidate: CandidateWorktree): Promise<void> {
   const record = records.get(candidate);
   if (!owned.has(candidate) || record === undefined)
     throw new TypeError("El worktree no pertenece a este servicio");
+  if (!record.inputDirectoryIdentity || !record.inputIdentities)
+    throw new TypeError("La entrada del candidato aún no fue reconciliada");
   const inputs = join(record.path, ".agent-input");
   const entry = await lstat(inputs);
   if (
@@ -444,72 +518,128 @@ async function assertOwnedInputs(candidate: CandidateWorktree): Promise<void> {
       throw new TypeError("La identidad de la entrada del agente ha cambiado");
   }
 }
+async function removeOwnedSidecar(
+  record: Readonly<CandidateRecord>,
+): Promise<void> {
+  const entry = await lstat(record.outputDirectory);
+  if (
+    entry.isSymbolicLink() ||
+    !entry.isDirectory() ||
+    (await realpath(record.outputDirectory)) !== record.outputDirectory ||
+    !equalIdentity(record.outputIdentity, {
+      device: entry.dev,
+      inode: entry.ino,
+    })
+  )
+    throw new TypeError("La identidad de la salida del agente ha cambiado");
+  // Keep the target on the same filesystem as the sidecar, then delete only
+  // the atomically moved, service-owned leaf.
+  const quarantine = await realpath(
+    await mkdtemp(join(dirname(record.outputDirectory), ".agent-sidecar-")),
+  );
+  const moved = join(quarantine, "sidecar");
+  await rename(record.outputDirectory, moved);
+  await rm(moved, { recursive: true, force: false });
+  await rmdir(quarantine);
+}
+export async function candidateRecord(
+  candidate: CandidateWorktree,
+): Promise<Readonly<CandidateRecord>> {
+  await assertOwned(candidate);
+  const record = records.get(candidate);
+  if (!record) throw new TypeError("El worktree no pertenece a este servicio");
+  return record;
+}
 export async function removeCandidateWorktree(
   candidate: CandidateWorktree,
 ): Promise<void> {
-  if (!(await lstat(candidate.path).catch(() => undefined))) return;
+  if (released.has(candidate)) return;
   if (!owned.has(candidate))
     throw new TypeError("El worktree no pertenece a este servicio");
-  await assertOwned(candidate);
+  const moved = quarantinedCandidates.get(candidate);
+  const record = moved
+    ? records.get(candidate)
+    : await candidateRecord(candidate);
+  if (!record) throw new TypeError("El worktree no pertenece a este servicio");
+  if (moved) {
+    const entry = await lstat(moved);
+    if (
+      entry.isSymbolicLink() ||
+      !entry.isDirectory() ||
+      !equalIdentity(record.identity, {
+        device: entry.dev,
+        inode: entry.ino,
+      }) ||
+      (await realpath(moved)) !== moved
+    )
+      throw new TypeError("La cuarentena del worktree candidato ha cambiado");
+  }
+  await assertOwnedOutput(candidate);
   const quarantineBase = await directory(
-    join(candidate.repositoryRoot, ".agent-quarantine"),
-    candidate.repositoryRoot,
+    join(record.repositoryRoot, ".agent-quarantine"),
+    record.repositoryRoot,
   );
   const quarantineChange = await directory(
-    join(quarantineBase, candidate.changeId),
+    join(quarantineBase, record.changeId),
     quarantineBase,
   );
-  const quarantined = join(
-    quarantineChange,
-    `${candidate.attemptId}-${randomUUID()}`,
-  );
-  // Atomic same-filesystem move: a swapped leaf is quarantined, never erased.
-  await rename(candidate.path, quarantined).catch(() => undefined);
+  if (!moved) {
+    const quarantined = join(
+      quarantineChange,
+      `${record.attemptId}-${randomUUID()}`,
+    );
+    // Atomic same-filesystem move: a swapped leaf is quarantined, never erased.
+    await rename(record.path, quarantined);
+    quarantinedCandidates.set(candidate, quarantined);
+  }
   await execFileAsync(
     "git",
-    ["-C", candidate.repositoryRoot, "worktree", "prune"],
+    ["-C", record.repositoryRoot, "worktree", "prune"],
     { encoding: "utf8", env: sanitizedGitEnv() },
-  ).catch(() => undefined);
-  const ref = `refs/heads/${candidate.branch}`;
-  const oid = await git(candidate.repositoryRoot, [
+  );
+  if (await registered(record.repositoryRoot, record.path))
+    throw new TypeError("Git no liberó el registro del worktree candidato");
+  const ref = `refs/heads/${record.branch}`;
+  const oid = await git(record.repositoryRoot, [
     "rev-parse",
     "--verify",
     ref,
   ]).catch(() => "");
-  if (oid === candidate.baselineCommit) {
-    await git(candidate.repositoryRoot, [
-      "update-ref",
-      "-d",
-      ref,
-      candidate.baselineCommit,
-    ]).catch(() => undefined);
+  if (oid) {
+    await git(record.repositoryRoot, ["update-ref", "-d", ref, oid]);
   }
-  await rm(candidate.outputDirectory, { recursive: true, force: false }).catch(
-    () => undefined,
-  );
+  const residual = await git(record.repositoryRoot, [
+    "rev-parse",
+    "--verify",
+    ref,
+  ]).catch(() => "");
+  if (residual) throw new TypeError("Git no liberó la ref del candidato");
+  await removeOwnedSidecar(record);
   owned.delete(candidate);
   records.delete(candidate);
+  quarantinedCandidates.delete(candidate);
+  released.add(candidate);
 }
 export async function validateCopiedInputs(
   candidate: CandidateWorktree,
   plan: ChangePlan,
 ): Promise<void> {
-  await assertOwned(candidate);
+  const record = await candidateRecord(candidate);
   await assertOwnedInputs(candidate);
   const approved = checkedPlan(plan);
   if (
-    approved.planSha256 !== candidate.planSha256 ||
-    approved.requestSha256 !== candidate.requestSha256
+    approved.planSha256 !== record.planSha256 ||
+    approved.requestSha256 !== record.requestSha256
   )
     throw new TypeError("El plan aprobado no corresponde al candidato");
-  const inputs = join(candidate.path, ".agent-input");
+  const inputs = join(record.path, ".agent-input");
   await bindInputs(
     join(inputs, names[0]),
     join(inputs, names[1]),
     join(inputs, names[2]),
     approved,
   );
-  if ((await inputHash(inputs)) !== candidate.inputHash)
+  if ((await inputHash(inputs)) !== record.inputHash)
     throw new TypeError("La entrada del agente cambió después del aislamiento");
 }
 export async function worktreeGit(
@@ -537,37 +667,47 @@ export async function assertCandidateOwnership(
 /** Mint the only adapter input accepted at runtime for this owned candidate. */
 export async function createAgentRunContext(
   candidate: CandidateWorktree,
-  resultSchemaPath: string,
 ): Promise<import("../agents/types.ts").AgentRunInput> {
-  await assertOwned(candidate);
-  await validateCopiedInputs(candidate, candidate.approvedPlan);
+  const record = await candidateRecord(candidate);
+  await validateCopiedInputs(candidate, record.approvedPlan);
   await assertOwnedOutput(candidate);
+  const schema = await schemaIdentity();
   const value = Object.freeze({
-    changeId: candidate.changeId,
-    attemptId: candidate.attemptId,
-    worktree: candidate.path,
-    requestPath: join(candidate.path, ".agent-input", names[0]),
-    planPath: join(candidate.path, ".agent-input", names[1]),
-    policyPath: join(candidate.path, ".agent-input", names[2]),
-    resultSchemaPath,
-    outputDirectory: candidate.outputDirectory,
+    changeId: record.changeId,
+    attemptId: record.attemptId,
+    worktree: record.path,
+    requestPath: join(record.path, ".agent-input", names[0]),
+    planPath: join(record.path, ".agent-input", names[1]),
+    policyPath: join(record.path, ".agent-input", names[2]),
+    resultSchemaPath: schema.path,
+    outputDirectory: record.outputDirectory,
   });
-  runContexts.set(value, candidate);
+  runContexts.set(value, Object.freeze({ candidate, schema }));
   return value;
 }
 
 export async function resolveAgentRunContext(
   value: import("../agents/types.ts").AgentRunInput,
 ): Promise<import("../agents/types.ts").AgentRunInput> {
-  const candidate = runContexts.get(value);
-  if (candidate === undefined)
+  const context = runContexts.get(value);
+  if (context === undefined)
     throw new TypeError(
       "El contexto de ejecución del agente no fue emitido por el servicio",
     );
-  if (candidate === null) return value;
-  await assertOwned(candidate);
-  await validateCopiedInputs(candidate, candidate.approvedPlan);
-  await assertOwnedOutput(candidate);
+  if (context === null) return value;
+  const record = await candidateRecord(context.candidate);
+  await validateCopiedInputs(context.candidate, record.approvedPlan);
+  await assertOwnedOutput(context.candidate);
+  await assertSchemaIdentity(context.schema);
+  if (
+    value.worktree !== record.path ||
+    value.requestPath !== join(record.path, ".agent-input", names[0]) ||
+    value.planPath !== join(record.path, ".agent-input", names[1]) ||
+    value.policyPath !== join(record.path, ".agent-input", names[2]) ||
+    value.resultSchemaPath !== context.schema.path ||
+    value.outputDirectory !== record.outputDirectory
+  )
+    throw new TypeError("El contexto de ejecución del agente fue sustituido");
   return value;
 }
 

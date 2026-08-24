@@ -176,7 +176,7 @@ function recordingRunner(): {
         args,
         options,
       });
-      return { exitCode: 0, stdout: "ok", stderr: "" };
+      return { exitCode: 0, stdout: '{"generatedFiles":[]}', stderr: "" };
     },
   };
 }
@@ -281,6 +281,7 @@ test("candidate worktree copies immutable inputs and cleans only its exact path"
       planPath,
       policyPath,
     });
+    const sidecar = candidate.outputDirectory;
     try {
       assert.equal(await git(candidate.path, ["rev-parse", "HEAD"]), baseline);
       assert.equal(
@@ -298,6 +299,71 @@ test("candidate worktree copies immutable inputs and cleans only its exact path"
       await removeCandidateWorktree(candidate);
     }
     await assert.rejects(stat(candidate.path));
+    await assert.rejects(stat(sidecar));
+  });
+});
+
+test("candidate ref reservation preserves collisions and permits a released retry", async () => {
+  await withRepository(async ({ root, baseline }) => {
+    const branch = "candidate/agent-isolation/attempt-000001";
+    await git(root, ["branch", branch, baseline]);
+    const input = {
+      repositoryRoot: root,
+      approvedPlan: plan(baseline),
+      changeId: "agent-isolation",
+      attemptId: "attempt-000001",
+      baselineCommit: baseline,
+      requestPath: await writeInput(root, "request.json"),
+      planPath: await writeInput(root, "plan.json"),
+      policyPath: await writeInput(root, "policy.json"),
+    };
+    await assert.rejects(createCandidateWorktree(input));
+    assert.equal(await git(root, ["rev-parse", branch]), baseline);
+    await git(root, ["branch", "-D", branch]);
+    const first = await createCandidateWorktree(input);
+    await removeCandidateWorktree(first);
+    const retry = await createCandidateWorktree(input);
+    await removeCandidateWorktree(retry);
+    await assert.rejects(git(root, ["rev-parse", branch]));
+  });
+});
+
+test("private snapshots and schema authority cannot be replaced through candidate input", async () => {
+  await withRepository(async ({ root, baseline }) => {
+    const candidate = await createCandidateWorktree({
+      repositoryRoot: root,
+      approvedPlan: plan(baseline),
+      changeId: "agent-isolation",
+      attemptId: "attempt-000001",
+      baselineCommit: baseline,
+      requestPath: await writeInput(root, "request.json"),
+      planPath: await writeInput(root, "plan.json"),
+      policyPath: await writeInput(root, "policy.json"),
+    });
+    try {
+      assert.throws(() => {
+        (
+          candidate as unknown as { repositorySnapshot: { refs: string } }
+        ).repositorySnapshot = { refs: "forged" };
+      });
+      const context = await (
+        createAgentRunContext as unknown as (
+          value: typeof candidate,
+          ignored: string,
+        ) => Promise<AgentRunInput>
+      )(candidate, "/tmp/attacker-schema.json");
+      assert.equal(
+        context.resultSchemaPath,
+        join(process.cwd(), "schemas", "ingestion", "agent-result.schema.json"),
+      );
+      await git(root, ["tag", "attacker-ref"]);
+      await assert.rejects(
+        validateWorktreeDiff(candidate, plan(baseline)),
+        /ref/i,
+      );
+    } finally {
+      await removeCandidateWorktree(candidate);
+    }
   });
 });
 
@@ -573,6 +639,35 @@ test("command result rejects traversal rather than trusting agent stdout", async
   }
 });
 
+test("command result protocol fails closed for malformed JSON results", async () => {
+  const worktree = await mkdtemp(
+    join(tmpdir(), "comunidadsolar-command-malformed-"),
+  );
+  const input = await createInput(worktree, worktree);
+  try {
+    for (const stdout of [
+      "not json",
+      "null",
+      "[]",
+      JSON.stringify({}),
+      JSON.stringify({ generatedFiles: [], extra: true }),
+      JSON.stringify({ generatedFiles: ["a", "a"] }),
+    ]) {
+      await assert.rejects(
+        new CommandAgent(
+          { command: process.execPath, args: [] },
+          recordingBroker(),
+          async () => ({ exitCode: 0, stdout, stderr: "" }),
+        ).run(input),
+        /(JSON válido|schema agent-result)/i,
+      );
+    }
+  } finally {
+    await rm(worktree, { recursive: true, force: true });
+    await rm(input.outputDirectory!, { recursive: true, force: true });
+  }
+});
+
 test("adapters reject a forged structural run input before spawning", async () => {
   const { runner, calls } = recordingRunner();
   await assert.rejects(
@@ -608,10 +703,7 @@ test("frozen candidate projection cannot redirect a minted run context", async (
       policyPath: await writeInput(root, "policy.json"),
     });
     try {
-      const context = await createAgentRunContext(
-        candidate,
-        join(process.cwd(), "schemas", "ingestion", "agent-result.schema.json"),
-      );
+      const context = await createAgentRunContext(candidate);
       assert.throws(() => {
         (candidate as { outputDirectory: string }).outputDirectory =
           "/tmp/forged";
@@ -638,7 +730,7 @@ test("frozen candidate projection cannot redirect a minted run context", async (
           join(candidate.outputDirectory, "command.stdout.log"),
           "utf8",
         ),
-        "ok",
+        '{"generatedFiles":[]}',
       );
     } finally {
       await removeCandidateWorktree(candidate);
@@ -659,10 +751,7 @@ test("owned run context rejects a replaced sidecar before spawning", async () =>
       policyPath: await writeInput(root, "policy.json"),
     });
     try {
-      const context = await createAgentRunContext(
-        candidate,
-        join(process.cwd(), "schemas", "ingestion", "agent-result.schema.json"),
-      );
+      const context = await createAgentRunContext(candidate);
       await rm(candidate.outputDirectory, { recursive: true, force: false });
       await mkdir(candidate.outputDirectory);
       const { runner, calls } = recordingRunner();
@@ -676,7 +765,11 @@ test("owned run context rejects a replaced sidecar before spawning", async () =>
       );
       assert.equal(calls.length, 0);
     } finally {
-      await removeCandidateWorktree(candidate);
+      await assert.rejects(
+        removeCandidateWorktree(candidate),
+        /identidad de la salida/i,
+      );
+      await rm(candidate.outputDirectory, { recursive: true, force: true });
     }
   });
 });
@@ -694,10 +787,7 @@ test("owned run context rejects a same-content copied input replacement", async 
       policyPath: await writeInput(root, "policy.json"),
     });
     try {
-      const context = await createAgentRunContext(
-        candidate,
-        join(process.cwd(), "schemas", "ingestion", "agent-result.schema.json"),
-      );
+      const context = await createAgentRunContext(candidate);
       const copiedRequest = join(
         candidate.path,
         ".agent-input",
@@ -758,6 +848,29 @@ test("operator Codex capability rejects replacement before executing", async () 
   }
 });
 
+test("Codex result protocol fails closed when final message is not JSON", async () => {
+  const root = await mkdtemp(join(tmpdir(), "comunidadsolar-codex-result-"));
+  const executable = join(root, "codex-fixture");
+  try {
+    await writeFile(executable, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+    const capability = await createCodexExecutableCapability(
+      await realpath(executable),
+    );
+    const input = await createInput(root, root);
+    await assert.rejects(
+      new CodexAgent(capability, async (_command, args) => {
+        const output = args[args.indexOf("--output-last-message") + 1];
+        await writeFile(output!, "not json", "utf8");
+        return { exitCode: 0, stdout: "", stderr: "" };
+      }).run(input),
+      /JSON válido/i,
+    );
+    await rm(input.outputDirectory!, { recursive: true, force: true });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("fixture agents are bound to one owned disposable candidate", async () => {
   await withRepository(async ({ root, baseline }) => {
     const candidate = await createCandidateWorktree({
@@ -794,6 +907,56 @@ test("fixture agents are bound to one owned disposable candidate", async () => {
     } finally {
       await removeCandidateWorktree(candidate);
     }
+  });
+});
+
+test("fixture disposal waits for an active leased handler", async () => {
+  await withRepository(async ({ root, baseline }) => {
+    const candidate = await createCandidateWorktree({
+      repositoryRoot: root,
+      approvedPlan: plan(baseline),
+      changeId: "agent-isolation",
+      attemptId: "attempt-000001",
+      baselineCommit: baseline,
+      requestPath: await writeInput(root, "request.json"),
+      planPath: await writeInput(root, "plan.json"),
+      policyPath: await writeInput(root, "policy.json"),
+    });
+    let entered!: () => void;
+    let release!: () => void;
+    const enteredRun = new Promise<void>((resolve) => (entered = resolve));
+    const released = new Promise<void>((resolve) => (release = resolve));
+    const run = await createFixtureAgentRun(candidate, async () => {
+      entered();
+      await released;
+      return {
+        exitCode: 0,
+        generatedFiles: [],
+        stdoutPath: "stdout",
+        stderrPath: "stderr",
+        finalMessagePath: "final",
+      };
+    });
+    const input = createTestAgentRunContext({
+      changeId: candidate.changeId,
+      attemptId: candidate.attemptId,
+      worktree: candidate.path,
+      requestPath: join(candidate.path, ".agent-input", "request.json"),
+      planPath: join(candidate.path, ".agent-input", "plan.json"),
+      policyPath: join(candidate.path, ".agent-input", "policy.json"),
+      resultSchemaPath: join(root, "schema.json"),
+      outputDirectory: candidate.outputDirectory,
+    });
+    const active = run.agent.run(input);
+    await enteredRun;
+    let disposed = false;
+    const disposing = run.dispose().then(() => (disposed = true));
+    await Promise.resolve();
+    assert.equal(disposed, false);
+    release();
+    await active;
+    await disposing;
+    await assert.rejects(run.agent.run(input), /capacidad FixtureAgent/i);
   });
 });
 

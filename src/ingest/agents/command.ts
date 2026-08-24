@@ -149,7 +149,7 @@ async function generatedFiles(output: string): Promise<string[]> {
   try {
     result = JSON.parse(output) as unknown;
   } catch {
-    return [];
+    throw new TypeError("El resultado del agente debe ser JSON válido");
   }
   {
     const validated = validateSchema<{ generatedFiles: string[] }>(

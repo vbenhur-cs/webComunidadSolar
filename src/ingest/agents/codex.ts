@@ -183,17 +183,12 @@ async function generatedFiles(path: string): Promise<string[]> {
   try {
     parsed = JSON.parse(await readFile(path, "utf8")) as unknown;
   } catch {
-    return [];
+    throw new TypeError("El resultado de Codex debe ser JSON válido");
   }
-  {
-    if (typeof parsed === "object" && parsed !== null) {
-      return validateSchema<{ generatedFiles: string[] }>(
-        "agent-result",
-        parsed,
-      ).generatedFiles.map(assertSafeGeneratedFile);
-    }
-  }
-  return [];
+  return validateSchema<{ generatedFiles: string[] }>(
+    "agent-result",
+    parsed,
+  ).generatedFiles.map(assertSafeGeneratedFile);
 }
 
 function assertSafeGeneratedFile(path: string): string {

@@ -19,7 +19,14 @@ interface CandidateIdentity {
 }
 const runs = new WeakMap<
   object,
-  { candidate: CandidateWorktree; identity: CandidateIdentity; closed: boolean }
+  {
+    candidate: CandidateWorktree;
+    identity: CandidateIdentity;
+    closed: boolean;
+    active: number;
+    drained: Promise<void>;
+    release?: () => void;
+  }
 >();
 
 export interface FixtureAgentRun {
@@ -46,6 +53,8 @@ export async function createFixtureAgentRun(
     candidate,
     identity: { device: entry.dev, inode: entry.ino },
     closed: false,
+    active: 0,
+    drained: Promise.resolve(),
   };
   runs.set(token, state);
   const agent: AgentAdapter = Object.freeze({
@@ -58,17 +67,27 @@ export async function createFixtureAgentRun(
         input.worktree !== current.candidate.path
       )
         throw new TypeError("La capacidad FixtureAgent no es válida");
-      await resolveAgentRunContext(input);
-      const actual = await lstat(current.candidate.path);
-      if (
-        actual.isSymbolicLink() ||
-        actual.dev !== current.identity.device ||
-        actual.ino !== current.identity.inode ||
-        (await realpath(current.candidate.path)) !== current.candidate.path
-      )
-        throw new TypeError("La identidad del candidato fixture ha cambiado");
-      await assertCandidateOwnership(current.candidate);
-      return { adapter: "fixture", ...(await handler(input)) };
+      current.active += 1;
+      if (current.active === 1)
+        current.drained = new Promise<void>((resolve) => {
+          current.release = resolve;
+        });
+      try {
+        await resolveAgentRunContext(input);
+        const actual = await lstat(current.candidate.path);
+        if (
+          actual.isSymbolicLink() ||
+          actual.dev !== current.identity.device ||
+          actual.ino !== current.identity.inode ||
+          (await realpath(current.candidate.path)) !== current.candidate.path
+        )
+          throw new TypeError("La identidad del candidato fixture ha cambiado");
+        await assertCandidateOwnership(current.candidate);
+        return { adapter: "fixture", ...(await handler(input)) };
+      } finally {
+        current.active -= 1;
+        if (current.active === 0) current.release?.();
+      }
     },
   });
   return Object.freeze({
@@ -77,6 +96,7 @@ export async function createFixtureAgentRun(
       const current = runs.get(token);
       if (!current || current.closed) return;
       current.closed = true;
+      await current.drained;
       runs.delete(token);
       await removeCandidateWorktree(current.candidate);
     },

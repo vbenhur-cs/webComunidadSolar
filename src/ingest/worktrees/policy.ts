@@ -1,6 +1,7 @@
 import type { ChangePlan } from "../domain.ts";
 
 import {
+  candidateRecord,
   externalSnapshot,
   gitSnapshot,
   removeCandidateWorktree,
@@ -68,47 +69,46 @@ async function validateDiff(
   plan: ChangePlan,
 ): Promise<string[]> {
   if (
-    plan.changeId !== candidate.changeId ||
-    plan.baselineCommit !== candidate.baselineCommit
+    plan.changeId !== (await candidateRecord(candidate)).changeId ||
+    plan.baselineCommit !== (await candidateRecord(candidate)).baselineCommit
   ) {
     throw new TypeError(
       "El plan aprobado no corresponde al worktree candidato",
     );
   }
+  const record = await candidateRecord(candidate);
   const [candidateSnapshot, repositorySnapshot, sourceSnapshot] =
     await Promise.all([
-      gitSnapshot(candidate.path),
-      externalSnapshot(candidate.repositoryRoot),
-      externalSnapshot(candidate.sourceRepositoryRoot),
+      gitSnapshot(record.path),
+      externalSnapshot(record.repositoryRoot),
+      externalSnapshot(record.sourceRepositoryRoot),
     ]);
-  if (candidateSnapshot.head !== candidate.baselineCommit) {
+  if (candidateSnapshot.head !== record.baselineCommit) {
     throw new TypeError("Se detectó un commit creado por el agente");
   }
   if (
-    candidateSnapshot.refs !== candidate.candidateSnapshot.refs ||
-    repositorySnapshot.refs !== candidate.repositorySnapshot.refs ||
-    sourceSnapshot.refs !== candidate.sourceSnapshot.refs
+    candidateSnapshot.refs !== record.candidateSnapshot.refs ||
+    repositorySnapshot.refs !== record.repositorySnapshot.refs ||
+    sourceSnapshot.refs !== record.sourceSnapshot.refs
   ) {
     throw new TypeError("Git ref protegido fue modificado");
   }
   if (
-    repositorySnapshot.head !== candidate.repositorySnapshot.head ||
-    repositorySnapshot.status !== candidate.repositorySnapshot.status
+    repositorySnapshot.head !== record.repositorySnapshot.head ||
+    repositorySnapshot.status !== record.repositorySnapshot.status
   ) {
     throw new TypeError("El repositorio principal cambió fuera del worktree");
   }
   if (
-    sourceSnapshot.head !== candidate.sourceSnapshot.head ||
-    sourceSnapshot.status !== candidate.sourceSnapshot.status
+    sourceSnapshot.head !== record.sourceSnapshot.head ||
+    sourceSnapshot.status !== record.sourceSnapshot.status
   ) {
     throw new TypeError("El source sibling cambió fuera del worktree");
   }
   await validateCopiedInputs(candidate, plan);
 
   const allowed = new Set(plan.files.map((file) => file.path));
-  const initialPaths = new Set(
-    changedPaths(candidate.candidateSnapshot.status),
-  );
+  const initialPaths = new Set(changedPaths(record.candidateSnapshot.status));
   const paths = changedPaths(await worktreeStatus(candidate)).filter(
     (path) => !initialPaths.has(path),
   );
