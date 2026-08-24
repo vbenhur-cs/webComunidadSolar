@@ -1,6 +1,7 @@
 import type { ChangePlan } from "../domain.ts";
 
 import {
+  assertCandidateServiceManifest,
   candidateRecord,
   externalSnapshot,
   gitSnapshot,
@@ -106,6 +107,7 @@ async function validateDiff(
     throw new TypeError("El source sibling cambió fuera del worktree");
   }
   await validateCopiedInputs(candidate, plan);
+  await assertCandidateServiceManifest(candidate);
 
   const allowed = new Set(plan.files.map((file) => file.path));
   const initialPaths = new Set(changedPaths(record.candidateSnapshot.status));

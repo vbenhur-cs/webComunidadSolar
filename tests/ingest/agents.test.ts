@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import {
+  lstat,
   mkdir,
   mkdtemp,
   readFile,
@@ -457,6 +458,105 @@ test("collapsed ignored worktree marker still exposes an evil sibling through th
       restore();
     }
     assert.equal(await readFile(evil, "utf8"), "external");
+  });
+});
+
+test("setup rejects an unowned ignored empty service directory", async () => {
+  await withRepository(async ({ root, baseline }) => {
+    await writeFile(
+      join(root, ".git", "info", "exclude"),
+      ".agent-worktrees/\n",
+    );
+    const evil = join(root, ".agent-worktrees", "evil");
+    const restore = setWorktreeTestHooks({
+      beforeSetupSnapshot: async () => {
+        await mkdir(evil, { recursive: true });
+      },
+    });
+    try {
+      await assert.rejects(
+        createCandidateWorktree({
+          repositoryRoot: root,
+          approvedPlan: plan(baseline),
+          changeId: "agent-isolation",
+          attemptId: "attempt-000001",
+          baselineCommit: baseline,
+          requestPath: await writeInput(root, "request.json"),
+          planPath: await writeInput(root, "plan.json"),
+          policyPath: await writeInput(root, "policy.json"),
+        }),
+        /refs protegidas|creación/i,
+      );
+    } finally {
+      restore();
+    }
+    assert.equal((await lstat(evil)).isDirectory(), true);
+  });
+});
+
+test("validation rejects an unowned ignored empty service directory after setup", async () => {
+  await withRepository(async ({ root, baseline }) => {
+    await writeFile(
+      join(root, ".git", "info", "exclude"),
+      ".agent-worktrees/\n",
+    );
+    const candidate = await createCandidateWorktree({
+      repositoryRoot: root,
+      approvedPlan: plan(baseline),
+      changeId: "agent-isolation",
+      attemptId: "attempt-000001",
+      baselineCommit: baseline,
+      requestPath: await writeInput(root, "request.json"),
+      planPath: await writeInput(root, "plan.json"),
+      policyPath: await writeInput(root, "policy.json"),
+    });
+    try {
+      await mkdir(join(root, ".agent-worktrees", "evil"));
+      await assert.rejects(
+        validateWorktreeDiff(candidate, plan(baseline)),
+        /manifiesto de servicio/i,
+      );
+    } finally {
+      await removeCandidateWorktree(candidate);
+    }
+  });
+});
+
+test("service manifest rejects a directory swapped to a symlink during enumeration", async () => {
+  await withRepository(async ({ root, baseline }) => {
+    const evil = join(root, ".agent-worktrees", "evil");
+    const outside = await mkdtemp(
+      join(tmpdir(), "comunidadsolar-manifest-outside-"),
+    );
+    await mkdir(evil, { recursive: true });
+    const canonicalEvil = await realpath(evil);
+    let swapped = false;
+    const restore = setWorktreeTestHooks({
+      beforeServiceDirectoryRead: async (path) => {
+        if (path !== canonicalEvil || swapped) return;
+        swapped = true;
+        await rm(path, { recursive: true, force: false });
+        await symlink(outside, path);
+      },
+    });
+    try {
+      await assert.rejects(
+        createCandidateWorktree({
+          repositoryRoot: root,
+          approvedPlan: plan(baseline),
+          changeId: "agent-isolation",
+          attemptId: "attempt-000001",
+          baselineCommit: baseline,
+          requestPath: await writeInput(root, "request.json"),
+          planPath: await writeInput(root, "plan.json"),
+          policyPath: await writeInput(root, "policy.json"),
+        }),
+        /identidad del directorio de servicio/i,
+      );
+    } finally {
+      restore();
+      await rm(outside, { recursive: true, force: true });
+    }
   });
 });
 

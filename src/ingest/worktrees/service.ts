@@ -59,6 +59,7 @@ interface WorktreeTestHooks {
   afterRegistration?(): Promise<void> | void;
   beforeSidecarDelete?(path: string): Promise<void> | void;
   beforeSetupSnapshot?(): Promise<void> | void;
+  beforeServiceDirectoryRead?(path: string): Promise<void> | void;
 }
 let testHooks: WorktreeTestHooks = {};
 /** Test-only deterministic fault/race injection; unavailable to production. */
@@ -282,17 +283,38 @@ async function serviceEntries(
 ): Promise<string> {
   const lines: string[] = [];
   const skip = excluded.map((path) => resolve(path));
-  const visit = async (path: string): Promise<void> => {
+  const visit = async (path: string): Promise<boolean> => {
     if (skip.some((root) => path === root || path.startsWith(`${root}/`)))
-      return;
+      return false;
     const entry = await lstat(path);
+    const identity = { device: entry.dev, inode: entry.ino };
     if (entry.isSymbolicLink() || !entry.isDirectory()) {
       lines.push(
-        `${relative(repositoryRoot, path)}\0${entry.dev}\0${entry.ino}`,
+        `${entry.isSymbolicLink() ? "S" : "F"}\0${relative(repositoryRoot, path)}\0${entry.dev}\0${entry.ino}`,
       );
-      return;
+      return true;
     }
-    for (const child of await readdir(path)) await visit(join(path, child));
+    if ((await realpath(path)) !== path)
+      throw new TypeError("El manifiesto de servicio atravesó un enlace");
+    await testHooks.beforeServiceDirectoryRead?.(path);
+    const children = await readdir(path);
+    const after = await lstat(path);
+    if (
+      after.isSymbolicLink() ||
+      !after.isDirectory() ||
+      !equalIdentity(identity, { device: after.dev, inode: after.ino }) ||
+      (await realpath(path)) !== path
+    )
+      throw new TypeError("La identidad del directorio de servicio cambió");
+    await Promise.all(children.map((child) => visit(join(path, child))));
+    // Directories are first-class manifest entries, including empty service
+    // directories and ancestors containing only an owned excluded leaf. This
+    // keeps a pre-existing service parent stable while still exposing any
+    // unowned empty sibling or identity change.
+    lines.push(
+      `D\0${relative(repositoryRoot, path)}\0${entry.dev}\0${entry.ino}`,
+    );
+    return true;
   };
   for (const root of [".agent-worktrees", ".agent-quarantine"]) {
     const path = join(repositoryRoot, root);
@@ -358,13 +380,6 @@ export async function createCandidateWorktree(
   const sourceRepositoryRoot = await root(
     input.sourceRepositoryRoot ?? input.repositoryRoot,
   );
-  const beforeRepository = await gitSnapshot(repositoryRoot, [
-    ...ownedQuarantines,
-  ]);
-  const beforeSource = await gitSnapshot(
-    sourceRepositoryRoot,
-    sourceRepositoryRoot === repositoryRoot ? [...ownedQuarantines] : [],
-  );
   if (
     (await git(repositoryRoot, ["rev-parse", "refs/heads/main"])) !==
     input.baselineCommit
@@ -383,6 +398,15 @@ export async function createCandidateWorktree(
   const parent = await directory(join(base, input.changeId), base);
   const path = join(parent, input.attemptId);
   await vacant(path);
+  // Establish service-owned parents before preflight. They are then stable
+  // manifest entries rather than apparent drift caused by candidate setup.
+  const beforeRepository = await gitSnapshot(repositoryRoot, [
+    ...ownedQuarantines,
+  ]);
+  const beforeSource = await gitSnapshot(
+    sourceRepositoryRoot,
+    sourceRepositoryRoot === repositoryRoot ? [...ownedQuarantines] : [],
+  );
   const branch = `candidate/${input.changeId}/${input.attemptId}`;
   const ref = `refs/heads/${branch}`;
   let candidate: CandidateWorktree | undefined;
@@ -690,6 +714,25 @@ export async function candidateRecord(
   const record = records.get(candidate);
   if (!record) throw new TypeError("El worktree no pertenece a este servicio");
   return record;
+}
+export async function assertCandidateServiceManifest(
+  candidate: CandidateWorktree,
+): Promise<void> {
+  const record = await candidateRecord(candidate);
+  const [repository, source] = await Promise.all([
+    gitSnapshot(record.repositoryRoot, [record.path, ...ownedQuarantines]),
+    gitSnapshot(
+      record.sourceRepositoryRoot,
+      record.sourceRepositoryRoot === record.repositoryRoot
+        ? [record.path, ...ownedQuarantines]
+        : [],
+    ),
+  ]);
+  if (
+    repository.serviceEntries !== record.repositorySnapshot.serviceEntries ||
+    source.serviceEntries !== record.sourceSnapshot.serviceEntries
+  )
+    throw new TypeError("El manifiesto de servicio externo cambió");
 }
 export async function removeCandidateWorktree(
   candidate: CandidateWorktree,
