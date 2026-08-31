@@ -27,7 +27,10 @@ import {
   codexInvocation,
   createCodexExecutableCapability,
 } from "../../src/ingest/agents/codex.ts";
-import { createOperatorIsolationBroker } from "../../src/ingest/agents/isolation.ts";
+import {
+  createOperatorIsolationBroker,
+  testIsolationBroker,
+} from "../../src/ingest/agents/isolation.ts";
 import { createFixtureAgentRun } from "../../src/ingest/agents/fixture.ts";
 import type {
   AgentRunInput,
@@ -322,6 +325,28 @@ test("broker timeout and non-zero exit never produce generated files", async () 
   } finally {
     await rm(dirname(input.requestPath), { recursive: true, force: true });
     await rm(input.outputDirectory!, { recursive: true, force: true });
+  }
+});
+
+test("test isolation broker terminates an argv job at its supplied deadline", async () => {
+  const workspace = await mkdtemp(
+    join(tmpdir(), "comunidadsolar-test-broker-timeout-"),
+  );
+  const broker = testIsolationBroker(workspace);
+  const started = Date.now();
+  try {
+    const result = await broker.run({
+      workspace,
+      command: process.execPath,
+      args: ["-e", "setTimeout(() => process.exit(0), 250)"],
+      stdin: "",
+      env: { PATH: "/usr/bin:/bin", LANG: "C", LC_ALL: "C" },
+      timeoutMs: 40,
+    });
+    assert.equal(result.timedOut, true);
+    assert.ok(Date.now() - started < 200);
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
   }
 });
 

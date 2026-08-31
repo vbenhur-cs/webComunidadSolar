@@ -62,12 +62,15 @@ export interface ProcessRunOptions {
   env: Record<string, string>;
   input: string;
   shell: false;
+  timeoutMs?: number;
+  terminationGraceMs?: number;
 }
 
 export interface ProcessRunResult {
   exitCode: number;
   stdout: string;
   stderr: string;
+  timedOut?: boolean;
 }
 
 export type ProcessRunner = (
@@ -79,23 +82,58 @@ export type ProcessRunner = (
 /** Run an argv-only agent process. No caller can opt into a shell. */
 export const runProcess: ProcessRunner = async (command, args, options) =>
   await new Promise<ProcessRunResult>((resolve, reject) => {
+    const usesDeadline = options.timeoutMs !== undefined;
+    const processGroup = usesDeadline && process.platform !== "win32";
     const child = spawn(command, args, {
       cwd: options.cwd,
       env: options.env,
       shell: false,
       stdio: ["pipe", "pipe", "pipe"],
+      detached: processGroup,
     });
     const stdout: Buffer[] = [];
     const stderr: Buffer[] = [];
+    let timedOut = false;
+    let deadline: NodeJS.Timeout | undefined;
+    let forceTermination: NodeJS.Timeout | undefined;
+    const clearTimers = () => {
+      if (deadline !== undefined) clearTimeout(deadline);
+      if (forceTermination !== undefined) clearTimeout(forceTermination);
+    };
+    const terminate = (signal: NodeJS.Signals) => {
+      if (child.exitCode !== null || child.signalCode !== null) return;
+      try {
+        if (processGroup && child.pid !== undefined)
+          process.kill(-child.pid, signal);
+        else child.kill(signal);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error;
+      }
+    };
     child.stdout.on("data", (chunk: Buffer) => stdout.push(chunk));
     child.stderr.on("data", (chunk: Buffer) => stderr.push(chunk));
-    child.once("error", reject);
+    child.once("error", (error) => {
+      clearTimers();
+      reject(error);
+    });
     child.once("close", (code) => {
+      clearTimers();
       resolve({
         exitCode: code ?? 1,
         stdout: Buffer.concat(stdout).toString("utf8"),
         stderr: Buffer.concat(stderr).toString("utf8"),
+        timedOut,
       });
     });
+    if (usesDeadline) {
+      deadline = setTimeout(() => {
+        timedOut = true;
+        terminate("SIGTERM");
+        forceTermination = setTimeout(
+          () => terminate("SIGKILL"),
+          options.terminationGraceMs ?? 100,
+        );
+      }, options.timeoutMs);
+    }
     child.stdin.end(options.input);
   });

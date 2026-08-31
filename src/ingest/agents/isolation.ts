@@ -42,7 +42,7 @@ export function testIsolationBroker(worktree: string): IsolationBroker {
   }
   const safeWorktree = resolve(worktree);
   return createOperatorIsolationBroker(
-    async ({ workspace, command, args, stdin, env }) => {
+    async ({ workspace, command, args, stdin, env, timeoutMs }) => {
       const candidatePath = resolve(workspace);
       if (
         candidatePath !== safeWorktree ||
@@ -55,8 +55,9 @@ export function testIsolationBroker(worktree: string): IsolationBroker {
         env: { ...env },
         input: stdin,
         shell: false,
+        timeoutMs,
       });
-      return { ...result, timedOut: false };
+      return { ...result, timedOut: result.timedOut ?? false };
     },
   );
 }
