@@ -9,16 +9,12 @@ import {
 export interface AgentRunInput {
   changeId: string;
   attemptId: string;
-  /** The owned workspace where this single broker job may execute. */
-  workspace?: string;
-  /** Transitional alias until the workspace service migrates. */
-  worktree: string;
+  /** The service-owned workspace where this single broker job may execute. */
+  workspace: string;
   requestPath: string;
   planPath: string;
   policyPath: string;
   resultSchemaPath: string;
-  /** Legacy sidecar ownership, unused by CommandAgent results. */
-  outputDirectory?: string;
 }
 
 export interface AgentRunResult {
@@ -28,12 +24,6 @@ export interface AgentRunResult {
   stdout?: string;
   stderr?: string;
   finalMessage?: string;
-  /** Legacy adapter result field. */
-  stdoutPath?: string;
-  /** Legacy adapter result field. */
-  stderrPath?: string;
-  /** Legacy adapter result field. */
-  finalMessagePath?: string;
 }
 
 export interface AgentAdapter {

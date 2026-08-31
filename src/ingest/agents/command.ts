@@ -1,5 +1,4 @@
 import { assertOperatorIsolationBroker } from "./isolation.ts";
-import { resolveAgentRunContext } from "../worktrees/service.ts";
 import {
   AGENT_FINAL_MESSAGE_MAX_BYTES,
   AGENT_TIMEOUT_DEFAULT_MS,
@@ -8,6 +7,12 @@ import {
   validatedAgentTimeout,
 } from "../limits.ts";
 import { validateSchema } from "../schema-validator.ts";
+import {
+  assertWorkspaceInputs,
+  workspaceInputs,
+  type AgentWorkspace,
+  type AgentWorkspaceInputs,
+} from "../workspaces/service.ts";
 
 import {
   type AgentAdapter,
@@ -31,6 +36,30 @@ function assertCommand(config: CommandAgentConfig): void {
   }
 }
 
+function assertWorkspaceRunInput(
+  workspace: AgentWorkspace,
+  input: AgentRunInput,
+): AgentWorkspaceInputs {
+  const expected = workspaceInputs(workspace);
+  if ("timeoutMs" in input) {
+    throw new TypeError("El timeout no pertenece al contexto del caller");
+  }
+  if (
+    input.changeId !== expected.changeId ||
+    input.attemptId !== expected.attemptId ||
+    input.workspace !== expected.workspace ||
+    input.requestPath !== expected.requestPath ||
+    input.planPath !== expected.planPath ||
+    input.policyPath !== expected.policyPath ||
+    input.resultSchemaPath !== expected.resultSchemaPath
+  ) {
+    throw new TypeError(
+      "El contexto de Command no corresponde al workspace aprobado",
+    );
+  }
+  return expected;
+}
+
 export class CommandAgent implements AgentAdapter {
   readonly name = "command";
   private readonly timeoutMs: number;
@@ -38,6 +67,7 @@ export class CommandAgent implements AgentAdapter {
   constructor(
     private readonly config: CommandAgentConfig,
     private readonly broker: IsolationBroker | null,
+    private readonly workspace: AgentWorkspace,
   ) {
     this.timeoutMs = validatedAgentTimeout(
       config.timeoutMs ?? AGENT_TIMEOUT_DEFAULT_MS,
@@ -47,20 +77,17 @@ export class CommandAgent implements AgentAdapter {
   async run(input: AgentRunInput): Promise<AgentRunResult> {
     assertCommand(this.config);
     assertOperatorIsolationBroker(this.broker);
-    if ("timeoutMs" in input) {
-      throw new TypeError("El timeout no pertenece al contexto del caller");
-    }
-    input = await resolveAgentRunContext(input);
-    const workspace = input.workspace ?? input.worktree;
+    const approved = assertWorkspaceRunInput(this.workspace, input);
+    await assertWorkspaceInputs(this.workspace);
     const result = await this.broker.run({
-      workspace,
+      workspace: approved.workspace,
       command: this.config.command,
       args: [...this.config.args],
       stdin: JSON.stringify({
-        requestPath: input.requestPath,
-        planPath: input.planPath,
-        policyPath: input.policyPath,
-        resultSchemaPath: input.resultSchemaPath,
+        requestPath: approved.requestPath,
+        planPath: approved.planPath,
+        policyPath: approved.policyPath,
+        resultSchemaPath: approved.resultSchemaPath,
       }),
       env: { PATH: "/usr/bin:/bin", LANG: "C", LC_ALL: "C" },
       timeoutMs: this.timeoutMs,

@@ -1100,7 +1100,8 @@ test("does not overwrite a colliding matrix temp file", async () => {
 
 test(
   "executes the emitted Astro deploy Worker through its generated Wrangler topology",
-  { timeout: 120_000 },
+  // The child build keeps its 90s cap; this also budgets the parity passes and cleanup.
+  { timeout: 180_000 },
   async () => {
     const result = await runHttpParity({ scope: "foundation" });
     const server = await runHttpParity(

@@ -4,19 +4,21 @@
 
 **Goal:** Recibir una solicitud detallada o página aportada, planificarla, exigir Gate 1, transformarla en Astro mediante un agente intercambiable, validarla, presentar el artefacto exacto en preview y exigir Gate 2 antes de promover/publicar.
 
-**Architecture:** Un CLI fino llama a un controlador tipado y a una máquina de estados persistida de forma atómica. Importadores no confiables normalizan entradas hacia un contrato único; adaptadores de plan/generación trabajan en un Git worktree aislado; validadores deterministas producen evidencia y un digest del bundle desplegable generado (`dist/` más `.wrangler/deploy/config.json`). Aprobaciones y candidatos viven fuera del worktree del agente hasta su export saneado a `changes/`.
+**Architecture:** Un CLI fino llama a un controlador tipado y a una máquina de estados persistida de forma atómica. Importadores no confiables normalizan entradas hacia un contrato único; los adaptadores de generación reciben un `AgentWorkspace` desechable sin Git mediante un broker del operador, y el controlador copia por bytes solo la salida estructuralmente aceptada a un staging limpio propio. Validadores deterministas producen evidencia y un digest del bundle desplegable generado (`dist/` más `.wrangler/deploy/config.json`). Aprobaciones, staging, commits candidatos y publicación permanecen fuera de la autoridad del agente.
 
-**Tech Stack:** TypeScript, Node `parseArgs`, Ajv 8.20.0, YAML 2.9.0, yauzl 3.4.0, parse5 8.0.1, Astro compiler 4.0.0, Codex CLI 0.148.0, Git worktrees, Playwright/axe, Wrangler.
+**Tech Stack:** TypeScript, Node `parseArgs`, Ajv 8.20.0, YAML 2.9.0, yauzl 3.4.0, parse5 8.0.1, Astro compiler 4.0.0, Codex CLI 0.148.0, Git, Playwright/axe, Wrangler.
 
-**Spec:** `docs/superpowers/specs/2026-08-21-astro-parity-ingestion-design.md`
+**Spec:** `docs/superpowers/specs/2026-08-21-astro-parity-ingestion-design.md` y la adenda vinculante `docs/superpowers/specs/2026-08-31-task-7-practical-isolation-design.md`. La adenda prevalece para la frontera de confianza y el handoff de Tasks 7–8.
 
 ## Global Constraints
 
 - Aplican el plan maestro y los planes 01–03 deben estar completamente verdes.
 - El CLI no interpreta strings mediante shell; usa `execFile`/`spawn` con argv.
 - Entradas, prompts, stdout y stderr no se consideran confianza ni aprobación.
-- El agente escribe solo en un worktree de candidato; `.change-state/` no está presente allí.
-- La entrada copiada al worktree se rehashea después del agente; cualquier alteración rechaza el intento.
+- El agente escribe solo en un `AgentWorkspace` desechable, sin `.git`, `.change-state/`, credenciales ni autoridad de publicación.
+- Las entradas copiadas al workspace se rehashean después del agente; cualquier alteración rechaza el intento.
+- El workspace completo se considera hostil después del job. Solo archivos regulares planificados se copian por bytes a un staging nuevo controlado por el controlador.
+- La Task 7 no afirma aislamiento OS frente a otro proceso local con autoridad equivalente; un despliegue multi-tenant requiere un broker operativo respaldado por contenedor o VM.
 - Dependencias, overwrites o rutas fuera del plan aprobado rechazan el intento.
 - FixtureAgent solo funciona con `INGEST_TEST_MODE=true`; no es un proveedor publicable.
 - Gate 1 y Gate 2 por CLI requieren TTY y confirmación del hash; tests inyectan un `ApprovalPrompt` explícito.
@@ -57,7 +59,7 @@ src/ingest/importers/*                request, página, carpeta y ZIP
 src/ingest/planning/*                 impacto, modo y plan estructurado
 src/ingest/approvals/*                Gate 1/Gate 2
 src/ingest/agents/*                   fixture, Codex y command
-src/ingest/worktrees/*                creación, diff y limpieza segura
+src/ingest/workspaces/*               export Git-less, manifest y staging limpio
 src/ingest/validation/*               políticas, build, E2E y evidencia
 src/ingest/candidate/*                commit, digest, preview y manifest
 src/ingest/publishers/*               local y Cloudflare
@@ -67,7 +69,6 @@ src/styles/generated/*                CSS aislado
 public/generated/*                    assets incorporados
 changes/*                              expedientes saneados tras promoción
 .change-state/*                        estado operativo ignorado
-.agent-worktrees/*                     worktrees ignorados
 .artifacts/intake/*                    entrada original ignorada
 .artifacts/candidates/*                build/evidencia ignorados
 ```
@@ -227,8 +228,9 @@ export interface JournalEvent {
 La escritura crea `.tmp-<pid>`, `fsync`, rename y `fsync` del directorio. Un
 intento fallido guarda `resumeState`; `retry` solo vuelve al último checkpoint
 `received|normalized|planned|gate1_approved` y crea un attempt nuevo.
-`.gitignore` añade `.change-state/`, `.agent-worktrees/` y los raws/builds bajo
-`.artifacts/`, sin ignorar los expedientes saneados `changes/`.
+`.gitignore` añade `.change-state/` y los raws/builds bajo `.artifacts/`, sin
+ignorar los expedientes saneados `changes/`. Los workspaces desechables viven
+fuera del repositorio bajo un root operativo controlado.
 
 - [ ] **Step 4: Ejecutar stress local y tests**
 
@@ -545,7 +547,7 @@ El prompt muestra resumen y exige escribir los primeros 12 caracteres de
 `subjectSha256`. Actor tiene 3–120 caracteres y no puede ser `agent`, `codex`,
 `fixture` ni vacío. Gate 1 registra plan hash/baseline; Gate 2 registra hash
 canónico del candidate, commit y artifact. Los records se escriben en
-`.change-state`, nunca en el worktree.
+`.change-state`, nunca en el workspace del agente.
 
 Tests usan `fakePrompt({ isTTY: true, answer: hash.slice(0,12) })`; producción
 usa stdin/stdout reales y escribe `environment: "production"`. Solo runners de
@@ -568,11 +570,12 @@ git add src/ingest/approvals tests/ingest/approvals.test.ts
 git commit -m "feat: enforce two human approval gates"
 ```
 
-### Task 7: Crear worktrees aislados y adaptadores de agente
+### Task 7: Crear workspaces Git-less, ejecutar mediante broker y entregar staging limpio
 
 **Files:**
-- Create: `src/ingest/worktrees/service.ts`
-- Create: `src/ingest/worktrees/policy.ts`
+- Create: `src/ingest/workspaces/service.ts`
+- Create: `src/ingest/workspaces/policy.ts`
+- Create: `src/ingest/limits.ts`
 - Create: `src/ingest/agents/types.ts`
 - Create: `src/ingest/agents/codex.ts`
 - Create: `src/ingest/agents/command.ts`
@@ -581,128 +584,108 @@ git commit -m "feat: enforce two human approval gates"
 - Create: `schemas/ingestion/agent-result.schema.json`
 - Create: `tests/fixtures/ingestion/command-agent.mjs`
 - Create: `tests/ingest/agents.test.ts`
+- Create: `docs/operations/agent-isolation.md`
 
 **Interfaces:**
-- Consumes: plan aprobado, baseline commit y raw hash.
-- Produces: `AgentAdapter.run(input): Promise<AgentRunResult>`, `createCandidateWorktree`, `validateWorktreeDiff`.
+- Consumes: plan aprobado, baseline commit, inputs autoritativos y una capacidad `IsolationBroker` configurada por el operador.
+- Produces: `AgentWorkspace`, `AgentAdapter.run(input): Promise<AgentRunResult>` y `validateAgentWorkspaceOutput(workspace, plan): Promise<StagedAgentOutput>`.
 
-- [ ] **Step 1: Escribir tests de argv, shell y paths modificados**
+- [ ] **Step 1: Escribir tests del broker, workspace y handoff**
 
 ```ts
-test("Codex runs ephemeral in workspace-write without bypass flags", () => {
-  const invocation = codexInvocation(agentInput);
-  assert.deepEqual(invocation.command, "codex");
-  assert.ok(invocation.args.includes("--ephemeral"));
-  assert.ok(invocation.args.includes("workspace-write"));
-  assert.ok(!invocation.args.some((arg) => arg.includes("dangerously-bypass")));
+test("exports the approved baseline without Git or operational state", async () => {
+  const workspace = await createAgentWorkspace(input);
+  assert.equal(await exists(join(workspace.path, ".git")), false);
+  assert.equal(await exists(join(workspace.path, ".change-state")), false);
 });
 
-test("command adapter never invokes a shell", async () => {
-  const spawn = recordingSpawn();
-  const broker = recordingIsolationBroker();
-  await new CommandAgent({ command: process.execPath, args: [fixtureAgent] }, broker, spawn).run(input);
-  assert.equal(spawn.options.shell, false);
-  assert.equal(spawn.command, broker.command);
-});
-
-test("command adapter refuses to run without an isolation broker", async () => {
+test("Command is bound to one service-owned workspace", async () => {
+  await agent.run(workspaceInputs(workspace));
   await assert.rejects(
-    new CommandAgent(commandConfig, null, recordingSpawn()).run(input),
-    /isolation broker/i,
+    agent.run({ ...workspaceInputs(workspace), requestPath: forgedPath }),
+    /workspace aprobado/i,
   );
 });
 
-test("rejects an agent change outside approved output paths", async () => {
-  await writeFile(join(worktree, "package.json"), "{}");
-  await assert.rejects(validateWorktreeDiff(worktree, plan), /package\.json no aprobado/i);
-});
-
-test("rejects any agent-created commit or changed protected ref", async () => {
-  await moveRef("refs/heads/main");
-  await assert.rejects(validateWorktreeDiff(worktree, plan), /Git ref protegido/i);
+test("copies only independently inventoried planned output", async () => {
+  const staged = await validateAgentWorkspaceOutput(workspace, plan);
+  assert.deepEqual(staged.files, ["src/pages/generated.astro"]);
+  assert.notEqual(await inode(staged.path), await inode(workspace.path));
 });
 ```
 
-- [ ] **Step 2: Ejecutar y confirmar fallo**
+Se conservan casos adversariales de mutación de inputs, traversal, symlinks,
+hardlinks, archivos especiales, output no planificado, límites, capability del
+broker y guardias before/after del repositorio. No son criterio de aceptación
+los tests que intentaban demostrar resistencia a races de otro proceso local
+con la misma autoridad.
 
-Run: `npm run test:unit -- tests/ingest/agents.test.ts`
+- [ ] **Step 2: Ejecutar y confirmar fallo inicial**
 
-Expected: FAIL con adapters/worktree ausentes.
+Run: `INGEST_TEST_MODE=true npm run test:unit -- tests/ingest/agents.test.ts`
 
-- [ ] **Step 3: Implementar aislamiento y contrato provider-neutral**
+Expected: FAIL mientras no existan el broker de ejecución, `AgentWorkspace`, el
+inventario hostil y el staging limpio.
+
+- [ ] **Step 3: Implementar el contrato práctico de aislamiento**
 
 ```ts
 export interface AgentRunInput {
   changeId: string;
   attemptId: string;
-  worktree: string;
+  workspace: string;
   requestPath: string;
   planPath: string;
   policyPath: string;
   resultSchemaPath: string;
 }
 
-export interface AgentRunResult {
-  adapter: string;
-  exitCode: number;
-  generatedFiles: string[];
-  stdoutPath: string;
-  stderrPath: string;
-  finalMessagePath: string;
-}
-
-export interface AgentAdapter {
-  readonly name: string;
-  run(input: AgentRunInput): Promise<AgentRunResult>;
-}
-
 export interface IsolationBroker {
-  wrap(input: { worktree: string; command: string; args: string[] }): {
-    command: string;
-    args: string[];
-    env: Record<string, string>;
-  };
+  run(input: BrokerRunInput): Promise<BrokerRunResult>;
+}
+
+export interface StagedAgentOutput {
+  readonly path: string;
+  readonly workspace: AgentWorkspace;
+  readonly files: readonly string[];
+  readonly sha256: Readonly<Record<string, string>>;
 }
 ```
 
-Worktree: `git worktree add --detach .agent-worktrees/<change>/<attempt>
-<baseline>`, luego rama `candidate/<change>/<attempt>`. Copiar input/plan/policy a
-`.agent-input/`, calcular tree hash antes/después y rechazar cambio de input.
+El controlador exporta el baseline aprobado a un directorio nuevo sin `.git`,
+copia inputs autoritativos bajo `.agent-input/` y registra manifests/hashes. Los
+adaptadores quedan ligados al objeto `AgentWorkspace` emitido por el servicio y
+rechazan una proyección de paths forjada. El broker posee el proceso completo,
+usa argv sin shell, environment mínimo y timeout fijo por configuración
+confiable; ningún request puede ampliar esa autoridad.
 
-Codex argv exacto:
+Al terminar el job, el controlador vuelve a validar inputs y repositorios,
+recorre todo el workspace sin seguir enlaces, deriva el inventario sin confiar
+en stdout y copia por bytes solo archivos regulares planificados a un baseline
+limpio nuevo. `StagedAgentOutput.path`, `files` y `sha256` son propiedad del
+controlador y constituyen el único handoff a Task 8. Gate 1, Task 8, validación,
+commit candidato, Gate 2 y publicación quedan fuera del agente.
 
-```text
-codex exec --ephemeral --ignore-user-config --sandbox workspace-write
-  --cd <worktree> --output-schema <agent-result.schema.json>
-  --output-last-message <final-message.json> --json -
-```
+La frontera práctica confía en host, filesystem, controlador y broker. No
+promete protección frente a un proceso local concurrente con igual autoridad.
+En un despliegue multi-tenant el operador debe aportar un broker respaldado por
+contenedor o VM; el broker local de tests no es publicable.
 
-El prompt se entrega por stdin y separa instrucciones fijas de paths de datos no
-confiables. CommandAgent recibe command + argv desde configuración de operador,
-env allowlist y JSON por stdin. Nunca ejecuta ese command directamente: exige
-un `IsolationBroker` configurado por el operador que limite escritura al
-worktree y se invoca sin shell; sin broker falla cerrado. FixtureAgent no se
-expone en el CLI productivo y solo se inyecta en clones temporales de tests.
-
-Antes/después se guardan `HEAD`, `refs/heads/main`, baseline, status del repo
-principal y estado del source sibling. El agente no puede crear commits, mover
-refs ni dejar cambios fuera del worktree; cualquier delta rechaza el intento y
-dispara cleanup.
-
-- [ ] **Step 4: Ejecutar adapters fixture/command y diff negativo**
+- [ ] **Step 4: Ejecutar adapters, policy estructural y guardias negativas**
 
 ```bash
 INGEST_TEST_MODE=true npm run test:unit -- tests/ingest/agents.test.ts
 ```
 
-Expected: PASS y limpieza del worktree fixture en `afterEach` mediante
-`git worktree remove <path>` con path exacto validado.
+Expected: PASS para broker/capability, argv sin shell, env mínimo, timeout,
+workspace Git-less, inputs inmutables, inventario independiente, copia por bytes
+y guardias del repositorio. El cleanup elimina solo el workspace propio.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Cerrar Task 7**
 
 ```bash
-git add src/ingest/worktrees src/ingest/agents schemas/ingestion/agent-result.schema.json tests/fixtures/ingestion/command-agent.mjs tests/ingest/agents.test.ts
-git commit -m "feat: isolate interchangeable page agents"
+git add src/ingest/agents src/ingest/workspaces src/ingest/limits.ts schemas/ingestion/agent-result.schema.json tests/fixtures/ingestion/command-agent.mjs tests/ingest/agents.test.ts docs/operations/agent-isolation.md docs/operations/task-7-closeout.md
+git commit -m "feat: close practical agent isolation task"
 ```
 
 ### Task 8: Definir catálogo de bloques y políticas de salida Astro
@@ -725,8 +708,8 @@ git commit -m "feat: isolate interchangeable page agents"
 - Create: `tests/ingest/output-policy.test.ts`
 
 **Interfaces:**
-- Consumes: `ChangePlan`, generated diff.
-- Produces: `BlockPageDefinition`, `validateOutputPolicy(worktree, plan): PolicyViolation[]`.
+- Consumes: `ChangePlan`, `StagedAgentOutput.path`, `StagedAgentOutput.files` y `StagedAgentOutput.sha256`, todos derivados por el controlador y no por el listado declarado del agente.
+- Produces: `BlockPageDefinition`, `validateOutputPolicy(stagingPath, inventory, plan): PolicyViolation[]`.
 
 - [ ] **Step 1: Escribir tests para tres modos y ataques comunes**
 
@@ -763,8 +746,7 @@ mailto y tel. Blocks genera JSON + ruta `.astro` que importa
 Los tres modos escriben también `src/content/generated/<id>.json` con ruta,
 metadata, privacidad y hash de contenido para sitemap/auditoría.
 
-Policy permite crear/modificar los cinco roots de `outputPaths` y cada archivo
-exacto de `plan.files`; rechaza cualquier otro path.
+Policy evalúa únicamente el árbol limpio en `StagedAgentOutput.path` y su inventario independiente. Permite crear/modificar los cinco roots de `outputPaths` y cada archivo exacto de `plan.files`; rechaza cualquier otro path y no vuelve a leer el workspace hostil ni confía en `generatedFiles` del agente.
 `package.json` y `package-lock.json` se añaden de forma excepcional solo cuando
 `plan.dependencies` no está vacío y el diff coincide exactamente con nombre +
 versión aprobados; ningún otro manifest/config es escribible.
@@ -800,7 +782,7 @@ git commit -m "feat: enforce generated Astro page policies"
 - Create: `tests/ingest/validation-runner.test.ts`
 
 **Interfaces:**
-- Consumes: worktree generado y plan aprobado.
+- Consumes: staging limpio controlado por el controlador, inventario aprobado por Task 8 y plan aprobado.
 - Produces: `runValidation(input): Promise<ValidationResult[]>`, todos `passed` o intento `failed`.
 
 - [ ] **Step 1: Escribir test de orden fail-fast y evidencia**
@@ -846,10 +828,7 @@ Orden:
 12. captura desktop/tablet/mobile;
 13. comparación HTML/visual si overwrite.
 
-Cada comando usa argv, timeout 10 minutos, stdout/stderr saneados y directorio
-del worktree. Un fallo detiene pasos dependientes pero registra `skipped` solo en
-el intento; candidate schema nunca acepta skipped/failed. La evidencia se
-escribe fuera del worktree, bajo el attempt. Los unitarios del runner siempre
+Cada comando usa argv, timeout 10 minutos, stdout/stderr saneados y el staging limpio como directorio de trabajo. Un fallo detiene pasos dependientes pero registra `skipped` solo en el intento; candidate schema nunca acepta skipped/failed. La evidencia se escribe fuera del staging, bajo el attempt. Los unitarios del runner siempre
 inyectan `CommandRunner` fixture y nunca ejecutan recursivamente la suite real.
 
 - [ ] **Step 4: Validar una fixture buena y cinco negativas**
@@ -880,7 +859,7 @@ git commit -m "feat: validate generated Astro candidates"
 - Create: `tests/ingest/candidate.test.ts`
 
 **Interfaces:**
-- Consumes: worktree limpio generado, validations y artifacts.
+- Consumes: `StagedAgentOutput.path` e inventario ya aprobados por Tasks 7–9, validations y artifacts.
 - Produces: `createCandidate(input): Promise<CandidateManifest>`, `hashTree(root): Promise<string>`, `startCandidatePreview(candidate): PreviewHandle`.
 
 - [ ] **Step 1: Escribir tests de digest y mutación posterior**
@@ -926,10 +905,7 @@ Expected: FAIL con candidate modules ausentes.
 
 - [ ] **Step 3: Implementar identidad no circular del candidato**
 
-Tras policy inicial, el controlador crea un commit A con solo outputs aprobados.
-El worktree debe quedar limpio. Validación/build se ejecutan sobre A. El build
-debe producir `.wrangler/deploy/config.json`; su `configPath` debe ser relativo,
-resolver dentro del worktree y apuntar a un `wrangler.json` generado bajo
+Tras policy inicial, el controlador materializa desde el staging y su inventario un checkout candidato limpio que nunca se entrega al agente, vuelve a comprobar los hashes y crea un commit A con solo outputs aprobados. El checkout debe quedar limpio. Validación/build se ejecutan sobre A. El build debe producir `.wrangler/deploy/config.json`; su `configPath` debe ser relativo, resolver dentro del checkout controlado y apuntar a un `wrangler.json` generado bajo
 `dist/`. Se aplican las mismas reglas a `auxiliaryWorkers` y
 `prerenderWorkerConfigPath` cuando existan. El config aplanado principal debe
 declarar el `targetEnvironment` aprobado y los mismos
@@ -1051,7 +1027,7 @@ Expected: FAIL con publishers ausentes.
 - [ ] **Step 3: Implementar verificación y export saneado**
 
 Antes de cualquier publisher: verificar journal, schemas, approvals, request/
-plan/candidate hashes, commit existente, worktree limpio, artifact digest y
+plan/candidate hashes, commit existente, checkout controlador limpio, artifact digest y
 validations verdes. El redirect `.wrangler/deploy/config.json` y el config
 aplanado al que apunta se vuelven a resolver dentro del bundle y sus hashes,
 `targetEnvironment`, bindings y destino deben coincidir con candidate/plan. Si
@@ -1075,8 +1051,7 @@ Añade `--dry-run` salvo `execute:true`. `execute:true` solo llega desde CLI con
 TTY, flag literal `--execute`, config validado y Gate 2. Nunca se usa en tests.
 
 Tras promoción exitosa, exportar request/plan, dos approvals, attempts y
-candidate saneados a `changes/<id>/`. Con el worktree principal limpio y en
-`main`, `promoteCandidate` ejecuta `git merge --ff-only <candidateCommit>`; como
+candidate saneados a `changes/<id>/`. Con el checkout principal limpio y en `main`, `promoteCandidate` ejecuta `git merge --ff-only <candidateCommit>`; como
 `main === baseline`, ese movimiento lleva exactamente a commit A. Después crea
 commit B, con identidad Git explícita del servicio, que solo documenta el
 expediente. El artifact publicado sigue siendo el commit A/digest aprobado,

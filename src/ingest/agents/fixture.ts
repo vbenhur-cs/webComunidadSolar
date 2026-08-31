@@ -42,7 +42,6 @@ function sameInput(
     input.changeId === expected.changeId &&
     input.attemptId === expected.attemptId &&
     input.workspace === expected.workspace &&
-    input.worktree === expected.workspace &&
     input.requestPath === expected.requestPath &&
     input.planPath === expected.planPath &&
     input.policyPath === expected.policyPath &&
