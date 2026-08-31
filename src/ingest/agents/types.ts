@@ -1,5 +1,7 @@
 import { spawn } from "node:child_process";
 
+import { AGENT_STDERR_MAX_BYTES, AGENT_STDOUT_MAX_BYTES } from "../limits.ts";
+
 export interface AgentRunInput {
   changeId: string;
   attemptId: string;
@@ -94,6 +96,9 @@ export const runProcess: ProcessRunner = async (command, args, options) =>
     const stdout: Buffer[] = [];
     const stderr: Buffer[] = [];
     let timedOut = false;
+    let captureError: TypeError | undefined;
+    let stdoutBytes = 0;
+    let stderrBytes = 0;
     let deadline: NodeJS.Timeout | undefined;
     let forceTermination: NodeJS.Timeout | undefined;
     const clearTimers = () => {
@@ -112,14 +117,49 @@ export const runProcess: ProcessRunner = async (command, args, options) =>
         if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error;
       }
     };
-    child.stdout.on("data", (chunk: Buffer) => stdout.push(chunk));
-    child.stderr.on("data", (chunk: Buffer) => stderr.push(chunk));
+    const requestTermination = () => {
+      terminate("SIGTERM");
+      forceTermination ??= setTimeout(
+        () => terminate("SIGKILL"),
+        options.terminationGraceMs ?? 100,
+      );
+    };
+    const capture = (
+      chunks: Buffer[],
+      chunk: Buffer,
+      label: "stdout" | "stderr",
+    ) => {
+      const maximum =
+        label === "stdout" ? AGENT_STDOUT_MAX_BYTES : AGENT_STDERR_MAX_BYTES;
+      const current = label === "stdout" ? stdoutBytes : stderrBytes;
+      const next = current + chunk.byteLength;
+      if (next > maximum) {
+        captureError ??= new TypeError(
+          `El ${label} del agente excede el límite permitido`,
+        );
+        requestTermination();
+        return;
+      }
+      if (label === "stdout") stdoutBytes = next;
+      else stderrBytes = next;
+      chunks.push(Buffer.from(chunk));
+    };
+    child.stdout.on("data", (chunk: Buffer) =>
+      capture(stdout, chunk, "stdout"),
+    );
+    child.stderr.on("data", (chunk: Buffer) =>
+      capture(stderr, chunk, "stderr"),
+    );
     child.once("error", (error) => {
       clearTimers();
       reject(error);
     });
     child.once("close", (code) => {
       clearTimers();
+      if (captureError !== undefined) {
+        reject(captureError);
+        return;
+      }
       resolve({
         exitCode: code ?? 1,
         stdout: Buffer.concat(stdout).toString("utf8"),
@@ -130,11 +170,7 @@ export const runProcess: ProcessRunner = async (command, args, options) =>
     if (usesDeadline) {
       deadline = setTimeout(() => {
         timedOut = true;
-        terminate("SIGTERM");
-        forceTermination = setTimeout(
-          () => terminate("SIGKILL"),
-          options.terminationGraceMs ?? 100,
-        );
+        requestTermination();
       }, options.timeoutMs);
     }
     child.stdin.end(options.input);

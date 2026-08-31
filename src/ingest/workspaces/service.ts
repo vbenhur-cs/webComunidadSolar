@@ -1,9 +1,11 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { createHash } from "node:crypto";
+import { constants } from "node:fs";
 import {
   chmod,
   lstat,
   mkdir,
+  open,
   opendir,
   readFile,
   realpath,
@@ -16,6 +18,14 @@ import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 
 import { canonicalJson, sha256Canonical } from "../canonical-json.ts";
 import type { ChangePlan } from "../domain.ts";
+import {
+  AGENT_INPUT_MAX_BYTES,
+  AGENT_IO_CHUNK_BYTES,
+  AGENT_WORKSPACE_ENTRY_MAX_COUNT,
+  AGENT_WORKSPACE_FILE_MAX_BYTES,
+  AGENT_WORKSPACE_FILE_MAX_COUNT,
+  AGENT_WORKSPACE_TOTAL_MAX_BYTES,
+} from "../limits.ts";
 
 const safeIdPattern = /^[a-z0-9](?:[a-z0-9-]{1,62}[a-z0-9])$/u;
 const safeCommitPattern = /^[a-f0-9]{40,64}$/u;
@@ -294,6 +304,9 @@ async function authoritativeBytes(
   if (entry.isSymbolicLink() || !entry.isFile() || entry.nlink !== 1) {
     throw new TypeError(`${label} debe ser un archivo regular autoritativo`);
   }
+  if (entry.size > AGENT_INPUT_MAX_BYTES) {
+    throw new TypeError(`${label} excede el límite de entrada permitido`);
+  }
   return await readFile(absolute);
 }
 
@@ -449,6 +462,58 @@ async function captureManifest(
   root: string,
 ): Promise<ReadonlyMap<string, ManifestEntry>> {
   const entries = new Map<string, ManifestEntry>();
+  let entryCount = 0;
+  let fileCount = 0;
+  let totalBytes = 0;
+
+  async function regularFileDigest(
+    path: string,
+  ): Promise<{ bytes: number; sha256: string }> {
+    const noFollow = constants.O_NOFOLLOW ?? 0;
+    const handle = await open(path, constants.O_RDONLY | noFollow);
+    try {
+      const entry = await handle.stat();
+      if (!entry.isFile() || entry.nlink !== 1) {
+        throw new TypeError("El workspace contiene un hardlink inseguro");
+      }
+      if (entry.size > AGENT_WORKSPACE_FILE_MAX_BYTES) {
+        throw new TypeError(
+          "El archivo del workspace excede el límite por archivo",
+        );
+      }
+      if (entry.size > AGENT_WORKSPACE_TOTAL_MAX_BYTES - totalBytes) {
+        throw new TypeError("El workspace excede el límite total de bytes");
+      }
+      const digest = createHash("sha256");
+      let bytes = 0;
+      while (true) {
+        const buffer = Buffer.allocUnsafe(AGENT_IO_CHUNK_BYTES);
+        const { bytesRead } = await handle.read(
+          buffer,
+          0,
+          buffer.byteLength,
+          null,
+        );
+        if (bytesRead === 0) break;
+        bytes += bytesRead;
+        if (
+          bytes > AGENT_WORKSPACE_FILE_MAX_BYTES ||
+          bytes > AGENT_WORKSPACE_TOTAL_MAX_BYTES - totalBytes
+        ) {
+          throw new TypeError("El workspace excede el límite total de bytes");
+        }
+        digest.update(buffer.subarray(0, bytesRead));
+      }
+      if (bytes !== entry.size) {
+        throw new TypeError(
+          "El archivo del workspace cambió durante la lectura",
+        );
+      }
+      return { bytes, sha256: digest.digest("hex") };
+    } finally {
+      await handle.close();
+    }
+  }
 
   async function visit(relativeDirectory: string): Promise<void> {
     const directory =
@@ -457,7 +522,15 @@ async function captureManifest(
         : join(root, ...relativeDirectory.split("/"));
     const handle = await opendir(directory);
     const names: string[] = [];
-    for await (const entry of handle) names.push(entry.name);
+    for await (const entry of handle) {
+      entryCount += 1;
+      if (entryCount > AGENT_WORKSPACE_ENTRY_MAX_COUNT) {
+        throw new TypeError(
+          "El workspace excede el límite de cantidad de entradas",
+        );
+      }
+      names.push(entry.name);
+    }
     names.sort();
     for (const name of names) {
       const path =
@@ -494,14 +567,21 @@ async function captureManifest(
       if (entry.nlink !== 1) {
         throw new TypeError("El workspace contiene un hardlink inseguro");
       }
-      const bytes = await readFile(absolute);
+      fileCount += 1;
+      if (fileCount > AGENT_WORKSPACE_FILE_MAX_COUNT) {
+        throw new TypeError(
+          "El workspace excede el límite de cantidad de archivos",
+        );
+      }
+      const file = await regularFileDigest(absolute);
+      totalBytes += file.bytes;
       entries.set(
         path,
         Object.freeze({
           kind: "file",
           mode,
-          bytes: bytes.byteLength,
-          sha256: sha256(bytes),
+          bytes: file.bytes,
+          sha256: file.sha256,
         }),
       );
     }
@@ -738,8 +818,16 @@ export async function assertWorkspaceInputs(
     if (directory.isSymbolicLink() || !directory.isDirectory()) {
       throw new TypeError("La entrada copiada del agente cambió");
     }
-    const names = (await readdir(inputRoot)).sort();
     const expectedNames = [...record.inputs.keys()].sort();
+    const names: string[] = [];
+    const inputDirectory = await opendir(inputRoot);
+    for await (const entry of inputDirectory) {
+      if (names.length >= expectedNames.length) {
+        throw new TypeError("La entrada copiada del agente cambió");
+      }
+      names.push(entry.name);
+    }
+    names.sort();
     if (canonicalJson(names) !== canonicalJson(expectedNames)) {
       throw new TypeError("La entrada copiada del agente cambió");
     }
@@ -750,7 +838,9 @@ export async function assertWorkspaceInputs(
         path !== expected.path ||
         entry.isSymbolicLink() ||
         !entry.isFile() ||
-        entry.nlink !== 1
+        entry.nlink !== 1 ||
+        entry.size !== expected.bytes ||
+        entry.size > AGENT_INPUT_MAX_BYTES
       ) {
         throw new TypeError("La entrada copiada del agente cambió");
       }

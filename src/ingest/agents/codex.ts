@@ -1,9 +1,20 @@
 import { createHash } from "node:crypto";
 import { constants } from "node:fs";
 import { access, lstat, open, readFile, realpath } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 
 import { validateSchema } from "../schema-validator.ts";
+import {
+  AGENT_FINAL_MESSAGE_MAX_BYTES,
+  AGENT_IO_CHUNK_BYTES,
+  assertBrokerResultLimits,
+} from "../limits.ts";
+import {
+  assertWorkspaceInputs,
+  workspaceInputs,
+  type AgentWorkspace,
+  type AgentWorkspaceInputs,
+} from "../workspaces/service.ts";
 import { assertOperatorIsolationBroker } from "./isolation.ts";
 import type {
   AgentAdapter,
@@ -50,28 +61,42 @@ export async function createCodexExecutableCapability(
   return capability;
 }
 
-function workspacePath(input: AgentRunInput): string {
-  if (input.workspace === undefined) {
-    throw new TypeError("Codex exige un AgentWorkspace aprobado");
+function assertWorkspaceRunInput(
+  workspace: AgentWorkspace,
+  input: AgentRunInput,
+): AgentWorkspaceInputs {
+  const expected = workspaceInputs(workspace);
+  if (
+    input.changeId !== expected.changeId ||
+    input.attemptId !== expected.attemptId ||
+    input.workspace !== expected.workspace ||
+    input.worktree !== expected.workspace ||
+    input.requestPath !== expected.requestPath ||
+    input.planPath !== expected.planPath ||
+    input.policyPath !== expected.policyPath ||
+    input.resultSchemaPath !== expected.resultSchemaPath
+  ) {
+    throw new TypeError(
+      "El contexto de Codex no corresponde al workspace aprobado",
+    );
   }
-  const workspace = resolve(input.workspace);
-  if (resolve(input.worktree) !== workspace) {
-    throw new TypeError("El contexto de Codex no corresponde al workspace");
-  }
-  return workspace;
+  return expected;
 }
 
-function finalMessagePath(input: AgentRunInput): string {
-  return join(workspacePath(input), ".agent-output", "final-message.json");
+function finalMessagePath(workspace: AgentWorkspace): string {
+  return join(workspace.path, ".agent-output", "final-message.json");
 }
 
 /** Build fixed Codex CLI argv without interpolating request or prompt text. */
-export function codexInvocation(input: AgentRunInput): CodexInvocation {
-  const workspace = workspacePath(input);
+export function codexInvocation(
+  workspace: AgentWorkspace,
+  input: AgentRunInput,
+): CodexInvocation {
+  const approved = assertWorkspaceRunInput(workspace, input);
   const dataPaths = {
-    requestPath: input.requestPath,
-    planPath: input.planPath,
-    policyPath: input.policyPath,
+    requestPath: approved.requestPath,
+    planPath: approved.planPath,
+    policyPath: approved.policyPath,
   };
   return {
     command: "codex",
@@ -82,11 +107,11 @@ export function codexInvocation(input: AgentRunInput): CodexInvocation {
       "--sandbox",
       "workspace-write",
       "--cd",
-      workspace,
+      approved.workspace,
       "--output-schema",
-      input.resultSchemaPath,
+      approved.resultSchemaPath,
       "--output-last-message",
-      finalMessagePath(input),
+      finalMessagePath(workspace),
       "--json",
       "-",
     ],
@@ -105,16 +130,18 @@ export class CodexAgent implements AgentAdapter {
   constructor(
     private readonly executable: CodexExecutableCapability | null,
     private readonly broker: IsolationBroker | null,
+    private readonly workspace: AgentWorkspace,
   ) {}
 
   async run(input: AgentRunInput): Promise<AgentRunResult> {
     assertOperatorIsolationBroker(this.broker);
-    const invocation = codexInvocation(input);
-    const workspace = workspacePath(input);
+    const approved = assertWorkspaceRunInput(this.workspace, input);
+    await assertWorkspaceInputs(this.workspace);
+    const invocation = codexInvocation(this.workspace, input);
     const command = await codexExecutable(this.executable);
-    await assertAgentOutputDirectory(workspace);
+    await assertAgentOutputDirectory(approved.workspace);
     const result = await this.broker.run({
-      workspace,
+      workspace: approved.workspace,
       command,
       args: [...invocation.args],
       stdin: invocation.input,
@@ -127,8 +154,11 @@ export class CodexAgent implements AgentAdapter {
         `El broker terminó con código de salida ${result.exitCode}`,
       );
     }
-    await assertAgentOutputDirectory(workspace);
-    const finalMessage = await readRegularFinalMessage(finalMessagePath(input));
+    assertBrokerResultLimits(result);
+    await assertAgentOutputDirectory(approved.workspace);
+    const finalMessage = await readRegularFinalMessage(
+      finalMessagePath(this.workspace),
+    );
     return {
       adapter: this.name,
       exitCode: result.exitCode,
@@ -189,7 +219,36 @@ async function readRegularFinalMessage(path: string): Promise<string> {
         "El mensaje final de Codex debe ser un archivo regular",
       );
     }
-    return (await handle.readFile()).toString("utf8");
+    if (entry.size > AGENT_FINAL_MESSAGE_MAX_BYTES) {
+      throw new TypeError(
+        "El mensaje final de Codex excede el límite permitido",
+      );
+    }
+    const chunks: Buffer[] = [];
+    let total = 0;
+    while (true) {
+      const buffer = Buffer.allocUnsafe(AGENT_IO_CHUNK_BYTES);
+      const { bytesRead } = await handle.read(
+        buffer,
+        0,
+        buffer.byteLength,
+        null,
+      );
+      if (bytesRead === 0) break;
+      total += bytesRead;
+      if (total > AGENT_FINAL_MESSAGE_MAX_BYTES) {
+        throw new TypeError(
+          "El mensaje final de Codex excede el límite permitido",
+        );
+      }
+      chunks.push(Buffer.from(buffer.subarray(0, bytesRead)));
+    }
+    if (total !== entry.size) {
+      throw new TypeError(
+        "El mensaje final de Codex cambió durante la lectura",
+      );
+    }
+    return Buffer.concat(chunks, total).toString("utf8");
   } catch (error: unknown) {
     if (error instanceof TypeError) throw error;
     throw new TypeError(

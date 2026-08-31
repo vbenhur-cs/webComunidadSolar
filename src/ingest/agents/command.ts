@@ -1,5 +1,10 @@
 import { assertOperatorIsolationBroker } from "./isolation.ts";
 import { resolveAgentRunContext } from "../worktrees/service.ts";
+import {
+  AGENT_FINAL_MESSAGE_MAX_BYTES,
+  assertAgentTextLimit,
+  assertBrokerResultLimits,
+} from "../limits.ts";
 import { validateSchema } from "../schema-validator.ts";
 
 import {
@@ -54,6 +59,12 @@ export class CommandAgent implements AgentAdapter {
       throw new TypeError(
         `El broker terminó con código de salida ${result.exitCode}`,
       );
+    assertBrokerResultLimits(result);
+    assertAgentTextLimit(
+      "mensaje final",
+      result.stdout,
+      AGENT_FINAL_MESSAGE_MAX_BYTES,
+    );
     return {
       adapter: this.name,
       exitCode: result.exitCode,

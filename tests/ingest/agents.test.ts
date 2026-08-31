@@ -6,6 +6,7 @@ import {
   lstat,
   mkdir,
   mkdtemp,
+  open,
   readFile,
   realpath,
   rename,
@@ -315,6 +316,16 @@ async function exists(path: string): Promise<boolean> {
   }
 }
 
+async function writeSparseFile(path: string, bytes: number): Promise<void> {
+  await mkdir(dirname(path), { recursive: true });
+  const handle = await open(path, "wx");
+  try {
+    await handle.truncate(bytes);
+  } finally {
+    await handle.close();
+  }
+}
+
 async function createInput(
   root: string,
   candidatePath: string,
@@ -355,34 +366,34 @@ function recordingBroker(): IsolationBroker {
   }));
 }
 
-test("Codex runs ephemeral in workspace-write without bypass flags", () => {
-  const invocation = codexInvocation({
-    changeId: "agent-isolation",
-    attemptId: "attempt-000001",
-    worktree: "/safe/workspace",
-    workspace: "/safe/workspace",
-    requestPath: "/safe/workspace/.agent-input/request.json",
-    planPath: "/safe/workspace/.agent-input/plan.json",
-    policyPath: "/safe/workspace/.agent-input/policy.json",
-    resultSchemaPath: "/safe/schema.json",
+test("Codex runs ephemeral in workspace-write without bypass flags", async () => {
+  await withWorkspaceRepository(async (repository) => {
+    const workspace = await createAgentWorkspace(workspaceInput(repository));
+    try {
+      const invocation = codexInvocation(workspace, agentInput(workspace));
+      assert.equal(invocation.command, "codex");
+      assert.deepEqual(invocation.args.slice(0, 6), [
+        "exec",
+        "--ephemeral",
+        "--ignore-user-config",
+        "--sandbox",
+        "workspace-write",
+        "--cd",
+      ]);
+      assert.ok(invocation.args.includes("--json"));
+      assert.ok(invocation.args.includes("-"));
+      assert.ok(
+        invocation.args.includes(
+          join(workspace.path, ".agent-output", "final-message.json"),
+        ),
+      );
+      assert.ok(
+        !invocation.args.some((arg) => arg.includes("dangerously-bypass")),
+      );
+    } finally {
+      await removeAgentWorkspace(workspace);
+    }
   });
-  assert.equal(invocation.command, "codex");
-  assert.deepEqual(invocation.args.slice(0, 6), [
-    "exec",
-    "--ephemeral",
-    "--ignore-user-config",
-    "--sandbox",
-    "workspace-write",
-    "--cd",
-  ]);
-  assert.ok(invocation.args.includes("--json"));
-  assert.ok(invocation.args.includes("-"));
-  assert.ok(
-    invocation.args.includes(
-      "/safe/workspace/.agent-output/final-message.json",
-    ),
-  );
-  assert.ok(!invocation.args.some((arg) => arg.includes("dangerously-bypass")));
 });
 
 test("command adapter delegates one complete argv-only job to the broker", async () => {
@@ -486,6 +497,43 @@ test("broker timeout and non-zero exit never produce generated files", async () 
   }
 });
 
+test("command adapter rejects oversized broker stdout and stderr", async () => {
+  const workspace = await mkdtemp(
+    join(tmpdir(), "comunidadsolar-command-log-limit-"),
+  );
+  const input = await createInput(workspace, workspace);
+  const config = { command: process.execPath, args: [] };
+  try {
+    await assert.rejects(
+      new CommandAgent(
+        config,
+        createOperatorIsolationBroker(async () => ({
+          exitCode: 0,
+          stdout: "x".repeat(262_145),
+          stderr: "",
+          timedOut: false,
+        })),
+      ).run(input),
+      /stdout.*l[ií]mite|l[ií]mite.*stdout/i,
+    );
+    await assert.rejects(
+      new CommandAgent(
+        config,
+        createOperatorIsolationBroker(async () => ({
+          exitCode: 0,
+          stdout: '{"generatedFiles":[]}',
+          stderr: "x".repeat(262_145),
+          timedOut: false,
+        })),
+      ).run(input),
+      /stderr.*l[ií]mite|l[ií]mite.*stderr/i,
+    );
+  } finally {
+    await rm(dirname(input.requestPath), { recursive: true, force: true });
+    await rm(input.outputDirectory!, { recursive: true, force: true });
+  }
+});
+
 test("test isolation broker terminates an argv job at its supplied deadline", async () => {
   const workspace = await mkdtemp(
     join(tmpdir(), "comunidadsolar-test-broker-timeout-"),
@@ -503,6 +551,28 @@ test("test isolation broker terminates an argv job at its supplied deadline", as
     });
     assert.equal(result.timedOut, true);
     assert.ok(Date.now() - started < 200);
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("test isolation broker rejects stdout beyond its capture ceiling", async () => {
+  const workspace = await mkdtemp(
+    join(tmpdir(), "comunidadsolar-test-broker-output-limit-"),
+  );
+  const broker = testIsolationBroker(workspace);
+  try {
+    await assert.rejects(
+      broker.run({
+        workspace,
+        command: process.execPath,
+        args: ["-e", 'process.stdout.write("x".repeat(262145))'],
+        stdin: "",
+        env: { PATH: "/usr/bin:/bin", LANG: "C", LC_ALL: "C" },
+        timeoutMs: 5_000,
+      }),
+      /stdout.*l[ií]mite|l[ií]mite.*stdout/i,
+    );
   } finally {
     await rm(workspace, { recursive: true, force: true });
   }
@@ -608,6 +678,17 @@ test("exports the approved baseline into a disposable workspace without Git or o
       await removeAgentWorkspace(workspace);
     }
     assert.equal(await exists(expectedPath), false);
+  });
+});
+
+test("rejects an oversized authoritative agent input before copying it", async () => {
+  await withWorkspaceRepository(async (repository) => {
+    await writeFile(repository.policyPath, Buffer.alloc(1_048_577, 0x78));
+    await assert.rejects(async () => {
+      const workspace = await createAgentWorkspace(workspaceInput(repository));
+      await removeAgentWorkspace(workspace);
+      assert.fail("expected the input size ceiling to reject the workspace");
+    }, /entrada|policy.*l[ií]mite|excede/i);
   });
 });
 
@@ -760,6 +841,99 @@ test("builds accepted inventory independently and byte-copies it into a clean ba
       assert.equal(Object.isFrozen(staged), true);
       assert.equal(Object.isFrozen(staged.files), true);
       assert.equal(Object.isFrozen(staged.sha256), true);
+    } finally {
+      await removeAgentWorkspace(workspace);
+    }
+  });
+});
+
+test("rejects an oversized sparse agent output before reading it", async () => {
+  await withWorkspaceRepository(async (repository) => {
+    const workspace = await createAgentWorkspace(workspaceInput(repository));
+    try {
+      await writeSparseFile(
+        join(workspace.path, "src/pages/generated.astro"),
+        8_388_609,
+      );
+      await assert.rejects(
+        () =>
+          validateAgentWorkspaceOutput(workspace, plan(repository.baseline)),
+        /archivo.*l[ií]mite|excede.*archivo/i,
+      );
+    } finally {
+      await removeAgentWorkspace(workspace);
+    }
+  });
+});
+
+test("rejects accepted output whose aggregate bytes exceed the fixed ceiling", async () => {
+  await withWorkspaceRepository(async (repository) => {
+    const generatedPlan = planWith(repository.baseline, {
+      files: [
+        {
+          path: "public/generated/agent-isolation",
+          operation: "create",
+        },
+      ],
+    });
+    const workspace = await createWorkspaceForPlan(repository, generatedPlan);
+    try {
+      for (const name of ["one.bin", "two.bin", "three.bin"]) {
+        await writeSparseFile(
+          join(workspace.path, "public/generated/agent-isolation", name),
+          6_291_456,
+        );
+      }
+      await assert.rejects(
+        () => validateAgentWorkspaceOutput(workspace, generatedPlan),
+        /salida.*bytes|bytes.*l[ií]mite|salida.*l[ií]mite/i,
+      );
+    } finally {
+      await removeAgentWorkspace(workspace);
+    }
+  });
+});
+
+test("rejects accepted output whose file count exceeds the fixed ceiling", async () => {
+  await withWorkspaceRepository(async (repository) => {
+    const generatedPlan = planWith(repository.baseline, {
+      files: [
+        {
+          path: "public/generated/agent-isolation",
+          operation: "create",
+        },
+      ],
+    });
+    const workspace = await createWorkspaceForPlan(repository, generatedPlan);
+    const outputRoot = join(workspace.path, "public/generated/agent-isolation");
+    try {
+      await mkdir(outputRoot, { recursive: true });
+      for (let index = 0; index < 257; index += 1) {
+        await writeFile(join(outputRoot, `${index}.txt`), "x", "utf8");
+      }
+      await assert.rejects(
+        () => validateAgentWorkspaceOutput(workspace, generatedPlan),
+        /cantidad.*archivo|archivos.*l[ií]mite/i,
+      );
+    } finally {
+      await removeAgentWorkspace(workspace);
+    }
+  });
+});
+
+test("rejects workspace entries before directory inventory grows without bound", async () => {
+  await withWorkspaceRepository(async (repository) => {
+    const workspace = await createAgentWorkspace(workspaceInput(repository));
+    const hostileRoot = join(workspace.path, "hostile-directories");
+    try {
+      await mkdir(hostileRoot);
+      for (let index = 0; index < 1_025; index += 1) {
+        await mkdir(join(hostileRoot, `${index}`));
+      }
+      await assert.rejects(
+        () => workspaceManifest(workspace),
+        /cantidad.*entradas|inventario.*l[ií]mite/i,
+      );
     } finally {
       await removeAgentWorkspace(workspace);
     }
@@ -1060,7 +1234,7 @@ test("Codex delegates to its broker and reads only a schema-valid workspace fina
       };
     });
     try {
-      const result = await new CodexAgent(capability, broker).run(
+      const result = await new CodexAgent(capability, broker, workspace).run(
         agentInput(workspace),
       );
       assert.equal(calls.length, 1);
@@ -1073,6 +1247,90 @@ test("Codex delegates to its broker and reads only a schema-valid workspace fina
       assert.deepEqual(result.generatedFiles, []);
       assert.equal(result.finalMessage, '{"generatedFiles":[]}');
       assert.equal(result.stdout, '{"type":"result"}');
+    } finally {
+      await removeAgentWorkspace(workspace);
+    }
+  });
+});
+
+test("Codex rejects a forged path-only input before broker delegation", async () => {
+  await withWorkspaceRepository(async (repository) => {
+    const executable = join(repository.sourceRoot, "codex-fixture");
+    await writeFile(executable, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+    const capability = await createCodexExecutableCapability(
+      await realpath(executable),
+    );
+    const workspace = await createAgentWorkspace(workspaceInput(repository));
+    let calls = 0;
+    const broker = createOperatorIsolationBroker(async () => {
+      calls += 1;
+      return {
+        exitCode: 0,
+        stdout: "",
+        stderr: "",
+        timedOut: false,
+      };
+    });
+    try {
+      await assert.rejects(
+        new CodexAgent(capability, broker, workspace).run({
+          ...agentInput(workspace),
+          requestPath: join(repository.sourceRoot, "forged-request.json"),
+        }),
+        /workspace aprobado|contexto.*workspace/i,
+      );
+      assert.equal(calls, 0);
+    } finally {
+      await removeAgentWorkspace(workspace);
+    }
+  });
+});
+
+test("Codex rejects oversized final messages and broker logs", async () => {
+  await withWorkspaceRepository(async (repository) => {
+    const executable = join(repository.sourceRoot, "codex-fixture");
+    await writeFile(executable, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+    const capability = await createCodexExecutableCapability(
+      await realpath(executable),
+    );
+    const workspace = await createAgentWorkspace(workspaceInput(repository));
+    const input = agentInput(workspace);
+    try {
+      await assert.rejects(
+        new CodexAgent(
+          capability,
+          createOperatorIsolationBroker(async ({ args }) => {
+            const output = args[args.indexOf("--output-last-message") + 1];
+            await writeSparseFile(output!, 65_537);
+            return {
+              exitCode: 0,
+              stdout: "",
+              stderr: "",
+              timedOut: false,
+            };
+          }),
+          workspace,
+        ).run(input),
+        /mensaje final.*l[ií]mite|excede.*mensaje final/i,
+      );
+      await rm(join(workspace.path, ".agent-output", "final-message.json"));
+      await assert.rejects(
+        new CodexAgent(
+          capability,
+          createOperatorIsolationBroker(async ({ args }) => {
+            const output = args[args.indexOf("--output-last-message") + 1];
+            await writeFile(output!, '{"generatedFiles":[]}', "utf8");
+            return {
+              exitCode: 0,
+              stdout: "x".repeat(262_145),
+              stderr: "",
+              timedOut: false,
+            };
+          }),
+          workspace,
+        ).run(input),
+        /stdout.*l[ií]mite|l[ií]mite.*stdout/i,
+      );
     } finally {
       await removeAgentWorkspace(workspace);
     }
@@ -2618,12 +2876,9 @@ test("owned run context rejects a same-content copied input replacement", async 
 });
 
 test("operator Codex capability rejects replacement before executing", async () => {
-  const root = await mkdtemp(
-    join(tmpdir(), "comunidadsolar-codex-capability-"),
-  );
-  const executable = join(root, "codex-fixture");
-  const link = join(root, "codex-link");
-  try {
+  await withWorkspaceRepository(async (repository) => {
+    const executable = join(repository.sourceRoot, "codex-fixture");
+    const link = join(repository.sourceRoot, "codex-link");
     await writeFile(executable, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
     const capability = await createCodexExecutableCapability(
       await realpath(executable),
@@ -2633,104 +2888,124 @@ test("operator Codex capability rejects replacement before executing", async () 
       createCodexExecutableCapability(link),
       /regular|enlace/i,
     );
-    await writeFile(join(root, "not-executable"), "x", { mode: 0o644 });
+    await writeFile(join(repository.sourceRoot, "not-executable"), "x", {
+      mode: 0o644,
+    });
     await assert.rejects(
-      createCodexExecutableCapability(join(root, "not-executable")),
+      createCodexExecutableCapability(
+        join(repository.sourceRoot, "not-executable"),
+      ),
       /EACCES|permission/i,
     );
-    await assert.rejects(createCodexExecutableCapability(root), /regular/i);
+    await assert.rejects(
+      createCodexExecutableCapability(repository.sourceRoot),
+      /regular/i,
+    );
+    const workspace = await createAgentWorkspace(workspaceInput(repository));
     await writeFile(executable, "#!/bin/sh\nexit 1\n", { mode: 0o755 });
-    const input = await createInput(root, root);
     let calls = 0;
     const broker = createOperatorIsolationBroker(async () => {
       calls += 1;
       return { exitCode: 0, stdout: "", stderr: "", timedOut: false };
     });
-    await assert.rejects(
-      new CodexAgent(capability, broker).run(input),
-      /identidad.*cambi/i,
-    );
-    assert.equal(calls, 0);
-    await rm(input.outputDirectory!, { recursive: true, force: true });
-  } finally {
-    await rm(root, { recursive: true, force: true });
-  }
+    try {
+      await assert.rejects(
+        new CodexAgent(capability, broker, workspace).run(
+          agentInput(workspace),
+        ),
+        /identidad.*cambi/i,
+      );
+      assert.equal(calls, 0);
+    } finally {
+      await removeAgentWorkspace(workspace);
+    }
+  });
 });
 
 test("Codex result protocol fails closed when final message is not JSON", async () => {
-  const root = await realpath(
-    await mkdtemp(join(tmpdir(), "comunidadsolar-codex-result-")),
-  );
-  const executable = join(root, "codex-fixture");
-  try {
+  await withWorkspaceRepository(async (repository) => {
+    const executable = join(repository.sourceRoot, "codex-fixture");
     await writeFile(executable, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
     const capability = await createCodexExecutableCapability(
       await realpath(executable),
     );
-    const input = await createInput(root, root);
-    await mkdir(join(root, ".agent-output"));
-    await assert.rejects(
-      new CodexAgent(
-        capability,
-        createOperatorIsolationBroker(async ({ args }) => {
-          const output = args[args.indexOf("--output-last-message") + 1];
-          await writeFile(output!, "not json", "utf8");
-          return {
+    const workspace = await createAgentWorkspace(workspaceInput(repository));
+    const input = agentInput(workspace);
+    try {
+      await assert.rejects(
+        new CodexAgent(
+          capability,
+          createOperatorIsolationBroker(async ({ args }) => {
+            const output = args[args.indexOf("--output-last-message") + 1];
+            await writeFile(output!, "not json", "utf8");
+            return {
+              exitCode: 0,
+              stdout: "",
+              stderr: "",
+              timedOut: false,
+            };
+          }),
+          workspace,
+        ).run(input),
+        /JSON válido/i,
+      );
+      const target = join(workspace.path, "attacker-final.json");
+      const finalMessage = join(
+        workspace.path,
+        ".agent-output",
+        "final-message.json",
+      );
+      await writeFile(target, '{"generatedFiles":[]}', "utf8");
+      await rm(finalMessage);
+      await symlink(target, finalMessage);
+      await assert.rejects(
+        new CodexAgent(
+          capability,
+          createOperatorIsolationBroker(async () => ({
             exitCode: 0,
             stdout: "",
             stderr: "",
             timedOut: false,
-          };
-        }),
-      ).run(input),
-      /JSON válido/i,
-    );
-    const target = join(root, "attacker-final.json");
-    const finalMessage = join(root, ".agent-output", "final-message.json");
-    await writeFile(target, '{"generatedFiles":[]}', "utf8");
-    await rm(finalMessage);
-    await symlink(target, finalMessage);
-    await assert.rejects(
-      new CodexAgent(
-        capability,
-        createOperatorIsolationBroker(async () => ({
-          exitCode: 0,
-          stdout: "",
-          stderr: "",
-          timedOut: false,
-        })),
-      ).run(input),
-      /regular|enlace/i,
-    );
-    await rm(finalMessage);
-    const outputDirectory = join(root, ".agent-output");
-    const replacedOutput = join(root, "attacker-output");
-    await assert.rejects(
-      new CodexAgent(
-        capability,
-        createOperatorIsolationBroker(async () => {
-          await rm(outputDirectory, { recursive: true, force: false });
-          await mkdir(replacedOutput);
-          await writeFile(
-            join(replacedOutput, "final-message.json"),
-            '{"generatedFiles":[]}',
-            "utf8",
-          );
-          await symlink(replacedOutput, outputDirectory);
-          return {
-            exitCode: 0,
-            stdout: "",
-            stderr: "",
-            timedOut: false,
-          };
-        }),
-      ).run(input),
-      /salida.*directorio seguro/i,
-    );
-    await rm(input.outputDirectory!, { recursive: true, force: true });
-  } finally {
-    await rm(root, { recursive: true, force: true });
-  }
+          })),
+          workspace,
+        ).run(input),
+        /regular|enlace/i,
+      );
+      await rm(finalMessage);
+      const outputDirectory = join(workspace.path, ".agent-output");
+      const replacedOutput = join(workspace.path, "attacker-output");
+      await assert.rejects(
+        new CodexAgent(
+          capability,
+          createOperatorIsolationBroker(async () => {
+            await rm(outputDirectory, { recursive: true, force: false });
+            await mkdir(replacedOutput);
+            await writeFile(
+              join(replacedOutput, "final-message.json"),
+              '{"generatedFiles":[]}',
+              "utf8",
+            );
+            await symlink(replacedOutput, outputDirectory);
+            return {
+              exitCode: 0,
+              stdout: "",
+              stderr: "",
+              timedOut: false,
+            };
+          }),
+          workspace,
+        ).run(input),
+        /salida.*directorio seguro/i,
+      );
+    } finally {
+      await rm(join(workspace.path, ".agent-output"), {
+        recursive: true,
+        force: true,
+      });
+      await mkdir(join(workspace.path, ".agent-output"));
+      await removeAgentWorkspace(workspace);
+    }
+  });
 });
 
 test("fixture agents are bound to one owned disposable workspace", async () => {

@@ -17,6 +17,15 @@ import { dirname, isAbsolute, join } from "node:path";
 import { canonicalJson } from "../canonical-json.ts";
 import type { ChangePlan } from "../domain.ts";
 import {
+  AGENT_ACCEPTED_OUTPUT_MAX_BYTES,
+  AGENT_ACCEPTED_OUTPUT_MAX_FILES,
+  AGENT_IO_CHUNK_BYTES,
+  AGENT_WORKSPACE_ENTRY_MAX_COUNT,
+  AGENT_WORKSPACE_FILE_MAX_BYTES,
+  AGENT_WORKSPACE_FILE_MAX_COUNT,
+  AGENT_WORKSPACE_TOTAL_MAX_BYTES,
+} from "../limits.ts";
+import {
   assertTrustedRepositoriesUnchanged,
   assertWorkspaceInputs,
   workspaceManifest,
@@ -57,10 +66,6 @@ export interface StagedAgentOutput {
   readonly workspace: AgentWorkspace;
   readonly files: readonly string[];
   readonly sha256: Readonly<Record<string, string>>;
-}
-
-function hash(bytes: Buffer): string {
-  return createHash("sha256").update(bytes).digest("hex");
 }
 
 function errorCode(error: unknown): string | undefined {
@@ -189,6 +194,54 @@ async function captureManifest(
   root: string,
 ): Promise<ReadonlyMap<string, ManifestEntry>> {
   const entries = new Map<string, ManifestEntry>();
+  let entryCount = 0;
+  let fileCount = 0;
+  let totalBytes = 0;
+
+  async function regularFileDigest(
+    path: string,
+  ): Promise<{ bytes: number; sha256: string }> {
+    const noFollow = constants.O_NOFOLLOW ?? 0;
+    const handle = await open(path, constants.O_RDONLY | noFollow);
+    try {
+      const entry = await handle.stat();
+      if (!entry.isFile() || entry.nlink !== 1) {
+        throw new TypeError("El staging contiene un hardlink inseguro");
+      }
+      if (entry.size > AGENT_WORKSPACE_FILE_MAX_BYTES) {
+        throw new TypeError("El staging excede el límite por archivo");
+      }
+      if (entry.size > AGENT_WORKSPACE_TOTAL_MAX_BYTES - totalBytes) {
+        throw new TypeError("El staging excede el límite total de bytes");
+      }
+      const digest = createHash("sha256");
+      let bytes = 0;
+      while (true) {
+        const buffer = Buffer.allocUnsafe(AGENT_IO_CHUNK_BYTES);
+        const { bytesRead } = await handle.read(
+          buffer,
+          0,
+          buffer.byteLength,
+          null,
+        );
+        if (bytesRead === 0) break;
+        bytes += bytesRead;
+        if (
+          bytes > AGENT_WORKSPACE_FILE_MAX_BYTES ||
+          bytes > AGENT_WORKSPACE_TOTAL_MAX_BYTES - totalBytes
+        ) {
+          throw new TypeError("El staging excede el límite total de bytes");
+        }
+        digest.update(buffer.subarray(0, bytesRead));
+      }
+      if (bytes !== entry.size) {
+        throw new TypeError("El staging cambió durante la lectura");
+      }
+      return { bytes, sha256: digest.digest("hex") };
+    } finally {
+      await handle.close();
+    }
+  }
 
   async function visit(relativeDirectory: string): Promise<void> {
     const directory =
@@ -197,7 +250,15 @@ async function captureManifest(
         : join(root, ...relativeDirectory.split("/"));
     const handle = await opendir(directory);
     const names: string[] = [];
-    for await (const entry of handle) names.push(entry.name);
+    for await (const entry of handle) {
+      entryCount += 1;
+      if (entryCount > AGENT_WORKSPACE_ENTRY_MAX_COUNT) {
+        throw new TypeError(
+          "El staging excede el límite de cantidad de entradas",
+        );
+      }
+      names.push(entry.name);
+    }
     names.sort();
     for (const name of names) {
       const path =
@@ -223,12 +284,19 @@ async function captureManifest(
       if (entry.nlink !== 1) {
         throw new TypeError("El staging contiene un hardlink inseguro");
       }
-      const bytes = await readFile(absolute);
+      fileCount += 1;
+      if (fileCount > AGENT_WORKSPACE_FILE_MAX_COUNT) {
+        throw new TypeError(
+          "El staging excede el límite de cantidad de archivos",
+        );
+      }
+      const file = await regularFileDigest(absolute);
+      totalBytes += file.bytes;
       entries.set(path, {
         kind: "file",
         mode,
-        bytes: bytes.byteLength,
-        sha256: hash(bytes),
+        bytes: file.bytes,
+        sha256: file.sha256,
       });
     }
   }
@@ -368,11 +436,27 @@ function changedOutputFiles(
   }
 
   const uniqueFiles = [...new Set(changedFiles)].sort();
+  if (uniqueFiles.length > AGENT_ACCEPTED_OUTPUT_MAX_FILES) {
+    throw new TypeError(
+      "La salida aceptada excede el límite de cantidad de archivos",
+    );
+  }
+  let acceptedBytes = 0;
   for (const path of uniqueFiles) {
     if (!outputAllowed(path, plan)) {
       throw new TypeError(
         `El path ${path} no aprobado fue modificado por el agente`,
       );
+    }
+    const entry = current.get(path);
+    if (!entry || entry.kind !== "file") {
+      throw new TypeError(
+        "El inventario aceptado no contiene un archivo regular",
+      );
+    }
+    acceptedBytes += entry.bytes;
+    if (acceptedBytes > AGENT_ACCEPTED_OUTPUT_MAX_BYTES) {
+      throw new TypeError("La salida aceptada excede el límite total de bytes");
     }
   }
   for (const directory of changedDirectories) {
@@ -391,10 +475,10 @@ function changedOutputFiles(
   return uniqueFiles;
 }
 
-async function regularFileBytes(
+async function regularFileDigest(
   path: string,
-  expected?: ManifestEntry,
-): Promise<Buffer> {
+  maximumBytes: number,
+): Promise<{ bytes: number; sha256: string }> {
   const noFollow = constants.O_NOFOLLOW ?? 0;
   let handle;
   try {
@@ -403,16 +487,30 @@ async function regularFileBytes(
     if (!entry.isFile() || entry.nlink !== 1) {
       throw new TypeError("La salida aceptada no es un archivo regular seguro");
     }
-    const bytes = await handle.readFile();
-    if (
-      expected &&
-      (expected.kind !== "file" ||
-        bytes.byteLength !== expected.bytes ||
-        hash(bytes) !== expected.sha256)
-    ) {
-      throw new TypeError("La salida aceptada cambió durante la copia");
+    if (entry.size > maximumBytes) {
+      throw new TypeError("La salida aceptada excede el límite permitido");
     }
-    return bytes;
+    const digest = createHash("sha256");
+    let bytes = 0;
+    while (true) {
+      const buffer = Buffer.allocUnsafe(AGENT_IO_CHUNK_BYTES);
+      const { bytesRead } = await handle.read(
+        buffer,
+        0,
+        buffer.byteLength,
+        null,
+      );
+      if (bytesRead === 0) break;
+      bytes += bytesRead;
+      if (bytes > maximumBytes) {
+        throw new TypeError("La salida aceptada excede el límite permitido");
+      }
+      digest.update(buffer.subarray(0, bytesRead));
+    }
+    if (bytes !== entry.size) {
+      throw new TypeError("La salida aceptada cambió durante la lectura");
+    }
+    return { bytes, sha256: digest.digest("hex") };
   } catch (error: unknown) {
     if (error instanceof TypeError) throw error;
     throw new TypeError("La salida aceptada no es un archivo regular seguro", {
@@ -428,11 +526,17 @@ async function copyAcceptedFile(
   stagingPath: string,
   path: string,
   expected: ManifestEntry,
+  remainingBytes: number,
 ): Promise<string> {
   const source = join(workspace.path, ...path.split("/"));
   const destination = join(stagingPath, ...path.split("/"));
-  const sourceBytes = await regularFileBytes(source, expected);
-  const acceptedHash = hash(sourceBytes);
+  if (
+    expected.kind !== "file" ||
+    expected.bytes > AGENT_WORKSPACE_FILE_MAX_BYTES ||
+    expected.bytes > remainingBytes
+  ) {
+    throw new TypeError("La salida aceptada excede el límite permitido");
+  }
   await mkdir(dirname(destination), { recursive: true, mode: 0o700 });
   const noFollow = constants.O_NOFOLLOW ?? 0;
   let destinationExists = true;
@@ -448,19 +552,77 @@ async function copyAcceptedFile(
   const flags = destinationExists
     ? constants.O_WRONLY | constants.O_TRUNC | noFollow
     : constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | noFollow;
-  const destinationHandle = await open(destination, flags, 0o600);
+  const sourceHandle = await open(source, constants.O_RDONLY | noFollow);
   try {
-    await destinationHandle.writeFile(Buffer.from(sourceBytes));
+    const sourceEntry = await sourceHandle.stat();
+    if (
+      !sourceEntry.isFile() ||
+      sourceEntry.nlink !== 1 ||
+      sourceEntry.size !== expected.bytes
+    ) {
+      throw new TypeError("La salida aceptada cambió durante la copia");
+    }
+    const destinationHandle = await open(destination, flags, 0o600);
+    try {
+      const destinationEntry = await destinationHandle.stat();
+      if (!destinationEntry.isFile() || destinationEntry.nlink !== 1) {
+        throw new TypeError("El destino del staging no es un archivo regular");
+      }
+      const sourceDigest = createHash("sha256");
+      let copiedBytes = 0;
+      while (true) {
+        const sourceBuffer = Buffer.allocUnsafe(AGENT_IO_CHUNK_BYTES);
+        const { bytesRead } = await sourceHandle.read(
+          sourceBuffer,
+          0,
+          sourceBuffer.byteLength,
+          null,
+        );
+        if (bytesRead === 0) break;
+        copiedBytes += bytesRead;
+        if (
+          copiedBytes > expected.bytes ||
+          copiedBytes > remainingBytes ||
+          copiedBytes > AGENT_WORKSPACE_FILE_MAX_BYTES
+        ) {
+          throw new TypeError("La salida aceptada excede el límite permitido");
+        }
+        const copiedBuffer = Buffer.from(sourceBuffer.subarray(0, bytesRead));
+        sourceDigest.update(copiedBuffer);
+        let written = 0;
+        while (written < copiedBuffer.byteLength) {
+          const result = await destinationHandle.write(
+            copiedBuffer,
+            written,
+            copiedBuffer.byteLength - written,
+            null,
+          );
+          if (result.bytesWritten === 0) {
+            throw new TypeError("No se pudo completar la copia al staging");
+          }
+          written += result.bytesWritten;
+        }
+      }
+      if (copiedBytes !== expected.bytes) {
+        throw new TypeError("La salida aceptada cambió durante la copia");
+      }
+      const acceptedHash = sourceDigest.digest("hex");
+      if (acceptedHash !== expected.sha256) {
+        throw new TypeError("La salida aceptada cambió durante la copia");
+      }
+      const copied = await regularFileDigest(destination, expected.bytes);
+      if (copied.bytes !== expected.bytes || copied.sha256 !== acceptedHash) {
+        throw new TypeError(
+          "El hash del staging no coincide con la salida aceptada",
+        );
+      }
+      return acceptedHash;
+    } finally {
+      await destinationHandle.close();
+    }
   } finally {
-    await destinationHandle.close();
+    await sourceHandle.close();
   }
-  const copiedBytes = await regularFileBytes(destination);
-  if (hash(copiedBytes) !== acceptedHash) {
-    throw new TypeError(
-      "El hash del staging no coincide con la salida aceptada",
-    );
-  }
-  return acceptedHash;
 }
 
 export async function validateAgentWorkspaceOutput(
@@ -484,6 +646,7 @@ export async function validateAgentWorkspaceOutput(
       workspace.baselineManifest,
     );
     const hashes = new Map<string, string>();
+    let copiedBytes = 0;
     for (const path of files) {
       const expected = current.get(path);
       if (!expected || expected.kind !== "file") {
@@ -491,8 +654,15 @@ export async function validateAgentWorkspaceOutput(
       }
       hashes.set(
         path,
-        await copyAcceptedFile(workspace, stagingPath, path, expected),
+        await copyAcceptedFile(
+          workspace,
+          stagingPath,
+          path,
+          expected,
+          AGENT_ACCEPTED_OUTPUT_MAX_BYTES - copiedBytes,
+        ),
       );
+      copiedBytes += expected.bytes;
     }
     await assertWorkspaceInputs(workspace);
     await assertPrivateOutputDirectory(workspace);
