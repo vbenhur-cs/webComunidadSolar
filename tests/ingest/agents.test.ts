@@ -295,7 +295,6 @@ function agentInput(workspace: AgentWorkspace): AgentRunInput {
   return {
     ...workspaceInputs(workspace),
     worktree: workspace.path,
-    timeoutMs: 5_000,
   };
 }
 
@@ -352,7 +351,6 @@ async function createInput(
     planPath,
     policyPath,
     resultSchemaPath,
-    timeoutMs: 5_000,
     outputDirectory,
   });
 }
@@ -414,7 +412,11 @@ test("command adapter delegates one complete argv-only job to the broker", async
   });
   try {
     await new CommandAgent(
-      { command: process.execPath, args: [fixtureAgent] },
+      {
+        command: process.execPath,
+        args: [fixtureAgent],
+        timeoutMs: 5_000,
+      },
       broker,
     ).run(input);
     assert.equal(calls.length, 1);
@@ -572,6 +574,28 @@ test("test isolation broker rejects stdout beyond its capture ceiling", async ()
         timeoutMs: 5_000,
       }),
       /stdout.*l[ií]mite|l[ií]mite.*stdout/i,
+    );
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+  }
+});
+
+test("test isolation broker rejects a timeout above the trusted hard cap", async () => {
+  const workspace = await mkdtemp(
+    join(tmpdir(), "comunidadsolar-test-broker-timeout-cap-"),
+  );
+  const broker = testIsolationBroker(workspace);
+  try {
+    await assert.rejects(
+      broker.run({
+        workspace,
+        command: process.execPath,
+        args: ["-e", "process.exit(0)"],
+        stdin: "",
+        env: { PATH: "/usr/bin:/bin", LANG: "C", LC_ALL: "C" },
+        timeoutMs: 300_001,
+      }),
+      /timeout.*l[ií]mite|l[ií]mite.*timeout/i,
     );
   } finally {
     await rm(workspace, { recursive: true, force: true });
@@ -1234,11 +1258,15 @@ test("Codex delegates to its broker and reads only a schema-valid workspace fina
       };
     });
     try {
-      const result = await new CodexAgent(capability, broker, workspace).run(
-        agentInput(workspace),
-      );
+      const result = await new CodexAgent(
+        capability,
+        broker,
+        workspace,
+        5_000,
+      ).run(agentInput(workspace));
       assert.equal(calls.length, 1);
       assert.equal(calls[0]?.workspace, workspace.path);
+      assert.equal(calls[0]?.timeoutMs, 5_000);
       assert.deepEqual(calls[0]?.env, {
         PATH: "/usr/bin:/bin",
         LANG: "C",
@@ -1280,6 +1308,71 @@ test("Codex rejects a forged path-only input before broker delegation", async ()
         /workspace aprobado|contexto.*workspace/i,
       );
       assert.equal(calls, 0);
+    } finally {
+      await removeAgentWorkspace(workspace);
+    }
+  });
+});
+
+test("Codex rejects a caller-controlled timeout before broker delegation", async () => {
+  await withWorkspaceRepository(async (repository) => {
+    const executable = join(repository.sourceRoot, "codex-fixture");
+    await writeFile(executable, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+    const capability = await createCodexExecutableCapability(
+      await realpath(executable),
+    );
+    const workspace = await createAgentWorkspace(workspaceInput(repository));
+    let calls = 0;
+    const broker = createOperatorIsolationBroker(async ({ args }) => {
+      calls += 1;
+      const output = args[args.indexOf("--output-last-message") + 1];
+      await writeFile(output!, '{"generatedFiles":[]}', "utf8");
+      return {
+        exitCode: 0,
+        stdout: "",
+        stderr: "",
+        timedOut: false,
+      };
+    });
+    try {
+      await assert.rejects(
+        new CodexAgent(capability, broker, workspace, 5_000).run({
+          ...agentInput(workspace),
+          timeoutMs: 1,
+        } as AgentRunInput & { timeoutMs: number }),
+        /timeout.*caller|timeout.*contexto/i,
+      );
+      assert.equal(calls, 0);
+    } finally {
+      await removeAgentWorkspace(workspace);
+    }
+  });
+});
+
+test("agent constructors reject invalid trusted timeout configuration", async () => {
+  await withWorkspaceRepository(async (repository) => {
+    const executable = join(repository.sourceRoot, "codex-fixture");
+    await writeFile(executable, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+    const capability = await createCodexExecutableCapability(
+      await realpath(executable),
+    );
+    const workspace = await createAgentWorkspace(workspaceInput(repository));
+    const broker = recordingBroker();
+    try {
+      for (const timeoutMs of [0, -1, Number.POSITIVE_INFINITY, 300_001]) {
+        assert.throws(
+          () => new CodexAgent(capability, broker, workspace, timeoutMs),
+          /timeout.*positivo|timeout.*l[ií]mite/i,
+        );
+        assert.throws(
+          () =>
+            new CommandAgent(
+              { command: process.execPath, args: [], timeoutMs },
+              broker,
+            ),
+          /timeout.*positivo|timeout.*l[ií]mite/i,
+        );
+      }
     } finally {
       await removeAgentWorkspace(workspace);
     }

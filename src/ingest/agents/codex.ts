@@ -7,7 +7,9 @@ import { validateSchema } from "../schema-validator.ts";
 import {
   AGENT_FINAL_MESSAGE_MAX_BYTES,
   AGENT_IO_CHUNK_BYTES,
+  AGENT_TIMEOUT_DEFAULT_MS,
   assertBrokerResultLimits,
+  validatedAgentTimeout,
 } from "../limits.ts";
 import {
   assertWorkspaceInputs,
@@ -66,6 +68,9 @@ function assertWorkspaceRunInput(
   input: AgentRunInput,
 ): AgentWorkspaceInputs {
   const expected = workspaceInputs(workspace);
+  if ("timeoutMs" in input) {
+    throw new TypeError("El timeout no pertenece al contexto del caller");
+  }
   if (
     input.changeId !== expected.changeId ||
     input.attemptId !== expected.attemptId ||
@@ -126,12 +131,16 @@ export function codexInvocation(
 
 export class CodexAgent implements AgentAdapter {
   readonly name = "codex";
+  private readonly timeoutMs: number;
 
   constructor(
     private readonly executable: CodexExecutableCapability | null,
     private readonly broker: IsolationBroker | null,
     private readonly workspace: AgentWorkspace,
-  ) {}
+    timeoutMs: number = AGENT_TIMEOUT_DEFAULT_MS,
+  ) {
+    this.timeoutMs = validatedAgentTimeout(timeoutMs);
+  }
 
   async run(input: AgentRunInput): Promise<AgentRunResult> {
     assertOperatorIsolationBroker(this.broker);
@@ -146,7 +155,7 @@ export class CodexAgent implements AgentAdapter {
       args: [...invocation.args],
       stdin: invocation.input,
       env: { PATH: "/usr/bin:/bin", LANG: "C", LC_ALL: "C" },
-      timeoutMs: input.timeoutMs ?? 60_000,
+      timeoutMs: this.timeoutMs,
     });
     if (result.timedOut) throw new TypeError("El broker agotó el timeout");
     if (result.exitCode !== 0) {

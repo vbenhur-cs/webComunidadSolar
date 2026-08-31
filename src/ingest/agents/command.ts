@@ -2,8 +2,10 @@ import { assertOperatorIsolationBroker } from "./isolation.ts";
 import { resolveAgentRunContext } from "../worktrees/service.ts";
 import {
   AGENT_FINAL_MESSAGE_MAX_BYTES,
+  AGENT_TIMEOUT_DEFAULT_MS,
   assertAgentTextLimit,
   assertBrokerResultLimits,
+  validatedAgentTimeout,
 } from "../limits.ts";
 import { validateSchema } from "../schema-validator.ts";
 
@@ -17,6 +19,7 @@ import {
 export interface CommandAgentConfig {
   command: string;
   args: string[];
+  timeoutMs?: number;
 }
 
 function assertCommand(config: CommandAgentConfig): void {
@@ -30,15 +33,23 @@ function assertCommand(config: CommandAgentConfig): void {
 
 export class CommandAgent implements AgentAdapter {
   readonly name = "command";
+  private readonly timeoutMs: number;
 
   constructor(
     private readonly config: CommandAgentConfig,
     private readonly broker: IsolationBroker | null,
-  ) {}
+  ) {
+    this.timeoutMs = validatedAgentTimeout(
+      config.timeoutMs ?? AGENT_TIMEOUT_DEFAULT_MS,
+    );
+  }
 
   async run(input: AgentRunInput): Promise<AgentRunResult> {
     assertCommand(this.config);
     assertOperatorIsolationBroker(this.broker);
+    if ("timeoutMs" in input) {
+      throw new TypeError("El timeout no pertenece al contexto del caller");
+    }
     input = await resolveAgentRunContext(input);
     const workspace = input.workspace ?? input.worktree;
     const result = await this.broker.run({
@@ -52,7 +63,7 @@ export class CommandAgent implements AgentAdapter {
         resultSchemaPath: input.resultSchemaPath,
       }),
       env: { PATH: "/usr/bin:/bin", LANG: "C", LC_ALL: "C" },
-      timeoutMs: input.timeoutMs ?? 60_000,
+      timeoutMs: this.timeoutMs,
     });
     if (result.timedOut) throw new TypeError("El broker agotó el timeout");
     if (result.exitCode !== 0)

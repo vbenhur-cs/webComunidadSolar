@@ -14,6 +14,20 @@ export const AGENT_FINAL_MESSAGE_MAX_BYTES = 64 * 1024;
 export const AGENT_STDOUT_MAX_BYTES = 256 * 1024;
 export const AGENT_STDERR_MAX_BYTES = 256 * 1024;
 export const AGENT_IO_CHUNK_BYTES = 64 * 1024;
+export const AGENT_TIMEOUT_DEFAULT_MS = 60 * 1000;
+export const AGENT_TIMEOUT_MAX_MS = 5 * 60 * 1000;
+
+export function validatedAgentTimeout(
+  timeoutMs: number = AGENT_TIMEOUT_DEFAULT_MS,
+): number {
+  if (!Number.isSafeInteger(timeoutMs) || timeoutMs <= 0) {
+    throw new TypeError("El timeout del agente debe ser un entero positivo");
+  }
+  if (timeoutMs > AGENT_TIMEOUT_MAX_MS) {
+    throw new TypeError("El timeout del agente excede el límite permitido");
+  }
+  return timeoutMs;
+}
 
 export function assertAgentTextLimit(
   label: "stdout" | "stderr" | "mensaje final",

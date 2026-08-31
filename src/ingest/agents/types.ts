@@ -1,6 +1,10 @@
 import { spawn } from "node:child_process";
 
-import { AGENT_STDERR_MAX_BYTES, AGENT_STDOUT_MAX_BYTES } from "../limits.ts";
+import {
+  AGENT_STDERR_MAX_BYTES,
+  AGENT_STDOUT_MAX_BYTES,
+  validatedAgentTimeout,
+} from "../limits.ts";
 
 export interface AgentRunInput {
   changeId: string;
@@ -13,8 +17,6 @@ export interface AgentRunInput {
   planPath: string;
   policyPath: string;
   resultSchemaPath: string;
-  /** Broker-enforced execution deadline. */
-  timeoutMs?: number;
   /** Legacy sidecar ownership, unused by CommandAgent results. */
   outputDirectory?: string;
 }
@@ -84,7 +86,11 @@ export type ProcessRunner = (
 /** Run an argv-only agent process. No caller can opt into a shell. */
 export const runProcess: ProcessRunner = async (command, args, options) =>
   await new Promise<ProcessRunResult>((resolve, reject) => {
-    const usesDeadline = options.timeoutMs !== undefined;
+    const timeoutMs =
+      options.timeoutMs === undefined
+        ? undefined
+        : validatedAgentTimeout(options.timeoutMs);
+    const usesDeadline = timeoutMs !== undefined;
     const processGroup = usesDeadline && process.platform !== "win32";
     const child = spawn(command, args, {
       cwd: options.cwd,
@@ -171,7 +177,7 @@ export const runProcess: ProcessRunner = async (command, args, options) =>
       deadline = setTimeout(() => {
         timedOut = true;
         requestTermination();
-      }, options.timeoutMs);
+      }, timeoutMs);
     }
     child.stdin.end(options.input);
   });
