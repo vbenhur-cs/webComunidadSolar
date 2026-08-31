@@ -350,6 +350,37 @@ test("test isolation broker terminates an argv job at its supplied deadline", as
   }
 });
 
+test(
+  "test isolation broker terminates a pipe-holding descendant after its leader exits",
+  { skip: process.platform === "win32" },
+  async () => {
+    const workspace = await mkdtemp(
+      join(tmpdir(), "comunidadsolar-test-broker-group-timeout-"),
+    );
+    const broker = testIsolationBroker(workspace);
+    const leader = [
+      'const { spawn } = require("node:child_process");',
+      `spawn(${JSON.stringify(process.execPath)}, ["-e", "setTimeout(() => process.exit(0), 500)"], { stdio: "inherit" });`,
+      "setTimeout(() => process.exit(0), 10);",
+    ].join("");
+    const started = Date.now();
+    try {
+      const result = await broker.run({
+        workspace,
+        command: process.execPath,
+        args: ["-e", leader],
+        stdin: "",
+        env: { PATH: "/usr/bin:/bin", LANG: "C", LC_ALL: "C" },
+        timeoutMs: 80,
+      });
+      assert.equal(result.timedOut, true);
+      assert.ok(Date.now() - started < 300);
+    } finally {
+      await rm(workspace, { recursive: true, force: true });
+    }
+  },
+);
+
 test("command adapter refuses to run without an isolation broker", async () => {
   await assert.rejects(
     new CommandAgent(

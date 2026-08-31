@@ -101,11 +101,13 @@ export const runProcess: ProcessRunner = async (command, args, options) =>
       if (forceTermination !== undefined) clearTimeout(forceTermination);
     };
     const terminate = (signal: NodeJS.Signals) => {
-      if (child.exitCode !== null || child.signalCode !== null) return;
       try {
-        if (processGroup && child.pid !== undefined)
+        if (processGroup && child.pid !== undefined) {
           process.kill(-child.pid, signal);
-        else child.kill(signal);
+          return;
+        }
+        if (child.exitCode !== null || child.signalCode !== null) return;
+        child.kill(signal);
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error;
       }
