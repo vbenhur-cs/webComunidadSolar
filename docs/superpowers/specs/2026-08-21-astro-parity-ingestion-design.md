@@ -2,6 +2,12 @@
 
 Estado: aprobado en conversación el 21 de agosto de 2026.
 
+Adenda vinculante para el aislamiento de agentes y el modelo de amenazas de la
+Task 7:
+`docs/superpowers/specs/2026-08-31-task-7-practical-isolation-design.md`. La
+adenda sustituye las garantías de las secciones 5.4 y 10 cuando exista
+conflicto; el resto de este diseño permanece vigente.
+
 ## 1. Resultado buscado
 
 Crear `comunidadsolar-astro` como un repositorio Git autónomo que reproduzca de
@@ -239,9 +245,13 @@ con el agente no contará por sí sola como registro de Gate 1.
 
 ### 5.4 Transformación aislada
 
-Cada intento se ejecutará en una rama o worktree dedicado y solo podrá escribir
-en paths permitidos del repositorio nuevo. El repositorio original permanecerá
-fuera de la lista de escritura.
+Cada intento se ejecutará mediante el broker confiable del operador en un
+workspace exportado, desechable y sin metadatos Git. El agente solo podrá
+escribir dentro de ese workspace; el repositorio original permanecerá fuera de
+la lista de escritura. Después de terminar el job, el controlador tratará todo
+el workspace como hostil e importará por copia de bytes únicamente la salida
+estructuralmente permitida a un checkout limpio. El contrato completo y sus
+límites están definidos en la adenda de aislamiento de la Task 7.
 
 El transformador será independiente del proveedor. La implementación inicial
 incluirá un adaptador para Codex local y un contrato de comando para sustituirlo
@@ -501,7 +511,8 @@ candidato.
   incorporarlos localmente cuando exista permiso.
 - Los secretos se leerán del entorno de ejecución y nunca se copiarán a prompts,
   expedientes, screenshots o logs.
-- El agente tendrá escritura limitada al worktree del intento.
+- El broker confiable limitará la escritura del agente al workspace desechable
+  del intento; el agente no recibirá `.git` ni autoridad de publicación.
 - Las rutas privadas heredarán noindex, no-store y los headers de seguridad de
   la referencia.
 - Las reglas de autorización fallarán cerradas ante variables ausentes o
