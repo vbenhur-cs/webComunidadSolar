@@ -823,6 +823,8 @@ test("builds accepted inventory independently and byte-copies it into a clean ba
     );
     try {
       const copied = join(staged.path, "src/pages/generated.astro");
+      assert.deepEqual(Object.keys(staged).sort(), ["files", "path", "sha256"]);
+      assert.equal("workspace" in staged, false);
       assert.notEqual(staged.path, workspace.path);
       assert.deepEqual(staged.files, ["src/pages/generated.astro"]);
       assert.equal(

@@ -63,7 +63,6 @@ const fixedGitArguments = Object.freeze([
 
 export interface StagedAgentOutput {
   readonly path: string;
-  readonly workspace: AgentWorkspace;
   readonly files: readonly string[];
   readonly sha256: Readonly<Record<string, string>>;
 }
@@ -669,7 +668,6 @@ export async function validateAgentWorkspaceOutput(
     await assertTrustedRepositoriesUnchanged(workspace);
     return Object.freeze({
       path: stagingPath,
-      workspace,
       files: Object.freeze([...files]),
       sha256: Object.freeze(Object.fromEntries(hashes)),
     });

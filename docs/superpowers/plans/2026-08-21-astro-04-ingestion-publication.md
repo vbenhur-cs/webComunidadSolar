@@ -646,7 +646,6 @@ export interface IsolationBroker {
 
 export interface StagedAgentOutput {
   readonly path: string;
-  readonly workspace: AgentWorkspace;
   readonly files: readonly string[];
   readonly sha256: Readonly<Record<string, string>>;
 }
@@ -663,8 +662,10 @@ Al terminar el job, el controlador vuelve a validar inputs y repositorios,
 recorre todo el workspace sin seguir enlaces, deriva el inventario sin confiar
 en stdout y copia por bytes solo archivos regulares planificados a un baseline
 limpio nuevo. `StagedAgentOutput.path`, `files` y `sha256` son propiedad del
-controlador y constituyen el único handoff a Task 8. Gate 1, Task 8, validación,
-commit candidato, Gate 2 y publicación quedan fuera del agente.
+controlador y constituyen la superficie completa y única del handoff a Task 8;
+el objeto no expone `AgentWorkspace`. El controlador conserva por separado su
+lifecycle y cleanup. Gate 1, Task 8, validación, commit candidato, Gate 2 y
+publicación quedan fuera del agente.
 
 La frontera práctica confía en host, filesystem, controlador y broker. No
 promete protección frente a un proceso local concurrente con igual autoridad.

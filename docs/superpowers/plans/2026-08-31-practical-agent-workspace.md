@@ -343,6 +343,7 @@ git commit -m "feat: export isolated agent workspaces"
 test("builds the accepted inventory independently of the agent's declared file list", async () => {
   await writeFile(join(workspace.path, "src/pages/generated.astro"), "---\n---\n<h1>x</h1>");
   const staged = await validateAgentWorkspaceOutput(workspace, plan);
+  assert.deepEqual(Object.keys(staged).sort(), ["files", "path", "sha256"]);
   assert.deepEqual(staged.files, ["src/pages/generated.astro"]);
   assert.equal(await readFile(join(staged.path, "src/pages/generated.astro"), "utf8"), "---\n---\n<h1>x</h1>");
 });
@@ -391,7 +392,6 @@ the legacy Codex adapter still depends on a service-owned sidecar directory.
 ```ts
 export interface StagedAgentOutput {
   readonly path: string;
-  readonly workspace: AgentWorkspace;
   readonly files: readonly string[];
   readonly sha256: Readonly<Record<string, string>>;
 }
@@ -412,7 +412,10 @@ only `plan.files` plus descendants of a generated root explicitly present in
 dependency diff. Re-export the original baseline into a new controller-owned
 staging directory, then copy accepted regular files using new byte buffers and
 verify hashes on both sides. Preserve `.agent-input` and `.agent-output`
-outside the staging tree. Return a sorted immutable inventory.
+outside the staging tree. Return exactly the controller-owned staging path,
+sorted immutable inventory and hashes; do not expose the hostile
+`AgentWorkspace` through `StagedAgentOutput`. The controller retains workspace
+cleanup/lifecycle responsibility separately.
 
 Update `CodexAgent` to delegate its job to the broker and use
 `.agent-output/final-message.json` inside the workspace as untrusted output;
@@ -520,7 +523,9 @@ git commit -m "feat: close practical agent isolation task"
 
 After Task 4, execute Tasks 8–12 in
 `docs/superpowers/plans/2026-08-21-astro-04-ingestion-publication.md` in order.
-The only interface change is that Task 8 receives `StagedAgentOutput.path` and
-its independently derived inventory instead of an agent-owned Git worktree.
+The only interface change is that Task 8 receives only
+`StagedAgentOutput.path`, its independently derived `files` inventory and
+`sha256` map instead of an agent-owned Git worktree. It does not receive the
+`AgentWorkspace`; workspace cleanup/lifecycle remains controller-internal.
 Then execute master-plan Task 5 (`verify-complete.ts` and the completion audit)
 against the final repository state.
