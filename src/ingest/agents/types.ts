@@ -3,12 +3,17 @@ import { spawn } from "node:child_process";
 export interface AgentRunInput {
   changeId: string;
   attemptId: string;
+  /** The owned workspace where this single broker job may execute. */
+  workspace?: string;
+  /** Transitional alias until the workspace service migrates. */
   worktree: string;
   requestPath: string;
   planPath: string;
   policyPath: string;
   resultSchemaPath: string;
-  /** Created by worktree service outside the agent-writable candidate. */
+  /** Broker-enforced execution deadline. */
+  timeoutMs?: number;
+  /** Legacy sidecar ownership, unused by CommandAgent results. */
   outputDirectory?: string;
 }
 
@@ -16,9 +21,15 @@ export interface AgentRunResult {
   adapter: string;
   exitCode: number;
   generatedFiles: string[];
-  stdoutPath: string;
-  stderrPath: string;
-  finalMessagePath: string;
+  stdout?: string;
+  stderr?: string;
+  finalMessage?: string;
+  /** Legacy adapter result field. */
+  stdoutPath?: string;
+  /** Legacy adapter result field. */
+  stderrPath?: string;
+  /** Legacy adapter result field. */
+  finalMessagePath?: string;
 }
 
 export interface AgentAdapter {
@@ -26,12 +37,24 @@ export interface AgentAdapter {
   run(input: AgentRunInput): Promise<AgentRunResult>;
 }
 
+export interface BrokerRunInput {
+  workspace: string;
+  command: string;
+  args: readonly string[];
+  stdin: string;
+  env: Readonly<Record<string, string>>;
+  timeoutMs: number;
+}
+
+export interface BrokerRunResult {
+  exitCode: number;
+  stdout: string;
+  stderr: string;
+  timedOut: boolean;
+}
+
 export interface IsolationBroker {
-  wrap(input: { worktree: string; command: string; args: string[] }): {
-    command: string;
-    args: string[];
-    env: Record<string, string>;
-  };
+  run(input: BrokerRunInput): Promise<BrokerRunResult>;
 }
 
 export interface ProcessRunOptions {

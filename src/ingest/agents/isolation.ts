@@ -1,13 +1,18 @@
 import { relative, resolve } from "node:path";
 
-import type { IsolationBroker } from "./types.ts";
+import {
+  runProcess,
+  type BrokerRunInput,
+  type BrokerRunResult,
+  type IsolationBroker,
+} from "./types.ts";
 
 const operatorBrokers = new WeakSet<object>();
 
 export function createOperatorIsolationBroker(
-  wrap: IsolationBroker["wrap"],
+  run: (input: BrokerRunInput) => Promise<BrokerRunResult>,
 ): IsolationBroker {
-  const broker = Object.freeze({ wrap });
+  const broker = Object.freeze({ run });
   operatorBrokers.add(broker);
   return broker;
 }
@@ -19,7 +24,7 @@ export function assertOperatorIsolationBroker(
     typeof broker !== "object" ||
     broker === null ||
     !operatorBrokers.has(broker) ||
-    typeof (broker as { wrap?: unknown }).wrap !== "function"
+    typeof (broker as { run?: unknown }).run !== "function"
   ) {
     throw new TypeError(
       "El command adapter exige un isolation broker del operador",
@@ -37,15 +42,21 @@ export function testIsolationBroker(worktree: string): IsolationBroker {
   }
   const safeWorktree = resolve(worktree);
   return createOperatorIsolationBroker(
-    ({ worktree: candidate, command, args }) => {
-      const candidatePath = resolve(candidate);
+    async ({ workspace, command, args, stdin, env }) => {
+      const candidatePath = resolve(workspace);
       if (
         candidatePath !== safeWorktree ||
         relative(safeWorktree, candidatePath).startsWith("..")
       ) {
-        throw new TypeError("El broker no autoriza ese worktree");
+        throw new TypeError("El broker no autoriza ese workspace");
       }
-      return { command, args, env: {} };
+      const result = await runProcess(command, [...args], {
+        cwd: safeWorktree,
+        env: { ...env },
+        input: stdin,
+        shell: false,
+      });
+      return { ...result, timedOut: false };
     },
   );
 }

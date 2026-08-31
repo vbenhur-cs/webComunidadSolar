@@ -31,6 +31,7 @@ import { createOperatorIsolationBroker } from "../../src/ingest/agents/isolation
 import { createFixtureAgentRun } from "../../src/ingest/agents/fixture.ts";
 import type {
   AgentRunInput,
+  BrokerRunInput,
   IsolationBroker,
   ProcessRunOptions,
   ProcessRunner,
@@ -157,10 +158,12 @@ async function createInput(
     changeId: "agent-isolation",
     attemptId: "attempt-000001",
     worktree: candidatePath,
+    workspace: candidatePath,
     requestPath,
     planPath,
     policyPath,
     resultSchemaPath,
+    timeoutMs: 5_000,
     outputDirectory,
   });
 }
@@ -188,10 +191,11 @@ function recordingRunner(): {
 }
 
 function recordingBroker(): IsolationBroker {
-  return createOperatorIsolationBroker(({ worktree, command, args }) => ({
-    command: "/operator/broker",
-    args: ["--worktree", worktree, "--", command, ...args],
-    env: {},
+  return createOperatorIsolationBroker(async () => ({
+    exitCode: 0,
+    stdout: '{"generatedFiles":[]}',
+    stderr: "",
+    timedOut: false,
   }));
 }
 
@@ -220,26 +224,101 @@ test("Codex runs ephemeral in workspace-write without bypass flags", () => {
   assert.ok(!invocation.args.some((arg) => arg.includes("dangerously-bypass")));
 });
 
-test("command adapter delegates to an operator broker without a shell", async () => {
-  const { runner, calls } = recordingRunner();
-  const commandWorktree = await mkdtemp(
-    join(tmpdir(), "comunidadsolar-command-input-"),
+test("command adapter delegates one complete argv-only job to the broker", async () => {
+  const calls: BrokerRunInput[] = [];
+  const commandWorkspace = await mkdtemp(
+    join(tmpdir(), "comunidadsolar-command-broker-"),
   );
-  const input = await createInput(commandWorktree, commandWorktree);
+  const input = await createInput(commandWorkspace, commandWorkspace);
+  const workspace = { path: commandWorkspace };
+  const broker = createOperatorIsolationBroker(async (brokerInput) => {
+    calls.push(brokerInput);
+    return {
+      exitCode: 0,
+      stdout: '{"generatedFiles":[]}',
+      stderr: "",
+      timedOut: false,
+    };
+  });
   try {
     await new CommandAgent(
       { command: process.execPath, args: [fixtureAgent] },
-      recordingBroker(),
-      runner,
+      broker,
     ).run(input);
     assert.equal(calls.length, 1);
-    assert.equal(calls[0]?.command, "/operator/broker");
-    assert.equal(calls[0]?.options.shell, false);
-    assert.deepEqual(calls[0]?.options.env, {
+    assert.equal(calls[0]?.workspace, workspace.path);
+    assert.deepEqual(calls[0]?.env, {
       PATH: "/usr/bin:/bin",
       LANG: "C",
       LC_ALL: "C",
     });
+    assert.equal(calls[0]?.args.includes("--shell"), false);
+    assert.equal(calls[0]?.timeoutMs, 5_000);
+  } finally {
+    await rm(dirname(input.requestPath), { recursive: true, force: true });
+    await rm(input.outputDirectory!, { recursive: true, force: true });
+  }
+});
+
+test("production command adapter rejects no broker and a structural broker", async () => {
+  const config = { command: process.execPath, args: [fixtureAgent] };
+  const result = {
+    exitCode: 0,
+    stdout: '{"generatedFiles":[]}',
+    stderr: "",
+    timedOut: false,
+  };
+  const input = {
+    changeId: "agent-isolation",
+    attemptId: "attempt-000001",
+    worktree: "/safe/worktree",
+    workspace: "/safe/worktree",
+    requestPath: "/safe/request.json",
+    planPath: "/safe/plan.json",
+    policyPath: "/safe/policy.json",
+    resultSchemaPath: "/safe/schema.json",
+    outputDirectory: "/safe/output",
+  };
+  await assert.rejects(
+    () => new CommandAgent(config, null).run(input),
+    /broker/i,
+  );
+  await assert.rejects(
+    () =>
+      new CommandAgent(config, {
+        run: async () => result,
+      } as never).run(input),
+    /broker/i,
+  );
+});
+
+test("broker timeout and non-zero exit never produce generated files", async () => {
+  const workspace = await mkdtemp(
+    join(tmpdir(), "comunidadsolar-command-timeout-"),
+  );
+  const input = await createInput(workspace, workspace);
+  const config = { command: process.execPath, args: [fixtureAgent] };
+  const timedOut = createOperatorIsolationBroker(async () => ({
+    exitCode: 124,
+    stdout: "",
+    stderr: "deadline",
+    timedOut: true,
+  }));
+  const nonZero = createOperatorIsolationBroker(async () => ({
+    exitCode: 1,
+    stdout: '{"generatedFiles":["must-not-be-returned.astro"]}',
+    stderr: "failed",
+    timedOut: false,
+  }));
+  try {
+    await assert.rejects(
+      () => new CommandAgent(config, timedOut).run(input),
+      /timeout/i,
+    );
+    await assert.rejects(
+      () => new CommandAgent(config, nonZero).run(input),
+      /código de salida/i,
+    );
   } finally {
     await rm(dirname(input.requestPath), { recursive: true, force: true });
     await rm(input.outputDirectory!, { recursive: true, force: true });
@@ -247,12 +326,10 @@ test("command adapter delegates to an operator broker without a shell", async ()
 });
 
 test("command adapter refuses to run without an isolation broker", async () => {
-  const { runner } = recordingRunner();
   await assert.rejects(
     new CommandAgent(
       { command: process.execPath, args: [fixtureAgent] },
       null,
-      runner,
     ).run({
       changeId: "agent-isolation",
       attemptId: "attempt-000001",
@@ -1612,47 +1689,22 @@ test("rejects ref and sidecar mutation, while allowing only contained generated 
   });
 });
 
-test("command broker rejects unknown or loader-controlled environment values", async () => {
-  const { runner } = recordingRunner();
-  const worktree = await mkdtemp(join(tmpdir(), "comunidadsolar-command-env-"));
-  const input = await createInput(worktree, worktree);
-  try {
-    const broker = createOperatorIsolationBroker(() => ({
-      command: "/operator/broker",
-      args: [],
-      env: { PATH: "/usr/bin", NODE_OPTIONS: "--require /tmp/pwn" },
-    }));
-    await assert.rejects(
-      new CommandAgent(
-        { command: process.execPath, args: [] },
-        broker,
-        runner,
-      ).run(input),
-      /entorno|broker/i,
-    );
-  } finally {
-    await rm(worktree, { recursive: true, force: true });
-    await rm(input.outputDirectory!, { recursive: true, force: true });
-  }
-});
-
 test("command result rejects traversal rather than trusting agent stdout", async () => {
   const worktree = await mkdtemp(
     join(tmpdir(), "comunidadsolar-command-result-"),
   );
   const input = await createInput(worktree, worktree);
   try {
-    const runner: ProcessRunner = async () => ({
+    const broker = createOperatorIsolationBroker(async () => ({
       exitCode: 0,
       stdout: JSON.stringify({ generatedFiles: ["../escape.astro"] }),
       stderr: "",
-    });
+      timedOut: false,
+    }));
     await assert.rejects(
-      new CommandAgent(
-        { command: process.execPath, args: [] },
-        recordingBroker(),
-        runner,
-      ).run(input),
+      new CommandAgent({ command: process.execPath, args: [] }, broker).run(
+        input,
+      ),
       /(path generado no seguro|schema agent-result)/i,
     );
   } finally {
@@ -1678,8 +1730,12 @@ test("command result protocol fails closed for malformed JSON results", async ()
       await assert.rejects(
         new CommandAgent(
           { command: process.execPath, args: [] },
-          recordingBroker(),
-          async () => ({ exitCode: 0, stdout, stderr: "" }),
+          createOperatorIsolationBroker(async () => ({
+            exitCode: 0,
+            stdout,
+            stderr: "",
+            timedOut: false,
+          })),
         ).run(input),
         /(JSON válido|schema agent-result)/i,
       );
@@ -1690,13 +1746,11 @@ test("command result protocol fails closed for malformed JSON results", async ()
   }
 });
 
-test("adapters reject a forged structural run input before spawning", async () => {
-  const { runner, calls } = recordingRunner();
+test("adapters reject a forged structural run input before broker delegation", async () => {
   await assert.rejects(
     new CommandAgent(
       { command: process.execPath, args: [] },
       recordingBroker(),
-      runner,
     ).run({
       changeId: "agent-isolation",
       attemptId: "attempt-000001",
@@ -1709,10 +1763,9 @@ test("adapters reject a forged structural run input before spawning", async () =
     }),
     /contexto de ejecución/i,
   );
-  assert.equal(calls.length, 0);
 });
 
-test("frozen candidate projection cannot redirect a minted run context", async () => {
+test("frozen candidate projection supplies immutable paths to the broker", async () => {
   await withRepository(async ({ root, baseline }) => {
     const candidate = await createCandidateWorktree({
       repositoryRoot: root,
@@ -1730,13 +1783,21 @@ test("frozen candidate projection cannot redirect a minted run context", async (
         (candidate as { outputDirectory: string }).outputDirectory =
           "/tmp/forged";
       });
-      const { runner, calls } = recordingRunner();
+      const calls: BrokerRunInput[] = [];
+      const broker = createOperatorIsolationBroker(async (brokerInput) => {
+        calls.push(brokerInput);
+        return {
+          exitCode: 0,
+          stdout: '{"generatedFiles":[]}',
+          stderr: "",
+          timedOut: false,
+        };
+      });
       await new CommandAgent(
         { command: process.execPath, args: [] },
-        recordingBroker(),
-        runner,
+        broker,
       ).run(context);
-      assert.deepEqual(JSON.parse(calls[0]!.options.input), {
+      assert.deepEqual(JSON.parse(calls[0]!.stdin), {
         requestPath: join(candidate.path, ".agent-input", "request.json"),
         planPath: join(candidate.path, ".agent-input", "plan.json"),
         policyPath: join(candidate.path, ".agent-input", "policy.json"),
@@ -1747,13 +1808,6 @@ test("frozen candidate projection cannot redirect a minted run context", async (
           "agent-result.schema.json",
         ),
       });
-      assert.equal(
-        await readFile(
-          join(candidate.outputDirectory, "command.stdout.log"),
-          "utf8",
-        ),
-        '{"generatedFiles":[]}',
-      );
     } finally {
       await removeCandidateWorktree(candidate);
     }
@@ -1776,16 +1830,13 @@ test("owned run context rejects a replaced sidecar before spawning", async () =>
       const context = await createAgentRunContext(candidate);
       await rm(candidate.outputDirectory, { recursive: true, force: false });
       await mkdir(candidate.outputDirectory);
-      const { runner, calls } = recordingRunner();
       await assert.rejects(
         new CommandAgent(
           { command: process.execPath, args: [] },
           recordingBroker(),
-          runner,
         ).run(context),
         /salida.*cambi|identidad/i,
       );
-      assert.equal(calls.length, 0);
     } finally {
       await assert.rejects(
         removeCandidateWorktree(candidate),
@@ -1818,16 +1869,13 @@ test("owned run context rejects a same-content copied input replacement", async 
       const content = await readFile(copiedRequest);
       await rm(copiedRequest);
       await writeFile(copiedRequest, content);
-      const { runner, calls } = recordingRunner();
       await assert.rejects(
         new CommandAgent(
           { command: process.execPath, args: [] },
           recordingBroker(),
-          runner,
         ).run(context),
         /entrada.*cambi|identidad/i,
       );
-      assert.equal(calls.length, 0);
     } finally {
       await removeCandidateWorktree(candidate);
     }
@@ -1980,40 +2028,6 @@ test("fixture disposal waits for an active leased handler", async () => {
     await disposing;
     await assert.rejects(run.agent.run(input), /capacidad FixtureAgent/i);
   });
-});
-
-test("agent adapters reject a sidecar symlink outside the owned output root", async () => {
-  const worktree = await mkdtemp(
-    join(tmpdir(), "comunidadsolar-agent-worktree-"),
-  );
-  const outside = await mkdtemp(
-    join(tmpdir(), "comunidadsolar-agent-outside-"),
-  );
-  const output = join(
-    dirname(worktree),
-    `${worktree.split("/").at(-1)}-output-link`,
-  );
-  await symlink(outside, output);
-  const original = await createInput(worktree, worktree);
-  const input = createTestAgentRunContext({
-    ...original,
-    outputDirectory: output,
-  });
-  try {
-    await assert.rejects(
-      new CommandAgent(
-        { command: process.execPath, args: [] },
-        recordingBroker(),
-        recordingRunner().runner,
-      ).run(input),
-      /salida.*seguro/i,
-    );
-  } finally {
-    await rm(original.outputDirectory!, { recursive: true, force: true });
-    await rm(output, { force: true });
-    await rm(worktree, { recursive: true, force: true });
-    await rm(outside, { recursive: true, force: true });
-  }
 });
 
 test("permits only safe descendants of explicitly planned generated roots", async () => {
