@@ -11,8 +11,10 @@ import type {
 } from "@astrojs/compiler/types";
 import ts from "typescript";
 
-import { validateBlockPage } from "../../content/block-catalog.ts";
-import { canonicalJson } from "../canonical-json.ts";
+import {
+  isApprovedGeneratedLink,
+  validateBlockPage,
+} from "../../content/block-catalog.ts";
 import type { ChangePlan, PrivateArea } from "../domain.ts";
 import {
   assertNoSuppliedSecrets,
@@ -20,7 +22,6 @@ import {
 } from "../importers/secret-scan.ts";
 import {
   assertControllerStagedOutput,
-  readStagedPackageBaselines,
   type StagedAgentOutput,
 } from "../workspaces/policy.ts";
 
@@ -30,9 +31,18 @@ export interface PolicyViolation {
   readonly message: string;
 }
 
+interface ImportBinding {
+  readonly kind: "default" | "named" | "namespace";
+  readonly imported: string;
+  readonly local: string;
+}
+
 interface ImportRecord {
   readonly specifier: string;
-  readonly locals: readonly string[];
+  readonly bindings: readonly ImportBinding[];
+  readonly sideEffect: boolean;
+  readonly typeOnly: boolean;
+  readonly attributes: boolean;
 }
 
 interface GeneratedContentDefinition {
@@ -53,8 +63,6 @@ interface GeneratedContentDefinition {
 }
 
 const hashPattern = /^[a-f0-9]{64}$/u;
-const exactVersionPattern =
-  /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/u;
 const sourceExtensions = new Set([
   ".astro",
   ".ts",
@@ -66,12 +74,43 @@ const sourceExtensions = new Set([
 ]);
 const activeUrlAttributes = new Set([
   "action",
+  "background",
+  "cite",
+  "data",
   "formaction",
   "href",
+  "manifest",
+  "ping",
   "poster",
   "src",
+  "srcset",
   "xlink:href",
 ]);
+const unsupportedMultiUrlAttributes = new Set(["ping", "srcset"]);
+const inertPublicExtensions = new Set([
+  ".avif",
+  ".gif",
+  ".ico",
+  ".jpeg",
+  ".jpg",
+  ".png",
+  ".webp",
+  ".woff",
+  ".woff2",
+]);
+const canonicalComponentModules = Object.freeze({
+  SiteLayout: "src/layouts/SiteLayout.astro",
+  PageHero: "src/components/site/PageHero.astro",
+  SectionHeading: "src/components/site/SectionHeading.astro",
+  ButtonLink: "src/components/site/ButtonLink.astro",
+} as const);
+const canonicalIslandModules = Object.freeze({
+  BlogFilter: "src/components/islands/BlogFilter",
+  ConsentManager: "src/components/islands/ConsentManager",
+  CoverageFinder: "src/components/islands/CoverageFinder",
+  ManganaferInterestForm: "src/components/islands/ManganaferInterestForm",
+  ManganaferQuoteForm: "src/components/islands/ManganaferQuoteForm",
+} as const);
 const forbiddenConfigBasenames = new Set([
   ".env",
   ".npmrc",
@@ -166,34 +205,6 @@ function outputPathAllowed(path: string, plan: ChangePlan): boolean {
   );
 }
 
-function normalizedActiveUrl(value: string): string {
-  return [...value]
-    .filter((character) => character.codePointAt(0)! > 0x20)
-    .join("")
-    .toLowerCase();
-}
-
-function safeLink(value: string): boolean {
-  const normalized = normalizedActiveUrl(value);
-  if (value.includes("\\")) return false;
-  const allowed =
-    (normalized.startsWith("/") && !normalized.startsWith("//")) ||
-    normalized.startsWith("#") ||
-    normalized.startsWith("https://") ||
-    normalized.startsWith("mailto:") ||
-    normalized.startsWith("tel:");
-  if (!allowed) return false;
-  if (normalized.startsWith("https://")) {
-    try {
-      const url = new URL(normalized);
-      return url.username === "" && url.password === "";
-    } catch {
-      return false;
-    }
-  }
-  return true;
-}
-
 function tagAttributes(node: AstroNode): readonly AttributeNode[] {
   return "attributes" in node ? node.attributes : [];
 }
@@ -209,7 +220,8 @@ function quotedAttribute(
 
 function sourceImports(source: string): {
   imports: ImportRecord[];
-  invalidDynamicImport: boolean;
+  executable: boolean;
+  parseError: boolean;
 } {
   const sourceFile = ts.createSourceFile(
     "generated.tsx",
@@ -219,52 +231,66 @@ function sourceImports(source: string): {
     ts.ScriptKind.TSX,
   );
   const imports: ImportRecord[] = [];
-  let invalidDynamicImport = false;
-
-  const add = (specifier: string, locals: readonly string[] = []): void => {
-    imports.push(
-      Object.freeze({ specifier, locals: Object.freeze([...locals]) }),
-    );
-  };
-  const visit = (node: ts.Node): void => {
+  let executable = false;
+  for (const statement of sourceFile.statements) {
     if (
-      (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) &&
-      node.moduleSpecifier !== undefined &&
-      ts.isStringLiteral(node.moduleSpecifier)
+      !ts.isImportDeclaration(statement) ||
+      !ts.isStringLiteral(statement.moduleSpecifier)
     ) {
-      const locals: string[] = [];
-      if (ts.isImportDeclaration(node) && node.importClause !== undefined) {
-        if (node.importClause.name !== undefined)
-          locals.push(node.importClause.name.text);
-        const bindings = node.importClause.namedBindings;
-        if (bindings !== undefined) {
-          if (ts.isNamespaceImport(bindings)) locals.push(bindings.name.text);
-          else
-            locals.push(
-              ...bindings.elements.map((element) => element.name.text),
-            );
-        }
-      }
-      add(node.moduleSpecifier.text, locals);
-    } else if (
-      ts.isCallExpression(node) &&
-      (node.expression.kind === ts.SyntaxKind.ImportKeyword ||
-        (ts.isIdentifier(node.expression) &&
-          node.expression.text === "require"))
-    ) {
-      if (
-        node.arguments.length === 1 &&
-        ts.isStringLiteral(node.arguments[0])
-      ) {
-        add(node.arguments[0].text);
+      executable = true;
+      continue;
+    }
+    const bindings: ImportBinding[] = [];
+    const clause = statement.importClause;
+    if (clause?.name !== undefined) {
+      bindings.push({
+        kind: "default",
+        imported: "default",
+        local: clause.name.text,
+      });
+    }
+    const namedBindings = clause?.namedBindings;
+    if (namedBindings !== undefined) {
+      if (ts.isNamespaceImport(namedBindings)) {
+        bindings.push({
+          kind: "namespace",
+          imported: "*",
+          local: namedBindings.name.text,
+        });
       } else {
-        invalidDynamicImport = true;
+        bindings.push(
+          ...namedBindings.elements.map((element) => ({
+            kind: "named" as const,
+            imported: (element.propertyName ?? element.name).text,
+            local: element.name.text,
+          })),
+        );
       }
     }
-    ts.forEachChild(node, visit);
+    imports.push(
+      Object.freeze({
+        specifier: statement.moduleSpecifier.text,
+        bindings: Object.freeze(bindings),
+        sideEffect: clause === undefined,
+        typeOnly:
+          clause?.phaseModifier === ts.SyntaxKind.TypeKeyword ||
+          (namedBindings !== undefined &&
+            ts.isNamedImports(namedBindings) &&
+            namedBindings.elements.some((element) => element.isTypeOnly)),
+        attributes: statement.attributes !== undefined,
+      }),
+    );
+  }
+  return {
+    imports,
+    executable,
+    parseError:
+      (
+        sourceFile as ts.SourceFile & {
+          readonly parseDiagnostics: readonly ts.Diagnostic[];
+        }
+      ).parseDiagnostics.length > 0,
   };
-  visit(sourceFile);
-  return { imports, invalidDynamicImport };
 }
 
 function resolvedLocalImport(
@@ -284,24 +310,84 @@ function resolvedLocalImport(
   return resolved;
 }
 
-function dependencyName(specifier: string): string {
-  if (specifier.startsWith("@")) {
-    return specifier.split("/").slice(0, 2).join("/");
-  }
-  return specifier.split("/", 1)[0] ?? specifier;
+function canonicalLocalSpecifier(importer: string, target: string): string {
+  const relative = posix.relative(posix.dirname(importer), target);
+  return relative.startsWith(".") ? relative : `./${relative}`;
 }
 
-function approvedDependencies(plan: ChangePlan): Map<string, string> {
-  const result = new Map<string, string>();
-  for (const declaration of plan.dependencies) {
-    const separator = declaration.lastIndexOf("@");
-    if (separator <= 0) continue;
-    result.set(
-      declaration.slice(0, separator),
-      declaration.slice(separator + 1),
-    );
+interface ImportExpectation {
+  readonly kind: "default" | "named" | "side-effect";
+  readonly imported: string;
+  readonly local: string;
+}
+
+function canonicalImportExpectations(
+  plan: ChangePlan,
+): ReadonlyMap<string, ImportExpectation> {
+  const paths = expectedPaths(plan);
+  const result = new Map<string, ImportExpectation>();
+  if (plan.selectedMode === "blocks") {
+    result.set("src/components/blocks/GeneratedBlockPage.astro", {
+      kind: "default",
+      imported: "default",
+      local: "GeneratedBlockPage",
+    });
+    result.set(paths.content, {
+      kind: "default",
+      imported: "default",
+      local: "page",
+    });
+    return result;
+  }
+  result.set(paths.stylesheet, {
+    kind: "side-effect",
+    imported: "",
+    local: "",
+  });
+  for (const name of plan.components) {
+    const target =
+      canonicalComponentModules[name as keyof typeof canonicalComponentModules];
+    if (target !== undefined) {
+      result.set(target, {
+        kind: "default",
+        imported: "default",
+        local: name,
+      });
+    }
+  }
+  for (const name of plan.islands) {
+    const target =
+      canonicalIslandModules[name as keyof typeof canonicalIslandModules];
+    if (target !== undefined) {
+      result.set(target, { kind: "named", imported: name, local: name });
+    }
   }
   return result;
+}
+
+function importMatches(
+  record: ImportRecord,
+  expected: ImportExpectation,
+  importer: string,
+  target: string,
+): boolean {
+  if (
+    record.typeOnly ||
+    record.attributes ||
+    record.specifier !== canonicalLocalSpecifier(importer, target)
+  ) {
+    return false;
+  }
+  if (expected.kind === "side-effect") {
+    return record.sideEffect && record.bindings.length === 0;
+  }
+  return (
+    !record.sideEffect &&
+    record.bindings.length === 1 &&
+    record.bindings[0]?.kind === expected.kind &&
+    record.bindings[0]?.imported === expected.imported &&
+    record.bindings[0]?.local === expected.local
+  );
 }
 
 function validateImports(
@@ -311,16 +397,25 @@ function validateImports(
 ): { violations: PolicyViolation[]; records: ImportRecord[] } {
   const violations: PolicyViolation[] = [];
   const parsed = sourceImports(frontmatter);
-  if (parsed.invalidDynamicImport) {
+  if (parsed.parseError) {
     violations.push(
       violation(
-        "import.dynamic",
-        "Las importaciones dinámicas deben ser literales",
+        "source.parse",
+        "El frontmatter generado no se puede parsear completamente",
         path,
       ),
     );
   }
-  const dependencies = approvedDependencies(plan);
+  if (parsed.executable) {
+    violations.push(
+      violation(
+        "source.executable",
+        "El frontmatter generado solo puede contener imports estáticos canónicos",
+        path,
+      ),
+    );
+  }
+  const expectations = canonicalImportExpectations(plan);
   for (const record of parsed.imports) {
     const lower = record.specifier.toLowerCase();
     if (
@@ -341,7 +436,27 @@ function validateImports(
     }
     try {
       const local = resolvedLocalImport(path, record.specifier);
-      if (local !== null) continue;
+      if (local !== null) {
+        const expected = expectations.get(local);
+        if (expected === undefined) {
+          violations.push(
+            violation(
+              "import.unapproved",
+              `Módulo local no aprobado por el plan: ${record.specifier}`,
+              path,
+            ),
+          );
+        } else if (!importMatches(record, expected, path, local)) {
+          violations.push(
+            violation(
+              "component.binding",
+              `El import no usa el binding canónico para ${record.specifier}`,
+              path,
+            ),
+          );
+        }
+        continue;
+      }
     } catch {
       violations.push(
         violation(
@@ -365,15 +480,13 @@ function validateImports(
       );
       continue;
     }
-    if (!dependencies.has(dependencyName(record.specifier))) {
-      violations.push(
-        violation(
-          "import.dependency",
-          `Dependencia no aprobada: ${record.specifier}`,
-          path,
-        ),
-      );
-    }
+    violations.push(
+      violation(
+        "import.dependency",
+        `La salida generada no admite módulos de paquete: ${record.specifier}`,
+        path,
+      ),
+    );
   }
   return { violations, records: parsed.imports };
 }
@@ -388,13 +501,115 @@ function frontmatterSources(ast: AstroNode): string[] {
   return result;
 }
 
+const approvedHtmlElements = new Set([
+  "a",
+  "abbr",
+  "address",
+  "article",
+  "aside",
+  "b",
+  "blockquote",
+  "br",
+  "button",
+  "caption",
+  "cite",
+  "code",
+  "col",
+  "colgroup",
+  "dd",
+  "details",
+  "div",
+  "dl",
+  "dt",
+  "em",
+  "fieldset",
+  "figcaption",
+  "figure",
+  "footer",
+  "form",
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "h5",
+  "h6",
+  "header",
+  "hr",
+  "img",
+  "input",
+  "label",
+  "legend",
+  "li",
+  "main",
+  "nav",
+  "ol",
+  "option",
+  "p",
+  "picture",
+  "pre",
+  "section",
+  "select",
+  "small",
+  "source",
+  "span",
+  "strong",
+  "summary",
+  "table",
+  "tbody",
+  "td",
+  "textarea",
+  "tfoot",
+  "th",
+  "thead",
+  "time",
+  "tr",
+  "u",
+  "ul",
+]);
+
+function resolvedCanonicalBindings(
+  records: readonly ImportRecord[],
+  plan: ChangePlan,
+  path: string,
+): ReadonlyMap<string, string> {
+  const result = new Map<string, string>();
+  const expectations = canonicalImportExpectations(plan);
+  for (const record of records) {
+    try {
+      const target = resolvedLocalImport(path, record.specifier);
+      if (target === null) continue;
+      const expected = expectations.get(target);
+      if (
+        expected !== undefined &&
+        importMatches(record, expected, path, target)
+      ) {
+        result.set(expected.local, target);
+      }
+    } catch {
+      // validateImports owns the traversal violation.
+    }
+  }
+  return result;
+}
+
 function validateTags(
   ast: AstroNode,
   plan: ChangePlan,
   path: string,
+  imports: readonly ImportRecord[],
 ): PolicyViolation[] {
   const violations: PolicyViolation[] = [];
+  const bindings = resolvedCanonicalBindings(imports, plan, path);
   const visit = (node: AstroNode): void => {
+    if (node.type === "expression") {
+      violations.push(
+        violation(
+          "source.executable",
+          "Las expresiones Astro ejecutables no están permitidas",
+          path,
+        ),
+      );
+    }
     for (const attribute of tagAttributes(node)) {
       const name = attribute.name.toLowerCase();
       if (attribute.kind === "spread") {
@@ -402,6 +617,23 @@ function validateTags(
           violation(
             "astro.spread",
             "Los atributos spread no permiten demostrar la allowlist",
+            path,
+          ),
+        );
+      } else if (
+        attribute.kind !== "quoted" &&
+        attribute.kind !== "empty" &&
+        !(
+          node.type === "component" &&
+          node.name === "GeneratedBlockPage" &&
+          attribute.kind === "shorthand" &&
+          attribute.name === "page"
+        )
+      ) {
+        violations.push(
+          violation(
+            "source.executable",
+            "Los atributos generados deben ser estáticos",
             path,
           ),
         );
@@ -421,7 +653,15 @@ function validateTags(
         );
       }
       if (activeUrlAttributes.has(name)) {
-        if (attribute.kind !== "quoted" || !safeLink(attribute.value)) {
+        const navigationOnlyProtocol =
+          attribute.value.startsWith("mailto:") ||
+          attribute.value.startsWith("tel:");
+        if (
+          unsupportedMultiUrlAttributes.has(name) ||
+          attribute.kind !== "quoted" ||
+          !isApprovedGeneratedLink(attribute.value) ||
+          (navigationOnlyProtocol && name !== "href")
+        ) {
           violations.push(
             violation(
               "link.unsafe",
@@ -431,16 +671,20 @@ function validateTags(
           );
         }
       }
-      if (
-        name === "style" &&
-        /url\(\s*["']?\s*(?:javascript:|data:text\/html)/iu.test(
-          attribute.value,
-        )
-      ) {
+      if (name === "style") {
         violations.push(
           violation(
-            "link.unsafe",
-            "El estilo usa un protocolo no aprobado",
+            "style.inline",
+            "Los estilos inline no están permitidos",
+            path,
+          ),
+        );
+      }
+      if (name === "srcdoc" || name === "http-equiv") {
+        violations.push(
+          violation(
+            "active-element.forbidden",
+            "El atributo HTML activo no está permitido",
             path,
           ),
         );
@@ -458,18 +702,18 @@ function validateTags(
         );
       }
       if (name === "script") {
+        violations.push(
+          violation(
+            "script.forbidden",
+            "Ningún script generado está autorizado por el plan",
+            path,
+          ),
+        );
         const src = quotedAttribute(node, "src");
-        const inlineDirective = quotedAttribute(node, "is:inline");
         const hasBody = node.children.some(
           (child) => child.type !== "text" || child.value.trim().length > 0,
         );
-        if (
-          inlineDirective !== undefined ||
-          src === undefined ||
-          hasBody ||
-          !safeLink(src.value) ||
-          !normalizedActiveUrl(src.value).startsWith("https://")
-        ) {
+        if (src === undefined || hasBody) {
           violations.push(
             violation(
               "script.inline",
@@ -478,27 +722,140 @@ function validateTags(
             ),
           );
         }
+      } else if (name === "style") {
+        violations.push(
+          violation(
+            "style.inline",
+            "Las hojas de estilo inline no están permitidas",
+            path,
+          ),
+        );
+      } else if (name === "object" || name === "embed" || name === "link") {
+        violations.push(
+          violation(
+            "active-element.forbidden",
+            `Elemento HTML activo no aprobado: ${name}`,
+            path,
+          ),
+        );
+      } else if (name === "base" || name === "meta") {
+        violations.push(
+          violation(
+            "active-element.forbidden",
+            `Elemento HTML de documento no aprobado: ${name}`,
+            path,
+          ),
+        );
+      } else if (name !== "iframe" && !approvedHtmlElements.has(name)) {
+        violations.push(
+          violation(
+            "element.unapproved",
+            `Elemento HTML no aprobado: ${name}`,
+            path,
+          ),
+        );
       }
     }
-    if (
-      node.type === "component" &&
-      node.attributes.some((attribute) =>
+    if (node.type === "component") {
+      const componentTarget =
+        canonicalComponentModules[
+          node.name as keyof typeof canonicalComponentModules
+        ];
+      const islandTarget =
+        canonicalIslandModules[
+          node.name as keyof typeof canonicalIslandModules
+        ];
+      const renderer =
+        plan.selectedMode === "blocks" &&
+        node.name === "GeneratedBlockPage" &&
+        bindings.get(node.name) ===
+          "src/components/blocks/GeneratedBlockPage.astro";
+      const component =
+        componentTarget !== undefined &&
+        plan.components.includes(node.name) &&
+        bindings.get(node.name) === componentTarget;
+      const island =
+        islandTarget !== undefined &&
+        plan.islands.includes(node.name) &&
+        bindings.get(node.name) === islandTarget;
+      if (!renderer && !component && !island) {
+        violations.push(
+          violation(
+            "component.binding",
+            `Componente no ligado a su módulo canónico aprobado: ${node.name}`,
+            path,
+          ),
+        );
+      }
+      const hydrated = node.attributes.some((attribute) =>
         attribute.name.toLowerCase().startsWith("client:"),
-      ) &&
-      !plan.islands.includes(node.name)
-    ) {
-      violations.push(
-        violation(
-          "island.unapproved",
-          `Isla no aprobada por el plan: ${node.name}`,
-          path,
-        ),
       );
+      if (hydrated && (plan.selectedMode !== "hybrid" || !island)) {
+        violations.push(
+          violation(
+            "island.unapproved",
+            `Isla hidratada no aprobada o no canónica: ${node.name}`,
+            path,
+          ),
+        );
+      }
     }
     if ("children" in node) node.children.forEach(visit);
   };
   visit(ast);
   return violations;
+}
+
+function significantRootChildren(ast: AstroNode): readonly AstroNode[] {
+  if (!("children" in ast)) return [];
+  return ast.children.filter(
+    (child) =>
+      child.type !== "frontmatter" &&
+      child.type !== "comment" &&
+      !(child.type === "text" && child.value.trim() === ""),
+  );
+}
+
+function validateModeStructure(
+  ast: AstroNode,
+  plan: ChangePlan,
+  path: string,
+): PolicyViolation[] {
+  if (path !== expectedPaths(plan).route) return [];
+  const roots = significantRootChildren(ast);
+  const root = roots[0];
+  if (plan.selectedMode === "blocks") {
+    const canonical =
+      roots.length === 1 &&
+      root?.type === "component" &&
+      root.name === "GeneratedBlockPage" &&
+      root.children.length === 0 &&
+      root.attributes.length === 1 &&
+      root.attributes[0]?.kind === "shorthand" &&
+      root.attributes[0]?.name === "page";
+    return canonical
+      ? []
+      : [
+          violation(
+            "mode.structure",
+            "Blocks requiere una única invocación canónica de GeneratedBlockPage",
+            path,
+          ),
+        ];
+  }
+  const canonical =
+    roots.length === 1 &&
+    root?.type === "component" &&
+    root.name === "SiteLayout";
+  return canonical
+    ? []
+    : [
+        violation(
+          "mode.layout",
+          "Freeform e hybrid requieren SiteLayout como única raíz renderizada",
+          path,
+        ),
+      ];
 }
 
 function requiredRouteImports(
@@ -511,7 +868,13 @@ function requiredRouteImports(
   const resolved = records.flatMap((record) => {
     try {
       const target = resolvedLocalImport(path, record.specifier);
-      return target === null ? [] : [{ target, locals: record.locals }];
+      const expected =
+        target === null
+          ? undefined
+          : canonicalImportExpectations(plan).get(target);
+      return target === null || expected === undefined
+        ? []
+        : [{ target, valid: importMatches(record, expected, path, target) }];
     } catch {
       return [];
     }
@@ -522,7 +885,7 @@ function requiredRouteImports(
       !resolved.some(
         (record) =>
           record.target === "src/components/blocks/GeneratedBlockPage.astro" &&
-          record.locals.includes("GeneratedBlockPage"),
+          record.valid,
       )
     ) {
       violations.push(
@@ -533,7 +896,11 @@ function requiredRouteImports(
         ),
       );
     }
-    if (!resolved.some((record) => record.target === paths.content)) {
+    if (
+      !resolved.some(
+        (record) => record.target === paths.content && record.valid,
+      )
+    ) {
       violations.push(
         violation(
           "mode.blocks-content",
@@ -546,8 +913,7 @@ function requiredRouteImports(
     if (
       !resolved.some(
         (record) =>
-          record.target === "src/layouts/SiteLayout.astro" &&
-          record.locals.includes("SiteLayout"),
+          record.target === "src/layouts/SiteLayout.astro" && record.valid,
       )
     ) {
       violations.push(
@@ -558,7 +924,11 @@ function requiredRouteImports(
         ),
       );
     }
-    if (!resolved.some((record) => record.target === paths.stylesheet)) {
+    if (
+      !resolved.some(
+        (record) => record.target === paths.stylesheet && record.valid,
+      )
+    ) {
       violations.push(
         violation(
           "mode.stylesheet",
@@ -602,18 +972,23 @@ export async function validateAstroSource(
       violation("astro.parse", "El archivo Astro contiene errores", path),
     );
   }
-  violations.push(...validateTags(parsed.ast, plan, path));
   const imports = frontmatterSources(parsed.ast).map((sourcePart) =>
     validateImports(sourcePart, plan, path),
   );
+  const records = imports.flatMap((entry) => entry.records);
   violations.push(...imports.flatMap((entry) => entry.violations));
-  violations.push(
-    ...requiredRouteImports(
-      imports.flatMap((entry) => entry.records),
-      plan,
-      path,
-    ),
-  );
+  if (path !== expectedPaths(plan).route) {
+    violations.push(
+      violation(
+        "source.unsupported",
+        "Solo la ruta canónica puede contener source Astro generado",
+        path,
+      ),
+    );
+  }
+  violations.push(...validateTags(parsed.ast, plan, path, records));
+  violations.push(...validateModeStructure(parsed.ast, plan, path));
+  violations.push(...requiredRouteImports(records, plan, path));
   return violations;
 }
 
@@ -736,131 +1111,21 @@ function validateCommonContent(
   );
 }
 
-function cloneJson<T>(value: T): T {
-  return JSON.parse(JSON.stringify(value)) as T;
-}
-
-function dependencyDiffValid(
-  baselinePackage: unknown,
-  baselineLock: unknown,
-  currentPackage: unknown,
-  currentLock: unknown,
-  plan: ChangePlan,
-): boolean {
-  const dependencies = approvedDependencies(plan);
-  if (
-    dependencies.size !== plan.dependencies.length ||
-    [...dependencies.values()].some(
-      (version) => !exactVersionPattern.test(version),
-    )
-  ) {
-    return false;
-  }
-  const basePackage = dataRecord(baselinePackage);
-  const nextPackage = dataRecord(currentPackage);
-  const baseLock = dataRecord(baselineLock);
-  const nextLock = dataRecord(currentLock);
-  if (
-    basePackage === null ||
-    nextPackage === null ||
-    baseLock === null ||
-    nextLock === null
-  ) {
-    return false;
-  }
-  const expectedPackage = cloneJson(basePackage);
-  const packageDependencies = dataRecord(expectedPackage.dependencies) ?? {};
-  expectedPackage.dependencies = packageDependencies;
-  for (const [name, version] of dependencies)
-    packageDependencies[name] = version;
-  if (canonicalJson(expectedPackage) !== canonicalJson(nextPackage))
-    return false;
-
-  const expectedLock = cloneJson(baseLock);
-  const expectedPackages = dataRecord(expectedLock.packages);
-  const currentPackages = dataRecord(nextLock.packages);
-  if (expectedPackages === null || currentPackages === null) return false;
-  const expectedRoot = dataRecord(expectedPackages[""]);
-  const currentRoot = dataRecord(currentPackages[""]);
-  if (expectedRoot === null || currentRoot === null) return false;
-  const rootDependencies = dataRecord(expectedRoot.dependencies) ?? {};
-  expectedRoot.dependencies = rootDependencies;
-  for (const [name, version] of dependencies) {
-    rootDependencies[name] = version;
-    const key = `node_modules/${name}`;
-    const currentEntry = dataRecord(currentPackages[key]);
-    const resolved = currentEntry?.resolved;
-    if (
-      currentEntry === null ||
-      currentEntry.version !== version ||
-      currentEntry.link === true ||
-      (resolved !== undefined &&
-        (typeof resolved !== "string" ||
-          !normalizedActiveUrl(resolved).startsWith("https://") ||
-          !safeLink(resolved)))
-    ) {
-      return false;
-    }
-    expectedPackages[key] = cloneJson(currentEntry);
-  }
-  return canonicalJson(expectedLock) === canonicalJson(nextLock);
-}
-
-async function validateDependencies(
-  inventory: StagedAgentOutput,
+function validateDependencies(
   files: ReadonlyMap<string, Buffer>,
-  plan: ChangePlan,
-): Promise<PolicyViolation[]> {
+): PolicyViolation[] {
   const hasPackage = files.has("package.json");
   const hasLock = files.has("package-lock.json");
   if (!hasPackage && !hasLock) return [];
-  if (!hasPackage || !hasLock || plan.dependencies.length === 0) {
-    return [
-      violation(
-        "dependency.authorization",
-        "Package y lock requieren dependencias aprobadas y deben cambiar juntos",
-      ),
-    ];
-  }
-  const packageSource = decodeUtf8(files.get("package.json")!);
-  const lockSource = decodeUtf8(files.get("package-lock.json")!);
-  if (packageSource === null || lockSource === null) {
-    return [violation("dependency.diff", "Los manifests deben ser JSON UTF-8")];
-  }
-  try {
-    const baseline = await readStagedPackageBaselines(inventory);
-    if (
-      !dependencyDiffValid(
-        JSON.parse(baseline.packageJson.toString("utf8")),
-        JSON.parse(baseline.packageLockJson.toString("utf8")),
-        JSON.parse(packageSource),
-        JSON.parse(lockSource),
-        plan,
-      )
-    ) {
-      return [
-        violation(
-          "dependency.diff",
-          "El diff de package y lock no coincide exactamente con nombre y versión aprobados",
-        ),
-      ];
-    }
-  } catch {
-    return [
-      violation(
-        "dependency.diff",
-        "No se pudo validar el diff exacto de dependencias",
-      ),
-    ];
-  }
-  return [];
+  return [
+    violation(
+      "dependency.unsupported",
+      "Los cambios de dependencias se rechazan hasta disponer de un grafo lock confiable derivado fuera del staging hostil",
+    ),
+  ];
 }
 
-function validateScriptSource(
-  source: string,
-  plan: ChangePlan,
-  path: string,
-): PolicyViolation[] {
+function validateScriptSource(source: string, path: string): PolicyViolation[] {
   const violations: PolicyViolation[] = [];
   try {
     assertNoSuppliedSecrets(source);
@@ -873,8 +1138,153 @@ function validateScriptSource(
       ),
     );
   }
-  violations.push(...validateImports(source, plan, path).violations);
+  const parsed = ts.createSourceFile(
+    path,
+    source,
+    ts.ScriptTarget.Latest,
+    false,
+    path.endsWith("x") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
+  );
+  if (
+    (
+      parsed as ts.SourceFile & {
+        readonly parseDiagnostics: readonly ts.Diagnostic[];
+      }
+    ).parseDiagnostics.length > 0
+  ) {
+    violations.push(
+      violation(
+        "source.parse",
+        "El source ejecutable generado no se puede parsear completamente",
+        path,
+      ),
+    );
+  }
+  violations.push(
+    violation(
+      "source.executable",
+      "Los archivos TS/JS/TSX/JSX generados no están autorizados",
+      path,
+    ),
+  );
   return violations;
+}
+
+function validateGeneratedCss(
+  source: string,
+  plan: ChangePlan,
+  path: string,
+): PolicyViolation[] {
+  const violations: PolicyViolation[] = [];
+  const withoutComments = source.replace(/\/\*[\s\S]*?\*\//gu, "").trim();
+  if (
+    /@|\\|url\s*\(|src\s*\(|image-set\s*\(|expression\s*\(|(?:javascript|data|https?)\s*:|\/\/|:global\b|-moz-binding\b|behavior\s*:/iu.test(
+      withoutComments,
+    )
+  ) {
+    violations.push(
+      violation(
+        "css.unsafe",
+        "El CSS generado no admite imports, URLs, at-rules ni valores activos",
+        path,
+      ),
+    );
+  }
+  const scopeClass = `.generated-${plan.changeId}`;
+  const rulePattern = /([^{}]+)\{([^{}]*)\}/gu;
+  let consumed = "";
+  let ruleCount = 0;
+  for (const match of withoutComments.matchAll(rulePattern)) {
+    ruleCount += 1;
+    consumed += match[0];
+    const selectors = (match[1] ?? "").split(",");
+    if (
+      selectors.some((selector) => {
+        const trimmed = selector.trim();
+        if (!trimmed.startsWith(scopeClass)) return true;
+        const suffix = trimmed.slice(scopeClass.length);
+        const first = suffix[0] ?? "";
+        return suffix !== "" && !/\s/u.test(first) && !".#[>:".includes(first);
+      })
+    ) {
+      violations.push(
+        violation(
+          "css.scope",
+          `Cada selector debe estar limitado por ${scopeClass}`,
+          path,
+        ),
+      );
+    }
+  }
+  const compactSource = withoutComments.replace(/\s/gu, "");
+  const compactConsumed = consumed.replace(/\s/gu, "");
+  if (
+    ruleCount === 0 ||
+    compactConsumed !== compactSource ||
+    (withoutComments.match(/\{/gu)?.length ?? 0) !==
+      (withoutComments.match(/\}/gu)?.length ?? 0)
+  ) {
+    violations.push(
+      violation(
+        "css.unsafe",
+        "El CSS generado usa una sintaxis no soportada por la política cerrada",
+        path,
+      ),
+    );
+  }
+  return violations;
+}
+
+function inertPublicAssetMatches(bytes: Buffer, extension: string): boolean {
+  const prefix = (length: number) =>
+    bytes.subarray(0, length).toString("ascii");
+  switch (extension) {
+    case ".png":
+      return (
+        bytes.length >= 8 &&
+        bytes
+          .subarray(0, 8)
+          .equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
+      );
+    case ".jpg":
+    case ".jpeg":
+      return (
+        bytes.length >= 3 &&
+        bytes[0] === 0xff &&
+        bytes[1] === 0xd8 &&
+        bytes[2] === 0xff
+      );
+    case ".gif":
+      return prefix(6) === "GIF87a" || prefix(6) === "GIF89a";
+    case ".webp":
+      return (
+        bytes.length >= 12 &&
+        prefix(4) === "RIFF" &&
+        bytes.subarray(8, 12).toString("ascii") === "WEBP"
+      );
+    case ".avif": {
+      const brand = bytes.subarray(8, 12).toString("ascii");
+      return (
+        bytes.length >= 12 &&
+        bytes.subarray(4, 8).toString("ascii") === "ftyp" &&
+        (brand === "avif" || brand === "avis")
+      );
+    }
+    case ".ico":
+      return (
+        bytes.length >= 4 &&
+        bytes[0] === 0 &&
+        bytes[1] === 0 &&
+        bytes[2] === 1 &&
+        bytes[3] === 0
+      );
+    case ".woff":
+      return prefix(4) === "wOFF";
+    case ".woff2":
+      return prefix(4) === "wOF2";
+    default:
+      return false;
+  }
 }
 
 export async function validateOutputPolicy(
@@ -982,6 +1392,28 @@ export async function validateOutputPolicy(
 
   for (const [path, bytes] of files) {
     const extension = posix.extname(path).toLowerCase();
+    if (
+      isDescendant(paths.assets, path) &&
+      (!inertPublicExtensions.has(extension) ||
+        !inertPublicAssetMatches(bytes, extension))
+    ) {
+      violations.push(
+        violation(
+          "asset.active",
+          "Los assets públicos generados se limitan a imágenes y fuentes inertes",
+          path,
+        ),
+      );
+    }
+    if (isDescendant(paths.components, path)) {
+      violations.push(
+        violation(
+          "source.unsupported",
+          "Los componentes generados no están autorizados por la gramática canónica actual",
+          path,
+        ),
+      );
+    }
     if (extension === ".astro") {
       const source = decodeUtf8(bytes);
       if (source === null) {
@@ -998,22 +1430,24 @@ export async function validateOutputPolicy(
           violation("source.utf8", "El source debe usar UTF-8", path),
         );
       } else {
-        violations.push(...validateScriptSource(source, plan, path));
+        violations.push(...validateScriptSource(source, path));
       }
     } else if (extension === ".css") {
       const source = decodeUtf8(bytes);
       if (
         source === null ||
-        /@import\b/iu.test(source) ||
-        /url\(\s*["']?\s*(?:javascript:|data:text\/html)/iu.test(source)
+        path !== paths.stylesheet ||
+        plan.selectedMode === "blocks"
       ) {
         violations.push(
           violation(
             "css.unsafe",
-            "El CSS contiene una referencia no aprobada",
+            "El CSS solo se admite en la hoja canónica de freeform/hybrid",
             path,
           ),
         );
+      } else {
+        violations.push(...validateGeneratedCss(source, plan, path));
       }
     }
   }
@@ -1038,6 +1472,6 @@ export async function validateOutputPolicy(
     }
   }
 
-  violations.push(...(await validateDependencies(inventory, files, plan)));
+  violations.push(...validateDependencies(files));
   return violations;
 }

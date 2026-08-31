@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
@@ -93,8 +93,8 @@ const freeformRoute = `---
 import SiteLayout from "../layouts/SiteLayout.astro";
 import "../styles/generated/${changeId}.css";
 ---
-<SiteLayout page="inicio" meta={{ title: "Generada", canonical: "/generated" }}>
-  <main><h1>Generada</h1><a href="/contacto">Contacto</a></main>
+<SiteLayout page="inicio">
+  <main class="generated-${changeId}"><h1>Generada</h1><a href="/contacto">Contacto</a></main>
 </SiteLayout>
 `;
 
@@ -103,8 +103,8 @@ import SiteLayout from "../layouts/SiteLayout.astro";
 import { CoverageFinder } from "../components/islands/CoverageFinder";
 import "../styles/generated/${changeId}.css";
 ---
-<SiteLayout page="inicio" meta={{ title: "Generada", canonical: "/generated" }}>
-  <main><h1>Generada</h1><CoverageFinder client:visible /></main>
+<SiteLayout page="inicio">
+  <main class="generated-${changeId}"><h1>Generada</h1><CoverageFinder client:visible /></main>
 </SiteLayout>
 `;
 
@@ -185,7 +185,7 @@ function generatedContent(
 interface StageOptions {
   mode?: ChangePlan["selectedMode"];
   baselineFiles?: Readonly<Record<string, string>>;
-  outputFiles: Readonly<Record<string, string>>;
+  outputFiles: Readonly<Record<string, string | Uint8Array>>;
   planChanges?: Partial<Omit<ChangePlan, "planSha256">>;
 }
 
@@ -198,12 +198,13 @@ async function git(root: string, args: string[]): Promise<string> {
 
 async function writeFiles(
   root: string,
-  files: Readonly<Record<string, string>>,
+  files: Readonly<Record<string, string | Uint8Array>>,
 ): Promise<void> {
   for (const [path, source] of Object.entries(files)) {
     const absolute = join(root, ...path.split("/"));
     await mkdir(dirname(absolute), { recursive: true });
-    await writeFile(absolute, source, "utf8");
+    if (typeof source === "string") await writeFile(absolute, source, "utf8");
+    else await writeFile(absolute, source);
   }
 }
 
@@ -297,6 +298,23 @@ test("blocks accepts only the six approved closed block types", () => {
     validateBlockPage(generatedContent("blocks", blockRoute)).blocks.length,
     6,
   );
+  assert.equal(
+    validateBlockPage({
+      ...generatedContent("blocks", blockRoute),
+      blocks: [
+        {
+          type: "cta",
+          title: "Same origin",
+          copy: "Allowed",
+          action: {
+            label: "Open",
+            href: "https://comunidadsolar.es/contacto",
+          },
+        },
+      ],
+    }).blocks.length,
+    1,
+  );
   assert.throws(
     () =>
       validateBlockPage({
@@ -320,11 +338,37 @@ test("blocks accepts only the six approved closed block types", () => {
       }),
     /enlace|protocol|schema|válid/iu,
   );
+  for (const href of [
+    "/\\evil.example/steal",
+    "https://attacker.example/steal",
+    "https://user:pass@comunidadsolar.es/steal",
+  ]) {
+    assert.throws(
+      () =>
+        validateBlockPage({
+          ...generatedContent("blocks", blockRoute),
+          blocks: [
+            {
+              type: "cta",
+              title: "Unsafe",
+              copy: "Unsafe",
+              action: { label: "Open", href },
+            },
+          ],
+        }),
+      /enlace|protocol|schema|válid/iu,
+    );
+  }
 });
 
 const sourcePlan = plan(hash("a"), "freeform");
 for (const [name, source, expectedCode] of [
   ["inline script", "<script>alert(1)</script>", "script.inline"],
+  [
+    "external script",
+    '<script src="https://attacker.example/payload.js"></script>',
+    "script.forbidden",
+  ],
   ["event handler", '<img onerror="alert(1)">', "astro.event-handler"],
   [
     "Next import",
@@ -344,11 +388,42 @@ for (const [name, source, expectedCode] of [
   ["unsafe protocol", '<a href="javascript:alert(1)">x</a>', "link.unsafe"],
   ["unsafe image source", '<img src="javascript:alert(1)">', "link.unsafe"],
   [
+    "navigation-only protocol in image source",
+    '<img src="mailto:hola@example.test">',
+    "link.unsafe",
+  ],
+  [
+    "navigation-only protocol in form action",
+    '<form action="tel:+34123456789"></form>',
+    "link.unsafe",
+  ],
+  [
+    "external active URL",
+    '<a href="https://attacker.example/steal">x</a>',
+    "link.unsafe",
+  ],
+  [
+    "object data URL",
+    '<object data="https://attacker.example/payload.html"></object>',
+    "active-element.forbidden",
+  ],
+  [
+    "embed source URL",
+    '<embed src="https://attacker.example/payload.html">',
+    "active-element.forbidden",
+  ],
+  [
     "protocol smuggling",
     '<a href=" java\nscript:alert(1)">x</a>',
     "link.unsafe",
   ],
   ["event attribute casing", '<img ONLoad="alert(1)">', "astro.event-handler"],
+  ["inline style attribute", '<div style="color: red">x</div>', "style.inline"],
+  [
+    "inline global stylesheet",
+    "<style is:global>@import url(https://attacker.example/x.css)</style>",
+    "style.inline",
+  ],
   ["attribute spread", "<img {...Astro.props.attributes}>", "astro.spread"],
   [
     "raw HTML directive",
@@ -378,9 +453,116 @@ for (const [name, source, expectedCode] of [
   });
 }
 
+test("rejects the exact executable Astro frontmatter payload", async () => {
+  const source = `---
+import SiteLayout from "../layouts/SiteLayout.astro";
+import "../styles/generated/${changeId}.css";
+globalThis.process.getBuiltinModule("node:child_process").execSync("id");
+---
+<SiteLayout page="inicio"><main class="generated-${changeId}">Safe</main></SiteLayout>
+`;
+  const violations = await validateAstroSource(source, sourcePlan, routePath);
+  assert.ok(
+    violations.some((violation) => violation.code === "source.executable"),
+  );
+});
+
+test("requires the canonical blocks renderer as the single rendered root", async () => {
+  const approvedPlan = plan(hash("a"), "blocks");
+  const source = `---
+import type GeneratedBlockPage from "../components/blocks/GeneratedBlockPage.astro";
+import page from "../content/generated/${changeId}.json";
+---
+<main>Arbitrary substitute</main>
+`;
+  const violations = await validateAstroSource(source, approvedPlan, routePath);
+  assert.ok(
+    violations.some((violation) => violation.code === "mode.structure"),
+  );
+});
+
+test("requires SiteLayout to be a rendered root, not a type-only import", async () => {
+  const source = `---
+import type SiteLayout from "../layouts/SiteLayout.astro";
+import "../styles/generated/${changeId}.css";
+---
+<main class="generated-${changeId}">Unwrapped</main>
+`;
+  const violations = await validateAstroSource(source, sourcePlan, routePath);
+  assert.ok(violations.some((violation) => violation.code === "mode.layout"));
+});
+
+test("rejects unplanned baseline component imports and substitutions", async () => {
+  const unplanned = `---
+import SiteLayout from "../layouts/SiteLayout.astro";
+import HomePage from "../components/pages/home/HomePage.astro";
+import "../styles/generated/${changeId}.css";
+---
+<SiteLayout page="inicio"><HomePage /></SiteLayout>
+`;
+  const substituted = `---
+import Shell from "../layouts/SiteLayout.astro";
+import "../styles/generated/${changeId}.css";
+---
+<Shell page="inicio"><main class="generated-${changeId}">Substitute</main></Shell>
+`;
+  const nonCanonicalPath = `---
+import SiteLayout from "../layouts/../layouts/SiteLayout.astro";
+import "../styles/generated/${changeId}.css";
+---
+<SiteLayout page="inicio"><main class="generated-${changeId}">Alias path</main></SiteLayout>
+`;
+  for (const source of [unplanned, substituted, nonCanonicalPath]) {
+    const violations = await validateAstroSource(source, sourcePlan, routePath);
+    assert.ok(
+      violations.some(
+        (violation) =>
+          violation.code === "import.unapproved" ||
+          violation.code === "component.binding",
+      ),
+    );
+  }
+});
+
+test("binds hydrated islands to their canonical catalog module", async () => {
+  const approvedPlan = plan(hash("a"), "hybrid");
+  const source = `---
+import SiteLayout from "../layouts/SiteLayout.astro";
+import { CoverageFinder } from "../components/pages/home/HomePage.astro";
+import "../styles/generated/${changeId}.css";
+---
+<SiteLayout page="inicio"><CoverageFinder client:visible /></SiteLayout>
+`;
+  const violations = await validateAstroSource(source, approvedPlan, routePath);
+  assert.ok(
+    violations.some(
+      (violation) =>
+        violation.code === "import.unapproved" ||
+        violation.code === "component.binding",
+    ),
+  );
+});
+
 test("accepts a parsed freeform source with required layout, stylesheet and safe links", async () => {
   assert.deepEqual(
     await validateAstroSource(freeformRoute, sourcePlan, routePath),
+    [],
+  );
+});
+
+test("accepts a plan-approved component only from its canonical module", async () => {
+  const approvedPlan = plan(hash("a"), "freeform", {
+    components: ["SiteLayout", "PageHero"],
+  });
+  const source = `---
+import SiteLayout from "../layouts/SiteLayout.astro";
+import PageHero from "../components/site/PageHero.astro";
+import "../styles/generated/${changeId}.css";
+---
+<SiteLayout page="inicio"><PageHero eyebrow="Solar" title="Seguro" lead="Estático" /></SiteLayout>
+`;
+  assert.deepEqual(
+    await validateAstroSource(source, approvedPlan, routePath),
     [],
   );
 });
@@ -398,8 +580,15 @@ for (const [mode, route] of [
           [routePath]: route,
           [contentPath]: JSON.stringify(generatedContent(mode, route)),
           ...(mode === "blocks"
-            ? {}
-            : { [stylesheetPath]: ".generated-page { display: block; }\n" }),
+            ? {
+                [`${assetsPath}/pixel.png`]: Buffer.from(
+                  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+                  "base64",
+                ),
+              }
+            : {
+                [stylesheetPath]: `.generated-${changeId} { display: block; }\n`,
+              }),
         },
       },
       async (staged, approvedPlan) => {
@@ -411,6 +600,123 @@ for (const [mode, route] of [
     );
   });
 }
+
+test("rejects active generated public assets", async () => {
+  const activeAssets = {
+    [`${assetsPath}/payload.html`]: '<script src="/payload.js"></script>\n',
+    [`${assetsPath}/payload.js`]: "globalThis.compromised = true;\n",
+    [`${assetsPath}/payload.svg`]:
+      '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>\n',
+    [`${assetsPath}/masquerading.png`]:
+      '<html><script src="https://attacker.example/payload.js"></script></html>\n',
+  };
+  await withStagedOutput(
+    {
+      outputFiles: {
+        [routePath]: blockRoute,
+        [contentPath]: JSON.stringify(generatedContent("blocks", blockRoute)),
+        ...activeAssets,
+      },
+    },
+    async (staged, approvedPlan) => {
+      const violations = await validateOutputPolicy(
+        staged.path,
+        staged,
+        approvedPlan,
+      );
+      for (const path of Object.keys(activeAssets)) {
+        assert.ok(
+          violations.some(
+            (violation) =>
+              violation.code === "asset.active" && violation.path === path,
+          ),
+        );
+      }
+    },
+  );
+});
+
+test("rejects generated TS and JS execution surfaces", async () => {
+  const executablePath = `${componentsPath}/payload.ts`;
+  await withStagedOutput(
+    {
+      outputFiles: {
+        [routePath]: blockRoute,
+        [contentPath]: JSON.stringify(generatedContent("blocks", blockRoute)),
+        [executablePath]:
+          'globalThis.process.getBuiltinModule("node:child_process").execSync("id");\n',
+      },
+    },
+    async (staged, approvedPlan) => {
+      const violations = await validateOutputPolicy(
+        staged.path,
+        staged,
+        approvedPlan,
+      );
+      assert.ok(
+        violations.some(
+          (violation) =>
+            violation.code === "source.executable" &&
+            violation.path === executablePath,
+        ),
+      );
+    },
+  );
+});
+
+test("rejects external, imported and unscoped generated CSS", async () => {
+  const cases = [
+    {
+      name: "external URL",
+      source: `.generated-${changeId} { background: url(https://attacker.example/x.png); }\n`,
+      code: "css.unsafe",
+    },
+    {
+      name: "import",
+      source: `@import url(https://attacker.example/x.css);\n.generated-${changeId} { display: block; }\n`,
+      code: "css.unsafe",
+    },
+    {
+      name: "global selector",
+      source: "body { display: none; }\n",
+      code: "css.scope",
+    },
+    {
+      name: "scope hidden in negation",
+      source: `body:not(.generated-${changeId}) { display: none; }\n`,
+      code: "css.scope",
+    },
+  ] as const;
+  for (const fixture of cases) {
+    await withStagedOutput(
+      {
+        mode: "freeform",
+        outputFiles: {
+          [routePath]: freeformRoute,
+          [contentPath]: JSON.stringify(
+            generatedContent("freeform", freeformRoute),
+          ),
+          [stylesheetPath]: fixture.source,
+        },
+      },
+      async (staged, approvedPlan) => {
+        const violations = await validateOutputPolicy(
+          staged.path,
+          staged,
+          approvedPlan,
+        );
+        assert.ok(
+          violations.some(
+            (violation) =>
+              violation.code === fixture.code &&
+              violation.path === stylesheetPath,
+          ),
+          fixture.name,
+        );
+      },
+    );
+  }
+});
 
 test("rejects forged staging objects and a mismatched staging path", async () => {
   await withStagedOutput(
@@ -509,94 +815,55 @@ test("validates only staged inventory and does not scan hostile unchanged baseli
   );
 });
 
-test("accepts only the exact approved package and lock dependency diff from baseline", async () => {
+test("fails closed on dependency changes without a trusted lock graph", async () => {
   const dependencyFiles = [
     { path: "package.json", operation: "modify" as const },
     { path: "package-lock.json", operation: "modify" as const },
   ];
-  await withStagedOutput(
+  const lockEntries = [
     {
-      outputFiles: {
-        [routePath]: blockRoute,
-        [contentPath]: JSON.stringify(generatedContent("blocks", blockRoute)),
-        "package.json":
-          '{"name":"fixture","version":"1.0.0","private":true,"dependencies":{"example":"1.2.3"}}\n',
-        "package-lock.json":
-          '{"name":"fixture","version":"1.0.0","lockfileVersion":3,"requires":true,"packages":{"":{"name":"fixture","version":"1.0.0","dependencies":{"example":"1.2.3"}},"node_modules/example":{"version":"1.2.3"}}}\n',
-      },
-      planChanges: {
-        files: [...generatedPlanFiles, ...dependencyFiles],
-        dependencies: ["example@1.2.3"],
-      },
+      name: "apparently exact entry",
+      entry: '{"version":"1.2.3"}',
     },
-    async (staged, approvedPlan, repositoryRoot) => {
-      await writeFile(
-        join(repositoryRoot, "package.json"),
-        '{"dependencies":{"attacker":"9.9.9"}}\n',
-        "utf8",
-      );
-      assert.deepEqual(
-        await validateOutputPolicy(staged.path, staged, approvedPlan),
-        [],
-      );
-      assert.match(
-        await readFile(join(staged.path, "package.json"), "utf8"),
-        /example/u,
-      );
-    },
-  );
-
-  await withStagedOutput(
     {
-      outputFiles: {
-        [routePath]: blockRoute,
-        [contentPath]: JSON.stringify(generatedContent("blocks", blockRoute)),
-        "package.json":
-          '{"name":"fixture","version":"1.0.0","private":true,"dependencies":{"example":"1.2.3","evil":"9.9.9"}}\n',
-        "package-lock.json":
-          '{"name":"fixture","version":"1.0.0","lockfileVersion":3,"requires":true,"packages":{"":{"name":"fixture","version":"1.0.0","dependencies":{"example":"1.2.3","evil":"9.9.9"}},"node_modules/example":{"version":"1.2.3"},"node_modules/evil":{"version":"9.9.9"}}}\n',
-      },
-      planChanges: {
-        files: [...generatedPlanFiles, ...dependencyFiles],
-        dependencies: ["example@1.2.3"],
-      },
+      name: "hostile HTTPS tarball",
+      entry:
+        '{"version":"1.2.3","resolved":"https://attacker.example/example-1.2.3.tgz","integrity":"sha512-trusted-looking"}',
     },
-    async (staged, approvedPlan) => {
-      const violations = await validateOutputPolicy(
-        staged.path,
-        staged,
-        approvedPlan,
-      );
-      assert.ok(
-        violations.some((violation) => violation.code === "dependency.diff"),
-      );
-    },
-  );
-
-  await withStagedOutput(
     {
-      outputFiles: {
-        [routePath]: blockRoute,
-        [contentPath]: JSON.stringify(generatedContent("blocks", blockRoute)),
-        "package.json":
-          '{"name":"fixture","version":"1.0.0","private":true,"dependencies":{"example":"1.2.3"}}\n',
-        "package-lock.json":
-          '{"name":"fixture","version":"1.0.0","lockfileVersion":3,"requires":true,"packages":{"":{"name":"fixture","version":"1.0.0","dependencies":{"example":"1.2.3"}},"node_modules/example":{"version":"1.2.3","resolved":"file:../../outside.tgz"}}}\n',
-      },
-      planChanges: {
-        files: [...generatedPlanFiles, ...dependencyFiles],
-        dependencies: ["example@1.2.3"],
-      },
+      name: "altered integrity",
+      entry:
+        '{"version":"1.2.3","resolved":"https://registry.npmjs.org/example/-/example-1.2.3.tgz","integrity":"sha512-attacker-controlled"}',
     },
-    async (staged, approvedPlan) => {
-      const violations = await validateOutputPolicy(
-        staged.path,
-        staged,
-        approvedPlan,
-      );
-      assert.ok(
-        violations.some((violation) => violation.code === "dependency.diff"),
-      );
-    },
-  );
+  ] as const;
+  for (const fixture of lockEntries) {
+    await withStagedOutput(
+      {
+        outputFiles: {
+          [routePath]: blockRoute,
+          [contentPath]: JSON.stringify(generatedContent("blocks", blockRoute)),
+          "package.json":
+            '{"name":"fixture","version":"1.0.0","private":true,"dependencies":{"example":"1.2.3"}}\n',
+          "package-lock.json": `{"name":"fixture","version":"1.0.0","lockfileVersion":3,"requires":true,"packages":{"":{"name":"fixture","version":"1.0.0","dependencies":{"example":"1.2.3"}},"node_modules/example":${fixture.entry}}}\n`,
+        },
+        planChanges: {
+          files: [...generatedPlanFiles, ...dependencyFiles],
+          dependencies: ["example@1.2.3"],
+        },
+      },
+      async (staged, approvedPlan) => {
+        const violations = await validateOutputPolicy(
+          staged.path,
+          staged,
+          approvedPlan,
+        );
+        assert.ok(
+          violations.some(
+            (violation) => violation.code === "dependency.unsupported",
+          ),
+          fixture.name,
+        );
+      },
+    );
+  }
 });

@@ -85,7 +85,7 @@
         "label": { "$ref": "#/$defs/text" },
         "href": {
           "type": "string",
-          "pattern": "^(?:/(?!/)|#|https://|mailto:|tel:)"
+          "pattern": "^(?:/(?![/\\\\])|#|https://comunidadsolar\\.es(?:[/?#]|$)|mailto:|tel:)"
         }
       }
     },
