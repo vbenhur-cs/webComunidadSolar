@@ -200,7 +200,8 @@ git commit -m "refactor: make agent brokers own execution"
   authoritative request/plan/policy/schema files and safe `changeId`/
   `attemptId` values.
 - Produces: `AgentWorkspace`, `createAgentWorkspace`, `workspaceInputs`,
-  `workspaceManifest`, `assertWorkspaceInputs`, `removeAgentWorkspace`.
+  `workspaceManifest`, `assertWorkspaceInputs`,
+  `assertTrustedRepositoriesUnchanged` and `removeAgentWorkspace`.
 
 - [ ] **Step 1: Write failing workspace export and input-integrity tests**
 
@@ -223,6 +224,12 @@ test("requires a fresh safe identifier pair and does not delete an occupied dire
   await mkdir(expectedWorkspacePath, { recursive: true });
   await assert.rejects(() => createAgentWorkspace(workspaceInput(repository)), /ocupado/i);
   assert.equal(await exists(expectedWorkspacePath), true);
+});
+
+test("records and rejects controller or source-repository drift around an attempt", async () => {
+  const workspace = await createAgentWorkspace(workspaceInput(repository));
+  await writeFile(join(repository.root, "outside.txt"), "changed", "utf8");
+  await assert.rejects(() => assertTrustedRepositoriesUnchanged(workspace), /repositorio.*cambió/i);
 });
 ```
 
@@ -269,6 +276,11 @@ export interface ManifestEntry {
   readonly bytes: number;
   readonly sha256: string | null;
 }
+
+export interface TrustedRepositorySnapshot {
+  readonly head: string;
+  readonly status: string;
+}
 ```
 
 Validate IDs with the existing lowercase-dash grammar and validate the baseline
@@ -284,9 +296,13 @@ file, path with an empty/dot/traversal segment, or regular file with `nlink !==
 authoritative files into `.agent-input/`, compute a private hash record, and
 exclude `.agent-input/` and `.agent-output/` from the source-tree baseline
 manifest. `assertWorkspaceInputs` compares current file bytes to that private
-record. `removeAgentWorkspace` only removes an owned object from its private
-`WeakMap` after canonical-root validation; cleanup failure leaves the workspace
-for diagnosis.
+record. Create `.agent-output/` before the broker runs, but do not include it
+in either accepted manifest. Capture `HEAD` and `status --porcelain=v1 -z` for
+the controller repository and optional source repository before export;
+`assertTrustedRepositoriesUnchanged` repeats those fixed argv-only reads and
+rejects any difference. `removeAgentWorkspace` only removes an owned object
+from its private `WeakMap` after canonical-root validation; cleanup failure
+leaves the workspace for diagnosis.
 
 - [ ] **Step 4: Run workspace tests and project checks**
 
@@ -347,6 +363,20 @@ test("Codex reads a schema-valid final message only from agent output", async ()
   const result = await codex.run(agentInput(workspace));
   assert.deepEqual(result.generatedFiles, []);
 });
+
+test("stages plan-declared dependency manifests only when Gate 1 declared dependencies", async () => {
+  const dependencyPlan = planWith({
+    dependencies: ["example@1.2.3"],
+    files: [
+      { path: "package.json", operation: "modify" },
+      { path: "package-lock.json", operation: "modify" },
+    ],
+  });
+  await writeFile(join(workspace.path, "package.json"), '{"dependencies":{"example":"1.2.3"}}');
+  await writeFile(join(workspace.path, "package-lock.json"), '{"lockfileVersion":3}');
+  const staged = await validateAgentWorkspaceOutput(workspace, dependencyPlan);
+  assert.deepEqual(staged.files, ["package-lock.json", "package.json"]);
+});
 ```
 
 - [ ] **Step 2: Run the output subset and confirm it fails**
@@ -376,11 +406,13 @@ First call `assertWorkspaceInputs`. Rewalk the workspace without following
 symlinks, reject special files and unsafe hardlinks, compare the source-tree
 manifest against the baseline and derive changed paths independently. Permit
 only `plan.files` plus descendants of a generated root explicitly present in
-`plan.files`; reject package/config changes unless a later Task 8 policy
-authorizes an exact dependency change. Re-export the original baseline into a
-new controller-owned staging directory, then copy accepted regular files using
-new byte buffers and verify hashes on both sides. Preserve `.agent-input` and
-`.agent-output` outside the staging tree. Return a sorted immutable inventory.
+`plan.files`. As the sole structural exception, permit `package.json` and
+`package-lock.json` only when each is explicitly listed in `plan.files` and
+`plan.dependencies` is nonempty; Task 8 must later compare their exact allowed
+dependency diff. Re-export the original baseline into a new controller-owned
+staging directory, then copy accepted regular files using new byte buffers and
+verify hashes on both sides. Preserve `.agent-input` and `.agent-output`
+outside the staging tree. Return a sorted immutable inventory.
 
 Update `CodexAgent` to delegate its job to the broker and use
 `.agent-output/final-message.json` inside the workspace as untrusted output;
