@@ -1,56 +1,76 @@
 import { lstat, realpath } from "node:fs/promises";
 
 import {
-  assertCandidateOwnership,
-  removeCandidateWorktree,
-  resolveAgentRunContext,
-  type CandidateWorktree,
-} from "../worktrees/service.ts";
-
+  assertWorkspaceInputs,
+  workspaceInputs,
+  type AgentWorkspace,
+  type AgentWorkspaceInputs,
+} from "../workspaces/service.ts";
 import type { AgentAdapter, AgentRunInput, AgentRunResult } from "./types.ts";
 
 export type FixtureAgentHandler = (
   input: AgentRunInput,
 ) => Promise<Omit<AgentRunResult, "adapter">>;
 
-interface CandidateIdentity {
+interface WorkspaceIdentity {
   device: number;
   inode: number;
 }
-const runs = new WeakMap<
-  object,
-  {
-    candidate: CandidateWorktree;
-    identity: CandidateIdentity;
-    closed: boolean;
-    active: number;
-    drained: Promise<void>;
-    release?: () => void;
-  }
->();
+
+interface FixtureRunState {
+  workspace: AgentWorkspace;
+  input: AgentWorkspaceInputs;
+  identity: WorkspaceIdentity;
+  closed: boolean;
+  active: number;
+  drained: Promise<void>;
+  release?: () => void;
+}
+
+const runs = new WeakMap<object, FixtureRunState>();
 
 export interface FixtureAgentRun {
   readonly agent: AgentAdapter;
   dispose(): Promise<void>;
 }
 
+function sameInput(
+  input: AgentRunInput,
+  expected: AgentWorkspaceInputs,
+): boolean {
+  return (
+    input.changeId === expected.changeId &&
+    input.attemptId === expected.attemptId &&
+    input.workspace === expected.workspace &&
+    input.worktree === expected.workspace &&
+    input.requestPath === expected.requestPath &&
+    input.planPath === expected.planPath &&
+    input.policyPath === expected.policyPath &&
+    input.resultSchemaPath === expected.resultSchemaPath
+  );
+}
+
 /**
- * Fixture agents are test capabilities bound to one service-owned candidate.
- * No environment flag or structural object can mint a usable production agent.
+ * Fixture agents are test capabilities bound to one owned AgentWorkspace.
+ * Disposal closes the capability; workspace lifecycle remains controller-owned.
  */
 export async function createFixtureAgentRun(
-  candidate: CandidateWorktree,
+  workspace: AgentWorkspace,
   handler: FixtureAgentHandler,
 ): Promise<FixtureAgentRun> {
-  if (process.env.INGEST_TEST_MODE !== "true")
-    throw new TypeError(
-      "FixtureAgent solo puede inyectarse en clones de prueba",
-    );
-  await assertCandidateOwnership(candidate);
-  const entry = await lstat(candidate.path);
+  if (process.env.INGEST_TEST_MODE !== "true") {
+    throw new TypeError("FixtureAgent solo puede inyectarse en modo de prueba");
+  }
+  const input = workspaceInputs(workspace);
+  await assertWorkspaceInputs(workspace);
+  const entry = await lstat(workspace.path);
+  if (entry.isSymbolicLink() || !entry.isDirectory()) {
+    throw new TypeError("La identidad del workspace fixture no es válida");
+  }
   const token = {};
-  const state = {
-    candidate,
+  const state: FixtureRunState = {
+    workspace,
+    input,
     identity: { device: entry.dev, inode: entry.ino },
     closed: false,
     active: 0,
@@ -59,31 +79,30 @@ export async function createFixtureAgentRun(
   runs.set(token, state);
   const agent: AgentAdapter = Object.freeze({
     name: "fixture",
-    async run(input: AgentRunInput): Promise<AgentRunResult> {
+    async run(agentInput: AgentRunInput): Promise<AgentRunResult> {
       const current = runs.get(token);
-      if (
-        !current ||
-        current.closed ||
-        input.worktree !== current.candidate.path
-      )
+      if (!current || current.closed || !sameInput(agentInput, current.input)) {
         throw new TypeError("La capacidad FixtureAgent no es válida");
+      }
       current.active += 1;
-      if (current.active === 1)
+      if (current.active === 1) {
         current.drained = new Promise<void>((resolve) => {
           current.release = resolve;
         });
+      }
       try {
-        await resolveAgentRunContext(input);
-        const actual = await lstat(current.candidate.path);
+        const actual = await lstat(current.workspace.path);
         if (
           actual.isSymbolicLink() ||
+          !actual.isDirectory() ||
           actual.dev !== current.identity.device ||
           actual.ino !== current.identity.inode ||
-          (await realpath(current.candidate.path)) !== current.candidate.path
-        )
-          throw new TypeError("La identidad del candidato fixture ha cambiado");
-        await assertCandidateOwnership(current.candidate);
-        return { adapter: "fixture", ...(await handler(input)) };
+          (await realpath(current.workspace.path)) !== current.workspace.path
+        ) {
+          throw new TypeError("La identidad del workspace fixture ha cambiado");
+        }
+        await assertWorkspaceInputs(current.workspace);
+        return { adapter: "fixture", ...(await handler(agentInput)) };
       } finally {
         current.active -= 1;
         if (current.active === 0) current.release?.();
@@ -98,7 +117,6 @@ export async function createFixtureAgentRun(
       current.closed = true;
       await current.drained;
       runs.delete(token);
-      await removeCandidateWorktree(current.candidate);
     },
   });
 }

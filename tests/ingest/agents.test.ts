@@ -36,8 +36,6 @@ import type {
   AgentRunInput,
   BrokerRunInput,
   IsolationBroker,
-  ProcessRunOptions,
-  ProcessRunner,
 } from "../../src/ingest/agents/types.ts";
 import {
   assertTrustedRepositoriesUnchanged,
@@ -46,8 +44,10 @@ import {
   removeAgentWorkspace,
   workspaceInputs,
   workspaceManifest,
+  type AgentWorkspace,
   type AgentWorkspaceInput,
 } from "../../src/ingest/workspaces/service.ts";
+import { validateAgentWorkspaceOutput } from "../../src/ingest/workspaces/policy.ts";
 import {
   createCandidateWorktree,
   createAgentRunContext,
@@ -57,6 +57,8 @@ import {
   setWorktreeTestHooks,
 } from "../../src/ingest/worktrees/service.ts";
 import { validateWorktreeDiff } from "../../src/ingest/worktrees/policy.ts";
+
+process.env.INGEST_TEST_MODE ??= "true";
 
 const execFileAsync = promisify(execFile);
 const hash = (character: string) => character.repeat(64);
@@ -116,6 +118,16 @@ function plan(baselineCommit: string): ChangePlan {
       siteIndexable: false,
     },
   };
+  return { ...unsigned, planSha256: sha256Canonical(unsigned) };
+}
+
+function planWith(
+  baselineCommit: string,
+  changes: Partial<Omit<ChangePlan, "planSha256">>,
+): ChangePlan {
+  const { planSha256: ignored, ...base } = plan(baselineCommit);
+  void ignored;
+  const unsigned = { ...base, ...changes };
   return { ...unsigned, planSha256: sha256Canonical(unsigned) };
 }
 
@@ -267,6 +279,25 @@ function workspaceInput(repository: WorkspaceRepository): AgentWorkspaceInput {
   };
 }
 
+async function createWorkspaceForPlan(
+  repository: WorkspaceRepository,
+  approvedPlan: ChangePlan,
+): Promise<AgentWorkspace> {
+  await writeFile(repository.planPath, JSON.stringify(approvedPlan), "utf8");
+  return await createAgentWorkspace({
+    ...workspaceInput(repository),
+    approvedPlan,
+  });
+}
+
+function agentInput(workspace: AgentWorkspace): AgentRunInput {
+  return {
+    ...workspaceInputs(workspace),
+    worktree: workspace.path,
+    timeoutMs: 5_000,
+  };
+}
+
 async function exists(path: string): Promise<boolean> {
   try {
     await lstat(path);
@@ -315,28 +346,6 @@ async function createInput(
   });
 }
 
-function recordingRunner(): {
-  runner: ProcessRunner;
-  calls: Array<{ command: string; args: string[]; options: ProcessRunOptions }>;
-} {
-  const calls: Array<{
-    command: string;
-    args: string[];
-    options: ProcessRunOptions;
-  }> = [];
-  return {
-    calls,
-    runner: async (command, args, options) => {
-      calls.push({
-        command,
-        args,
-        options,
-      });
-      return { exitCode: 0, stdout: '{"generatedFiles":[]}', stderr: "" };
-    },
-  };
-}
-
 function recordingBroker(): IsolationBroker {
   return createOperatorIsolationBroker(async () => ({
     exitCode: 0,
@@ -350,12 +359,12 @@ test("Codex runs ephemeral in workspace-write without bypass flags", () => {
   const invocation = codexInvocation({
     changeId: "agent-isolation",
     attemptId: "attempt-000001",
-    worktree: "/safe/worktree",
-    requestPath: "/safe/worktree/.agent-input/request.json",
-    planPath: "/safe/worktree/.agent-input/plan.json",
-    policyPath: "/safe/worktree/.agent-input/policy.json",
+    worktree: "/safe/workspace",
+    workspace: "/safe/workspace",
+    requestPath: "/safe/workspace/.agent-input/request.json",
+    planPath: "/safe/workspace/.agent-input/plan.json",
+    policyPath: "/safe/workspace/.agent-input/policy.json",
     resultSchemaPath: "/safe/schema.json",
-    outputDirectory: "/safe/output",
   });
   assert.equal(invocation.command, "codex");
   assert.deepEqual(invocation.args.slice(0, 6), [
@@ -368,6 +377,11 @@ test("Codex runs ephemeral in workspace-write without bypass flags", () => {
   ]);
   assert.ok(invocation.args.includes("--json"));
   assert.ok(invocation.args.includes("-"));
+  assert.ok(
+    invocation.args.includes(
+      "/safe/workspace/.agent-output/final-message.json",
+    ),
+  );
   assert.ok(!invocation.args.some((arg) => arg.includes("dangerously-bypass")));
 });
 
@@ -713,6 +727,355 @@ test("cleanup removes only an owned workspace object", async () => {
     assert.equal(await exists(workspace.path), true);
     await removeAgentWorkspace(workspace);
     assert.equal(await exists(workspace.path), false);
+  });
+});
+
+test("builds accepted inventory independently and byte-copies it into a clean baseline", async () => {
+  await withWorkspaceRepository(async (repository) => {
+    const workspace = await createAgentWorkspace(workspaceInput(repository));
+    const generated = join(workspace.path, "src/pages/generated.astro");
+    await mkdir(dirname(generated), { recursive: true });
+    await writeFile(generated, "---\n---\n<h1>x</h1>", "utf8");
+
+    const staged = await validateAgentWorkspaceOutput(
+      workspace,
+      plan(repository.baseline),
+    );
+    try {
+      const copied = join(staged.path, "src/pages/generated.astro");
+      assert.notEqual(staged.path, workspace.path);
+      assert.deepEqual(staged.files, ["src/pages/generated.astro"]);
+      assert.equal(
+        staged.sha256["src/pages/generated.astro"],
+        "03e11ae7fe4831a674ed9286bc5ad0b6c1b11b76c11fbf1247d337d7270e3372",
+      );
+      assert.equal(await readFile(copied, "utf8"), "---\n---\n<h1>x</h1>");
+      assert.equal(
+        await readFile(join(staged.path, "README.md"), "utf8"),
+        "fixture\n",
+      );
+      assert.equal(await exists(join(staged.path, ".agent-input")), false);
+      assert.equal(await exists(join(staged.path, ".agent-output")), false);
+      assert.notEqual((await stat(generated)).ino, (await stat(copied)).ino);
+      assert.equal(Object.isFrozen(staged), true);
+      assert.equal(Object.isFrozen(staged.files), true);
+      assert.equal(Object.isFrozen(staged.sha256), true);
+    } finally {
+      await removeAgentWorkspace(workspace);
+    }
+  });
+});
+
+for (const hostile of [
+  {
+    name: "a symlink",
+    setup: async (workspace: AgentWorkspace) => {
+      const path = join(workspace.path, "src/pages/generated.astro");
+      await mkdir(dirname(path), { recursive: true });
+      await symlink("/tmp/outside", path);
+    },
+  },
+  {
+    name: "an unplanned file",
+    setup: async (workspace: AgentWorkspace) => {
+      await writeFile(join(workspace.path, "package.json"), "{}", "utf8");
+    },
+  },
+  {
+    name: "a hardlink",
+    setup: async (workspace: AgentWorkspace) => {
+      const path = join(workspace.path, "src/pages/generated.astro");
+      await mkdir(dirname(path), { recursive: true });
+      await link(join(workspace.path, "README.md"), path);
+    },
+  },
+  {
+    name: "a special file",
+    setup: async (workspace: AgentWorkspace) => {
+      const path = join(workspace.path, "src/pages/generated.astro");
+      await mkdir(dirname(path), { recursive: true });
+      await execFileAsync("mkfifo", [path]);
+    },
+  },
+  {
+    name: "a replaced private output directory",
+    setup: async (workspace: AgentWorkspace) => {
+      const output = join(workspace.path, ".agent-output");
+      await rm(output, { recursive: true, force: false });
+      await symlink("/tmp/outside", output);
+    },
+  },
+]) {
+  test(`rejects hostile workspace output containing ${hostile.name}`, async () => {
+    await withWorkspaceRepository(async (repository) => {
+      const workspace = await createAgentWorkspace(workspaceInput(repository));
+      try {
+        await hostile.setup(workspace);
+        await assert.rejects(
+          () =>
+            validateAgentWorkspaceOutput(workspace, plan(repository.baseline)),
+          /workspace|enlace|hardlink|especial|no aprobado/i,
+        );
+      } finally {
+        await removeAgentWorkspace(workspace);
+      }
+    });
+  });
+}
+
+test("rejects a directory created at a planned regular-file path", async () => {
+  await withWorkspaceRepository(async (repository) => {
+    await mkdir(join(repository.root, "src/pages"), { recursive: true });
+    await writeFile(join(repository.root, "src/pages/.gitkeep"), "", "utf8");
+    await git(repository.root, ["add", "src/pages/.gitkeep"]);
+    await git(repository.root, ["commit", "--quiet", "-m", "page root"]);
+    const currentRepository = {
+      ...repository,
+      baseline: await git(repository.root, ["rev-parse", "HEAD"]),
+    };
+    const approvedPlan = plan(currentRepository.baseline);
+    const workspace = await createWorkspaceForPlan(
+      currentRepository,
+      approvedPlan,
+    );
+    try {
+      await mkdir(join(workspace.path, "src/pages/generated.astro"));
+      await assert.rejects(
+        () => validateAgentWorkspaceOutput(workspace, approvedPlan),
+        /directorio.*no aprobado|archivo regular/i,
+      );
+    } finally {
+      await removeAgentWorkspace(workspace);
+    }
+  });
+});
+
+test("stages dependency manifests only when Gate 1 planned both and declared dependencies", async () => {
+  await withWorkspaceRepository(async (repository) => {
+    const dependencyPlan = planWith(repository.baseline, {
+      dependencies: ["example@1.2.3"],
+      files: [
+        { path: "package.json", operation: "modify" },
+        { path: "package-lock.json", operation: "modify" },
+      ],
+    });
+    const workspace = await createWorkspaceForPlan(repository, dependencyPlan);
+    try {
+      await Promise.all([
+        writeFile(
+          join(workspace.path, "package.json"),
+          '{"dependencies":{"example":"1.2.3"}}',
+          "utf8",
+        ),
+        writeFile(
+          join(workspace.path, "package-lock.json"),
+          '{"lockfileVersion":3}',
+          "utf8",
+        ),
+      ]);
+      const staged = await validateAgentWorkspaceOutput(
+        workspace,
+        dependencyPlan,
+      );
+      assert.deepEqual(staged.files, ["package-lock.json", "package.json"]);
+    } finally {
+      await removeAgentWorkspace(workspace);
+    }
+  });
+});
+
+for (const manifestCase of [
+  {
+    name: "no dependency declaration",
+    changes: {
+      dependencies: [],
+      files: [
+        { path: "package.json", operation: "modify" as const },
+        { path: "package-lock.json", operation: "modify" as const },
+      ],
+    },
+  },
+  {
+    name: "only one planned manifest",
+    changes: {
+      dependencies: ["example@1.2.3"],
+      files: [{ path: "package.json", operation: "modify" as const }],
+    },
+  },
+]) {
+  test(`rejects dependency manifests with ${manifestCase.name}`, async () => {
+    await withWorkspaceRepository(async (repository) => {
+      const dependencyPlan = planWith(
+        repository.baseline,
+        manifestCase.changes,
+      );
+      const workspace = await createWorkspaceForPlan(
+        repository,
+        dependencyPlan,
+      );
+      try {
+        await Promise.all([
+          writeFile(join(workspace.path, "package.json"), "{}", "utf8"),
+          writeFile(
+            join(workspace.path, "package-lock.json"),
+            '{"lockfileVersion":3}',
+            "utf8",
+          ),
+        ]);
+        await assert.rejects(
+          () => validateAgentWorkspaceOutput(workspace, dependencyPlan),
+          /package.*no aprobado|manifest/i,
+        );
+      } finally {
+        await removeAgentWorkspace(workspace);
+      }
+    });
+  });
+}
+
+test("stages safe descendants of explicitly planned generated roots", async () => {
+  await withWorkspaceRepository(async (repository) => {
+    const generatedPlan = planWith(repository.baseline, {
+      files: [
+        ...plan(repository.baseline).files,
+        {
+          path: "src/components/generated/agent-isolation",
+          operation: "create",
+        },
+      ],
+    });
+    const workspace = await createWorkspaceForPlan(repository, generatedPlan);
+    const component = join(
+      workspace.path,
+      "src/components/generated/agent-isolation/Card.astro",
+    );
+    try {
+      await mkdir(dirname(component), { recursive: true });
+      await writeFile(component, "<div />", "utf8");
+      const staged = await validateAgentWorkspaceOutput(
+        workspace,
+        generatedPlan,
+      );
+      assert.deepEqual(staged.files, [
+        "src/components/generated/agent-isolation/Card.astro",
+      ]);
+    } finally {
+      await removeAgentWorkspace(workspace);
+    }
+  });
+});
+
+test("rejects traversal in a planned output path", async () => {
+  await withWorkspaceRepository(async (repository) => {
+    const traversalPlan = planWith(repository.baseline, {
+      files: [{ path: "../escape.astro", operation: "create" }],
+    });
+    const workspace = await createWorkspaceForPlan(repository, traversalPlan);
+    try {
+      await assert.rejects(
+        () => validateAgentWorkspaceOutput(workspace, traversalPlan),
+        /path.*seguro|traversal/i,
+      );
+    } finally {
+      await removeAgentWorkspace(workspace);
+    }
+  });
+});
+
+test("rechecks copied inputs and trusted repositories before staging handoff", async () => {
+  await withWorkspaceRepository(async (repository) => {
+    const workspace = await createAgentWorkspace(workspaceInput(repository));
+    const generated = join(workspace.path, "src/pages/generated.astro");
+    try {
+      await mkdir(dirname(generated), { recursive: true });
+      await writeFile(generated, "<h1>generated</h1>", "utf8");
+      await writeFile(
+        join(repository.sourceRoot, "agent-mutation.txt"),
+        "changed",
+        "utf8",
+      );
+      await assert.rejects(
+        () =>
+          validateAgentWorkspaceOutput(workspace, plan(repository.baseline)),
+        /repositorio.*cambi[oó]/i,
+      );
+      await rm(join(repository.sourceRoot, "agent-mutation.txt"));
+      await chmod(dirname(workspace.requestPath), 0o700);
+      await chmod(workspace.requestPath, 0o600);
+      await writeFile(workspace.requestPath, '{"changed":true}', "utf8");
+      await assert.rejects(
+        () =>
+          validateAgentWorkspaceOutput(workspace, plan(repository.baseline)),
+        /entrada copiada/i,
+      );
+    } finally {
+      await removeAgentWorkspace(workspace);
+    }
+  });
+});
+
+test("command fixture emits only schema-valid JSON on stdout", async () => {
+  const workspace = await mkdtemp(
+    join(tmpdir(), "comunidadsolar-command-fixture-"),
+  );
+  const input = await createInput(workspace, workspace);
+  try {
+    const result = await new CommandAgent(
+      { command: process.execPath, args: [fixtureAgent] },
+      testIsolationBroker(workspace),
+    ).run(input);
+    assert.deepEqual(result.generatedFiles, ["src/pages/generated.astro"]);
+    assert.equal(
+      result.stdout,
+      '{"generatedFiles":["src/pages/generated.astro"]}',
+    );
+  } finally {
+    await rm(workspace, { recursive: true, force: true });
+    await rm(input.outputDirectory!, { recursive: true, force: true });
+  }
+});
+
+test("Codex delegates to its broker and reads only a schema-valid workspace final message", async () => {
+  await withWorkspaceRepository(async (repository) => {
+    const executable = join(repository.sourceRoot, "codex-fixture");
+    await writeFile(executable, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+    const capability = await createCodexExecutableCapability(
+      await realpath(executable),
+    );
+    const workspace = await createAgentWorkspace(workspaceInput(repository));
+    const calls: BrokerRunInput[] = [];
+    const broker = createOperatorIsolationBroker(async (brokerInput) => {
+      calls.push(brokerInput);
+      const outputIndex = brokerInput.args.indexOf("--output-last-message");
+      await writeFile(
+        brokerInput.args[outputIndex + 1]!,
+        '{"generatedFiles":[]}',
+        "utf8",
+      );
+      return {
+        exitCode: 0,
+        stdout: '{"type":"result"}',
+        stderr: "",
+        timedOut: false,
+      };
+    });
+    try {
+      const result = await new CodexAgent(capability, broker).run(
+        agentInput(workspace),
+      );
+      assert.equal(calls.length, 1);
+      assert.equal(calls[0]?.workspace, workspace.path);
+      assert.deepEqual(calls[0]?.env, {
+        PATH: "/usr/bin:/bin",
+        LANG: "C",
+        LC_ALL: "C",
+      });
+      assert.deepEqual(result.generatedFiles, []);
+      assert.equal(result.finalMessage, '{"generatedFiles":[]}');
+      assert.equal(result.stdout, '{"type":"result"}');
+    } finally {
+      await removeAgentWorkspace(workspace);
+    }
   });
 });
 
@@ -2278,12 +2641,16 @@ test("operator Codex capability rejects replacement before executing", async () 
     await assert.rejects(createCodexExecutableCapability(root), /regular/i);
     await writeFile(executable, "#!/bin/sh\nexit 1\n", { mode: 0o755 });
     const input = await createInput(root, root);
-    const { runner, calls } = recordingRunner();
+    let calls = 0;
+    const broker = createOperatorIsolationBroker(async () => {
+      calls += 1;
+      return { exitCode: 0, stdout: "", stderr: "", timedOut: false };
+    });
     await assert.rejects(
-      new CodexAgent(capability, runner).run(input),
+      new CodexAgent(capability, broker).run(input),
       /identidad.*cambi/i,
     );
-    assert.equal(calls.length, 0);
+    assert.equal(calls, 0);
     await rm(input.outputDirectory!, { recursive: true, force: true });
   } finally {
     await rm(root, { recursive: true, force: true });
@@ -2291,7 +2658,9 @@ test("operator Codex capability rejects replacement before executing", async () 
 });
 
 test("Codex result protocol fails closed when final message is not JSON", async () => {
-  const root = await mkdtemp(join(tmpdir(), "comunidadsolar-codex-result-"));
+  const root = await realpath(
+    await mkdtemp(join(tmpdir(), "comunidadsolar-codex-result-")),
+  );
   const executable = join(root, "codex-fixture");
   try {
     await writeFile(executable, "#!/bin/sh\nexit 0\n", { mode: 0o755 });
@@ -2299,13 +2668,64 @@ test("Codex result protocol fails closed when final message is not JSON", async 
       await realpath(executable),
     );
     const input = await createInput(root, root);
+    await mkdir(join(root, ".agent-output"));
     await assert.rejects(
-      new CodexAgent(capability, async (_command, args) => {
-        const output = args[args.indexOf("--output-last-message") + 1];
-        await writeFile(output!, "not json", "utf8");
-        return { exitCode: 0, stdout: "", stderr: "" };
-      }).run(input),
+      new CodexAgent(
+        capability,
+        createOperatorIsolationBroker(async ({ args }) => {
+          const output = args[args.indexOf("--output-last-message") + 1];
+          await writeFile(output!, "not json", "utf8");
+          return {
+            exitCode: 0,
+            stdout: "",
+            stderr: "",
+            timedOut: false,
+          };
+        }),
+      ).run(input),
       /JSON válido/i,
+    );
+    const target = join(root, "attacker-final.json");
+    const finalMessage = join(root, ".agent-output", "final-message.json");
+    await writeFile(target, '{"generatedFiles":[]}', "utf8");
+    await rm(finalMessage);
+    await symlink(target, finalMessage);
+    await assert.rejects(
+      new CodexAgent(
+        capability,
+        createOperatorIsolationBroker(async () => ({
+          exitCode: 0,
+          stdout: "",
+          stderr: "",
+          timedOut: false,
+        })),
+      ).run(input),
+      /regular|enlace/i,
+    );
+    await rm(finalMessage);
+    const outputDirectory = join(root, ".agent-output");
+    const replacedOutput = join(root, "attacker-output");
+    await assert.rejects(
+      new CodexAgent(
+        capability,
+        createOperatorIsolationBroker(async () => {
+          await rm(outputDirectory, { recursive: true, force: false });
+          await mkdir(replacedOutput);
+          await writeFile(
+            join(replacedOutput, "final-message.json"),
+            '{"generatedFiles":[]}',
+            "utf8",
+          );
+          await symlink(replacedOutput, outputDirectory);
+          return {
+            exitCode: 0,
+            stdout: "",
+            stderr: "",
+            timedOut: false,
+          };
+        }),
+      ).run(input),
+      /salida.*directorio seguro/i,
     );
     await rm(input.outputDirectory!, { recursive: true, force: true });
   } finally {
@@ -2313,92 +2733,62 @@ test("Codex result protocol fails closed when final message is not JSON", async 
   }
 });
 
-test("fixture agents are bound to one owned disposable candidate", async () => {
-  await withRepository(async ({ root, baseline }) => {
-    const candidate = await createCandidateWorktree({
-      repositoryRoot: root,
-      approvedPlan: plan(baseline),
-      changeId: "agent-isolation",
-      attemptId: "attempt-000001",
-      baselineCommit: baseline,
-      requestPath: await writeInput(root, "request.json"),
-      planPath: await writeInput(root, "plan.json"),
-      policyPath: await writeInput(root, "policy.json"),
-    });
-    const run = await createFixtureAgentRun(candidate, async () => ({
+test("fixture agents are bound to one owned disposable workspace", async () => {
+  await withWorkspaceRepository(async (repository) => {
+    const workspace = await createAgentWorkspace(workspaceInput(repository));
+    const run = await createFixtureAgentRun(workspace, async () => ({
       exitCode: 0,
       generatedFiles: [],
-      stdoutPath: join(candidate.outputDirectory, "stdout"),
-      stderrPath: join(candidate.outputDirectory, "stderr"),
-      finalMessagePath: join(candidate.outputDirectory, "final"),
+      stdout: "",
+      stderr: "",
+      finalMessage: '{"generatedFiles":[]}',
     }));
-    const input = createTestAgentRunContext({
-      changeId: candidate.changeId,
-      attemptId: candidate.attemptId,
-      worktree: candidate.path,
-      requestPath: join(candidate.path, ".agent-input", "request.json"),
-      planPath: join(candidate.path, ".agent-input", "plan.json"),
-      policyPath: join(candidate.path, ".agent-input", "policy.json"),
-      resultSchemaPath: join(root, "schema.json"),
-      outputDirectory: candidate.outputDirectory,
-    });
+    const input = agentInput(workspace);
     try {
       assert.equal((await run.agent.run(input)).adapter, "fixture");
       await run.dispose();
+      assert.equal(await exists(workspace.path), true);
       await assert.rejects(run.agent.run(input), /capacidad FixtureAgent/i);
     } finally {
-      await removeCandidateWorktree(candidate);
+      await removeAgentWorkspace(workspace);
     }
   });
 });
 
 test("fixture disposal waits for an active leased handler", async () => {
-  await withRepository(async ({ root, baseline }) => {
-    const candidate = await createCandidateWorktree({
-      repositoryRoot: root,
-      approvedPlan: plan(baseline),
-      changeId: "agent-isolation",
-      attemptId: "attempt-000001",
-      baselineCommit: baseline,
-      requestPath: await writeInput(root, "request.json"),
-      planPath: await writeInput(root, "plan.json"),
-      policyPath: await writeInput(root, "policy.json"),
-    });
+  await withWorkspaceRepository(async (repository) => {
+    const workspace = await createAgentWorkspace(workspaceInput(repository));
     let entered!: () => void;
     let release!: () => void;
     const enteredRun = new Promise<void>((resolve) => (entered = resolve));
     const released = new Promise<void>((resolve) => (release = resolve));
-    const run = await createFixtureAgentRun(candidate, async () => {
+    const run = await createFixtureAgentRun(workspace, async () => {
       entered();
       await released;
       return {
         exitCode: 0,
         generatedFiles: [],
-        stdoutPath: "stdout",
-        stderrPath: "stderr",
-        finalMessagePath: "final",
+        stdout: "",
+        stderr: "",
+        finalMessage: '{"generatedFiles":[]}',
       };
     });
-    const input = createTestAgentRunContext({
-      changeId: candidate.changeId,
-      attemptId: candidate.attemptId,
-      worktree: candidate.path,
-      requestPath: join(candidate.path, ".agent-input", "request.json"),
-      planPath: join(candidate.path, ".agent-input", "plan.json"),
-      policyPath: join(candidate.path, ".agent-input", "policy.json"),
-      resultSchemaPath: join(root, "schema.json"),
-      outputDirectory: candidate.outputDirectory,
-    });
-    const active = run.agent.run(input);
-    await enteredRun;
-    let disposed = false;
-    const disposing = run.dispose().then(() => (disposed = true));
-    await Promise.resolve();
-    assert.equal(disposed, false);
-    release();
-    await active;
-    await disposing;
-    await assert.rejects(run.agent.run(input), /capacidad FixtureAgent/i);
+    const input = agentInput(workspace);
+    try {
+      const active = run.agent.run(input);
+      await enteredRun;
+      let disposed = false;
+      const disposing = run.dispose().then(() => (disposed = true));
+      await Promise.resolve();
+      assert.equal(disposed, false);
+      release();
+      await active;
+      await disposing;
+      assert.equal(await exists(workspace.path), true);
+      await assert.rejects(run.agent.run(input), /capacidad FixtureAgent/i);
+    } finally {
+      await removeAgentWorkspace(workspace);
+    }
   });
 });
 
