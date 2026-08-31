@@ -559,12 +559,51 @@ import SiteLayout from "../layouts/SiteLayout.astro";
 import PageHero from "../components/site/PageHero.astro";
 import "../styles/generated/${changeId}.css";
 ---
-<SiteLayout page="inicio"><PageHero eyebrow="Solar" title="Seguro" lead="Estático" /></SiteLayout>
+<SiteLayout page="inicio"><PageHero tone="green" eyebrow="Solar" title="Seguro" lead="Estático" image="/generated/hero.png" /></SiteLayout>
 `;
   assert.deepEqual(
     await validateAstroSource(source, approvedPlan, routePath),
     [],
   );
+});
+
+test("rejects external resources passed through approved component props", async () => {
+  const approvedPlan = plan(hash("a"), "freeform", {
+    components: ["SiteLayout", "PageHero"],
+  });
+  const source = `---
+import SiteLayout from "../layouts/SiteLayout.astro";
+import PageHero from "../components/site/PageHero.astro";
+import "../styles/generated/${changeId}.css";
+---
+<SiteLayout page="inicio"><PageHero tone="green" eyebrow="x" title="x" lead="x" image="https://attacker.example/pixel.png" /></SiteLayout>
+`;
+  const violations = await validateAstroSource(source, approvedPlan, routePath);
+  assert.ok(violations.some((violation) => violation.code === "link.unsafe"));
+});
+
+test("rejects unmodeled URL-like props on approved components", async () => {
+  const approvedPlan = plan(hash("a"), "freeform", {
+    components: ["SiteLayout", "PageHero"],
+  });
+  for (const prop of ["imageSrc", "constructor"]) {
+    const source = `---
+import SiteLayout from "../layouts/SiteLayout.astro";
+import PageHero from "../components/site/PageHero.astro";
+import "../styles/generated/${changeId}.css";
+---
+<SiteLayout page="inicio"><PageHero tone="green" eyebrow="x" title="x" lead="x" ${prop}="https://attacker.example/pixel.png" /></SiteLayout>
+`;
+    const violations = await validateAstroSource(
+      source,
+      approvedPlan,
+      routePath,
+    );
+    assert.ok(
+      violations.some((violation) => violation.code === "component.prop"),
+      prop,
+    );
+  }
 });
 
 for (const [mode, route] of [

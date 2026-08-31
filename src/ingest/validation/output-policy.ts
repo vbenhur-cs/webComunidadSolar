@@ -104,6 +104,71 @@ const canonicalComponentModules = Object.freeze({
   SectionHeading: "src/components/site/SectionHeading.astro",
   ButtonLink: "src/components/site/ButtonLink.astro",
 } as const);
+type ComponentPropPolicy =
+  | { readonly kind: "text" }
+  | { readonly kind: "enum"; readonly values: readonly string[] }
+  | { readonly kind: "navigation" }
+  | { readonly kind: "resource" };
+const textComponentProp: ComponentPropPolicy = Object.freeze({ kind: "text" });
+const navigationComponentProp: ComponentPropPolicy = Object.freeze({
+  kind: "navigation",
+});
+const resourceComponentProp: ComponentPropPolicy = Object.freeze({
+  kind: "resource",
+});
+function enumComponentProp(...values: string[]): ComponentPropPolicy {
+  return Object.freeze({ kind: "enum", values: Object.freeze(values) });
+}
+const canonicalComponentPropPolicies: Record<
+  keyof typeof canonicalComponentModules,
+  Readonly<Record<string, ComponentPropPolicy>>
+> = Object.freeze({
+  SiteLayout: Object.freeze({
+    page: enumComponentProp(
+      "inicio",
+      "nosotros",
+      "remoto",
+      "comunidades",
+      "fotovoltaica",
+      "baterias",
+      "aerotermia",
+      "activos",
+      "activoConectado",
+      "blog",
+      "eventos",
+      "comunero",
+      "contacto",
+      "comercializadora",
+      "mantenimiento",
+      "privacy",
+      "cookies",
+      "legal",
+      "terms",
+      "socios",
+      "guia",
+    ),
+  }),
+  PageHero: Object.freeze({
+    tone: enumComponentProp("green", "yellow", "blue", "cream"),
+    eyebrow: textComponentProp,
+    title: textComponentProp,
+    lead: textComponentProp,
+    image: resourceComponentProp,
+    imageAlt: textComponentProp,
+  }),
+  SectionHeading: Object.freeze({
+    eyebrow: textComponentProp,
+    title: textComponentProp,
+    copy: textComponentProp,
+    align: enumComponentProp("left", "center"),
+  }),
+  ButtonLink: Object.freeze({
+    href: navigationComponentProp,
+    kind: enumComponentProp("primary", "secondary", "ghost"),
+    analyticsEvent: textComponentProp,
+    ariaControls: textComponentProp,
+  }),
+});
 const canonicalIslandModules = Object.freeze({
   BlogFilter: "src/components/islands/BlogFilter",
   ConsentManager: "src/components/islands/ConsentManager",
@@ -216,6 +281,70 @@ function quotedAttribute(
   return node.attributes.find(
     (attribute) => attribute.name.toLowerCase() === name,
   );
+}
+
+function isApprovedGeneratedResource(value: string): boolean {
+  return (
+    (value.startsWith("/") || value.startsWith("https://")) &&
+    isApprovedGeneratedLink(value)
+  );
+}
+
+function validateCanonicalComponentProps(
+  node: TagLikeNode,
+  componentName: keyof typeof canonicalComponentModules,
+  path: string,
+): PolicyViolation[] {
+  const violations: PolicyViolation[] = [];
+  const policies = canonicalComponentPropPolicies[componentName];
+  for (const attribute of node.attributes) {
+    const policy = Object.hasOwn(policies, attribute.name)
+      ? policies[attribute.name]
+      : undefined;
+    if (policy === undefined) {
+      violations.push(
+        violation(
+          "component.prop",
+          `Prop no modelada para ${componentName}: ${attribute.name}`,
+          path,
+        ),
+      );
+      continue;
+    }
+    if (attribute.kind !== "quoted") {
+      violations.push(
+        violation(
+          "component.prop",
+          `La prop ${attribute.name} de ${componentName} debe ser texto estático`,
+          path,
+        ),
+      );
+      continue;
+    }
+    if (policy.kind === "enum" && !policy.values.includes(attribute.value)) {
+      violations.push(
+        violation(
+          "component.prop",
+          `Valor no aprobado para ${componentName}.${attribute.name}`,
+          path,
+        ),
+      );
+    } else if (
+      (policy.kind === "navigation" &&
+        !isApprovedGeneratedLink(attribute.value)) ||
+      (policy.kind === "resource" &&
+        !isApprovedGeneratedResource(attribute.value))
+    ) {
+      violations.push(
+        violation(
+          "link.unsafe",
+          `La prop ${componentName}.${attribute.name} usa un origen o protocolo no aprobado`,
+          path,
+        ),
+      );
+    }
+  }
+  return violations;
 }
 
 function sourceImports(source: string): {
@@ -783,6 +912,15 @@ function validateTags(
           violation(
             "component.binding",
             `Componente no ligado a su módulo canónico aprobado: ${node.name}`,
+            path,
+          ),
+        );
+      }
+      if (component) {
+        violations.push(
+          ...validateCanonicalComponentProps(
+            node,
+            node.name as keyof typeof canonicalComponentModules,
             path,
           ),
         );
