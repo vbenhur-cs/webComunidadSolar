@@ -1,6 +1,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
+  chmod,
   lstat,
   mkdir,
   opendir,
@@ -396,7 +397,7 @@ function forbiddenExportSegment(segment: string): boolean {
     segment === ".source-work" ||
     segment === ".wrangler" ||
     segment === ".env" ||
-    (segment.startsWith(".env.") && segment !== ".env.example") ||
+    segment.startsWith(".env.") ||
     segment === ".dev.vars" ||
     segment === ".npmrc" ||
     segment === "wrangler.toml" ||
@@ -539,6 +540,20 @@ async function createExclusiveWorkspace(path: string): Promise<void> {
   }
 }
 
+async function makePrivateInputsRemovable(
+  workspacePath: string,
+): Promise<void> {
+  const inputRoot = join(workspacePath, privateInputDirectory);
+  try {
+    const entry = await lstat(inputRoot);
+    if (!entry.isSymbolicLink() && entry.isDirectory()) {
+      await chmod(inputRoot, 0o700);
+    }
+  } catch (error: unknown) {
+    if (errorCode(error) !== "ENOENT") throw error;
+  }
+}
+
 async function assertWorkspaceLocation(record: WorkspaceRecord): Promise<void> {
   if (
     (await realpath(record.workspaceRoot)) !== record.workspaceRoot ||
@@ -635,7 +650,8 @@ export async function createAgentWorkspace(
     const inputRecords = new Map<string, InputRecord>();
     for (const [name, bytes] of copies) {
       const copiedPath = join(inputRoot, name);
-      await writeFile(copiedPath, bytes, { flag: "wx", mode: 0o600 });
+      await writeFile(copiedPath, bytes, { flag: "wx", mode: 0o400 });
+      await chmod(copiedPath, 0o400);
       inputRecords.set(
         name,
         Object.freeze({
@@ -645,6 +661,7 @@ export async function createAgentWorkspace(
         }),
       );
     }
+    await chmod(inputRoot, 0o500);
     const identity = await lstat(path);
     const exposedManifest = immutableManifest(baselineManifest);
     const workspace: AgentWorkspace = Object.freeze({
@@ -677,6 +694,7 @@ export async function createAgentWorkspace(
   } catch (error: unknown) {
     if (created) {
       try {
+        await makePrivateInputsRemovable(path);
         await rm(path, { recursive: true, force: true });
       } catch {
         // Preserve a failed export when cleanup cannot complete for diagnosis.
@@ -778,6 +796,7 @@ export async function removeAgentWorkspace(
 ): Promise<void> {
   const record = workspaceRecord(workspace);
   await assertWorkspaceLocation(record);
+  await makePrivateInputsRemovable(record.path);
   await rm(record.path, { recursive: true, force: false });
   workspaceRecords.delete(workspace);
 }

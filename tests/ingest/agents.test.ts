@@ -194,6 +194,11 @@ async function withWorkspaceRepository(
       mkdir(join(root, ".change-state")),
       mkdir(join(root, ".wrangler", "deploy"), { recursive: true }),
       writeFile(join(root, ".env"), "TOKEN=must-not-be-exported\n", "utf8"),
+      writeFile(
+        join(root, ".env.example"),
+        "SENTINEL_SECRET=must-not-be-exported\n",
+        "utf8",
+      ),
       writeFile(join(root, "wrangler.jsonc"), '{"name":"publish"}\n', "utf8"),
       writeFile(join(sourceRoot, "SOURCE_ONLY.md"), "source sibling\n", "utf8"),
     ]);
@@ -557,6 +562,7 @@ test("exports the approved baseline into a disposable workspace without Git or o
         ".git",
         ".change-state",
         ".env",
+        ".env.example",
         ".wrangler",
         "wrangler.jsonc",
         "SOURCE_ONLY.md",
@@ -578,6 +584,7 @@ test("exports the approved baseline into a disposable workspace without Git or o
         ),
       });
       const currentManifest = await workspaceManifest(workspace);
+      assert.equal(currentManifest.has(".env.example"), false);
       assert.deepEqual([...currentManifest.keys()], ["README.md"]);
       assert.deepEqual(
         [...currentManifest.entries()],
@@ -590,10 +597,32 @@ test("exports the approved baseline into a disposable workspace without Git or o
   });
 });
 
+test("copies authoritative inputs without owner, group, or other write permission", async () => {
+  await withWorkspaceRepository(async (repository) => {
+    const workspace = await createAgentWorkspace(workspaceInput(repository));
+    try {
+      const inputDirectory = dirname(workspace.requestPath);
+      assert.equal((await stat(inputDirectory)).mode & 0o222, 0);
+      for (const path of [
+        workspace.requestPath,
+        workspace.planPath,
+        workspace.policyPath,
+        workspace.resultSchemaPath,
+      ]) {
+        assert.equal((await stat(path)).mode & 0o222, 0);
+      }
+    } finally {
+      await removeAgentWorkspace(workspace);
+    }
+  });
+});
+
 test("rejects a mutated copied request before accepting output", async () => {
   await withWorkspaceRepository(async (repository) => {
     const workspace = await createAgentWorkspace(workspaceInput(repository));
     try {
+      await chmod(dirname(workspace.requestPath), 0o700);
+      await chmod(workspace.requestPath, 0o600);
       await writeFile(workspace.requestPath, '{"changed":true}', "utf8");
       await assert.rejects(
         () => assertWorkspaceInputs(workspace),
