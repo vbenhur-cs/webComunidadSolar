@@ -1,0 +1,23 @@
+---
+import type { StepsBlockDefinition } from "../../content/block-catalog.ts";
+
+type Props = Omit<StepsBlockDefinition, "type">;
+
+const { title, steps } = Astro.props;
+---
+
+<section class="generated-block generated-steps">
+  <div class="shell">
+    <h2>{title}</h2>
+    <ol>
+      {
+        steps.map((step) => (
+          <li>
+            <h3>{step.title}</h3>
+            <p>{step.copy}</p>
+          </li>
+        ))
+      }
+    </ol>
+  </div>
+</section>

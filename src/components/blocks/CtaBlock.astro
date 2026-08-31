@@ -1,0 +1,17 @@
+---
+import ButtonLink from "../site/ButtonLink.astro";
+
+import type { CtaBlockDefinition } from "../../content/block-catalog.ts";
+
+type Props = Omit<CtaBlockDefinition, "type">;
+
+const { title, copy, action } = Astro.props;
+---
+
+<section class="generated-block generated-cta">
+  <div class="shell">
+    <h2>{title}</h2>
+    <p>{copy}</p>
+    <ButtonLink href={action.href}>{action.label}</ButtonLink>
+  </div>
+</section>

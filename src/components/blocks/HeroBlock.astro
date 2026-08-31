@@ -1,0 +1,31 @@
+---
+import ButtonLink from "../site/ButtonLink.astro";
+
+import type { HeroBlockDefinition } from "../../content/block-catalog.ts";
+
+type Props = Omit<HeroBlockDefinition, "type">;
+
+const { eyebrow, title, lead, primary, secondary } = Astro.props;
+---
+
+<section class="generated-block generated-hero">
+  <div class="shell">
+    <p class="eyebrow">{eyebrow}</p>
+    <h1>{title}</h1>
+    <p>{lead}</p>
+    {
+      (primary || secondary) && (
+        <div class="hero-actions">
+          {primary && (
+            <ButtonLink href={primary.href}>{primary.label}</ButtonLink>
+          )}
+          {secondary && (
+            <ButtonLink href={secondary.href} kind="secondary">
+              {secondary.label}
+            </ButtonLink>
+          )}
+        </div>
+      )
+    }
+  </div>
+</section>

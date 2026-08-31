@@ -1,0 +1,21 @@
+---
+import type { FaqBlockDefinition } from "../../content/block-catalog.ts";
+
+type Props = Omit<FaqBlockDefinition, "type">;
+
+const { title, items } = Astro.props;
+---
+
+<section class="generated-block generated-faq">
+  <div class="shell">
+    <h2>{title}</h2>
+    {
+      items.map((item) => (
+        <details>
+          <summary>{item.question}</summary>
+          <p>{item.answer}</p>
+        </details>
+      ))
+    }
+  </div>
+</section>

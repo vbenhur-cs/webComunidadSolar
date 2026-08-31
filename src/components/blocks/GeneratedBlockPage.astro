@@ -1,0 +1,51 @@
+---
+import SiteLayout from "../../layouts/SiteLayout.astro";
+import type {
+  ApprovedBlockDefinition,
+  BlockPageDefinition,
+} from "../../content/block-catalog.ts";
+import CtaBlock from "./CtaBlock.astro";
+import FaqBlock from "./FaqBlock.astro";
+import FeatureBlock from "./FeatureBlock.astro";
+import HeroBlock from "./HeroBlock.astro";
+import StepsBlock from "./StepsBlock.astro";
+import TrustBlock from "./TrustBlock.astro";
+
+interface Props {
+  page: BlockPageDefinition;
+}
+
+const { page } = Astro.props;
+const meta = {
+  title: page.metadata.title,
+  description: page.metadata.description,
+  canonical: page.route,
+  robots: {
+    index: page.metadata.index && !page.privacy.private,
+    follow: page.metadata.index && !page.privacy.private,
+  },
+};
+---
+
+<SiteLayout page="inicio" {meta}>
+  <main class="generated-page" data-generated-change={page.changeId}>
+    {
+      page.blocks.map((block: ApprovedBlockDefinition) => {
+        switch (block.type) {
+          case "hero":
+            return <HeroBlock {...block} />;
+          case "feature":
+            return <FeatureBlock {...block} />;
+          case "cta":
+            return <CtaBlock {...block} />;
+          case "steps":
+            return <StepsBlock {...block} />;
+          case "faq":
+            return <FaqBlock {...block} />;
+          case "trust":
+            return <TrustBlock {...block} />;
+        }
+      })
+    }
+  </main>
+</SiteLayout>

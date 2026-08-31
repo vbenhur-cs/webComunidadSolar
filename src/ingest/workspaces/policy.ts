@@ -71,6 +71,11 @@ export interface StagedAgentOutput {
 interface StagedOutputRecord {
   readonly root: string;
   readonly path: string;
+  readonly repositoryRoot: string;
+  readonly baselineCommit: string;
+  readonly changeId: string;
+  readonly planSha256: string;
+  readonly planCanonical: string;
   readonly rootIdentity: { readonly device: number; readonly inode: number };
   readonly pathIdentity: { readonly device: number; readonly inode: number };
 }
@@ -97,6 +102,11 @@ function isSameOrWithin(root: string, candidate: string): boolean {
 
 async function createControllerStaging(
   workspacePath: string,
+  repositoryRoot: string,
+  baselineCommit: string,
+  changeId: string,
+  planSha256: string,
+  planCanonical: string,
 ): Promise<StagedOutputRecord> {
   const root = await realpath(
     await mkdtemp(join(tmpdir(), "comunidadsolar-agent-staging-")),
@@ -119,6 +129,11 @@ async function createControllerStaging(
     return Object.freeze({
       root,
       path,
+      repositoryRoot,
+      baselineCommit,
+      changeId,
+      planSha256,
+      planCanonical,
       rootIdentity: Object.freeze({
         device: rootEntry.dev,
         inode: rootEntry.ino,
@@ -727,7 +742,14 @@ export async function validateAgentWorkspaceOutput(
   const files = changedOutputFiles(current, workspace.baselineManifest, plan);
   let staging: StagedOutputRecord | undefined;
   try {
-    staging = await createControllerStaging(workspace.path);
+    staging = await createControllerStaging(
+      workspace.path,
+      workspace.repositoryRoot,
+      workspace.baselineCommit,
+      plan.changeId,
+      plan.planSha256,
+      canonicalJson(plan),
+    );
     const stagingPath = staging.path;
     await exportBaseline(workspace, stagingPath);
     await stripOperationalFiles(stagingPath);
@@ -772,6 +794,76 @@ export async function validateAgentWorkspaceOutput(
     }
     throw error;
   }
+}
+
+/** Proves that a staging handoff was minted by this controller instance. */
+export async function assertControllerStagedOutput(
+  output: StagedAgentOutput,
+  plan: ChangePlan,
+): Promise<void> {
+  const record = stagedOutputRecord(output);
+  if (
+    output.path !== record.path ||
+    plan.changeId !== record.changeId ||
+    plan.baselineCommit !== record.baselineCommit ||
+    plan.planSha256 !== record.planSha256 ||
+    canonicalJson(plan) !== record.planCanonical
+  ) {
+    throw new TypeError(
+      "El path o plan no coincide con el staging controlador",
+    );
+  }
+  await assertStagedOutputLocation(record);
+}
+
+export interface StagedPackageBaselines {
+  readonly packageJson: Buffer;
+  readonly packageLockJson: Buffer;
+}
+
+async function baselineBlob(
+  record: StagedOutputRecord,
+  path: (typeof packageManifests)[number],
+): Promise<Buffer> {
+  const child = spawn(
+    gitExecutable,
+    [
+      ...fixedGitArguments,
+      "-C",
+      record.repositoryRoot,
+      "cat-file",
+      "blob",
+      `${record.baselineCommit}:${path}`,
+    ],
+    {
+      env: fixedGitEnvironment,
+      shell: false,
+      stdio: ["ignore", "pipe", "pipe"],
+    },
+  );
+  const output = collect(child, "stdout");
+  const error = collect(child, "stderr");
+  if ((await exitCode(child)) !== 0) {
+    const details = Buffer.concat(error).toString("utf8").trim();
+    throw new TypeError(
+      `No se pudo leer el manifest del baseline controlador: ${details}`,
+    );
+  }
+  return Buffer.concat(output);
+}
+
+/** Reads only the two fixed dependency manifests from the bound baseline. */
+export async function readStagedPackageBaselines(
+  output: StagedAgentOutput,
+): Promise<StagedPackageBaselines> {
+  const record = stagedOutputRecord(output);
+  await assertStagedOutputLocation(record);
+  const [packageJson, packageLockJson] = await Promise.all([
+    baselineBlob(record, "package.json"),
+    baselineBlob(record, "package-lock.json"),
+  ]);
+  await assertStagedOutputLocation(record);
+  return Object.freeze({ packageJson, packageLockJson });
 }
 
 export async function removeStagedAgentOutput(

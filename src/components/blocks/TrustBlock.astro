@@ -1,0 +1,23 @@
+---
+import type { TrustBlockDefinition } from "../../content/block-catalog.ts";
+
+type Props = Omit<TrustBlockDefinition, "type">;
+
+const { title, items } = Astro.props;
+---
+
+<section class="generated-block generated-trust">
+  <div class="shell">
+    <h2>{title}</h2>
+    <dl>
+      {
+        items.map((item) => (
+          <div>
+            <dt>{item.label}</dt>
+            <dd>{item.detail}</dd>
+          </div>
+        ))
+      }
+    </dl>
+  </div>
+</section>

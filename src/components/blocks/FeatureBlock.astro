@@ -1,0 +1,23 @@
+---
+import type { FeatureBlockDefinition } from "../../content/block-catalog.ts";
+
+type Props = Omit<FeatureBlockDefinition, "type">;
+
+const { title, items } = Astro.props;
+---
+
+<section class="generated-block generated-features">
+  <div class="shell">
+    <h2>{title}</h2>
+    <div class="generated-feature-grid">
+      {
+        items.map((item) => (
+          <article>
+            <h3>{item.title}</h3>
+            <p>{item.copy}</p>
+          </article>
+        ))
+      }
+    </div>
+  </div>
+</section>
