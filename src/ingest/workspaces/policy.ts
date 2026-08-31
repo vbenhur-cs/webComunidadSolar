@@ -12,7 +12,8 @@ import {
   realpath,
   rm,
 } from "node:fs/promises";
-import { dirname, isAbsolute, join } from "node:path";
+import { tmpdir } from "node:os";
+import { dirname, isAbsolute, join, relative, sep } from "node:path";
 
 import { canonicalJson } from "../canonical-json.ts";
 import type { ChangePlan } from "../domain.ts";
@@ -67,11 +68,102 @@ export interface StagedAgentOutput {
   readonly sha256: Readonly<Record<string, string>>;
 }
 
+interface StagedOutputRecord {
+  readonly root: string;
+  readonly path: string;
+  readonly rootIdentity: { readonly device: number; readonly inode: number };
+  readonly pathIdentity: { readonly device: number; readonly inode: number };
+}
+
+const stagedOutputRecords = new WeakMap<
+  StagedAgentOutput,
+  StagedOutputRecord
+>();
+
 function errorCode(error: unknown): string | undefined {
   if (typeof error !== "object" || error === null || !("code" in error)) {
     return undefined;
   }
   return typeof error.code === "string" ? error.code : undefined;
+}
+
+function isSameOrWithin(root: string, candidate: string): boolean {
+  const path = relative(root, candidate);
+  return (
+    path === "" ||
+    (!isAbsolute(path) && path !== ".." && !path.startsWith(`..${sep}`))
+  );
+}
+
+async function createControllerStaging(
+  workspacePath: string,
+): Promise<StagedOutputRecord> {
+  const root = await realpath(
+    await mkdtemp(join(tmpdir(), "comunidadsolar-agent-staging-")),
+  );
+  try {
+    const path = await realpath(await mkdtemp(join(root, "output-")));
+    const canonicalWorkspace = await realpath(workspacePath);
+    if (
+      isSameOrWithin(root, canonicalWorkspace) ||
+      isSameOrWithin(canonicalWorkspace, root)
+    ) {
+      throw new TypeError(
+        "El staging controlador debe estar separado del workspace del agente",
+      );
+    }
+    const [rootEntry, pathEntry] = await Promise.all([
+      lstat(root),
+      lstat(path),
+    ]);
+    return Object.freeze({
+      root,
+      path,
+      rootIdentity: Object.freeze({
+        device: rootEntry.dev,
+        inode: rootEntry.ino,
+      }),
+      pathIdentity: Object.freeze({
+        device: pathEntry.dev,
+        inode: pathEntry.ino,
+      }),
+    });
+  } catch (error: unknown) {
+    await rm(root, { recursive: true, force: true }).catch(() => undefined);
+    throw error;
+  }
+}
+
+function stagedOutputRecord(output: StagedAgentOutput): StagedOutputRecord {
+  const record = stagedOutputRecords.get(output);
+  if (!record) {
+    throw new TypeError("El staging no pertenece a este controlador");
+  }
+  return record;
+}
+
+async function assertStagedOutputLocation(
+  record: StagedOutputRecord,
+): Promise<void> {
+  const [rootEntry, pathEntry] = await Promise.all([
+    lstat(record.root),
+    lstat(record.path),
+  ]);
+  if (
+    dirname(record.path) !== record.root ||
+    (await realpath(record.root)) !== record.root ||
+    (await realpath(record.path)) !== record.path ||
+    rootEntry.isSymbolicLink() ||
+    !rootEntry.isDirectory() ||
+    rootEntry.dev !== record.rootIdentity.device ||
+    rootEntry.ino !== record.rootIdentity.inode ||
+    pathEntry.isSymbolicLink() ||
+    !pathEntry.isDirectory() ||
+    pathEntry.dev !== record.pathIdentity.device ||
+    pathEntry.ino !== record.pathIdentity.inode
+  ) {
+    throw new TypeError("La identidad canónica del staging cambió");
+  }
 }
 
 function validateRelativePath(path: string): void {
@@ -633,11 +725,10 @@ export async function validateAgentWorkspaceOutput(
   await assertApprovedPlan(workspace, plan);
   const current = await workspaceManifest(workspace);
   const files = changedOutputFiles(current, workspace.baselineManifest, plan);
-  let stagingPath: string | undefined;
+  let staging: StagedOutputRecord | undefined;
   try {
-    stagingPath = await mkdtemp(
-      join(dirname(workspace.path), `${workspace.attemptId}-staging-`),
-    );
+    staging = await createControllerStaging(workspace.path);
+    const stagingPath = staging.path;
     await exportBaseline(workspace, stagingPath);
     await stripOperationalFiles(stagingPath);
     assertSameManifest(
@@ -666,17 +757,28 @@ export async function validateAgentWorkspaceOutput(
     await assertWorkspaceInputs(workspace);
     await assertPrivateOutputDirectory(workspace);
     await assertTrustedRepositoriesUnchanged(workspace);
-    return Object.freeze({
+    const output: StagedAgentOutput = Object.freeze({
       path: stagingPath,
       files: Object.freeze([...files]),
       sha256: Object.freeze(Object.fromEntries(hashes)),
     });
+    stagedOutputRecords.set(output, staging);
+    return output;
   } catch (error: unknown) {
-    if (stagingPath !== undefined) {
-      await rm(stagingPath, { recursive: true, force: true }).catch(
+    if (staging !== undefined) {
+      await rm(staging.root, { recursive: true, force: true }).catch(
         () => undefined,
       );
     }
     throw error;
   }
+}
+
+export async function removeStagedAgentOutput(
+  output: StagedAgentOutput,
+): Promise<void> {
+  const record = stagedOutputRecord(output);
+  await assertStagedOutputLocation(record);
+  await rm(record.root, { recursive: true, force: false });
+  stagedOutputRecords.delete(output);
 }

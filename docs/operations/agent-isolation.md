@@ -69,9 +69,11 @@ sin seguir symlinks y deriva el inventario independientemente de
 especiales, paths no planificados y límites excedidos.
 
 Los archivos aceptados se abren sin seguir enlaces y se copian por buffers a un
-baseline limpio nuevo. `StagedAgentOutput.path`, `files` y `sha256` son
+baseline limpio nuevo bajo un root temporal separado. El root y el directorio
+de output tienen sufijos opacos, no codifican change/attempt y no son siblings
+del workspace. `StagedAgentOutput.path`, `files` y `sha256` son
 controller-owned; Task 8 debe usar ese path e inventario y no volver al
-workspace del agente.
+workspace del agente ni intentar derivarlo desde el path entregado.
 
 ## Exclusión de actores locales equivalentes
 
@@ -90,8 +92,10 @@ la interfaz necesaria, pero no implementa ni certifica esa separación OS.
 
 - Un timeout, salida inválida, input mutado o drift de repositorio cierra el
   intento sin producir staging aceptado.
-- El cleanup solo elimina un `AgentWorkspace` reconocido por el servicio. Un
-  fallo de cleanup conserva el directorio para diagnóstico controlado.
+- El cleanup de workspace solo elimina un `AgentWorkspace` reconocido por el
+  servicio. El cleanup de staging acepta únicamente el objeto exacto reconocido
+  por el controlador y elimina su root privado separado completo. Un fallo de
+  cleanup conserva el directorio para diagnóstico controlado.
 - Los logs persistidos deben respetar los límites y el saneado del controlador;
   no se deben copiar contenidos privados completos a incidencias.
 - Antes de habilitar un broker nuevo, se deben repetir los tests de capability,

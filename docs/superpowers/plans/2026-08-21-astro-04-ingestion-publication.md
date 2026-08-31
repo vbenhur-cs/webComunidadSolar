@@ -661,10 +661,13 @@ confiable; ningún request puede ampliar esa autoridad.
 Al terminar el job, el controlador vuelve a validar inputs y repositorios,
 recorre todo el workspace sin seguir enlaces, deriva el inventario sin confiar
 en stdout y copia por bytes solo archivos regulares planificados a un baseline
-limpio nuevo. `StagedAgentOutput.path`, `files` y `sha256` son propiedad del
-controlador y constituyen la superficie completa y única del handoff a Task 8;
-el objeto no expone `AgentWorkspace`. El controlador conserva por separado su
-lifecycle y cleanup. Gate 1, Task 8, validación, commit candidato, Gate 2 y
+limpio nuevo bajo un root temporal separado y opaco que no codifica
+`changeId`/`attemptId` ni comparte parent con el workspace.
+`StagedAgentOutput.path`, `files` y `sha256` son propiedad del controlador y
+constituyen la superficie completa y única del handoff a Task 8; el objeto no
+expone `AgentWorkspace` ni permite derivarlo como sibling. El controlador
+conserva por separado su lifecycle y cleanup mediante una capacidad ligada al
+objeto staging. Gate 1, Task 8, validación, commit candidato, Gate 2 y
 publicación quedan fuera del agente.
 
 La frontera práctica confía en host, filesystem, controlador y broker. No

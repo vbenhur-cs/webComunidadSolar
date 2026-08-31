@@ -8,6 +8,7 @@ import {
   mkdtemp,
   open,
   readFile,
+  readdir,
   realpath,
   rm,
   stat,
@@ -15,7 +16,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { basename, dirname, join, relative } from "node:path";
 import test from "node:test";
 import { promisify } from "node:util";
 
@@ -47,7 +48,10 @@ import {
   type AgentWorkspace,
   type AgentWorkspaceInput,
 } from "../../src/ingest/workspaces/service.ts";
-import { validateAgentWorkspaceOutput } from "../../src/ingest/workspaces/policy.ts";
+import {
+  removeStagedAgentOutput,
+  validateAgentWorkspaceOutput,
+} from "../../src/ingest/workspaces/policy.ts";
 
 process.env.INGEST_TEST_MODE ??= "true";
 
@@ -821,10 +825,21 @@ test("builds accepted inventory independently and byte-copies it into a clean ba
       workspace,
       plan(repository.baseline),
     );
+    let stagedRemoved = false;
+    let workspaceRemoved = false;
     try {
       const copied = join(staged.path, "src/pages/generated.astro");
+      const stagingRoot = dirname(staged.path);
       assert.deepEqual(Object.keys(staged).sort(), ["files", "path", "sha256"]);
       assert.equal("workspace" in staged, false);
+      assert.notEqual(stagingRoot, dirname(workspace.path));
+      assert.equal(basename(stagingRoot).includes(workspace.changeId), false);
+      assert.equal(basename(stagingRoot).includes(workspace.attemptId), false);
+      assert.equal(basename(staged.path).includes(workspace.changeId), false);
+      assert.equal(basename(staged.path).includes(workspace.attemptId), false);
+      assert.ok(relative(stagingRoot, workspace.path).startsWith(".."));
+      assert.equal(await exists(join(stagingRoot, workspace.attemptId)), false);
+      assert.deepEqual(await readdir(stagingRoot), [basename(staged.path)]);
       assert.notEqual(staged.path, workspace.path);
       assert.deepEqual(staged.files, ["src/pages/generated.astro"]);
       assert.equal(
@@ -842,8 +857,25 @@ test("builds accepted inventory independently and byte-copies it into a clean ba
       assert.equal(Object.isFrozen(staged), true);
       assert.equal(Object.isFrozen(staged.files), true);
       assert.equal(Object.isFrozen(staged.sha256), true);
-    } finally {
+      await assert.rejects(
+        () => removeStagedAgentOutput({ ...staged }),
+        /staging.*pertenece|controlador/i,
+      );
+      await removeStagedAgentOutput(staged);
+      stagedRemoved = true;
+      assert.equal(await exists(staged.path), false);
+      assert.equal(await exists(stagingRoot), false);
+      assert.equal(await exists(workspace.path), true);
       await removeAgentWorkspace(workspace);
+      workspaceRemoved = true;
+      assert.equal(await exists(workspace.path), false);
+    } finally {
+      if (!stagedRemoved) {
+        await removeStagedAgentOutput(staged).catch(() => undefined);
+      }
+      if (!workspaceRemoved) {
+        await removeAgentWorkspace(workspace).catch(() => undefined);
+      }
     }
   });
 });
@@ -1052,7 +1084,11 @@ test("stages dependency manifests only when Gate 1 planned both and declared dep
         workspace,
         dependencyPlan,
       );
-      assert.deepEqual(staged.files, ["package-lock.json", "package.json"]);
+      try {
+        assert.deepEqual(staged.files, ["package-lock.json", "package.json"]);
+      } finally {
+        await removeStagedAgentOutput(staged);
+      }
     } finally {
       await removeAgentWorkspace(workspace);
     }
@@ -1131,9 +1167,13 @@ test("stages safe descendants of explicitly planned generated roots", async () =
         workspace,
         generatedPlan,
       );
-      assert.deepEqual(staged.files, [
-        "src/components/generated/agent-isolation/Card.astro",
-      ]);
+      try {
+        assert.deepEqual(staged.files, [
+          "src/components/generated/agent-isolation/Card.astro",
+        ]);
+      } finally {
+        await removeStagedAgentOutput(staged);
+      }
     } finally {
       await removeAgentWorkspace(workspace);
     }

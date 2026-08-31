@@ -335,7 +335,8 @@ git commit -m "feat: export isolated agent workspaces"
 - Consumes: a live `AgentWorkspace`, the approved `ChangePlan` and its private
   baseline/input records.
 - Produces: `validateAgentWorkspaceOutput(workspace, plan): Promise<StagedAgentOutput>`;
-  the staging tree is a clean baseline export plus byte-copied allowed output.
+  the staging tree is a clean baseline export plus byte-copied allowed output,
+  and `removeStagedAgentOutput` owns its cleanup.
 
 - [ ] **Step 1: Write failing output-policy and clean-copy tests**
 
@@ -344,8 +345,10 @@ test("builds the accepted inventory independently of the agent's declared file l
   await writeFile(join(workspace.path, "src/pages/generated.astro"), "---\n---\n<h1>x</h1>");
   const staged = await validateAgentWorkspaceOutput(workspace, plan);
   assert.deepEqual(Object.keys(staged).sort(), ["files", "path", "sha256"]);
+  assert.notEqual(dirname(staged.path), dirname(workspace.path));
   assert.deepEqual(staged.files, ["src/pages/generated.astro"]);
   assert.equal(await readFile(join(staged.path, "src/pages/generated.astro"), "utf8"), "---\n---\n<h1>x</h1>");
+  await removeStagedAgentOutput(staged);
 });
 
 for (const setup of [
@@ -400,6 +403,10 @@ export async function validateAgentWorkspaceOutput(
   workspace: AgentWorkspace,
   plan: ChangePlan,
 ): Promise<StagedAgentOutput>;
+
+export async function removeStagedAgentOutput(
+  output: StagedAgentOutput,
+): Promise<void>;
 ```
 
 First call `assertWorkspaceInputs`. Rewalk the workspace without following
@@ -410,12 +417,16 @@ only `plan.files` plus descendants of a generated root explicitly present in
 `package-lock.json` only when each is explicitly listed in `plan.files` and
 `plan.dependencies` is nonempty; Task 8 must later compare their exact allowed
 dependency diff. Re-export the original baseline into a new controller-owned
-staging directory, then copy accepted regular files using new byte buffers and
-verify hashes on both sides. Preserve `.agent-input` and `.agent-output`
-outside the staging tree. Return exactly the controller-owned staging path,
-sorted immutable inventory and hashes; do not expose the hostile
-`AgentWorkspace` through `StagedAgentOutput`. The controller retains workspace
-cleanup/lifecycle responsibility separately.
+staging directory beneath a separate temporary root. Both root and output use
+opaque generated suffixes and neither encodes `changeId` nor `attemptId`; the
+root must be disjoint from the workspace root. Then copy accepted regular files
+using new byte buffers and verify hashes on both sides. Preserve `.agent-input`
+and `.agent-output` outside the staging tree. Return exactly the
+controller-owned staging path, sorted immutable inventory and hashes; do not
+expose the hostile `AgentWorkspace` through `StagedAgentOutput` or make it a
+derivable sibling. The controller retains workspace cleanup separately and
+uses an ownership-bound `removeStagedAgentOutput` to remove the whole private
+staging root.
 
 Update `CodexAgent` to delegate its job to the broker and use
 `.agent-output/final-message.json` inside the workspace as untrusted output;

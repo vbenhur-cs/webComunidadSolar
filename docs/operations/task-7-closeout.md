@@ -17,7 +17,9 @@ una afirmación de protección OS.
 - `IsolationBroker.run`: job completo con argv sin shell, entorno mínimo,
   timeout confiable y resultado acotado.
 - `StagedAgentOutput`: path de staging, inventario ordenado y hashes derivados
-  por el controlador después de tratar el workspace como hostil.
+  por el controlador después de tratar el workspace como hostil. Vive bajo un
+  root opaco separado, sin IDs derivables, y su cleanup queda ligado al objeto
+  exacto retenido por el controlador.
 - La raíz ya no conserva la entrada obsoleta `.agent-worktrees/` en
   `.gitignore`; no queda un namespace local que sugiera autoridad Git del
   agente.
