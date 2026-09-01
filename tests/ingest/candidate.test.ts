@@ -1031,6 +1031,45 @@ test("previews only the verified copied bundle through a semantic descriptor and
   });
 });
 
+test(
+  "reaps an owned zombie preview leader before interpreting post-TERM EPERM",
+  { skip: process.platform === "win32" },
+  async (t) => {
+    let previewPid: number | undefined;
+    t.after(() => {
+      if (previewPid === undefined) return;
+      try {
+        process.kill(-previewPid, "SIGKILL");
+      } catch {
+        // The passing cleanup has already removed the owned group.
+      }
+    });
+    await withCandidateFixture({}, async (fixture) => {
+      await installFixtureWrangler(fixture.repositoryRoot);
+      let closed: Promise<void> | undefined;
+      const preview = createCandidatePreviewTestCapability(async () => {
+        const child = spawn(
+          process.execPath,
+          ["-e", "setInterval(() => undefined, 1_000);"],
+          { detached: true, stdio: "ignore" },
+        );
+        previewPid = child.pid;
+        closed = new Promise<void>((resolveClosed) => {
+          child.once("close", () => resolveClosed());
+        });
+        return { child, url: "http://127.0.0.1:43124" };
+      });
+      const candidate = await createCandidate(candidateInput(fixture, preview));
+      const handle = await startCandidatePreview(candidate);
+
+      await assert.doesNotReject(handle.stop());
+      await closed;
+      assert.ok(previewPid !== undefined);
+      assert.throws(() => process.kill(previewPid!, 0), /ESRCH/u);
+    });
+  },
+);
+
 test("preview resolves Wrangler from its sealed store root after cwd changes", async (t) => {
   const otherRoot = await mkdtemp(join(tmpdir(), "candidate-preview-cwd-"));
   const initialCwd = process.cwd();

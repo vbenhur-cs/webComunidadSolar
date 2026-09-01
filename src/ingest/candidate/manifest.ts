@@ -3663,12 +3663,48 @@ function isMissingProcess(error: unknown): boolean {
   );
 }
 
-function processGroupExists(pid: number): boolean {
+function isInaccessibleProcess(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    error.code === "EPERM"
+  );
+}
+
+type ProcessGroupState = "present" | "missing" | "inaccessible";
+
+interface OwnedPreviewProcess {
+  readonly child: ChildProcess;
+  readonly pid: number;
+  /** Resolves only after Node has observed the controller-owned child exit. */
+  readonly reaped: Promise<void>;
+}
+
+function observeOwnedPreviewProcess(
+  child: ChildProcess,
+  pid: number,
+): OwnedPreviewProcess {
+  let resolveReaped: (() => void) | undefined;
+  const reaped = new Promise<void>((resolveReapedPromise) => {
+    resolveReaped = resolveReapedPromise;
+  });
+  const markReaped = (): void => {
+    child.off("exit", markReaped);
+    resolveReaped?.();
+  };
+  child.once("exit", markReaped);
+  if (child.exitCode !== null || child.signalCode !== null) markReaped();
+  return Object.freeze({ child, pid, reaped });
+}
+
+function processGroupState(pid: number): ProcessGroupState {
   try {
     process.kill(-pid, 0);
-    return true;
+    return "present";
   } catch (error: unknown) {
-    if (isMissingProcess(error)) return false;
+    if (isMissingProcess(error)) return "missing";
+    if (isInaccessibleProcess(error)) return "inaccessible";
     throw error;
   }
 }
@@ -3681,26 +3717,67 @@ function signalProcessGroup(pid: number, signal: NodeJS.Signals): void {
   }
 }
 
+async function waitForOwnedPreviewReap(
+  preview: OwnedPreviewProcess,
+  timeoutMilliseconds: number,
+): Promise<boolean> {
+  return await new Promise<boolean>((resolveReap) => {
+    const timeout = setTimeout(
+      () => resolveReap(false),
+      Math.max(0, timeoutMilliseconds),
+    );
+    void preview.reaped.then(() => {
+      clearTimeout(timeout);
+      resolveReap(true);
+    });
+  });
+}
+
 async function waitForProcessGroupExit(
-  pid: number,
+  preview: OwnedPreviewProcess,
   timeoutMilliseconds: number,
 ): Promise<boolean> {
   const deadline = Date.now() + timeoutMilliseconds;
-  while (processGroupExists(pid)) {
+  while (true) {
+    const state = processGroupState(preview.pid);
+    if (state === "missing") return true;
+    if (state === "inaccessible") {
+      const reaped = await waitForOwnedPreviewReap(
+        preview,
+        deadline - Date.now(),
+      );
+      if (!reaped) return false;
+
+      // A zombie leader can make the group probe report EPERM until Node
+      // reaps its own child. Recheck after that observation; EPERM still
+      // means an inaccessible live group and must fail closed.
+      const stateAfterReap = processGroupState(preview.pid);
+      if (stateAfterReap === "missing") return true;
+      if (stateAfterReap === "inaccessible") {
+        throw new TypeError(
+          "No se pudo verificar que el grupo de preview candidato terminara",
+        );
+      }
+    }
     if (Date.now() >= deadline) return false;
     await new Promise<void>((resolveWait) => {
       setTimeout(resolveWait, 25);
     });
   }
-  return true;
 }
 
-async function stopProcessGroup(pid: number): Promise<void> {
-  if (!processGroupExists(pid)) return;
-  signalProcessGroup(pid, "SIGTERM");
-  if (await waitForProcessGroupExit(pid, 1_500)) return;
-  signalProcessGroup(pid, "SIGKILL");
-  if (!(await waitForProcessGroupExit(pid, 1_500))) {
+async function stopProcessGroup(preview: OwnedPreviewProcess): Promise<void> {
+  const initialState = processGroupState(preview.pid);
+  if (initialState === "missing") return;
+  if (initialState === "inaccessible") {
+    throw new TypeError(
+      "No se pudo verificar el grupo de preview candidato antes de detenerlo",
+    );
+  }
+  signalProcessGroup(preview.pid, "SIGTERM");
+  if (await waitForProcessGroupExit(preview, 1_500)) return;
+  signalProcessGroup(preview.pid, "SIGKILL");
+  if (!(await waitForProcessGroupExit(preview, 1_500))) {
     throw new TypeError("No se pudo detener el grupo de preview candidato");
   }
 }
@@ -3732,27 +3809,23 @@ export async function startCandidatePreview(
   if (
     typeof launchPid !== "number" ||
     !Number.isSafeInteger(launchPid) ||
-    launchPid <= 0 ||
-    launch.child.exitCode !== null
+    launchPid <= 0
   ) {
-    if (
-      typeof launchPid === "number" &&
-      Number.isSafeInteger(launchPid) &&
-      launchPid > 0
-    ) {
-      await stopProcessGroup(launchPid).catch(() => undefined);
-    }
     throw new TypeError("El preview candidato no creó un proceso válido");
   }
-  const pid = launchPid;
+  const previewProcess = observeOwnedPreviewProcess(launch.child, launchPid);
+  if (launch.child.exitCode !== null || launch.child.signalCode !== null) {
+    await stopProcessGroup(previewProcess).catch(() => undefined);
+    throw new TypeError("El preview candidato no creó un proceso válido");
+  }
   let url: string;
   try {
     url = localPreviewUrl(launch.url);
   } catch (error: unknown) {
-    await stopProcessGroup(pid).catch(() => undefined);
+    await stopProcessGroup(previewProcess).catch(() => undefined);
     throw error;
   }
-  candidatePreviewPids.set(candidate, pid);
+  candidatePreviewPids.set(candidate, previewProcess.pid);
 
   let stopped = false;
   return Object.freeze({
@@ -3761,7 +3834,7 @@ export async function startCandidatePreview(
       if (stopped) return;
       stopped = true;
       try {
-        await stopProcessGroup(pid);
+        await stopProcessGroup(previewProcess);
       } finally {
         candidatePreviewPids.delete(candidate);
       }
