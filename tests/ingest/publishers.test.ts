@@ -377,6 +377,19 @@ function fixturePromotionLeaseRaceMarker(repositoryRoot: string): string {
   );
 }
 
+function fixturePromotionLeaseRaceAcknowledgement(
+  repositoryRoot: string,
+): string {
+  return join(
+    repositoryRoot,
+    ".change-state",
+    changeId,
+    "candidates",
+    attemptId,
+    "promotion-lease-race-ack.test",
+  );
+}
+
 async function waitForLeaseRaceReady(path: string): Promise<void> {
   const deadline = Date.now() + 5_000;
   while (Date.now() < deadline) {
@@ -1564,10 +1577,11 @@ test("test approvals can never fast-forward protected main", async () => {
   });
 });
 
-test("a promotion failure token cannot authorize fixture approvals", async () => {
+test("a lease barrier token cannot reach its stage without controller approvals", async () => {
   await withPublisherFixture({}, async (fixture) => {
-    const testCapability =
-      createCandidatePromotionTestCapability("dossier-write");
+    const testCapability = createCandidatePromotionTestCapability(
+      "protected-main-reattach-before-lease",
+    );
     await assert.rejects(
       promoteCandidate({ candidate: fixture.candidate, testCapability }),
       /aprobaciones.*prueba|test approval/i,
@@ -1575,6 +1589,17 @@ test("a promotion failure token cannot authorize fixture approvals", async () =>
     assert.equal(
       await git(fixture.repositoryRoot, ["rev-parse", "HEAD"]),
       fixture.candidate.baselineCommit,
+    );
+    await assert.rejects(
+      readFile(fixturePromotionLeaseRaceMarker(fixture.repositoryRoot), "utf8"),
+      /ENOENT/u,
+    );
+    await assert.rejects(
+      readFile(
+        fixturePromotionLeaseRaceAcknowledgement(fixture.repositoryRoot),
+        "utf8",
+      ),
+      /ENOENT/u,
     );
   });
 });
@@ -1852,8 +1877,14 @@ test("a failed final protected-main fast-forward leaves main at its baseline", a
   await withPublisherFixture(
     { approvalAuthority: "controller" },
     async (fixture) => {
-      const indexLock = join(fixture.repositoryRoot, ".git", "index.lock");
-      await writeFile(indexLock, "fixture lock\n", { flag: "wx" });
+      const mainLock = join(
+        fixture.repositoryRoot,
+        ".git",
+        "refs",
+        "heads",
+        "main.lock",
+      );
+      await writeFile(mainLock, "fixture lock\n", { flag: "wx" });
       try {
         const outcome = await promoteCandidate({
           candidate: fixture.candidate,
@@ -1861,7 +1892,7 @@ test("a failed final protected-main fast-forward leaves main at its baseline", a
           () => "published" as const,
           (error: unknown) => {
             assert.ok(error instanceof Error);
-            assert.match(error.message, /avanzar main|index\.lock/i);
+            assert.match(error.message, /lease|main\.lock|main/i);
             return "rejected" as const;
           },
         );
@@ -1886,7 +1917,7 @@ test("a failed final protected-main fast-forward leaves main at its baseline", a
         assert.match(event, /recoverable-failure/u);
         assert.equal(event.includes("published"), false);
       } finally {
-        await rm(indexLock, { force: true });
+        await rm(mainLock, { force: true });
       }
     },
   );
@@ -1911,7 +1942,10 @@ test("a concurrent advance after the final check loses the protected-main lease 
         fixture.candidate.candidateCommit,
         fixture.candidate.baselineCommit,
       ]);
-      await writeAtomic(marker, Buffer.from("advanced\n", "utf8"));
+      await writeAtomic(
+        fixturePromotionLeaseRaceAcknowledgement(fixture.repositoryRoot),
+        Buffer.from("advanced\n", "utf8"),
+      );
       const outcome = await promotion.then(
         () => "published" as const,
         (error: unknown) => {
@@ -1960,6 +1994,65 @@ test("a concurrent advance after the final check loses the protected-main lease 
   );
 });
 
+test("a main reattachment immediately before the lease cannot publish B outside the CAS", async () => {
+  await withPublisherFixture(
+    { approvalAuthority: "controller" },
+    async (fixture) => {
+      const testCapability = createCandidatePromotionTestCapability(
+        "protected-main-reattach-before-lease",
+      );
+      const promotion = promoteCandidate({
+        candidate: fixture.candidate,
+        testCapability,
+      });
+      const marker = fixturePromotionLeaseRaceMarker(fixture.repositoryRoot);
+      await waitForLeaseRaceReady(marker);
+      assert.equal(
+        await git(fixture.repositoryRoot, ["symbolic-ref", "--quiet", "HEAD"]),
+        "refs/heads/main",
+      );
+      assert.equal(
+        await git(fixture.repositoryRoot, ["rev-parse", "HEAD"]),
+        fixture.candidate.baselineCommit,
+      );
+      await git(fixture.repositoryRoot, ["checkout", "--quiet", "main"]);
+      assert.equal(
+        await git(fixture.repositoryRoot, ["rev-parse", "refs/heads/main"]),
+        fixture.candidate.baselineCommit,
+      );
+      await writeAtomic(
+        fixturePromotionLeaseRaceAcknowledgement(fixture.repositoryRoot),
+        Buffer.from("advanced\n", "utf8"),
+      );
+
+      const result = await promotion;
+      assert.equal(result.reconciliation, "complete");
+      assert.equal(
+        await git(fixture.repositoryRoot, ["rev-parse", "HEAD"]),
+        result.dossierCommit,
+      );
+      assert.equal(
+        await git(fixture.repositoryRoot, ["symbolic-ref", "--quiet", "HEAD"]),
+        "refs/heads/main",
+      );
+      assert.equal(
+        await git(fixture.repositoryRoot, ["status", "--porcelain=v1"]),
+        "",
+      );
+      assert.deepEqual(
+        (await git(fixture.repositoryRoot, ["log", "--format=%H", "-3"])).split(
+          "\n",
+        ),
+        [
+          result.dossierCommit,
+          fixture.candidate.candidateCommit,
+          fixture.candidate.baselineCommit,
+        ],
+      );
+    },
+  );
+});
+
 test("the concurrent-advance test barrier rejects an acknowledgement without a lease change", async () => {
   await withPublisherFixture(
     { approvalAuthority: "controller" },
@@ -1973,7 +2066,10 @@ test("the concurrent-advance test barrier rejects an acknowledgement without a l
       });
       const marker = fixturePromotionLeaseRaceMarker(fixture.repositoryRoot);
       await waitForLeaseRaceReady(marker);
-      await writeAtomic(marker, Buffer.from("advanced\n", "utf8"));
+      await writeAtomic(
+        fixturePromotionLeaseRaceAcknowledgement(fixture.repositoryRoot),
+        Buffer.from("advanced\n", "utf8"),
+      );
 
       const outcome = await promotion.then(
         () => "published" as const,
@@ -2039,7 +2135,10 @@ test("a staged concurrent deletion survives a lost protected-main lease", async 
       ]);
       await rm(join(fixture.repositoryRoot, "README.md"));
       await git(fixture.repositoryRoot, ["add", "README.md"]);
-      await writeAtomic(marker, Buffer.from("advanced\n", "utf8"));
+      await writeAtomic(
+        fixturePromotionLeaseRaceAcknowledgement(fixture.repositoryRoot),
+        Buffer.from("advanced\n", "utf8"),
+      );
 
       const outcome = await promotion.then(
         () => "published" as const,
@@ -2081,6 +2180,81 @@ test("a staged concurrent deletion survives a lost protected-main lease", async 
       assert.match(event, /promotion/u);
       assert.match(event, /recoverable-failure/u);
       assert.equal(event.includes("published"), false);
+    },
+  );
+});
+
+test("a staged concurrent deletion after the CAS stays published but reconciliation-pending", async () => {
+  await withPublisherFixture(
+    { approvalAuthority: "controller" },
+    async (fixture) => {
+      const testCapability = createCandidatePromotionTestCapability(
+        "protected-main-reconcile-dirty",
+      );
+      const promotion = promoteCandidate({
+        candidate: fixture.candidate,
+        testCapability,
+      });
+      const marker = fixturePromotionLeaseRaceMarker(fixture.repositoryRoot);
+      await waitForLeaseRaceReady(marker);
+      await git(fixture.repositoryRoot, [
+        "read-tree",
+        "-m",
+        "-u",
+        fixture.candidate.baselineCommit,
+        fixture.candidate.candidateCommit,
+      ]);
+      await rm(join(fixture.repositoryRoot, "README.md"));
+      await git(fixture.repositoryRoot, ["add", "README.md"]);
+      await writeAtomic(
+        fixturePromotionLeaseRaceAcknowledgement(fixture.repositoryRoot),
+        Buffer.from("advanced\n", "utf8"),
+      );
+
+      const result = await promotion;
+      assert.equal(result.reconciliation, "pending");
+      assert.equal(
+        await git(fixture.repositoryRoot, ["rev-parse", "refs/heads/main"]),
+        result.dossierCommit,
+      );
+      assert.match(
+        await git(fixture.repositoryRoot, ["status", "--porcelain=v1"]),
+        /D\s+README\.md/u,
+      );
+      assert.match(
+        await git(fixture.repositoryRoot, [
+          "diff",
+          "--cached",
+          "--name-status",
+        ]),
+        /D\s+README\.md/u,
+      );
+      const event = await readFile(
+        join(
+          fixture.repositoryRoot,
+          ".change-state",
+          changeId,
+          "candidates",
+          attemptId,
+          "publication-events.ndjson",
+        ),
+        "utf8",
+      );
+      assert.match(event, /promotion/u);
+      assert.match(event, /published-reconciliation-pending/u);
+      assert.equal(event.includes("recoverable-failure"), false);
+      assert.equal(event.includes(fixture.repositoryRoot), false);
+      assert.equal(event.includes("retry"), false);
+      const pendingEvent = JSON.parse(event) as Record<string, unknown>;
+      assert.deepEqual(Object.keys(pendingEvent).sort(), [
+        "at",
+        "schemaVersion",
+        "stage",
+        "status",
+      ]);
+      assert.equal(pendingEvent.schemaVersion, 1);
+      assert.equal(pendingEvent.stage, "promotion");
+      assert.equal(pendingEvent.status, "published-reconciliation-pending");
     },
   );
 });

@@ -209,8 +209,10 @@ export type CandidatePromotionFailureStage =
   | "dossier-add"
   | "dossier-commit"
   | "protected-main-fast-forward"
-  /** A test-only pause after the final lease check; it cannot mutate Git. */
-  | "protected-main-concurrent-advance";
+  /** Test-only lease barriers; they cannot mutate Git. */
+  | "protected-main-concurrent-advance"
+  | "protected-main-reattach-before-lease"
+  | "protected-main-reconcile-dirty";
 
 interface PreviewLaunch {
   readonly child: ChildProcess;
@@ -2509,7 +2511,9 @@ export function createCandidatePromotionTestCapability(
       stage !== "dossier-add" &&
       stage !== "dossier-commit" &&
       stage !== "protected-main-fast-forward" &&
-      stage !== "protected-main-concurrent-advance")
+      stage !== "protected-main-concurrent-advance" &&
+      stage !== "protected-main-reattach-before-lease" &&
+      stage !== "protected-main-reconcile-dirty")
   ) {
     throw new TypeError(
       "La inspección de promoción sólo existe en modo de pruebas",
@@ -2558,19 +2562,30 @@ function missingPath(error: unknown): boolean {
 }
 
 const promotionLeaseRaceMarkerName = "promotion-lease-race.test";
+const promotionLeaseRaceAcknowledgementName = "promotion-lease-race-ack.test";
 const promotionLeaseRaceReady = Buffer.from("ready\n", "utf8");
 const promotionLeaseRaceAdvanced = Buffer.from("advanced\n", "utf8");
 
-async function candidatePromotionLeaseRaceMarker(
+interface CandidatePromotionLeaseRaceFiles {
+  readonly marker: string;
+  readonly acknowledgement: string;
+}
+
+async function candidatePromotionLeaseRaceFiles(
   candidate: CandidateManifest,
-): Promise<string> {
+): Promise<CandidatePromotionLeaseRaceFiles> {
   const record = candidateRecord(candidate);
   const store = await assertControllerCandidateStore(record.store);
   const directory = dirname(record.manifestPath);
   const marker = join(directory, promotionLeaseRaceMarkerName);
+  const acknowledgement = join(
+    directory,
+    promotionLeaseRaceAcknowledgementName,
+  );
   if (
     !isStrictlyWithin(store.stateRoot.path, directory) ||
-    !isStrictlyWithin(directory, marker)
+    !isStrictlyWithin(directory, marker) ||
+    !isStrictlyWithin(directory, acknowledgement)
   ) {
     throw new TypeError("La barrera de lease escapa el estado candidato");
   }
@@ -2582,11 +2597,12 @@ async function candidatePromotionLeaseRaceMarker(
   ) {
     throw new TypeError("El estado de lease candidato no es seguro");
   }
-  return marker;
+  return Object.freeze({ marker, acknowledgement });
 }
 
 async function assertCandidatePromotionLeaseRaceAdvanced(
   candidate: CandidateManifest,
+  expectedMain: string,
 ): Promise<void> {
   const record = candidateRecord(candidate);
   const store = await assertControllerCandidateStore(record.store);
@@ -2595,62 +2611,69 @@ async function assertCandidatePromotionLeaseRaceAdvanced(
     ["rev-parse", "--verify", "refs/heads/main^{commit}"],
     "No se pudo verificar main tras la carrera de lease",
   );
-  if (main !== candidate.candidateCommit) {
+  if (main !== expectedMain) {
     throw new TypeError(
-      "La barrera de lease no observó el avance externo exacto a A",
+      "La barrera de lease no observó el ref protegido esperado",
     );
   }
 }
 
+type CandidatePromotionLeaseBarrierStage =
+  | "protected-main-concurrent-advance"
+  | "protected-main-reattach-before-lease"
+  | "protected-main-reconcile-dirty";
+
 /**
  * A private test barrier only. The opaque token can pause for an independently
- * acting fixture to advance main; it never receives or executes Git input.
+ * acting fixture; it never receives or executes Git input.
  */
 async function awaitCandidatePromotionLeaseRace(
   capability: CandidatePromotionTestCapability | undefined,
   candidate: CandidateManifest,
+  stage: CandidatePromotionLeaseBarrierStage,
+  expectedMain: string,
 ): Promise<void> {
-  if (
-    candidatePromotionTestStage(capability) !==
-    "protected-main-concurrent-advance"
-  ) {
+  if (candidatePromotionTestStage(capability) !== stage) {
     return;
   }
-  const marker = await candidatePromotionLeaseRaceMarker(candidate);
+  const files = await candidatePromotionLeaseRaceFiles(candidate);
   try {
-    await rm(marker, { force: true });
-    await writeAtomic(marker, promotionLeaseRaceReady);
+    await Promise.all([
+      rm(files.marker, { force: true }),
+      rm(files.acknowledgement, { force: true }),
+    ]);
+    await writeAtomic(files.marker, promotionLeaseRaceReady);
     const deadline = Date.now() + 5_000;
     while (Date.now() < deadline) {
       let bytes: Buffer;
       try {
-        bytes = (await readStableRegularFile(marker, 64)).bytes;
+        bytes = (await readStableRegularFile(files.acknowledgement, 64)).bytes;
       } catch (error: unknown) {
         if (missingPath(error)) {
-          throw new TypeError(
-            "La barrera de lease desapareció durante la prueba",
-          );
+          await new Promise<void>((resolveWait) => {
+            setTimeout(resolveWait, 10);
+          });
+          continue;
         }
         throw error;
       }
       if (bytes.equals(promotionLeaseRaceAdvanced)) {
-        await assertCandidatePromotionLeaseRaceAdvanced(candidate);
+        await assertCandidatePromotionLeaseRaceAdvanced(
+          candidate,
+          expectedMain,
+        );
         return;
       }
-      if (!bytes.equals(promotionLeaseRaceReady)) {
-        throw new TypeError(
-          "La barrera de lease recibió una señal no permitida",
-        );
-      }
-      await new Promise<void>((resolveWait) => {
-        setTimeout(resolveWait, 10);
-      });
+      throw new TypeError("La barrera de lease recibió una señal no permitida");
     }
     throw new TypeError(
       "La carrera de lease candidato excedió el tiempo límite",
     );
   } finally {
-    await rm(marker, { force: true }).catch(() => undefined);
+    await Promise.all([
+      rm(files.marker, { force: true }),
+      rm(files.acknowledgement, { force: true }),
+    ]).catch(() => undefined);
   }
 }
 
@@ -2696,11 +2719,14 @@ async function verifiedPublicationEvents(path: string): Promise<string> {
       );
       if (
         event.schemaVersion !== 1 ||
-        event.status !== "recoverable-failure" ||
+        (event.status !== "recoverable-failure" &&
+          event.status !== "published-reconciliation-pending") ||
         typeof event.at !== "string" ||
         !Number.isFinite(Date.parse(event.at)) ||
         (event.stage !== "local" &&
           event.stage !== "cloudflare" &&
+          event.stage !== "promotion") ||
+        (event.status === "published-reconciliation-pending" &&
           event.stage !== "promotion")
       ) {
         throw new TypeError("El evento de publicación no es canónico");
@@ -2713,10 +2739,13 @@ async function verifiedPublicationEvents(path: string): Promise<string> {
   }
 }
 
-/** Records a recoverable, path-free failure; it never marks a candidate published. */
-export async function recordCandidatePublicationFailure(
+type CandidatePublicationEventStatus =
+  "recoverable-failure" | "published-reconciliation-pending";
+
+async function recordCandidatePublicationEvent(
   candidate: CandidateManifest,
   stage: "local" | "cloudflare" | "promotion",
+  status: CandidatePublicationEventStatus,
 ): Promise<void> {
   const path = await candidatePublicationEventsPath(candidate);
   const previous = await verifiedPublicationEvents(path);
@@ -2724,14 +2753,39 @@ export async function recordCandidatePublicationFailure(
     schemaVersion: 1,
     at: new Date().toISOString(),
     stage,
-    status: "recoverable-failure",
+    status,
   });
   await writeAtomic(path, Buffer.from(`${previous}${event}\n`, "utf8"));
+}
+
+/** Records a recoverable, path-free failure; it never marks a candidate published. */
+export async function recordCandidatePublicationFailure(
+  candidate: CandidateManifest,
+  stage: "local" | "cloudflare" | "promotion",
+): Promise<void> {
+  await recordCandidatePublicationEvent(
+    candidate,
+    stage,
+    "recoverable-failure",
+  );
+}
+
+/** Records that main is published while local checkout reconciliation is pending. */
+async function recordCandidatePromotionReconciliationPending(
+  candidate: CandidateManifest,
+): Promise<void> {
+  await recordCandidatePublicationEvent(
+    candidate,
+    "promotion",
+    "published-reconciliation-pending",
+  );
 }
 
 export interface CandidatePromotionResult {
   readonly candidateCommit: string;
   readonly dossierCommit: string;
+  /** Main was atomically published; local checkout state is either clean or pending. */
+  readonly reconciliation: "complete" | "pending";
 }
 
 function expectedDossierPaths(candidate: CandidateManifest): readonly string[] {
@@ -3043,73 +3097,7 @@ async function removePrivateDossierWorktree(
   );
 }
 
-/** Detaches a clean controller checkout without changing refs/heads/main. */
-async function detachControllerCheckoutAtBaseline(
-  store: ArtifactStoreRecord,
-  candidate: CandidateManifest,
-): Promise<void> {
-  await runStorePromotionGit(
-    store.root.path,
-    ["checkout", "--detach", "--quiet", candidate.baselineCommit],
-    "No se pudo aislar el checkout controlador en el baseline",
-  );
-  const [head, status] = await Promise.all([
-    runStoreGit(
-      store.root.path,
-      ["rev-parse", "--verify", "HEAD^{commit}"],
-      "No se pudo verificar el checkout controlador aislado",
-    ),
-    runStoreGit(
-      store.root.path,
-      ["status", "--porcelain=v1", "--untracked-files=all"],
-      "No se pudo verificar la limpieza del checkout aislado",
-    ),
-  ]);
-  if (head !== candidate.baselineCommit || status !== "") {
-    throw new TypeError("El checkout aislado no conserva el baseline limpio");
-  }
-}
-
-/** Advances only detached HEAD/index/worktree to B; main remains untouched. */
-async function advanceDetachedCheckoutToDossier(
-  store: ArtifactStoreRecord,
-  candidate: CandidateManifest,
-  dossierCommit: string,
-): Promise<void> {
-  await runStorePromotionGit(
-    store.root.path,
-    ["merge", "--ff-only", dossierCommit],
-    "No se pudo preparar el checkout aislado para el expediente",
-  );
-  const [head, main, status] = await Promise.all([
-    runStoreGit(
-      store.root.path,
-      ["rev-parse", "--verify", "HEAD^{commit}"],
-      "No se pudo verificar el checkout aislado del expediente",
-    ),
-    runStoreGit(
-      store.root.path,
-      ["rev-parse", "--verify", "refs/heads/main^{commit}"],
-      "No se pudo verificar main antes del lease protegido",
-    ),
-    runStoreGit(
-      store.root.path,
-      ["status", "--porcelain=v1", "--untracked-files=all"],
-      "No se pudo verificar la limpieza del checkout aislado",
-    ),
-  ]);
-  if (
-    head !== dossierCommit ||
-    main !== candidate.baselineCommit ||
-    status !== ""
-  ) {
-    throw new TypeError(
-      "El checkout aislado no conserva B ni el baseline previo al lease",
-    );
-  }
-}
-
-/** The only production mutation of refs/heads/main: an explicit CAS lease. */
+/** The only pre-publication mutation of refs/heads/main: an explicit CAS. */
 async function advanceProtectedMainWithLease(
   store: ArtifactStoreRecord,
   candidate: CandidateManifest,
@@ -3122,17 +3110,12 @@ async function advanceProtectedMainWithLease(
   );
 }
 
-/** Reattaches without touching files after a successful CAS to already-clean B. */
-async function attachControllerMainAtDossier(
+/** Verifies reconciliation left attached main, HEAD, index and worktree at B. */
+async function assertControllerMainAtDossier(
   store: ArtifactStoreRecord,
   candidate: CandidateManifest,
   dossierCommit: string,
 ): Promise<void> {
-  await runStorePromotionGit(
-    store.root.path,
-    ["symbolic-ref", "HEAD", "refs/heads/main"],
-    "No se pudo reenganchar el checkout controlador a main",
-  );
   const [headRef, main, head, parent, status] = await Promise.all([
     runStoreGit(
       store.root.path,
@@ -3173,14 +3156,84 @@ async function attachControllerMainAtDossier(
   }
 }
 
-/** A non-forced recovery preserves any work introduced by the concurrent actor. */
+/**
+ * After CAS, transition from the known clean baseline to B with non-forced
+ * detached checkouts only. B was already published by the CAS; these local
+ * operations cannot publish it. If concurrent work or a ref race prevents
+ * reconciliation, preserve it and report pending instead of rolling back.
+ */
+async function publishedControllerReconciliation(
+  store: ArtifactStoreRecord,
+  candidate: CandidateManifest,
+  dossierCommit: string,
+): Promise<"complete" | "pending"> {
+  try {
+    const mainBefore = await runStoreGit(
+      store.root.path,
+      ["rev-parse", "--verify", "refs/heads/main^{commit}"],
+      "No se pudo verificar main publicado antes de reconciliar",
+    );
+    if (mainBefore !== dossierCommit) return "pending";
+    await runStorePromotionGit(
+      store.root.path,
+      ["checkout", "--detach", "--quiet", candidate.baselineCommit],
+      "No se pudo volver al baseline para reconciliar main publicado",
+    );
+    await runStorePromotionGit(
+      store.root.path,
+      ["checkout", "--detach", "--quiet", dossierCommit],
+      "No se pudo avanzar el checkout a main publicado",
+    );
+    const mainAfter = await runStoreGit(
+      store.root.path,
+      ["rev-parse", "--verify", "refs/heads/main^{commit}"],
+      "No se pudo revalidar main publicado antes de reenganchar HEAD",
+    );
+    if (mainAfter !== dossierCommit) return "pending";
+    await runStorePromotionGit(
+      store.root.path,
+      ["symbolic-ref", "HEAD", "refs/heads/main"],
+      "No se pudo reenganchar HEAD al main publicado",
+    );
+    await assertControllerMainAtDossier(store, candidate, dossierCommit);
+    return "complete";
+  } catch {
+    return "pending";
+  }
+}
+
+/** A non-forced lost-lease recovery preserves concurrent work. */
 async function restoreControllerMainCheckout(
   store: ArtifactStoreRecord,
+  candidate: CandidateManifest,
 ): Promise<void> {
+  const mainBefore = await runStoreGit(
+    store.root.path,
+    ["rev-parse", "--verify", "refs/heads/main^{commit}"],
+    "No se pudo leer main tras perder el lease",
+  );
   await runStorePromotionGit(
     store.root.path,
-    ["checkout", "--quiet", "--no-guess", "main"],
-    "No se pudo restaurar el checkout controlador sin descartar cambios",
+    ["checkout", "--detach", "--quiet", candidate.baselineCommit],
+    "No se pudo preparar la recuperación sin descartar cambios",
+  );
+  await runStorePromotionGit(
+    store.root.path,
+    ["checkout", "--detach", "--quiet", mainBefore],
+    "No se pudo seguir main tras perder el lease sin descartar cambios",
+  );
+  const mainAfter = await runStoreGit(
+    store.root.path,
+    ["rev-parse", "--verify", "refs/heads/main^{commit}"],
+    "No se pudo revalidar main tras perder el lease",
+  );
+  if (mainAfter !== mainBefore) {
+    throw new TypeError("main cambió durante la recuperación del lease");
+  }
+  await runStorePromotionGit(
+    store.root.path,
+    ["symbolic-ref", "HEAD", "refs/heads/main"],
+    "No se pudo reenganchar el checkout controlador sin descartar cambios",
   );
   const [headRef, main, head] = await Promise.all([
     runStoreGit(
@@ -3206,7 +3259,7 @@ async function restoreControllerMainCheckout(
 
 /**
  * Commits fixed sanitized dossier B in an isolated worktree based on candidate
- * A, verifies the complete B, then fast-forwards protected main once from the
+ * A, verifies the complete B, then atomically leases protected main from the
  * baseline to B. Protected main is therefore never left at A alone.
  */
 export async function promoteCandidateWithDossier(
@@ -3220,7 +3273,8 @@ export async function promoteCandidateWithDossier(
   await assertCandidateMainBaseline(candidate);
   const dossier = await prepareCandidateDossier(candidate);
   const worktree = await createPrivateDossierWorktree(store, candidate);
-  let controllerCheckoutDetached = false;
+  let leaseAttempted = false;
+  let mainPublished = false;
   try {
     induceCandidatePromotionTestFailure(testCapability, "dossier-write");
     const files = await writeCandidateDossier(
@@ -3248,31 +3302,61 @@ export async function promoteCandidateWithDossier(
     );
     await assertDossierCommit(worktree.root, candidate, dossierCommit, dossier);
 
-    // The protected checkout must begin clean at baseline. From here B is
-    // prepared privately, then only a compare-and-swap can mutate main.
+    // B remains private until the fixed ref CAS below. No controller checkout
+    // operation occurs before it, so only the lease can publish B.
     await assertCandidateMainBaseline(candidate);
     induceCandidatePromotionTestFailure(
       testCapability,
       "protected-main-fast-forward",
     );
-    await detachControllerCheckoutAtBaseline(store, candidate);
-    controllerCheckoutDetached = true;
-    await advanceDetachedCheckoutToDossier(store, candidate, dossierCommit);
-
-    // This barrier is private test plumbing. A fixture may now advance the
-    // protected ref independently; the CAS below remains the only production
-    // ref mutation and must reject that changed baseline.
-    await awaitCandidatePromotionLeaseRace(testCapability, candidate);
+    await awaitCandidatePromotionLeaseRace(
+      testCapability,
+      candidate,
+      "protected-main-reattach-before-lease",
+      candidate.baselineCommit,
+    );
+    await awaitCandidatePromotionLeaseRace(
+      testCapability,
+      candidate,
+      "protected-main-concurrent-advance",
+      candidate.candidateCommit,
+    );
+    leaseAttempted = true;
     await advanceProtectedMainWithLease(store, candidate, dossierCommit);
-    await attachControllerMainAtDossier(store, candidate, dossierCommit);
-    controllerCheckoutDetached = false;
+    mainPublished = true;
+    let reconciliation: "complete" | "pending" = "pending";
+    try {
+      await awaitCandidatePromotionLeaseRace(
+        testCapability,
+        candidate,
+        "protected-main-reconcile-dirty",
+        dossierCommit,
+      );
+      reconciliation = await publishedControllerReconciliation(
+        store,
+        candidate,
+        dossierCommit,
+      );
+    } catch {
+      // B is already protected-main history. Never turn a later local error
+      // into a recoverable unpublished result or overwrite concurrent work.
+      reconciliation = "pending";
+    }
+    if (reconciliation === "pending") {
+      await recordCandidatePromotionReconciliationPending(candidate).catch(
+        () => undefined,
+      );
+    }
     return Object.freeze({
       candidateCommit: candidate.candidateCommit,
       dossierCommit,
+      reconciliation,
     });
   } finally {
-    if (controllerCheckoutDetached) {
-      await restoreControllerMainCheckout(store);
+    if (leaseAttempted && !mainPublished) {
+      await restoreControllerMainCheckout(store, candidate).catch(
+        () => undefined,
+      );
     }
     await removePrivateDossierWorktree(store, worktree).catch(() => undefined);
   }

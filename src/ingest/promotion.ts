@@ -14,6 +14,8 @@ export interface PromotionInput {
 export interface PromotionResult {
   readonly candidateCommit: string;
   readonly dossierCommit: string;
+  /** Protected main is published even when local reconciliation is pending. */
+  readonly reconciliation: "complete" | "pending";
 }
 
 /** Promotes only candidate A, then records the sealed documentation-only B. */
