@@ -1760,6 +1760,7 @@ test("promotion fast-forwards candidate A then commits only a sanitized dossier 
           `changes/${changeId}/approvals/gate-1.json`,
           `changes/${changeId}/approvals/gate-2.json`,
           `changes/${changeId}/attempts/${attemptId}.json`,
+          `changes/${changeId}/candidate-manifest.json`,
           `changes/${changeId}/candidate.json`,
           `changes/${changeId}/plan.json`,
           `changes/${changeId}/request.json`,

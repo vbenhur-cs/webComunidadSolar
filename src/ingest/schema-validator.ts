@@ -10,6 +10,7 @@ export type IngestionSchemaName =
   | "approval"
   | "attempt"
   | "candidate"
+  | "candidate-dossier-preimage"
   | "agent-result";
 
 function readSchema(name: IngestionSchemaName): object {
@@ -27,6 +28,7 @@ const schemas: Record<IngestionSchemaName, object> = {
   approval: readSchema("approval"),
   attempt: readSchema("attempt"),
   candidate: readSchema("candidate"),
+  "candidate-dossier-preimage": readSchema("candidate-dossier-preimage"),
   "agent-result": readSchema("agent-result"),
 };
 

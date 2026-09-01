@@ -136,6 +136,50 @@ const validCandidate = (overrides: Record<string, unknown> = {}) => ({
   ...overrides,
 });
 
+const validCandidateDossierPreimage = (
+  overrides: Record<string, unknown> = {},
+) => ({
+  schemaVersion: 1,
+  kind: "sealed-candidate-preimage",
+  candidateSchemaVersion: 1,
+  changeId: "nueva-pagina-autoconsumo",
+  attemptId: "attempt-000001",
+  requestSha256: hash("a"),
+  planSha256: hash("d"),
+  baselineCommit: commit,
+  candidateCommit: "c".repeat(40),
+  artifactSha256: hash("f"),
+  buildProfile: {
+    adapter: "local",
+    configSha256: hash("c"),
+    environmentSha256: null,
+    siteIndexable: false,
+  },
+  routes: [{ index: 0, valueSha256: hash("1") }],
+  files: [{ index: 0, valueSha256: hash("2") }],
+  validations: [
+    {
+      index: 0,
+      id: "typecheck",
+      status: "passed",
+      evidencePathSha256: hash("3"),
+      evidenceSha256: hash("4"),
+    },
+  ],
+  artifacts: [
+    {
+      index: 0,
+      sourcePathSha256: hash("5"),
+      dossierPathSha256: hash("6"),
+      sha256: hash("f"),
+      bytes: 12,
+    },
+  ],
+  preview: { commandSha256: hash("7"), urlSha256: hash("8") },
+  knownDifferences: [],
+  ...overrides,
+});
+
 test("canonical JSON has a hand-checked stable representation and digest", () => {
   const left = { b: 2, a: [3, { d: 4, c: 5 }] };
   const right = { a: [3, { c: 5, d: 4 }], b: 2 };
@@ -248,6 +292,7 @@ test("accepts one valid instance of each closed ingestion schema", () => {
     ["approval", validApproval()],
     ["attempt", validAttempt()],
     ["candidate", validCandidate()],
+    ["candidate-dossier-preimage", validCandidateDossierPreimage()],
   ] as const) {
     assert.deepEqual(validateSchema(name, value), value, name);
   }
@@ -274,6 +319,7 @@ test("all schemas reject unknown properties", () => {
     ["approval", validApproval()],
     ["attempt", validAttempt()],
     ["candidate", validCandidate()],
+    ["candidate-dossier-preimage", validCandidateDossierPreimage()],
   ] as const) {
     assert.throws(
       () => validateSchema(name, { ...value, unexpected: true }),

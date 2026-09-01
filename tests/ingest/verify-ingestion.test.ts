@@ -4,8 +4,48 @@ import { promisify } from "node:util";
 import test from "node:test";
 
 import { verifyIngestion } from "../../scripts/verify-ingestion.ts";
+import { safeIngestionAuditJson } from "../../src/ingest/safe-output.ts";
 
 const execFileAsync = promisify(execFile);
+
+test("audit JSON preserves only its allowlisted durable facts", () => {
+  assert.deepEqual(
+    safeIngestionAuditJson({
+      ok: false,
+      changes: [
+        {
+          changeId: "safe-change",
+          state: "validated",
+          revision: 7,
+          candidate: null,
+          payload: new Uint8Array([66, 101, 97, 114, 101, 114]),
+        },
+      ],
+      missing: ["change:safe-change"],
+      nested: { token: "Bearer never-print" },
+    }),
+    {
+      ok: false,
+      changes: [
+        {
+          changeId: "safe-change",
+          state: "validated",
+          revision: 7,
+          candidate: null,
+        },
+      ],
+      missing: ["change:safe-change"],
+    },
+  );
+  assert.equal(
+    safeIngestionAuditJson({
+      ok: true,
+      changes: new Uint8Array([99, 111, 111, 107, 105, 101]),
+      missing: [],
+    }),
+    "[redactado]",
+  );
+});
 
 test("ingestion audit fails closed when a durable candidate fact is missing", async () => {
   const audit = await verifyIngestion({

@@ -1,5 +1,8 @@
 import { canonicalJson } from "./canonical-json.ts";
-import { sanitizedCandidateDossierRecord } from "./dossier-integrity.ts";
+import {
+  candidateDossierPreimage,
+  sanitizedCandidateDossierRecord,
+} from "./dossier-integrity.ts";
 import type {
   ApprovalRecord,
   AttemptRecord,
@@ -90,6 +93,10 @@ export function createSanitizedCandidateDossier(
     {
       path: "candidate.json",
       contents: `${canonicalJson(sanitizedCandidateDossierRecord(source.candidate))}\n`,
+    },
+    {
+      path: "candidate-manifest.json",
+      contents: `${canonicalJson(candidateDossierPreimage(source.candidate))}\n`,
     },
   ].sort((left, right) =>
     left.path < right.path ? -1 : left.path > right.path ? 1 : 0,

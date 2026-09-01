@@ -53,9 +53,11 @@ Compruebe los hechos durables sin revelar contenido de entrada:
 npm run verify:ingestion
 ```
 
-El resultado contiene sólo identidad, estado, revisión y digests. Si falta
-journal, candidato, evidencia o expediente obligatorio, devuelve `ok: false`
-y el proceso termina con error.
+El resultado contiene sólo identidad, estado, revisión y digests permitidos
+por su esquema de salida. Si falta journal, candidato, evidencia o expediente
+obligatorio, devuelve `ok: false` y el proceso termina con error. Objetos,
+bytes, campos desconocidos y errores no clasificados no se serializan: se
+reemplazan por una salida saneada.
 
 El verificador abre únicamente la composición de auditoría durable; no inicia
 Codex ni `CommandAgent`. Si detecta configuración de agente o un error de
@@ -123,12 +125,17 @@ atómica y después crea el tag; un fallo deja sin tag ni expediente parcial. El
 tag anotado `refs/tags/ingestion-fixture/<change-id>` y su dossier deben formar
 una pareja: su sello canónico incluye el commit candidato, el sujeto compuesto
 de Gate 2, el hash del candidato sellado, el hash de toda su proyección saneada
-y el hash de los bytes canónicos de los seis archivos del expediente. `npm run
-verify:ingestion` descubre ambos desde el repositorio fuente y recalcula esos
-bindings, además de request/plan/Gates/intento y la evidencia del candidato. La
-ausencia o modificación de cualquiera de los dos hace que la auditoría falle
-cerradamente sin inicializar un agente. El gate `main == HEAD` se conserva para
-cada grabación: este flujo nunca adelanta, fusiona ni relaja `main`.
+y el hash de los bytes canónicos de los siete archivos del expediente. Además
+de `candidate.json`, el dossier contiene `candidate-manifest.json`: una
+preimagen canónica con schema explícito que compromete cada campo del candidato.
+No guarda rutas locales, URLs, comandos, descripciones ni bytes de evidencia en
+claro; conserva sus SHA-256, arrays con índices contiguos y los identificadores
+seguros necesarios para reconstruir los bindings. `npm run verify:ingestion`
+lee esos bytes, exige forma canónica y recalcula el sello antes de aceptar
+`candidate.json`, Gate 2 y el tag. La ausencia, un campo extra o la modificación
+de cualquiera de los dos hace que la auditoría falle cerradamente sin
+inicializar un agente. El gate `main == HEAD` se conserva para cada grabación:
+este flujo nunca adelanta, fusiona ni relaja `main`.
 
 **`--execute` no es una autorización implícita de deploy.** La CLI actual ni lo
 acepta; una publicación Cloudflare real sigue cerrada hasta que exista una

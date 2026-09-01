@@ -1,11 +1,16 @@
 import assert from "node:assert/strict";
+import { Buffer } from "node:buffer";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import test from "node:test";
 
 import { runCli, type CliController } from "../../src/ingest/cli.ts";
 import { openIngestionAuditController } from "../../src/ingest/controller.ts";
-import { safeError, safeJson } from "../../src/ingest/safe-output.ts";
+import {
+  safeCliJson,
+  safeError,
+  safeJson,
+} from "../../src/ingest/safe-output.ts";
 
 function controller(overrides: Partial<CliController> = {}): CliController {
   return {
@@ -132,7 +137,7 @@ test("status JSON redacts intake paths, secrets and capability-shaped fields", a
   });
 
   assert.equal(result.exitCode, 0);
-  assert.match(result.stdout, /"safeFact":"planned"/);
+  assert.match(result.stdout, /"state":"planned"/);
   assert.doesNotMatch(result.stdout, /PRIVATE KEY|\/Users\/|never-print/);
 });
 
@@ -144,6 +149,7 @@ test("CLI output and operational errors remove environment, argv and runtime int
           kind: "success",
           value: {
             changeId: "safe-change",
+            state: "planned",
             environment: { API_KEY: "api-key-never-print" },
             argv: ["--token", "argv-never-print"],
             pid: 4242,
@@ -159,7 +165,7 @@ test("CLI output and operational errors remove environment, argv and runtime int
     }),
   });
   assert.equal(result.exitCode, 0);
-  assert.match(result.stdout, /"safeFact":"planned"/u);
+  assert.match(result.stdout, /"state":"planned"/u);
   assert.doesNotMatch(
     result.stdout,
     /api-key-never-print|argv-never-print|4242|private-bundle|private-repository|private-artifact|C:\\private|never-print|environment|argv|pid|bundle|repository|internal|capability/iu,
@@ -195,7 +201,7 @@ test("safe output redacts absolute paths after punctuation delimiters", () => {
   assert.equal(safeError(new Error("failure(/tmp/benign)")), "fallo operativo");
   assert.deepEqual(
     safeJson({ nested: { note: "x[/Users/example/private]" } }),
-    { nested: { note: "[redactado]" } },
+    "[redactado]",
   );
 });
 
@@ -211,9 +217,69 @@ test("safe output redacts paths and credentials without relying on delimiters", 
   ];
 
   for (const value of unsafeValues) {
-    assert.deepEqual(safeJson({ note: value }), { note: "[redactado]" });
+    assert.equal(safeJson({ note: value }), "[redactado]");
     assert.equal(safeError(new Error(`failure ${value}`)), "fallo operativo");
   }
+});
+
+test("safe output closes unknown byte containers and sid errors while CLI preserves allowlisted status facts", async () => {
+  const cyclic: { self?: unknown } = {};
+  cyclic.self = cyclic;
+
+  assert.equal(safeError(new Error("sid=9ad836f1c7b6")), "fallo operativo");
+  assert.equal(
+    safeJson({ payload: Buffer.from("Bearer supersecret-cookie=abc") }),
+    "[redactado]",
+  );
+  assert.equal(
+    safeJson(new Uint8Array([66, 101, 97, 114, 101, 114])),
+    "[redactado]",
+  );
+  assert.equal(safeJson(cyclic), "[redactado]");
+  assert.equal(
+    safeJson({
+      nested: { value: new Uint8Array([99, 111, 111, 107, 105, 101]) },
+    }),
+    "[redactado]",
+  );
+  assert.equal(
+    safeCliJson({ payload: Buffer.from("Bearer supersecret-cookie=abc") }),
+    "[redactado]",
+  );
+
+  const result = await runCli(["status", "safe-change", "--json"], {
+    controller: controller({
+      async status() {
+        return {
+          kind: "success",
+          value: {
+            changeId: "safe-change",
+            state: "planned",
+            revision: 4,
+            attemptId: "attempt-000001",
+            pendingGate: 1,
+            candidate: null,
+            payload: Buffer.from("Bearer supersecret-cookie=abc"),
+            nested: { token: "sid=9ad836f1c7b6" },
+          },
+        };
+      },
+    }),
+  });
+
+  assert.equal(result.exitCode, 0);
+  assert.deepEqual(JSON.parse(result.stdout), {
+    changeId: "safe-change",
+    state: "planned",
+    revision: 4,
+    attemptId: "attempt-000001",
+    pendingGate: 1,
+    candidate: null,
+  });
+  assert.doesNotMatch(
+    result.stdout,
+    /supersecret|cookie|sid=|payload|nested|token/iu,
+  );
 });
 
 test("unknown and malformed options fail before a transition", async () => {

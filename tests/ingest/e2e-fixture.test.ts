@@ -25,7 +25,12 @@ import {
   approveGate2,
 } from "../../src/ingest/approvals/service.ts";
 import { canonicalJson } from "../../src/ingest/canonical-json.ts";
-import { candidateApprovalSubject } from "../../src/ingest/dossier-integrity.ts";
+import {
+  candidateApprovalSubject,
+  candidateDossierCommitment,
+  candidateDossierPreimage,
+  sanitizedCandidateProjection,
+} from "../../src/ingest/dossier-integrity.ts";
 import {
   createIngestionAuditTestSeal,
   openIngestionAuditController,
@@ -407,7 +412,7 @@ function fixtureRecordFiles(
     ],
     failure: null,
   };
-  const projection = {
+  const candidateManifest: CandidateManifest = {
     schemaVersion: 1,
     changeId,
     attemptId: "attempt-000001",
@@ -416,26 +421,38 @@ function fixtureRecordFiles(
     baselineCommit: fixtureRecordCommit,
     candidateCommit: fixtureRecordCommit,
     artifactSha256: fixtureRecordArtifactHash,
-    buildProfile: plan.publication,
+    buildProfile: {
+      adapter: "local",
+      configSha256: fixtureRecordHash,
+      environment: null,
+      siteIndexable: false,
+    },
     routes: ["/fixture-record"],
     files: ["src/pages/fixture-record.astro"],
     artifacts: [
       {
-        path: "bundle/dist/index.html",
+        path: `.artifacts/candidates/${changeId}/attempt-000001/bundle/dist/index.html`,
         sha256: fixtureRecordHash,
         bytes: 17,
       },
     ],
     validations: [
-      { id: "build", status: "passed", evidence: "evidence/build.json" },
+      {
+        id: "build",
+        status: "passed",
+        evidence: "evidence/candidate-build.json#build",
+        evidenceSha256: fixtureRecordEvidenceHash,
+      },
     ],
-    preview: { command: "sealed verified candidate preview" },
+    preview: {
+      command: "fixture preview --check-only",
+      url: "http://127.0.0.1:4321",
+    },
     knownDifferences: [],
   };
-  const commitment = candidateDossierCommitmentFromProjection(
-    fixtureRecordHash,
-    projection,
-  );
+  const preimage = candidateDossierPreimage(candidateManifest);
+  const projection = sanitizedCandidateProjection(candidateManifest);
+  const commitment = candidateDossierCommitment(candidateManifest);
   const candidate = { ...projection, ...commitment };
   const gate2 = {
     schemaVersion: 1,
@@ -456,6 +473,7 @@ function fixtureRecordFiles(
     ["approvals/gate-2.json", `${canonicalJson(gate2)}\n`],
     ["attempts/attempt-000001.json", `${canonicalJson(attempt)}\n`],
     ["candidate.json", `${canonicalJson(candidate)}\n`],
+    ["candidate-manifest.json", `${canonicalJson(preimage)}\n`],
   ]);
 }
 
@@ -481,6 +499,14 @@ function fixtureRecordAuditTag(
   candidateCommit: string,
 ): IngestionAuditTestTag {
   const files = fixtureRecordFiles(changeId);
+  return fixtureRecordAuditTagForFiles(files, changeId, candidateCommit);
+}
+
+function fixtureRecordAuditTagForFiles(
+  files: ReadonlyMap<string, string>,
+  changeId: string,
+  candidateCommit: string,
+): IngestionAuditTestTag {
   const candidate = JSON.parse(files.get("candidate.json") ?? "") as {
     readonly sealedCandidateSha256: string;
     readonly sanitizedProjectionSha256: string;
@@ -1060,6 +1086,140 @@ test("audit rejects a candidate and Gate 2 rewritten together after durable seal
       const audit = await auditFixtureRecords(tags);
       assert.equal(audit.ok, false);
       assert.deepEqual(audit.missing, [`fixture:${fixtureRecordChangeId}`]);
+    });
+  } finally {
+    process.chdir(previousCwd);
+  }
+});
+
+test("audit rejects a coherent arbitrary sealed digest without a matching durable candidate preimage", async () => {
+  const previousCwd = process.cwd();
+  try {
+    await withTemporaryMainClone(async (clone) => {
+      process.chdir(clone);
+      const files = new Map(fixtureRecordFiles());
+      const candidate = JSON.parse(files.get("candidate.json") ?? "") as Record<
+        string,
+        unknown
+      >;
+      const gate2 = JSON.parse(
+        files.get("approvals/gate-2.json") ?? "",
+      ) as Record<string, unknown>;
+      const projection = { ...candidate };
+      delete projection.approvalSubjectSha256;
+      delete projection.sanitizedProjectionSha256;
+      delete projection.sealedCandidateSha256;
+      const commitment = candidateDossierCommitmentFromProjection(
+        "f".repeat(64),
+        projection,
+      );
+      candidate.sealedCandidateSha256 = commitment.sealedCandidateSha256;
+      candidate.sanitizedProjectionSha256 =
+        commitment.sanitizedProjectionSha256;
+      candidate.approvalSubjectSha256 = commitment.approvalSubjectSha256;
+      gate2.subjectSha256 = commitment.approvalSubjectSha256;
+      files.set("candidate.json", `${canonicalJson(candidate)}\n`);
+      files.set("approvals/gate-2.json", `${canonicalJson(gate2)}\n`);
+      await writeFixtureRecord(clone, files);
+
+      const audit = await auditFixtureSeal(
+        createIngestionAuditTestSeal([
+          {
+            ...fixtureRecordAuditTag(
+              fixtureRecordChangeId,
+              fixtureRecordCommit,
+            ),
+            sealedCandidateSha256: commitment.sealedCandidateSha256,
+            sanitizedProjectionSha256: commitment.sanitizedProjectionSha256,
+            gate2SubjectSha256: commitment.approvalSubjectSha256,
+            dossierSha256: sanitizedDossierSha256(
+              [...files].map(([path, contents]) => ({ path, contents })),
+            ),
+          },
+        ]),
+      );
+
+      assert.equal(audit.ok, false);
+      assert.deepEqual(audit.missing, [`fixture:${fixtureRecordChangeId}`]);
+    });
+  } finally {
+    process.chdir(previousCwd);
+  }
+});
+
+test("audit rejects altered, missing, or schema-invalid durable candidate preimages", async () => {
+  const previousCwd = process.cwd();
+  try {
+    await withTemporaryMainClone(async (clone) => {
+      process.chdir(clone);
+      const mutations: ReadonlyArray<{
+        readonly name: string;
+        readonly mutate: (files: Map<string, string>) => void;
+      }> = [
+        {
+          name: "altered",
+          mutate(files) {
+            const preimage = JSON.parse(
+              files.get("candidate-manifest.json") ?? "",
+            ) as Record<string, unknown>;
+            const preview = preimage.preview as Record<string, unknown>;
+            preview.commandSha256 = "f".repeat(64);
+            files.set(
+              "candidate-manifest.json",
+              `${canonicalJson(preimage)}\n`,
+            );
+          },
+        },
+        {
+          name: "missing",
+          mutate(files) {
+            files.delete("candidate-manifest.json");
+          },
+        },
+        {
+          name: "schema-extra",
+          mutate(files) {
+            const preimage = JSON.parse(
+              files.get("candidate-manifest.json") ?? "",
+            ) as Record<string, unknown>;
+            preimage.unexpected = true;
+            files.set(
+              "candidate-manifest.json",
+              `${canonicalJson(preimage)}\n`,
+            );
+          },
+        },
+        {
+          name: "invalid",
+          mutate(files) {
+            files.set("candidate-manifest.json", "{}\n");
+          },
+        },
+      ];
+
+      for (const { name, mutate } of mutations) {
+        await rm(join(clone, "changes", fixtureRecordChangeId), {
+          recursive: true,
+          force: true,
+        });
+        const files = new Map(fixtureRecordFiles());
+        mutate(files);
+        await writeFixtureRecord(clone, files);
+        const seal = createIngestionAuditTestSeal([
+          fixtureRecordAuditTagForFiles(
+            files,
+            fixtureRecordChangeId,
+            fixtureRecordCommit,
+          ),
+        ]);
+        const audit = await auditFixtureSeal(seal);
+        assert.equal(audit.ok, false, name);
+        assert.deepEqual(
+          audit.missing,
+          [`fixture:${fixtureRecordChangeId}`],
+          name,
+        );
+      }
     });
   } finally {
     process.chdir(previousCwd);

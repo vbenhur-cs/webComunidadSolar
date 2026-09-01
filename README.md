@@ -78,9 +78,13 @@ Cuando se autorice la grabación de fixtures, sus expedientes saneados viven en
 entradas y builds bajo `.artifacts/` nunca se versionan como evidencia.
 El tag anotado sella el commit del candidato, el sujeto compuesto de Gate 2 y
 los hashes canónicos de la proyección saneada y de todos los bytes del
-expediente. La grabación conserva el gate `main == HEAD`; no adelanta, fusiona
-ni relaja `main`.
+expediente. Cada dossier incluye `candidate-manifest.json`, una preimagen
+canónica con schema cerrado: guarda hashes de valores sensibles (rutas,
+comandos, URL, evidencia y diferencias), nunca sus valores en claro, para que
+la auditoría pueda recalcular el sello tras destruir el clon. La grabación
+conserva el gate `main == HEAD`; no adelanta, fusiona ni relaja `main`.
 
 `npm run verify:ingestion` abre sólo el grafo de auditoría durable: no inicia
-agentes ni acepta su configuración. Sus errores y JSON se sanean antes de
-imprimirse, incluso si la configuración local contiene rutas o secretos.
+agentes ni acepta su configuración. Sus errores y JSON usan esquemas de salida
+allowlisted; valores no clasificados, bytes, rutas o secretos nunca se
+imprimen.

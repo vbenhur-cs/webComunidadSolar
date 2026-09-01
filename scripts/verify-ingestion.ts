@@ -5,7 +5,10 @@ import {
   openIngestionAuditController,
   type IngestionAudit,
 } from "../src/ingest/controller.ts";
-import { safeError, safeJson } from "../src/ingest/safe-output.ts";
+import {
+  safeError,
+  safeIngestionAuditJson,
+} from "../src/ingest/safe-output.ts";
 
 interface AuditPort {
   audit(): Promise<IngestionAudit>;
@@ -36,7 +39,7 @@ export async function verifyIngestion(
 async function main(): Promise<void> {
   try {
     const audit = await verifyIngestion();
-    process.stdout.write(`${JSON.stringify(safeJson(audit))}\n`);
+    process.stdout.write(`${JSON.stringify(safeIngestionAuditJson(audit))}\n`);
     process.exitCode = audit.ok ? 0 : 1;
   } catch (error: unknown) {
     process.stderr.write(`${safeError(error)}\n`);

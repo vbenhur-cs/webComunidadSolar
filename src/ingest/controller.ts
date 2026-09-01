@@ -46,8 +46,13 @@ import {
 import type { CandidateBuildTestCapability } from "./candidate/evidence.ts";
 import { canonicalJson } from "./canonical-json.ts";
 import {
+  assertCandidateDossierProjectionBinding,
+  candidateDossierPreimageSha256,
   candidateDossierCommitmentFromProjection,
+  parseCandidateDossierPreimage,
   sanitizedDossierSha256,
+  type CandidateDossierPreimage,
+  type SanitizedCandidateProjection,
 } from "./dossier-integrity.ts";
 import { createSanitizedCandidateDossier } from "./dossier.ts";
 import type {
@@ -727,7 +732,10 @@ function durableValidationId(value: unknown, label: string): string {
   return value;
 }
 
-function durableCandidateFacts(value: unknown): DurableCandidateFacts {
+function durableCandidateFacts(
+  value: unknown,
+  preimage: CandidateDossierPreimage,
+): DurableCandidateFacts {
   const candidate = exactDurableRecord(value, "El candidato fixture", [
     "approvalSubjectSha256",
     "artifactSha256",
@@ -804,15 +812,42 @@ function durableCandidateFacts(value: unknown): DurableCandidateFacts {
     "sanitizedProjectionSha256",
     "El candidato fixture",
   );
-  durableStringArray(candidate.routes, "Las rutas candidatas", (route) =>
-    route.startsWith("/"),
+  const routes = durableStringArray(
+    candidate.routes,
+    "Las rutas candidatas",
+    (route) => route.startsWith("/"),
   );
-  durableStringArray(candidate.files, "Los archivos candidatos", (path) =>
-    safeRelativePath.test(path),
+  const files = durableStringArray(
+    candidate.files,
+    "Los archivos candidatos",
+    (path) => safeRelativePath.test(path),
   );
+  const buildProfile = exactDurableRecord(
+    candidate.buildProfile,
+    "El perfil de build candidato",
+    ["adapter", "configSha256", "environment", "siteIndexable"],
+  );
+  const adapter = buildProfile.adapter;
+  const environment = buildProfile.environment;
+  if (
+    (adapter !== "local" && adapter !== "cloudflare") ||
+    !sha256Pattern.test(
+      durableString(
+        buildProfile,
+        "configSha256",
+        "El perfil de build candidato",
+      ),
+    ) ||
+    (environment !== null && typeof environment !== "string") ||
+    typeof buildProfile.siteIndexable !== "boolean"
+  ) {
+    throw new TypeError("El perfil de build candidato no está saneado");
+  }
   if (!Array.isArray(candidate.artifacts)) {
     throw new TypeError("Los artefactos candidatos no son una lista");
   }
+  const artifacts: Array<SanitizedCandidateProjection["artifacts"][number]> =
+    [];
   for (const artifact of candidate.artifacts) {
     const record = exactDurableRecord(artifact, "Un artefacto candidato", [
       "bytes",
@@ -823,7 +858,7 @@ function durableCandidateFacts(value: unknown): DurableCandidateFacts {
     if (!path.startsWith("bundle/") || !safeRelativePath.test(path)) {
       throw new TypeError("Un artefacto candidato tiene una ruta no permitida");
     }
-    durableHash(record, "sha256", "Un artefacto candidato");
+    const sha256 = durableHash(record, "sha256", "Un artefacto candidato");
     if (
       typeof record.bytes !== "number" ||
       !Number.isSafeInteger(record.bytes) ||
@@ -831,6 +866,7 @@ function durableCandidateFacts(value: unknown): DurableCandidateFacts {
     ) {
       throw new TypeError("Un artefacto candidato no tiene bytes válidos");
     }
+    artifacts.push(Object.freeze({ path, sha256, bytes: record.bytes }));
   }
   const preview = exactDurableRecord(
     candidate.preview,
@@ -843,6 +879,9 @@ function durableCandidateFacts(value: unknown): DurableCandidateFacts {
   if (!Array.isArray(candidate.knownDifferences)) {
     throw new TypeError("Las diferencias candidatas no son una lista");
   }
+  const knownDifferences: Array<
+    SanitizedCandidateProjection["knownDifferences"][number]
+  > = [];
   for (const difference of candidate.knownDifferences) {
     const record = exactDurableRecord(difference, "Una diferencia candidata", [
       "approvalRequired",
@@ -850,6 +889,7 @@ function durableCandidateFacts(value: unknown): DurableCandidateFacts {
     if (record.approvalRequired !== true) {
       throw new TypeError("Una diferencia candidata no conserva Gate 2");
     }
+    knownDifferences.push(Object.freeze({ approvalRequired: true }));
   }
   if (!Array.isArray(candidate.validations)) {
     throw new TypeError("Las validaciones candidatas no son una lista");
@@ -858,6 +898,9 @@ function durableCandidateFacts(value: unknown): DurableCandidateFacts {
     string,
     { readonly status: "passed" | "failed"; readonly evidence: string }
   >();
+  const candidateValidations: Array<
+    SanitizedCandidateProjection["validations"][number]
+  > = [];
   for (const validation of candidate.validations) {
     const record = exactDurableRecord(validation, "Una validación candidata", [
       "evidence",
@@ -878,20 +921,45 @@ function durableCandidateFacts(value: unknown): DurableCandidateFacts {
       throw new TypeError("Una validación candidata no conserva su evidencia");
     }
     validations.set(id, { status, evidence });
+    candidateValidations.push(Object.freeze({ id, status, evidence }));
   }
   if (validations.size === 0) {
     throw new TypeError(
       "El candidato fixture no tiene evidencia de validación",
     );
   }
-  const projection = Object.fromEntries(
-    Object.entries(candidate).filter(
-      ([key]) =>
-        key !== "approvalSubjectSha256" &&
-        key !== "sanitizedProjectionSha256" &&
-        key !== "sealedCandidateSha256",
-    ),
-  );
+  const projection: SanitizedCandidateProjection = Object.freeze({
+    schemaVersion: 1,
+    changeId,
+    attemptId,
+    requestSha256,
+    planSha256,
+    baselineCommit,
+    candidateCommit,
+    artifactSha256,
+    buildProfile: Object.freeze({
+      adapter,
+      configSha256: durableHash(
+        buildProfile,
+        "configSha256",
+        "El perfil de build candidato",
+      ),
+      environment,
+      siteIndexable: buildProfile.siteIndexable,
+    }),
+    routes,
+    files,
+    artifacts: Object.freeze(artifacts),
+    validations: Object.freeze(candidateValidations),
+    preview: Object.freeze({ command: "sealed verified candidate preview" }),
+    knownDifferences: Object.freeze(knownDifferences),
+  });
+  if (candidateDossierPreimageSha256(preimage) !== sealedCandidateSha256) {
+    throw new TypeError(
+      "El candidato fixture no conserva su preimagen sellada",
+    );
+  }
+  assertCandidateDossierProjectionBinding(preimage, projection);
   const commitment = candidateDossierCommitmentFromProjection(
     sealedCandidateSha256,
     projection,
@@ -915,7 +983,7 @@ function durableCandidateFacts(value: unknown): DurableCandidateFacts {
     sealedCandidateSha256,
     sanitizedProjectionSha256,
     approvalSubjectSha256,
-    buildProfile: candidate.buildProfile,
+    buildProfile: projection.buildProfile,
     validations,
   });
 }
@@ -1047,12 +1115,18 @@ async function verifyDurableFixtureDossier(
     join(root, "candidate.json"),
     "El candidato fixture durable",
   );
-  const candidate = durableCandidateFacts(candidateFile.value);
+  const preimageFile = await readCanonicalDossierFile(
+    join(root, "candidate-manifest.json"),
+    "La preimagen candidata fixture durable",
+  );
+  const preimage = parseCandidateDossierPreimage(preimageFile.value);
+  const candidate = durableCandidateFacts(candidateFile.value, preimage);
   const expected = [
     "approvals/gate-1.json",
     "approvals/gate-2.json",
     `attempts/${candidate.attemptId}.json`,
     "candidate.json",
+    "candidate-manifest.json",
     "plan.json",
     "request.json",
   ].sort();
@@ -1157,6 +1231,7 @@ async function verifyDurableFixtureDossier(
   }
   const dossierSha256 = sanitizedDossierSha256([
     { path: "candidate.json", contents: candidateFile.contents },
+    { path: "candidate-manifest.json", contents: preimageFile.contents },
     { path: "request.json", contents: requestFile.contents },
     { path: "plan.json", contents: planFile.contents },
     { path: "approvals/gate-1.json", contents: gate1File.contents },

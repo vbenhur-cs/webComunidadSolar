@@ -4,7 +4,7 @@ import { createInterface } from "node:readline/promises";
 import { parseArgs } from "node:util";
 
 import { openIngestionController } from "./controller.ts";
-import { safeError, safeJson } from "./safe-output.ts";
+import { safeCliJson, safeError } from "./safe-output.ts";
 
 export type CliCommandResult =
   | { readonly kind: "success"; readonly value: Record<string, unknown> }
@@ -59,7 +59,7 @@ const usage = [
 ].join("\n");
 
 function serialized(value: unknown): string {
-  return `${JSON.stringify(safeJson(value))}\n`;
+  return `${JSON.stringify(safeCliJson(value))}\n`;
 }
 
 function forbidden(message: string): CliRunResult {

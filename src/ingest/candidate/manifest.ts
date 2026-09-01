@@ -2799,6 +2799,7 @@ function expectedDossierPaths(candidate: CandidateManifest): readonly string[] {
     "approvals/gate-2.json",
     `attempts/${candidate.attemptId}.json`,
     "candidate.json",
+    "candidate-manifest.json",
     "plan.json",
     "request.json",
   ]);
@@ -2891,6 +2892,7 @@ async function writeCandidateDossier(
     ["request.json", join(destination, "request.json")],
     ["plan.json", join(destination, "plan.json")],
     ["candidate.json", join(destination, "candidate.json")],
+    ["candidate-manifest.json", join(destination, "candidate-manifest.json")],
     ["approvals/gate-1.json", join(approvals, "gate-1.json")],
     ["approvals/gate-2.json", join(approvals, "gate-2.json")],
     [

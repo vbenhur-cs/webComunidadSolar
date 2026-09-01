@@ -98,6 +98,7 @@ const recordableDossierFiles = Object.freeze([
   "approvals/gate-1.json",
   "approvals/gate-2.json",
   "attempts/attempt-000001.json",
+  "candidate-manifest.json",
   "candidate.json",
   "plan.json",
   "request.json",
