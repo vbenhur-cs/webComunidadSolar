@@ -9,7 +9,6 @@ import { promisify } from "node:util";
 import { sha256Canonical } from "../../../src/ingest/canonical-json.ts";
 import {
   createCandidate,
-  createControllerCandidateStoreTestInitialization,
   openControllerCandidateStore,
   releaseControllerCandidateStore,
   verifyCandidateArtifact,
@@ -54,6 +53,19 @@ const attemptId = "attempt-000001";
 
 const sha256 = (value: string | Uint8Array): string =>
   createHash("sha256").update(value).digest("hex");
+
+/** Test fixture setup keeps the raw repository root out of candidate APIs. */
+async function openFixtureCandidateStore(
+  repositoryRoot: string,
+): Promise<ControllerCandidateStore> {
+  const previous = process.cwd();
+  process.chdir(repositoryRoot);
+  try {
+    return await openControllerCandidateStore();
+  } finally {
+    process.chdir(previous);
+  }
+}
 
 async function writeFiles(
   root: string,
@@ -310,9 +322,7 @@ async function runFixture(): Promise<void> {
       { output, plan, attemptId, evidenceRoot, publicationProfile },
       { commands: async (command) => passedCommand(command) },
     );
-    const storeInitialization =
-      await createControllerCandidateStoreTestInitialization(repositoryRoot);
-    store = await openControllerCandidateStore(storeInitialization);
+    store = await openFixtureCandidateStore(repositoryRoot);
     const build = createCandidateBuildTestCapability({
       files: {
         "dist/_worker.js/index.js":

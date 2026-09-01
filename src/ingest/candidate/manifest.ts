@@ -5,15 +5,20 @@ import {
   access,
   lstat,
   mkdir,
+  mkdtemp,
   open,
   realpath,
   rm,
   writeFile,
 } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 
 import { canonicalJson } from "../canonical-json.ts";
-import { createSanitizedCandidateDossier } from "../dossier.ts";
+import {
+  createSanitizedCandidateDossier,
+  type SanitizedDossierFile,
+} from "../dossier.ts";
 import type {
   ApprovalRecord,
   AttemptRecord,
@@ -92,11 +97,6 @@ export interface ControllerCandidateStore {
   readonly [controllerCandidateStoreBrand]: true;
 }
 
-declare const controllerCandidateStoreTestInitializationBrand: unique symbol;
-export interface ControllerCandidateStoreTestInitialization {
-  readonly [controllerCandidateStoreTestInitializationBrand]: true;
-}
-
 interface DirectoryIdentity {
   readonly path: string;
   readonly device: number;
@@ -157,13 +157,24 @@ interface CandidatePreviewRecord {
   readonly previewCapability: CandidatePreviewTestCapability | undefined;
 }
 
-export interface FixedPreviewInvocation {
+/** Private process invocation; it never crosses the candidate module boundary. */
+interface FixedPreviewInvocation {
   /** The fixed controller-local Wrangler executable; never caller supplied. */
   readonly executable: string;
   /** Includes the executable as argv[0] so fixture assertions see exact argv. */
   readonly argv: readonly string[];
   readonly cwd: string;
   readonly env: Readonly<Record<string, string>>;
+}
+
+/** Semantic preview assertion only; it deliberately contains no process details. */
+export interface PreviewAssertionDescriptor {
+  readonly publisher: "local";
+  readonly candidateCommit: string;
+  readonly artifactSha256: string;
+  readonly sealedBundle: true;
+  readonly fixedLocalArguments: true;
+  readonly localOnly: true;
 }
 
 /** Internal shape delivered only through the opaque test-only observer. */
@@ -192,13 +203,20 @@ export interface PreviewHandle {
   stop(): Promise<void>;
 }
 
+/** Predefined failure stages for contained transaction fixture coverage. */
+export type CandidatePromotionFailureStage =
+  | "dossier-write"
+  | "dossier-add"
+  | "dossier-commit"
+  | "protected-main-fast-forward";
+
 interface PreviewLaunch {
   readonly child: ChildProcess;
   readonly url: string;
 }
 
 type CandidatePreviewAdapter = (
-  invocation: FixedPreviewInvocation,
+  descriptor: PreviewAssertionDescriptor,
 ) => Promise<PreviewLaunch>;
 
 /** A fixture-only capability; callers can never provide process arguments. */
@@ -217,6 +235,12 @@ declare const candidateLocalPublicationTestCapabilityBrand: unique symbol;
 /** A fixture-only capability which can authorize a contained local preview. */
 export interface CandidateLocalPublicationTestCapability {
   readonly [candidateLocalPublicationTestCapabilityBrand]: true;
+}
+
+declare const candidatePromotionTestCapabilityBrand: unique symbol;
+/** A fixture-only failure token; it can never authorize or alter promotion. */
+export interface CandidatePromotionTestCapability {
+  readonly [candidatePromotionTestCapabilityBrand]: true;
 }
 
 export interface CandidateCreationInput {
@@ -260,10 +284,6 @@ const controllerCandidateStores = new WeakMap<
   ControllerCandidateStore,
   ArtifactStoreRecord
 >();
-const controllerCandidateStoreTestInitializations = new WeakMap<
-  ControllerCandidateStoreTestInitialization,
-  string
->();
 const candidateRecords = new WeakMap<
   CandidateManifest,
   CandidatePreviewRecord
@@ -279,6 +299,10 @@ const candidateCloudflareDryRunTestCapabilities = new WeakMap<
 >();
 const candidateLocalPublicationTestCapabilities =
   new WeakSet<CandidateLocalPublicationTestCapability>();
+const candidatePromotionTestCapabilities = new WeakMap<
+  CandidatePromotionTestCapability,
+  CandidatePromotionFailureStage
+>();
 
 function lexicalCompare(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
@@ -444,6 +468,30 @@ async function runStorePromotionGit(
   return Buffer.concat(output).toString("utf8").trim();
 }
 
+/** Reads a fixed Git blob exactly; used only to verify a private dossier B. */
+async function readStoreGitBytes(
+  root: string,
+  arguments_: readonly string[],
+  failure: string,
+): Promise<Buffer> {
+  const child = spawn(
+    gitExecutable,
+    [...fixedGitArguments, "-C", root, ...arguments_],
+    {
+      env: fixedGitEnvironment,
+      shell: false,
+      stdio: ["ignore", "pipe", "pipe"],
+    },
+  );
+  const output = collectGit(child, "stdout");
+  const errors = collectGit(child, "stderr");
+  if ((await gitExitCode(child)) !== 0) {
+    const detail = Buffer.concat(errors).toString("utf8").trim();
+    throw new TypeError(detail === "" ? failure : `${failure}: ${detail}`);
+  }
+  return Buffer.concat(output);
+}
+
 async function controllerRepositoryRoot(rootInput: string): Promise<string> {
   const rootPath = await realpath(rootInput);
   const entry = await lstat(rootPath);
@@ -506,46 +554,13 @@ async function openStoreAtRoot(
   return store;
 }
 
-/** Test-only trusted initialization for an isolated controller repository. */
-export async function createControllerCandidateStoreTestInitialization(
-  repositoryRoot: string,
-): Promise<ControllerCandidateStoreTestInitialization> {
-  if (process.env.INGEST_TEST_MODE !== "true") {
-    throw new TypeError(
-      "La inicialización de store candidato sólo existe en modo de pruebas",
-    );
-  }
-  const root = await controllerRepositoryRoot(repositoryRoot);
-  const initialization = Object.freeze(
-    {},
-  ) as ControllerCandidateStoreTestInitialization;
-  controllerCandidateStoreTestInitializations.set(initialization, root);
-  return initialization;
-}
-
 /**
- * Opens controller-owned persistent candidate state. Production resolves only
- * the trusted controller startup directory; test initialization is opaque.
+ * Opens controller-owned persistent candidate state from the trusted
+ * controller startup directory. It deliberately accepts no repository path
+ * or test initialization capability.
  */
-export async function openControllerCandidateStore(
-  testInitialization?: ControllerCandidateStoreTestInitialization,
-): Promise<ControllerCandidateStore> {
-  if (testInitialization === undefined) {
-    return await openStoreAtRoot(process.cwd());
-  }
-  if (process.env.INGEST_TEST_MODE !== "true") {
-    throw new TypeError(
-      "El store candidato no acepta inicialización de pruebas",
-    );
-  }
-  const root =
-    controllerCandidateStoreTestInitializations.get(testInitialization);
-  if (root === undefined) {
-    throw new TypeError(
-      "La inicialización de store no pertenece al controlador",
-    );
-  }
-  return await openStoreAtRoot(root);
+export async function openControllerCandidateStore(): Promise<ControllerCandidateStore> {
+  return await openStoreAtRoot(process.cwd());
 }
 
 /** Releases only in-memory store authority; durable state deliberately remains. */
@@ -2482,6 +2497,47 @@ export function createCandidateLocalPublicationTestCapability(): CandidateLocalP
   return capability;
 }
 
+/** Mints a fixture-only token which can only abort one predefined stage. */
+export function createCandidatePromotionTestCapability(
+  stage: CandidatePromotionFailureStage,
+): CandidatePromotionTestCapability {
+  if (
+    process.env.INGEST_TEST_MODE !== "true" ||
+    (stage !== "dossier-write" &&
+      stage !== "dossier-add" &&
+      stage !== "dossier-commit" &&
+      stage !== "protected-main-fast-forward")
+  ) {
+    throw new TypeError(
+      "La inspección de promoción sólo existe en modo de pruebas",
+    );
+  }
+  const capability = Object.freeze({}) as CandidatePromotionTestCapability;
+  candidatePromotionTestCapabilities.set(capability, stage);
+  return capability;
+}
+
+function induceCandidatePromotionTestFailure(
+  capability: CandidatePromotionTestCapability | undefined,
+  stage: CandidatePromotionFailureStage,
+): void {
+  if (capability === undefined) return;
+  if (process.env.INGEST_TEST_MODE !== "true") {
+    throw new TypeError(
+      "La inspección de promoción sólo existe en modo de pruebas",
+    );
+  }
+  const configuredStage = candidatePromotionTestCapabilities.get(capability);
+  if (configuredStage === undefined) {
+    throw new TypeError(
+      "La capability de promoción no pertenece al controlador",
+    );
+  }
+  if (configuredStage === stage) {
+    throw new TypeError(`La fixture solicitó fallo de promoción: ${stage}`);
+  }
+}
+
 function missingPath(error: unknown): boolean {
   return (
     typeof error === "object" &&
@@ -2582,19 +2638,15 @@ function expectedDossierPaths(candidate: CandidateManifest): readonly string[] {
   ]);
 }
 
-/**
- * Checks every parent/destination that the fixed dossier writer will use
- * without creating worktree files. This must run before the fast-forward so a
- * regular or occupied `changes` path cannot leave main at candidate A.
- */
+/** Checks the fixed dossier destination inside a private trusted worktree. */
 async function assertDossierDestinationAvailable(
-  store: ArtifactStoreRecord,
+  root: string,
   candidate: CandidateManifest,
 ): Promise<void> {
-  const changes = join(store.root.path, "changes");
+  const changes = join(root, "changes");
   const destination = join(changes, candidate.changeId);
   if (
-    !isStrictlyWithin(store.root.path, changes) ||
+    !isStrictlyWithin(root, changes) ||
     !isStrictlyWithin(changes, destination)
   ) {
     throw new TypeError(
@@ -2624,11 +2676,14 @@ async function assertDossierDestinationAvailable(
   throw new TypeError("El destino de expediente candidato ya está ocupado");
 }
 
-async function writeCandidateDossier(
+interface PreparedCandidateDossier {
+  readonly files: readonly SanitizedDossierFile[];
+  readonly expectedPaths: readonly string[];
+}
+
+async function prepareCandidateDossier(
   candidate: CandidateManifest,
-): Promise<readonly string[]> {
-  const record = candidateRecord(candidate);
-  const store = await assertControllerCandidateStore(record.store);
+): Promise<PreparedCandidateDossier> {
   const publication = await candidatePublicationState(candidate);
   const dossier = createSanitizedCandidateDossier({
     request: publication.request,
@@ -2646,8 +2701,19 @@ async function writeCandidateDossier(
   ) {
     throw new TypeError("El expediente candidato no tiene una forma permitida");
   }
-  await assertDossierDestinationAvailable(store, candidate);
-  const changes = await createChildDirectory(store.root.path, "changes", true);
+  return Object.freeze({
+    files: dossier.files,
+    expectedPaths: Object.freeze(expected),
+  });
+}
+
+async function writeCandidateDossier(
+  root: string,
+  candidate: CandidateManifest,
+  dossier: PreparedCandidateDossier,
+): Promise<readonly string[]> {
+  await assertDossierDestinationAvailable(root, candidate);
+  const changes = await createChildDirectory(root, "changes", true);
   const destination = await createChildDirectory(
     changes,
     candidate.changeId,
@@ -2691,80 +2757,262 @@ async function assertCachedDossier(
   const cached = (
     await runStoreGit(
       root,
-      ["diff", "--cached", "--name-only", "--diff-filter=ACMR"],
+      ["diff", "--cached", "--name-status", "--no-renames"],
       "No se pudo verificar el expediente preparado",
     )
   )
     .split("\n")
     .filter(Boolean)
     .sort(lexicalCompare);
+  const expectedCached = expected
+    .map((path) => `A\t${path}`)
+    .sort(lexicalCompare);
   if (
-    cached.length !== expected.length ||
-    cached.some((path, index) => path !== expected[index])
+    cached.length !== expectedCached.length ||
+    cached.some((path, index) => path !== expectedCached[index])
   ) {
     throw new TypeError(
       "El commit de expediente contiene archivos no permitidos",
     );
   }
+  const [unstaged, untracked] = await Promise.all([
+    runStoreGit(
+      root,
+      ["diff", "--name-status", "--no-renames"],
+      "No se pudo verificar el worktree de expediente",
+    ),
+    runStoreGit(
+      root,
+      ["ls-files", "--others", "--exclude-standard"],
+      "No se pudo verificar archivos no rastreados del expediente",
+    ),
+  ]);
+  if (unstaged !== "" || untracked !== "") {
+    throw new TypeError("El worktree de expediente no está limpio");
+  }
+}
+
+async function assertDossierCommit(
+  root: string,
+  candidate: CandidateManifest,
+  dossierCommit: string,
+  dossier: PreparedCandidateDossier,
+): Promise<void> {
+  const [head, parent, status, changed] = await Promise.all([
+    runStoreGit(
+      root,
+      ["rev-parse", "--verify", "HEAD^{commit}"],
+      "No se pudo verificar el commit de expediente",
+    ),
+    runStoreGit(
+      root,
+      ["rev-parse", "--verify", "HEAD^"],
+      "No se pudo verificar el padre del expediente",
+    ),
+    runStoreGit(
+      root,
+      ["status", "--porcelain=v1", "--untracked-files=all"],
+      "No se pudo verificar la limpieza del expediente",
+    ),
+    runStoreGit(
+      root,
+      [
+        "diff-tree",
+        "--no-commit-id",
+        "--name-status",
+        "--no-renames",
+        "-r",
+        dossierCommit,
+      ],
+      "No se pudo verificar el diff del expediente",
+    ),
+  ]);
+  const expected = dossier.expectedPaths
+    .map((path) => `A\tchanges/${candidate.changeId}/${path}`)
+    .sort(lexicalCompare);
+  const actual = changed.split("\n").filter(Boolean).sort(lexicalCompare);
+  if (
+    head !== dossierCommit ||
+    parent !== candidate.candidateCommit ||
+    status !== "" ||
+    actual.length !== expected.length ||
+    actual.some((path, index) => path !== expected[index])
+  ) {
+    throw new TypeError(
+      "El expediente privado no contiene exclusivamente el dossier aprobado",
+    );
+  }
+  for (const file of dossier.files) {
+    const blob = await readStoreGitBytes(
+      root,
+      ["show", `${dossierCommit}:changes/${candidate.changeId}/${file.path}`],
+      "No se pudo verificar el contenido del expediente",
+    );
+    if (!blob.equals(Buffer.from(file.contents, "utf8"))) {
+      throw new TypeError("El expediente privado cambió durante el commit");
+    }
+  }
+}
+
+interface PrivateDossierWorktree {
+  readonly root: string;
+}
+
+async function createPrivateDossierRoot(): Promise<string> {
+  const root = await mkdtemp(join(tmpdir(), "comunidadsolar-dossier-"));
+  const [entry, canonicalRoot, canonicalTemporaryRoot] = await Promise.all([
+    lstat(root),
+    realpath(root),
+    realpath(tmpdir()),
+  ]);
+  if (
+    entry.isSymbolicLink() ||
+    !entry.isDirectory() ||
+    !isStrictlyWithin(canonicalTemporaryRoot, canonicalRoot)
+  ) {
+    await rm(root, { recursive: true, force: true }).catch(() => undefined);
+    throw new TypeError("No se pudo crear el worktree privado de expediente");
+  }
+  return canonicalRoot;
+}
+
+async function createPrivateDossierWorktree(
+  store: ArtifactStoreRecord,
+  candidate: CandidateManifest,
+): Promise<PrivateDossierWorktree> {
+  const root = await createPrivateDossierRoot();
+  try {
+    await runStorePromotionGit(
+      store.root.path,
+      ["worktree", "add", "--detach", root, candidate.candidateCommit],
+      "No se pudo crear el worktree privado de expediente",
+    );
+    const [topLevel, head, status] = await Promise.all([
+      runStoreGit(
+        root,
+        ["rev-parse", "--show-toplevel"],
+        "No se pudo verificar el worktree privado de expediente",
+      ),
+      runStoreGit(
+        root,
+        ["rev-parse", "--verify", "HEAD^{commit}"],
+        "No se pudo verificar el candidato en el worktree privado",
+      ),
+      runStoreGit(
+        root,
+        ["status", "--porcelain=v1", "--untracked-files=all"],
+        "No se pudo verificar la limpieza del worktree privado",
+      ),
+    ]);
+    if (
+      topLevel !== root ||
+      head !== candidate.candidateCommit ||
+      status !== ""
+    ) {
+      throw new TypeError(
+        "El worktree privado no está fijado en el candidato A",
+      );
+    }
+    return Object.freeze({ root });
+  } catch (error: unknown) {
+    await runStorePromotionGit(
+      store.root.path,
+      ["worktree", "remove", "--force", root],
+      "No se pudo retirar el worktree privado de expediente",
+    ).catch(() => undefined);
+    await rm(root, { recursive: true, force: true }).catch(() => undefined);
+    throw error;
+  }
+}
+
+async function removePrivateDossierWorktree(
+  store: ArtifactStoreRecord,
+  worktree: PrivateDossierWorktree,
+): Promise<void> {
+  await runStorePromotionGit(
+    store.root.path,
+    ["worktree", "remove", "--force", worktree.root],
+    "No se pudo retirar el worktree privado de expediente",
+  );
 }
 
 /**
- * Fast-forwards only sealed candidate A, then commits the fixed sanitized
- * dossier as B. No caller receives a checkout, root, or dossier destination.
+ * Commits fixed sanitized dossier B in an isolated worktree based on candidate
+ * A, verifies the complete B, then fast-forwards protected main once from the
+ * baseline to B. Protected main is therefore never left at A alone.
  */
 export async function promoteCandidateWithDossier(
   candidate: CandidateManifest,
+  testCapability?: CandidatePromotionTestCapability,
 ): Promise<CandidatePromotionResult> {
   await assertCandidatePromotion(candidate);
   const record = candidateRecord(candidate);
   const store = await assertControllerCandidateStore(record.store);
   await verifyCandidateArtifact(candidate);
   await assertCandidateMainBaseline(candidate);
-  await assertDossierDestinationAvailable(store, candidate);
-  await runStorePromotionGit(
-    store.root.path,
-    ["merge", "--ff-only", candidate.candidateCommit],
-    "No se pudo avanzar main al candidato aprobado",
-  );
-  const merged = await runStoreGit(
-    store.root.path,
-    ["rev-parse", "--verify", "HEAD^{commit}"],
-    "No se pudo verificar el candidato promovido",
-  );
-  if (merged !== candidate.candidateCommit) {
-    throw new TypeError("El fast-forward no dejó main en el commit candidato");
-  }
-  const files = await writeCandidateDossier(candidate);
-  await runStorePromotionGit(
-    store.root.path,
-    ["add", "--", `changes/${candidate.changeId}`],
-    "No se pudo preparar el expediente candidato",
-  );
-  await assertCachedDossier(store.root.path, files);
-  await runStorePromotionGit(
-    store.root.path,
-    ["commit", "--no-verify", "-m", `docs: dossier ${candidate.changeId}`],
-    "No se pudo confirmar el expediente candidato",
-  );
-  const [dossierCommit, parent] = await Promise.all([
-    runStoreGit(
-      store.root.path,
+  const dossier = await prepareCandidateDossier(candidate);
+  const worktree = await createPrivateDossierWorktree(store, candidate);
+  try {
+    induceCandidatePromotionTestFailure(testCapability, "dossier-write");
+    const files = await writeCandidateDossier(
+      worktree.root,
+      candidate,
+      dossier,
+    );
+    induceCandidatePromotionTestFailure(testCapability, "dossier-add");
+    await runStorePromotionGit(
+      worktree.root,
+      ["add", "--", `changes/${candidate.changeId}`],
+      "No se pudo preparar el expediente candidato",
+    );
+    await assertCachedDossier(worktree.root, files);
+    induceCandidatePromotionTestFailure(testCapability, "dossier-commit");
+    await runStorePromotionGit(
+      worktree.root,
+      ["commit", "--no-verify", "-m", `docs: dossier ${candidate.changeId}`],
+      "No se pudo confirmar el expediente candidato",
+    );
+    const dossierCommit = await runStoreGit(
+      worktree.root,
       ["rev-parse", "--verify", "HEAD^{commit}"],
-      "No se pudo verificar el commit de expediente",
-    ),
-    runStoreGit(
+      "No se pudo verificar el commit privado de expediente",
+    );
+    await assertDossierCommit(worktree.root, candidate, dossierCommit, dossier);
+
+    // Recheck immediately before the sole protected-main mutation. Any
+    // concurrent dirty/advanced state leaves main untouched and recoverable.
+    await assertCandidateMainBaseline(candidate);
+    induceCandidatePromotionTestFailure(
+      testCapability,
+      "protected-main-fast-forward",
+    );
+    await runStorePromotionGit(
       store.root.path,
-      ["rev-parse", "--verify", "HEAD^"],
-      "No se pudo verificar el padre del expediente",
-    ),
-  ]);
-  if (parent !== candidate.candidateCommit) {
-    throw new TypeError("El expediente no tiene como padre al candidato A");
+      ["merge", "--ff-only", dossierCommit],
+      "No se pudo avanzar main a la cadena candidato-expediente",
+    );
+    const [head, parent] = await Promise.all([
+      runStoreGit(
+        store.root.path,
+        ["rev-parse", "--verify", "HEAD^{commit}"],
+        "No se pudo verificar main tras la promoción",
+      ),
+      runStoreGit(
+        store.root.path,
+        ["rev-parse", "--verify", "HEAD^"],
+        "No se pudo verificar el padre de main tras la promoción",
+      ),
+    ]);
+    if (head !== dossierCommit || parent !== candidate.candidateCommit) {
+      throw new TypeError("El fast-forward no conservó la cadena A a B");
+    }
+    return Object.freeze({
+      candidateCommit: candidate.candidateCommit,
+      dossierCommit,
+    });
+  } finally {
+    await removePrivateDossierWorktree(store, worktree).catch(() => undefined);
   }
-  return Object.freeze({
-    candidateCommit: candidate.candidateCommit,
-    dossierCommit,
-  });
 }
 
 /**
@@ -2785,6 +3033,19 @@ export function createCandidatePreviewTestCapability(
   const capability = Object.freeze({}) as CandidatePreviewTestCapability;
   candidatePreviewCapabilities.set(capability, adapter);
   return capability;
+}
+
+function previewAssertion(
+  candidate: CandidateManifest,
+): PreviewAssertionDescriptor {
+  return Object.freeze({
+    publisher: "local",
+    candidateCommit: candidate.candidateCommit,
+    artifactSha256: candidate.artifactSha256,
+    sealedBundle: true,
+    fixedLocalArguments: true,
+    localOnly: true,
+  });
 }
 
 async function localWranglerPath(
@@ -3118,8 +3379,8 @@ export async function startCandidatePreview(
   if (adapter === undefined) {
     throw new TypeError("La capability de preview no pertenece al controlador");
   }
-  const invocation = await fixedPreviewInvocation(candidate);
-  const launch = await adapter(invocation);
+  await fixedPreviewInvocation(candidate);
+  const launch = await adapter(previewAssertion(candidate));
   const launchPid = launch.child.pid;
   if (
     typeof launchPid !== "number" ||
@@ -3158,50 +3419,5 @@ export async function startCandidatePreview(
         candidatePreviewPids.delete(candidate);
       }
     },
-  });
-}
-
-declare const candidateTestInspectionCapabilityBrand: unique symbol;
-export interface CandidateTestInspectionCapability {
-  readonly [candidateTestInspectionCapabilityBrand]: true;
-}
-
-const candidateTestInspectionCapabilities =
-  new WeakSet<CandidateTestInspectionCapability>();
-
-/** Mints the sole test-only inspection authority; production cannot mint it. */
-export function createCandidateTestInspectionCapability(): CandidateTestInspectionCapability {
-  if (process.env.INGEST_TEST_MODE !== "true") {
-    throw new TypeError(
-      "La inspección candidata sólo existe en modo de pruebas",
-    );
-  }
-  const capability = Object.freeze({}) as CandidateTestInspectionCapability;
-  candidateTestInspectionCapabilities.add(capability);
-  return capability;
-}
-
-/** Test-only snapshot; it is a copy and cannot mutate preview state. */
-export function candidateTestInspection(
-  capability: CandidateTestInspectionCapability,
-  candidate: CandidateManifest,
-): {
-  readonly bundlePath: string;
-  readonly manifestPath: string;
-  readonly previewPid: number | undefined;
-} {
-  if (
-    process.env.INGEST_TEST_MODE !== "true" ||
-    !candidateTestInspectionCapabilities.has(capability)
-  ) {
-    throw new TypeError(
-      "La inspección candidata no pertenece al controlador de pruebas",
-    );
-  }
-  const record = candidateRecord(candidate);
-  return Object.freeze({
-    bundlePath: record.bundlePath,
-    manifestPath: record.manifestPath,
-    previewPid: candidatePreviewPids.get(candidate),
   });
 }

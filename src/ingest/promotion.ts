@@ -1,11 +1,14 @@
 import {
   promoteCandidateWithDossier,
   recordCandidatePublicationFailure,
+  type CandidatePromotionTestCapability,
 } from "./candidate/manifest.ts";
 import type { CandidateManifest } from "./domain.ts";
 
 export interface PromotionInput {
   readonly candidate: CandidateManifest;
+  /** Test-only failure token; it cannot add authority or change Git inputs. */
+  readonly testCapability?: CandidatePromotionTestCapability;
 }
 
 export interface PromotionResult {
@@ -18,7 +21,10 @@ export async function promoteCandidate(
   input: PromotionInput,
 ): Promise<PromotionResult> {
   try {
-    return await promoteCandidateWithDossier(input.candidate);
+    return await promoteCandidateWithDossier(
+      input.candidate,
+      input.testCapability,
+    );
   } catch (error) {
     await recordCandidatePublicationFailure(input.candidate, "promotion").catch(
       () => undefined,

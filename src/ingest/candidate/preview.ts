@@ -6,6 +6,6 @@ export {
   createCandidatePreviewTestCapability,
   startCandidatePreview,
   type CandidatePreviewTestCapability,
-  type FixedPreviewInvocation,
+  type PreviewAssertionDescriptor,
   type PreviewHandle,
 } from "./manifest.ts";

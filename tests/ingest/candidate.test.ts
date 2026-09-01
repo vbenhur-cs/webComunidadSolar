@@ -20,18 +20,15 @@ import { promisify } from "node:util";
 
 import { sha256Canonical } from "../../src/ingest/canonical-json.ts";
 import {
-  candidateTestInspection,
   createCandidate,
-  createControllerCandidateStoreTestInitialization,
-  createCandidateTestInspectionCapability,
+  createCandidatePromotionTestCapability,
   loadCandidate,
   openControllerCandidateStore,
   releaseControllerCandidateStore,
   verifyCandidateArtifact,
   type CandidateCreationInput,
+  type CandidatePromotionFailureStage,
   type ControllerCandidateStore,
-  type ControllerCandidateStoreTestInitialization,
-  type CandidateTestInspectionCapability,
 } from "../../src/ingest/candidate/manifest.ts";
 import {
   createCandidateBuildTestCapability,
@@ -42,7 +39,7 @@ import {
   createCandidatePreviewTestCapability,
   startCandidatePreview,
   type CandidatePreviewTestCapability,
-  type FixedPreviewInvocation,
+  type PreviewAssertionDescriptor,
 } from "../../src/ingest/candidate/preview.ts";
 import { hashTree } from "../../src/ingest/candidate/tree-digest.ts";
 import type { ChangePlan, ValidationResult } from "../../src/ingest/domain.ts";
@@ -300,10 +297,71 @@ interface CandidateFixture {
   readonly plan: ChangePlan;
   readonly validations: ValidationResult[];
   readonly store: ControllerCandidateStore;
-  readonly storeInitialization: ControllerCandidateStoreTestInitialization;
   readonly build: CandidateBuildTestCapability;
-  readonly inspection: CandidateTestInspectionCapability;
 }
+
+/** Test-only fixture setup; production candidate APIs receive no raw root. */
+async function openFixtureCandidateStore(
+  repositoryRoot: string,
+): Promise<ControllerCandidateStore> {
+  const previous = process.cwd();
+  process.chdir(repositoryRoot);
+  try {
+    return await openControllerCandidateStore();
+  } finally {
+    process.chdir(previous);
+  }
+}
+
+function fixtureCandidateBundlePath(repositoryRoot: string): string {
+  return join(
+    repositoryRoot,
+    ".artifacts",
+    "candidates",
+    changeId,
+    attemptId,
+    "bundle",
+  );
+}
+
+type PublicPreviewDescriptor = Parameters<
+  Parameters<typeof createCandidatePreviewTestCapability>[0]
+>[0];
+type PublicPromotionStage = Parameters<
+  typeof createCandidatePromotionTestCapability
+>[0];
+
+function compilePublicPreviewSurface(
+  descriptor: PublicPreviewDescriptor,
+  promotionStage: PublicPromotionStage,
+  preview: typeof import("../../src/ingest/candidate/preview.ts"),
+  manifest: typeof import("../../src/ingest/candidate/manifest.ts"),
+): void {
+  const safe: PreviewAssertionDescriptor = descriptor;
+  void safe;
+  // @ts-expect-error Raw execution details must not be public preview data.
+  void descriptor.cwd;
+  // @ts-expect-error Raw execution details must not be public preview data.
+  void descriptor.argv;
+  // @ts-expect-error Raw execution details must not be public preview data.
+  void descriptor.env;
+  // @ts-expect-error Raw execution details must not be public preview data.
+  void descriptor.executable;
+  // @ts-expect-error Raw bundle authority must not be public preview data.
+  void descriptor.bundlePath;
+  // @ts-expect-error Test-only raw initializer must not remain public.
+  void manifest.createControllerCandidateStoreTestInitialization;
+  // @ts-expect-error Test-only raw inspection must not remain public.
+  void manifest.candidateTestInspection;
+  // @ts-expect-error Fixed process invocation must not be re-exported.
+  void preview.FixedPreviewInvocation;
+  const safePromotionStage: CandidatePromotionFailureStage = promotionStage;
+  void safePromotionStage;
+  // @ts-expect-error The promotion token accepts a stage, never a callback.
+  createCandidatePromotionTestCapability(async () => undefined);
+}
+
+void compilePublicPreviewSurface;
 
 async function withCandidateFixture(
   buildOptions: BuildFixtureOptions,
@@ -413,9 +471,7 @@ async function withCandidateFixture(
       },
       { commands: async (command) => await commandResult(command) },
     );
-    const storeInitialization =
-      await createControllerCandidateStoreTestInitialization(repositoryRoot);
-    store = await openControllerCandidateStore(storeInitialization);
+    store = await openFixtureCandidateStore(repositoryRoot);
     const build = createCandidateBuildTestCapability(
       candidateBuildFixture(plan, buildOptions),
     );
@@ -425,9 +481,7 @@ async function withCandidateFixture(
       plan,
       validations,
       store,
-      storeInitialization,
       build,
-      inspection: createCandidateTestInspectionCapability(),
     });
   } finally {
     if (store !== undefined) {
@@ -580,8 +634,8 @@ test("reloads and rehashes the durable controller bundle without a checkout path
   await withCandidateFixture({}, async (fixture) => {
     const candidate = await createCandidate(candidateInput(fixture));
     await releaseControllerCandidateStore(fixture.store);
-    const reloadedStore = await openControllerCandidateStore(
-      fixture.storeInitialization,
+    const reloadedStore = await openFixtureCandidateStore(
+      fixture.repositoryRoot,
     );
     const reloaded = await loadCandidate({
       store: reloadedStore,
@@ -621,9 +675,7 @@ test("reloads durable state from a fresh controller store after staging is relea
     await releaseControllerCandidateStore(fixture.store);
     await removeStagedAgentOutput(fixture.output);
 
-    const freshStore = await openControllerCandidateStore(
-      fixture.storeInitialization,
-    );
+    const freshStore = await openFixtureCandidateStore(fixture.repositoryRoot);
     const reloaded = await loadCandidate({
       store: freshStore,
       changeId,
@@ -660,9 +712,7 @@ test("rejects a controller store opened for another repository", async (t) => {
     "--initial-branch=main",
     otherRepository,
   ]);
-  const initialization =
-    await createControllerCandidateStoreTestInitialization(otherRepository);
-  const mismatchedStore = await openControllerCandidateStore(initialization);
+  const mismatchedStore = await openFixtureCandidateStore(otherRepository);
   try {
     await withCandidateFixture({}, async (fixture) => {
       await assert.rejects(
@@ -691,6 +741,33 @@ test("candidate public modules expose no raw root, checkout, or bundle helpers",
   assert.equal("assertControllerCandidateStoreOutput" in policy, false);
   assert.equal("copyCandidateBundle" in manifest, false);
   assert.equal("readCandidateBundleConfiguration" in manifest, false);
+});
+
+test("candidate public test seams expose neither raw store roots nor preview process details", async () => {
+  const [manifest, preview, manifestSource, previewSource] = await Promise.all([
+    import("../../src/ingest/candidate/manifest.ts"),
+    import("../../src/ingest/candidate/preview.ts"),
+    readFile(
+      new URL("../../src/ingest/candidate/manifest.ts", import.meta.url),
+      "utf8",
+    ),
+    readFile(
+      new URL("../../src/ingest/candidate/preview.ts", import.meta.url),
+      "utf8",
+    ),
+  ]);
+  assert.equal(
+    "createControllerCandidateStoreTestInitialization" in manifest,
+    false,
+  );
+  assert.equal("candidateTestInspection" in manifest, false);
+  assert.equal("createCandidateTestInspectionCapability" in manifest, false);
+  assert.equal("FixedPreviewInvocation" in preview, false);
+  assert.doesNotMatch(
+    manifestSource,
+    /export (?:interface |function )?(?:FixedPreviewInvocation|CandidateTestInspectionCapability|createControllerCandidateStoreTestInitialization|candidateTestInspection|createCandidateTestInspectionCapability)/u,
+  );
+  assert.doesNotMatch(previewSource, /FixedPreviewInvocation/u);
 });
 
 test("candidate reload exposes only durable store identity", async () => {
@@ -876,9 +953,12 @@ test("fails closed when the controller has no build or preview capability", asyn
 test("rehashes the copied bundle and refuses a changed output byte", async () => {
   await withCandidateFixture({}, async (fixture) => {
     const candidate = await createCandidate(candidateInput(fixture));
-    const inspection = candidateTestInspection(fixture.inspection, candidate);
     await writeFile(
-      join(inspection.bundlePath, "dist", "index.html"),
+      join(
+        fixtureCandidateBundlePath(fixture.repositoryRoot),
+        "dist",
+        "index.html",
+      ),
       "changed\n",
     );
     await assert.rejects(
@@ -888,12 +968,13 @@ test("rehashes the copied bundle and refuses a changed output byte", async () =>
   });
 });
 
-test("previews only the verified copied bundle with fixed local Wrangler argv and kills its group", async (t) => {
+test("previews only the verified copied bundle through a semantic descriptor and kills its group", async (t) => {
   await withCandidateFixture({}, async (fixture) => {
     await installFixtureWrangler(fixture.repositoryRoot);
-    let invocation: FixedPreviewInvocation | undefined;
+    let descriptor: PreviewAssertionDescriptor | undefined;
+    let previewPid: number | undefined;
     const preview = createCandidatePreviewTestCapability(async (current) => {
-      invocation = current;
+      descriptor = current;
       const child = spawn(
         process.execPath,
         [
@@ -915,30 +996,35 @@ test("previews only the verified copied bundle with fixed local Wrangler argv an
             rejectPort(new Error(`fixture preview exited ${code}`));
         });
       });
+      previewPid = child.pid;
       return { child, url: `http://127.0.0.1:${port}` };
     });
     const candidate = await createCandidate(candidateInput(fixture, preview));
     const handle = await startCandidatePreview(candidate);
     t.after(async () => await handle.stop().catch(() => undefined));
-    assert.ok(invocation !== undefined);
-    assert.equal(invocation?.argv[1], "dev");
-    assert.ok(invocation?.argv.includes("--no-bundle"));
-    assert.ok(invocation?.argv.includes("--assets"));
-    assert.ok(invocation?.argv.includes("--config"));
-    assert.ok(invocation?.argv.includes("--local"));
-    assert.ok(
-      invocation?.argv.every((argument) => !argument.includes("build")),
-    );
+    assert.deepEqual(descriptor, {
+      publisher: "local",
+      candidateCommit: candidate.candidateCommit,
+      artifactSha256: candidate.artifactSha256,
+      sealedBundle: true,
+      fixedLocalArguments: true,
+      localOnly: true,
+    });
+    assert.deepEqual(Object.keys(descriptor ?? {}).sort(), [
+      "artifactSha256",
+      "candidateCommit",
+      "fixedLocalArguments",
+      "localOnly",
+      "publisher",
+      "sealedBundle",
+    ]);
     const response = await fetch(handle.url);
     assert.equal(response.status, 200);
-    const previewPid = candidateTestInspection(
-      fixture.inspection,
-      candidate,
-    ).previewPid;
     await handle.stop();
-    if (previewPid !== undefined) {
+    const stoppedPid = previewPid;
+    if (stoppedPid !== undefined) {
       await assert.rejects(
-        async () => process.kill(previewPid, 0),
+        async () => process.kill(stoppedPid, 0),
         /ESRCH|no such process/i,
       );
     }
@@ -954,16 +1040,12 @@ test("preview resolves Wrangler from its sealed store root after cwd changes", a
   });
   await withCandidateFixture({}, async (fixture) => {
     const trustedRoot = await realpath(fixture.repositoryRoot);
-    const trustedExecutable = await installFixtureWrangler(trustedRoot);
-    const otherExecutable = join(otherRoot, "node_modules", ".bin", "wrangler");
-    await mkdir(dirname(otherExecutable), { recursive: true });
-    await writeFile(otherExecutable, "#!/bin/sh\nexit 0\n");
-    await chmod(otherExecutable, 0o700);
+    await installFixtureWrangler(trustedRoot);
 
-    let invocation: FixedPreviewInvocation | undefined;
+    let descriptor: PreviewAssertionDescriptor | undefined;
     let handle: Awaited<ReturnType<typeof startCandidatePreview>> | undefined;
     const preview = createCandidatePreviewTestCapability(async (current) => {
-      invocation = current;
+      descriptor = current;
       const child = spawn(
         process.execPath,
         ["-e", "setInterval(() => undefined, 1_000);"],
@@ -975,9 +1057,14 @@ test("preview resolves Wrangler from its sealed store root after cwd changes", a
     process.chdir(otherRoot);
     try {
       handle = await startCandidatePreview(candidate);
-      assert.equal(invocation?.executable, trustedExecutable);
-      assert.equal(invocation?.argv[0], trustedExecutable);
-      assert.notEqual(invocation?.executable, otherExecutable);
+      assert.deepEqual(descriptor, {
+        publisher: "local",
+        candidateCommit: candidate.candidateCommit,
+        artifactSha256: candidate.artifactSha256,
+        sealedBundle: true,
+        fixedLocalArguments: true,
+        localOnly: true,
+      });
     } finally {
       await handle?.stop().catch(() => undefined);
       process.chdir(initialCwd);
@@ -994,9 +1081,13 @@ test("rechecks an escaped deploy redirect changed after verification before prev
     });
     const candidate = await createCandidate(candidateInput(fixture, preview));
     await verifyCandidateArtifact(candidate);
-    const inspection = candidateTestInspection(fixture.inspection, candidate);
     await writeFile(
-      join(inspection.bundlePath, ".wrangler", "deploy", "config.json"),
+      join(
+        fixtureCandidateBundlePath(fixture.repositoryRoot),
+        ".wrangler",
+        "deploy",
+        "config.json",
+      ),
       '{"configPath":"../../../../escape/wrangler.json","auxiliaryWorkers":[]}',
     );
     await assert.rejects(

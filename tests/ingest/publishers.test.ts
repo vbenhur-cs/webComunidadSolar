@@ -8,6 +8,7 @@ import {
   mkdtemp,
   readFile,
   rm,
+  symlink,
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -21,19 +22,18 @@ import {
 } from "../../src/ingest/canonical-json.ts";
 import {
   createCandidate,
-  candidateTestInspection,
-  createCandidateTestInspectionCapability,
-  createControllerCandidateStoreTestInitialization,
+  createCandidatePromotionTestCapability,
   assertCandidateLocalPublication,
   loadCandidate,
   openControllerCandidateStore,
   releaseControllerCandidateStore,
-  type CandidateTestInspectionCapability,
   type ControllerCandidateStore,
-  type FixedPreviewInvocation,
 } from "../../src/ingest/candidate/manifest.ts";
 import { createCandidateBuildTestCapability } from "../../src/ingest/candidate/evidence.ts";
-import { createCandidatePreviewTestCapability } from "../../src/ingest/candidate/preview.ts";
+import {
+  createCandidatePreviewTestCapability,
+  type PreviewAssertionDescriptor,
+} from "../../src/ingest/candidate/preview.ts";
 import {
   createCloudflarePublisherTestCapability,
   CloudflarePublisher,
@@ -337,10 +337,33 @@ interface PublisherFixture {
   readonly candidate: CandidateManifest;
   readonly plan: ChangePlan;
   readonly operator: OperatorProfile;
-  readonly inspection: CandidateTestInspectionCapability;
-  readonly previewInvocations: FixedPreviewInvocation[];
+  readonly previewInvocations: PreviewAssertionDescriptor[];
   readonly previewPids: number[];
   reloadCandidate(): Promise<CandidateManifest>;
+}
+
+/** Test-only fixture setup; candidate production APIs receive no root input. */
+async function openFixtureCandidateStore(
+  repositoryRoot: string,
+): Promise<ControllerCandidateStore> {
+  const previous = process.cwd();
+  process.chdir(repositoryRoot);
+  try {
+    return await openControllerCandidateStore();
+  } finally {
+    process.chdir(previous);
+  }
+}
+
+function fixtureCandidateBundlePath(repositoryRoot: string): string {
+  return join(
+    repositoryRoot,
+    ".artifacts",
+    "candidates",
+    changeId,
+    attemptId,
+    "bundle",
+  );
 }
 
 interface PublisherFixtureOptions {
@@ -597,24 +620,17 @@ async function withPublisherFixture(
       { output, plan, attemptId, evidenceRoot, publicationProfile },
       { commands: async (command) => passedCommand(command) },
     );
-    const initialization =
-      await createControllerCandidateStoreTestInitialization(repositoryRoot);
-    store = await openControllerCandidateStore(initialization);
+    store = await openFixtureCandidateStore(repositoryRoot);
     await fixtureWrangler(repositoryRoot, options.wranglerExitCode ?? 0);
-    const inspection = createCandidateTestInspectionCapability();
-    const previewInvocations: FixedPreviewInvocation[] = [];
+    const previewInvocations: PreviewAssertionDescriptor[] = [];
     const previewPids: number[] = [];
-    const preview = createCandidatePreviewTestCapability(async (invocation) => {
-      previewInvocations.push(invocation);
-      const page = await readFile(
-        join(invocation.cwd, "dist", "index.html"),
-        "utf8",
-      );
+    const preview = createCandidatePreviewTestCapability(async (descriptor) => {
+      previewInvocations.push(descriptor);
       const child = spawn(
         process.execPath,
         [
           "-e",
-          `const http=require('node:http');const page=${JSON.stringify(page)};const server=http.createServer((_,res)=>res.end(page));server.listen(0,'127.0.0.1',()=>console.log(server.address().port));`,
+          "const http=require('node:http');const server=http.createServer((_,res)=>res.end('<main>exact candidate bundle</main>\\n'));server.listen(0,'127.0.0.1',()=>console.log(server.address().port));",
         ],
         { detached: true, stdio: ["ignore", "pipe", "ignore"] },
       );
@@ -671,7 +687,6 @@ async function withPublisherFixture(
       candidate,
       plan,
       operator: fixtureOperator(plan),
-      inspection,
       previewInvocations,
       previewPids,
       async reloadCandidate() {
@@ -824,10 +839,22 @@ test("publishes the exact verified local bundle and stops its preview group", as
       dryRun: false,
     });
     assert.equal(fixture.previewInvocations.length, 1);
-    assert.match(
-      fixture.previewInvocations[0]!.cwd,
-      /\.artifacts\/candidates\/publisher-candidate\/attempt-000001\/bundle$/u,
-    );
+    assert.deepEqual(fixture.previewInvocations[0], {
+      publisher: "local",
+      candidateCommit: fixture.candidate.candidateCommit,
+      artifactSha256: fixture.candidate.artifactSha256,
+      sealedBundle: true,
+      fixedLocalArguments: true,
+      localOnly: true,
+    });
+    assert.deepEqual(Object.keys(fixture.previewInvocations[0] ?? {}).sort(), [
+      "artifactSha256",
+      "candidateCommit",
+      "fixedLocalArguments",
+      "localOnly",
+      "publisher",
+      "sealedBundle",
+    ]);
     for (const pid of fixture.previewPids) {
       assert.throws(() => process.kill(pid, 0), /ESRCH|no such process/i);
     }
@@ -928,12 +955,12 @@ test("refuses a missing Gate 2 before starting the local preview", async () => {
 
 test("refuses a changed candidate artifact before starting the local preview", async () => {
   await withPublisherFixture({}, async (fixture) => {
-    const inspection = candidateTestInspection(
-      fixture.inspection,
-      fixture.candidate,
-    );
     await writeFile(
-      join(inspection.bundlePath, "dist", "index.html"),
+      join(
+        fixtureCandidateBundlePath(fixture.repositoryRoot),
+        "dist",
+        "index.html",
+      ),
       "changed after approval\n",
     );
     await assert.rejects(
@@ -1369,12 +1396,13 @@ test("Cloudflare rejects a changed deploy redirect before its dry-run observer",
   await withPublisherFixture(
     { adapter: "cloudflare", approvalAuthority: "controller" },
     async (fixture) => {
-      const inspection = candidateTestInspection(
-        fixture.inspection,
-        fixture.candidate,
-      );
       await writeFile(
-        join(inspection.bundlePath, ".wrangler", "deploy", "config.json"),
+        join(
+          fixtureCandidateBundlePath(fixture.repositoryRoot),
+          ".wrangler",
+          "deploy",
+          "config.json",
+        ),
         JSON.stringify({ configPath: "../../outside.json" }),
       );
       let observerCalls = 0;
@@ -1503,6 +1531,66 @@ test("test approvals can never fast-forward protected main", async () => {
   });
 });
 
+test("a promotion failure token cannot authorize fixture approvals", async () => {
+  await withPublisherFixture({}, async (fixture) => {
+    const testCapability =
+      createCandidatePromotionTestCapability("dossier-write");
+    await assert.rejects(
+      promoteCandidate({ candidate: fixture.candidate, testCapability }),
+      /aprobaciones.*prueba|test approval/i,
+    );
+    assert.equal(
+      await git(fixture.repositoryRoot, ["rev-parse", "HEAD"]),
+      fixture.candidate.baselineCommit,
+    );
+  });
+});
+
+test("a promotion failure token cannot be minted or used outside test mode", async () => {
+  await withPublisherFixture(
+    { approvalAuthority: "controller" },
+    async (fixture) => {
+      const testCapability =
+        createCandidatePromotionTestCapability("dossier-write");
+      const previous = process.env.INGEST_TEST_MODE;
+      process.env.INGEST_TEST_MODE = "false";
+      try {
+        assert.throws(
+          () => createCandidatePromotionTestCapability("dossier-write"),
+          /modo de pruebas/i,
+        );
+        await assert.rejects(
+          promoteCandidate({ candidate: fixture.candidate, testCapability }),
+          /modo de pruebas/i,
+        );
+        assert.equal(
+          await git(fixture.repositoryRoot, ["rev-parse", "HEAD"]),
+          fixture.candidate.baselineCommit,
+        );
+        const event = await readFile(
+          join(
+            fixture.repositoryRoot,
+            ".change-state",
+            changeId,
+            "candidates",
+            attemptId,
+            "publication-events.ndjson",
+          ),
+          "utf8",
+        );
+        assert.match(event, /promotion/u);
+        assert.match(event, /recoverable-failure/u);
+      } finally {
+        if (previous === undefined) {
+          delete process.env.INGEST_TEST_MODE;
+        } else {
+          process.env.INGEST_TEST_MODE = previous;
+        }
+      }
+    },
+  );
+});
+
 test("promotion fast-forwards candidate A then commits only a sanitized dossier B", async () => {
   await withPublisherFixture(
     { approvalAuthority: "controller" },
@@ -1565,6 +1653,215 @@ test("dossier destination preflight leaves main at baseline when changes is a re
         "changes\n",
       );
       await writeFile(join(fixture.repositoryRoot, "changes"), "blocked\n");
+
+      const outcome = await promoteCandidate({
+        candidate: fixture.candidate,
+      }).then(
+        () => "published" as const,
+        () => "rejected" as const,
+      );
+
+      assert.equal(
+        await git(fixture.repositoryRoot, ["rev-parse", "HEAD"]),
+        fixture.candidate.baselineCommit,
+      );
+      assert.equal(outcome, "rejected");
+      const event = await readFile(
+        join(
+          fixture.repositoryRoot,
+          ".change-state",
+          changeId,
+          "candidates",
+          attemptId,
+          "publication-events.ndjson",
+        ),
+        "utf8",
+      );
+      assert.match(event, /promotion/u);
+      assert.match(event, /recoverable-failure/u);
+      assert.equal(event.includes("published"), false);
+    },
+  );
+});
+
+test("transactional dossier preparation leaves main at baseline when changes is ignored", async () => {
+  await withPublisherFixture(
+    { approvalAuthority: "controller" },
+    async (fixture) => {
+      await appendFile(
+        join(fixture.repositoryRoot, ".git", "info", "exclude"),
+        "changes/\n",
+      );
+
+      const outcome = await promoteCandidate({
+        candidate: fixture.candidate,
+      }).then(
+        () => "published" as const,
+        () => "rejected" as const,
+      );
+
+      assert.equal(
+        await git(fixture.repositoryRoot, ["rev-parse", "HEAD"]),
+        fixture.candidate.baselineCommit,
+      );
+      assert.equal(outcome, "rejected");
+      const event = await readFile(
+        join(
+          fixture.repositoryRoot,
+          ".change-state",
+          changeId,
+          "candidates",
+          attemptId,
+          "publication-events.ndjson",
+        ),
+        "utf8",
+      );
+      assert.match(event, /promotion/u);
+      assert.match(event, /recoverable-failure/u);
+      assert.equal(event.includes("published"), false);
+    },
+  );
+});
+
+test("transactional dossier preparation leaves main at baseline when private dossier writing fails", async () => {
+  await withPublisherFixture(
+    { approvalAuthority: "controller" },
+    async (fixture) => {
+      const testCapability =
+        createCandidatePromotionTestCapability("dossier-write");
+      const outcome = await promoteCandidate({
+        candidate: fixture.candidate,
+        testCapability,
+      }).then(
+        () => "published" as const,
+        () => "rejected" as const,
+      );
+
+      assert.equal(
+        await git(fixture.repositoryRoot, ["rev-parse", "HEAD"]),
+        fixture.candidate.baselineCommit,
+      );
+      assert.equal(outcome, "rejected");
+      const event = await readFile(
+        join(
+          fixture.repositoryRoot,
+          ".change-state",
+          changeId,
+          "candidates",
+          attemptId,
+          "publication-events.ndjson",
+        ),
+        "utf8",
+      );
+      assert.match(event, /promotion/u);
+      assert.match(event, /recoverable-failure/u);
+      assert.equal(event.includes("published"), false);
+    },
+  );
+});
+
+test("transactional dossier preparation leaves main at baseline when dossier commit fails", async () => {
+  await withPublisherFixture(
+    { approvalAuthority: "controller" },
+    async (fixture) => {
+      await git(fixture.repositoryRoot, ["config", "commit.gpgSign", "true"]);
+      await git(fixture.repositoryRoot, [
+        "config",
+        "gpg.program",
+        "/usr/bin/false",
+      ]);
+
+      const outcome = await promoteCandidate({
+        candidate: fixture.candidate,
+      }).then(
+        () => "published" as const,
+        () => "rejected" as const,
+      );
+
+      assert.equal(
+        await git(fixture.repositoryRoot, ["rev-parse", "HEAD"]),
+        fixture.candidate.baselineCommit,
+      );
+      assert.equal(outcome, "rejected");
+      const event = await readFile(
+        join(
+          fixture.repositoryRoot,
+          ".change-state",
+          changeId,
+          "candidates",
+          attemptId,
+          "publication-events.ndjson",
+        ),
+        "utf8",
+      );
+      assert.match(event, /promotion/u);
+      assert.match(event, /recoverable-failure/u);
+      assert.equal(event.includes("published"), false);
+    },
+  );
+});
+
+test("a failed final protected-main fast-forward leaves main at its baseline", async () => {
+  await withPublisherFixture(
+    { approvalAuthority: "controller" },
+    async (fixture) => {
+      const indexLock = join(fixture.repositoryRoot, ".git", "index.lock");
+      await writeFile(indexLock, "fixture lock\n", { flag: "wx" });
+      try {
+        const outcome = await promoteCandidate({
+          candidate: fixture.candidate,
+        }).then(
+          () => "published" as const,
+          (error: unknown) => {
+            assert.ok(error instanceof Error);
+            assert.match(error.message, /avanzar main|index\.lock/i);
+            return "rejected" as const;
+          },
+        );
+
+        assert.equal(
+          await git(fixture.repositoryRoot, ["rev-parse", "HEAD"]),
+          fixture.candidate.baselineCommit,
+        );
+        assert.equal(outcome, "rejected");
+        const event = await readFile(
+          join(
+            fixture.repositoryRoot,
+            ".change-state",
+            changeId,
+            "candidates",
+            attemptId,
+            "publication-events.ndjson",
+          ),
+          "utf8",
+        );
+        assert.match(event, /promotion/u);
+        assert.match(event, /recoverable-failure/u);
+        assert.equal(event.includes("published"), false);
+      } finally {
+        await rm(indexLock, { force: true });
+      }
+    },
+  );
+});
+
+test("promotion rejects staged deletion and type changes before main can move", async () => {
+  await withPublisherFixture(
+    { approvalAuthority: "controller" },
+    async (fixture) => {
+      await rm(join(fixture.repositoryRoot, "src", "pages", "index.astro"));
+      await rm(join(fixture.repositoryRoot, "README.md"));
+      await symlink(
+        "src/pages/contacto.astro",
+        join(fixture.repositoryRoot, "README.md"),
+      );
+      await git(fixture.repositoryRoot, ["add", "-A"]);
+      const status = await git(fixture.repositoryRoot, [
+        "status",
+        "--porcelain=v1",
+      ]);
+      assert.match(status, /D\s+src\/pages\/index\.astro/u);
+      assert.match(status, /T\s+README\.md/u);
 
       const outcome = await promoteCandidate({
         candidate: fixture.candidate,
