@@ -112,6 +112,32 @@ const executionCopyRecords = new WeakMap<
   ExecutionCopyRecord
 >();
 
+/**
+ * Opaque controller checkout used only while creating one candidate commit.
+ * Its Git path and source repository never leave the controller capability.
+ */
+declare const controllerCandidateCheckoutBrand: unique symbol;
+export interface ControllerCandidateCheckout {
+  readonly [controllerCandidateCheckoutBrand]: true;
+}
+
+interface CandidateCheckoutRecord {
+  readonly root: string;
+  readonly path: string;
+  readonly output: StagedAgentOutput;
+  readonly attemptId: string;
+  readonly planCanonical: string;
+  readonly baselineCommit: string;
+  readonly outputSha256: Readonly<Record<string, string>>;
+  readonly rootIdentity: { readonly device: number; readonly inode: number };
+  readonly pathIdentity: { readonly device: number; readonly inode: number };
+}
+
+const candidateCheckoutRecords = new WeakMap<
+  ControllerCandidateCheckout,
+  CandidateCheckoutRecord
+>();
+
 function errorCode(error: unknown): string | undefined {
   if (typeof error !== "object" || error === null || !("code" in error)) {
     return undefined;
@@ -1123,6 +1149,270 @@ export async function removeControllerExecutionCopy(
   await assertExecutionCopyLocation(record);
   await rm(record.root, { recursive: true, force: false });
   executionCopyRecords.delete(copy);
+}
+
+async function runFixedGit(
+  arguments_: readonly string[],
+  failure: string,
+): Promise<string> {
+  const child = spawn(gitExecutable, [...fixedGitArguments, ...arguments_], {
+    env: fixedGitEnvironment,
+    shell: false,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  const output = collect(child, "stdout");
+  const errors = collect(child, "stderr");
+  if ((await exitCode(child)) !== 0) {
+    const detail = Buffer.concat(errors).toString("utf8").trim();
+    throw new TypeError(detail === "" ? failure : `${failure}: ${detail}`);
+  }
+  return Buffer.concat(output).toString("utf8").trim();
+}
+
+function candidateCheckoutRecord(
+  checkout: ControllerCandidateCheckout,
+): CandidateCheckoutRecord {
+  const record = candidateCheckoutRecords.get(checkout);
+  if (record === undefined) {
+    throw new TypeError("El checkout candidato no pertenece al controlador");
+  }
+  return record;
+}
+
+async function assertCandidateCheckoutLocation(
+  record: CandidateCheckoutRecord,
+): Promise<void> {
+  const [rootEntry, pathEntry] = await Promise.all([
+    lstat(record.root),
+    lstat(record.path),
+  ]);
+  if (
+    dirname(record.path) !== record.root ||
+    rootEntry.isSymbolicLink() ||
+    !rootEntry.isDirectory() ||
+    rootEntry.dev !== record.rootIdentity.device ||
+    rootEntry.ino !== record.rootIdentity.inode ||
+    pathEntry.isSymbolicLink() ||
+    !pathEntry.isDirectory() ||
+    pathEntry.dev !== record.pathIdentity.device ||
+    pathEntry.ino !== record.pathIdentity.inode ||
+    (await realpath(record.root)) !== record.root ||
+    (await realpath(record.path)) !== record.path
+  ) {
+    throw new TypeError("La identidad del checkout candidato cambió");
+  }
+}
+
+function sameOutputHashMaps(
+  left: Readonly<Record<string, string>>,
+  right: Readonly<Record<string, string>>,
+): boolean {
+  return outputHashesDigest(left) === outputHashesDigest(right);
+}
+
+/**
+ * Materializes a Git checkout from the private trusted baseline record and
+ * copies only the rechecked staged bytes. The returned object intentionally
+ * contains no filesystem path or Git/repository authority.
+ */
+export async function createControllerCandidateCheckout(
+  output: StagedAgentOutput,
+  plan: ChangePlan,
+  attemptId: string,
+): Promise<ControllerCandidateCheckout> {
+  const staging = stagedOutputRecord(output);
+  const approvedHashes = await verifiedStagedOutputHashes(
+    output,
+    plan,
+    attemptId,
+  );
+  let root: string | undefined;
+  try {
+    root = await realpath(
+      await mkdtemp(join(tmpdir(), "comunidadsolar-candidate-checkout-")),
+    );
+    const checkoutPath = join(root, "checkout");
+    await runFixedGit(
+      [
+        "clone",
+        "--no-local",
+        "--no-checkout",
+        "--quiet",
+        "--",
+        staging.repositoryRoot,
+        checkoutPath,
+      ],
+      "No se pudo clonar el baseline del candidato",
+    );
+    const canonicalCheckout = await realpath(checkoutPath);
+    if (canonicalCheckout !== checkoutPath) {
+      throw new TypeError("El checkout candidato no es canónico");
+    }
+    await runFixedGit(
+      [
+        "-C",
+        canonicalCheckout,
+        "checkout",
+        "--detach",
+        "--quiet",
+        plan.baselineCommit,
+      ],
+      "No se pudo abrir el baseline del candidato",
+    );
+    const [head, status] = await Promise.all([
+      runFixedGit(
+        ["-C", canonicalCheckout, "rev-parse", "HEAD"],
+        "No se pudo leer el commit candidato",
+      ),
+      runFixedGit(
+        [
+          "-C",
+          canonicalCheckout,
+          "status",
+          "--porcelain=v1",
+          "--untracked-files=all",
+        ],
+        "No se pudo comprobar el checkout candidato",
+      ),
+    ]);
+    if (head !== staging.baselineCommit || status !== "") {
+      throw new TypeError("El checkout candidato no parte del baseline limpio");
+    }
+
+    let remainingBytes = AGENT_ACCEPTED_OUTPUT_MAX_BYTES;
+    for (const relativePath of exactOutputPaths(output)) {
+      const expectedHash = approvedHashes[relativePath]!;
+      const current = await regularFileDigest(
+        join(output.path, ...relativePath.split("/")),
+        remainingBytes,
+      );
+      if (current.sha256 !== expectedHash || current.bytes > remainingBytes) {
+        throw new TypeError(
+          "La salida aprobada cambió antes de crear el candidato",
+        );
+      }
+      await copyAcceptedFile(
+        output.path,
+        canonicalCheckout,
+        relativePath,
+        {
+          kind: "file",
+          mode: 0o600,
+          bytes: current.bytes,
+          sha256: expectedHash,
+        },
+        remainingBytes,
+      );
+      remainingBytes -= current.bytes;
+    }
+    const recheckedHashes = await verifiedStagedOutputHashes(
+      output,
+      plan,
+      attemptId,
+    );
+    if (!sameOutputHashMaps(approvedHashes, recheckedHashes)) {
+      throw new TypeError(
+        "La salida aprobada cambió durante la copia candidata",
+      );
+    }
+    const [rootEntry, pathEntry] = await Promise.all([
+      lstat(root),
+      lstat(canonicalCheckout),
+    ]);
+    const checkout = Object.freeze({}) as ControllerCandidateCheckout;
+    candidateCheckoutRecords.set(
+      checkout,
+      Object.freeze({
+        root,
+        path: canonicalCheckout,
+        output,
+        attemptId,
+        planCanonical: canonicalJson(plan),
+        baselineCommit: staging.baselineCommit,
+        outputSha256: approvedHashes,
+        rootIdentity: Object.freeze({
+          device: rootEntry.dev,
+          inode: rootEntry.ino,
+        }),
+        pathIdentity: Object.freeze({
+          device: pathEntry.dev,
+          inode: pathEntry.ino,
+        }),
+      }),
+    );
+    await assertControllerCandidateCheckout(checkout, output, plan, attemptId);
+    return checkout;
+  } catch (error: unknown) {
+    if (root !== undefined) {
+      await rm(root, { recursive: true, force: true }).catch(() => undefined);
+    }
+    throw error;
+  }
+}
+
+/** Rechecks the bound approved bytes inside the private candidate checkout. */
+export async function assertControllerCandidateCheckout(
+  checkout: ControllerCandidateCheckout,
+  output: StagedAgentOutput,
+  plan: ChangePlan,
+  attemptId: string,
+): Promise<ControllerExecutionIntegrity> {
+  const record = candidateCheckoutRecord(checkout);
+  if (
+    record.output !== output ||
+    record.attemptId !== attemptId ||
+    record.planCanonical !== canonicalJson(plan) ||
+    record.baselineCommit !== plan.baselineCommit
+  ) {
+    throw new TypeError(
+      "El checkout candidato no coincide con el output, plan o intento",
+    );
+  }
+  await assertCandidateCheckoutLocation(record);
+  let remainingBytes = AGENT_ACCEPTED_OUTPUT_MAX_BYTES;
+  const hashes: Record<string, string> = {};
+  for (const relativePath of Object.keys(record.outputSha256).sort()) {
+    const expected = record.outputSha256[relativePath]!;
+    const file = await regularFileDigest(
+      join(record.path, ...relativePath.split("/")),
+      remainingBytes,
+    );
+    if (file.sha256 !== expected || file.bytes > remainingBytes) {
+      throw new TypeError(
+        "El checkout candidato ya no coincide con la salida aprobada",
+      );
+    }
+    remainingBytes -= file.bytes;
+    hashes[relativePath] = file.sha256;
+  }
+  return Object.freeze({
+    outputSha256: Object.freeze(hashes),
+    sha256: outputHashesDigest(hashes),
+  });
+}
+
+/**
+ * Grants a path only to the controller's fixed operation after the opaque
+ * checkout has been revalidated. It is not a public artifact or agent API.
+ */
+export async function withControllerCandidateCheckout<T>(
+  checkout: ControllerCandidateCheckout,
+  output: StagedAgentOutput,
+  plan: ChangePlan,
+  attemptId: string,
+  operation: (checkoutPath: string) => Promise<T>,
+): Promise<T> {
+  await assertControllerCandidateCheckout(checkout, output, plan, attemptId);
+  return await operation(candidateCheckoutRecord(checkout).path);
+}
+
+export async function removeControllerCandidateCheckout(
+  checkout: ControllerCandidateCheckout,
+): Promise<void> {
+  const record = candidateCheckoutRecord(checkout);
+  await assertCandidateCheckoutLocation(record);
+  await rm(record.root, { recursive: true, force: false });
+  candidateCheckoutRecords.delete(checkout);
 }
 
 export interface StagedPackageBaselines {

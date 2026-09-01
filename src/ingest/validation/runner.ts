@@ -161,6 +161,14 @@ interface EvidenceRootRecord extends DirectoryRecord {
   readonly attemptIdentity: { readonly device: number; readonly inode: number };
 }
 
+interface PreliminaryValidationRecord {
+  readonly output: StagedAgentOutput;
+  readonly attemptId: string;
+  readonly planCanonical: string;
+  readonly evidenceRoot: ValidationEvidenceRoot;
+  readonly results: readonly ValidationResult[];
+}
+
 interface PublicationProfileRecord {
   readonly output: StagedAgentOutput;
   readonly attemptId: string;
@@ -211,6 +219,10 @@ const consumedEvidenceRoots = new WeakSet<ValidationEvidenceRoot>();
 const publicationProfiles = new WeakMap<
   ControllerPublicationProfile,
   PublicationProfileRecord
+>();
+const preliminaryValidationRecords = new WeakMap<
+  readonly ValidationResult[],
+  PreliminaryValidationRecord
 >();
 const timeoutTestControllers = new WeakSet<ValidationTimeoutTestCapability>();
 
@@ -445,6 +457,96 @@ async function assertEvidenceRoot(
     );
   }
   return record;
+}
+
+/**
+ * Proves that a result array is the exact successful Task 9 result minted for
+ * this staged capability, plan and attempt. A copied array or caller-created
+ * evidence path is not eligible for candidate creation.
+ */
+export async function assertCandidateEligiblePreliminaryValidation(
+  results: readonly ValidationResult[],
+  output: StagedAgentOutput,
+  plan: ChangePlan,
+  attemptId: string,
+): Promise<readonly ValidationResult[]> {
+  const record = preliminaryValidationRecords.get(results);
+  if (
+    record === undefined ||
+    record.results !== results ||
+    record.output !== output ||
+    record.attemptId !== attemptId ||
+    record.planCanonical !== canonicalJson(plan)
+  ) {
+    throw new TypeError(
+      "La evidencia preliminar no pertenece al output, plan e intento del controlador",
+    );
+  }
+  await assertControllerStagedOutputAttempt(output, plan, attemptId);
+  const root = await assertEvidenceRoot(
+    record.evidenceRoot,
+    output,
+    plan,
+    attemptId,
+  );
+  if (
+    results.length === 0 ||
+    results.some((result) => result.status !== "passed")
+  ) {
+    throw new TypeError(
+      "El candidato requiere validaciones preliminares únicamente aprobadas",
+    );
+  }
+  const expectedHashes = exactOutputHashes(output);
+  const identifiers = new Set<string>();
+  for (const result of results) {
+    if (
+      !safeRelativePath(result.id) ||
+      identifiers.has(result.id) ||
+      result.evidence === null ||
+      result.evidenceSha256 === null ||
+      !sha256Pattern.test(result.evidenceSha256) ||
+      !isSameOrWithin(root.attemptPath, result.evidence) ||
+      result.evidence === root.attemptPath
+    ) {
+      throw new TypeError("La evidencia preliminar no tiene una forma segura");
+    }
+    identifiers.add(result.id);
+    const entry = await lstat(result.evidence);
+    if (entry.isSymbolicLink() || !entry.isFile() || entry.nlink !== 1) {
+      throw new TypeError("La evidencia preliminar no es un archivo regular");
+    }
+    const bytes = await regularFileBytes(result.evidence);
+    if (bytes.sha256 !== result.evidenceSha256) {
+      throw new TypeError("El hash de la evidencia preliminar no coincide");
+    }
+    let persisted: unknown;
+    try {
+      persisted = JSON.parse(bytes.bytes.toString("utf8")) as unknown;
+    } catch {
+      throw new TypeError("La evidencia preliminar no contiene JSON estricto");
+    }
+    const value = asRecord(persisted);
+    const preliminary = value === null ? null : asRecord(value.preliminary);
+    if (
+      value === null ||
+      value.schemaVersion !== 2 ||
+      value.attemptId !== attemptId ||
+      value.id !== result.id ||
+      value.status !== "passed" ||
+      preliminary === null ||
+      preliminary.scope !== PRELIMINARY_STAGED_VALIDATION_SCOPE ||
+      preliminary.planSha256 !== plan.planSha256 ||
+      preliminary.executionCopy === null ||
+      canonicalJson(preliminary.approvedOutputSha256) !==
+        canonicalJson(expectedHashes)
+    ) {
+      throw new TypeError(
+        "La evidencia preliminar no está ligada al output y plan aprobados",
+      );
+    }
+  }
+  return results;
 }
 
 /**
@@ -1528,7 +1630,20 @@ export async function runValidation(
       );
       failed = status === "failed";
     }
-    return results;
+    const immutableResults = Object.freeze(
+      results.map((result) => Object.freeze({ ...result })),
+    ) as ValidationResult[];
+    preliminaryValidationRecords.set(
+      immutableResults,
+      Object.freeze({
+        output: input.output,
+        attemptId: input.attemptId,
+        planCanonical: canonicalJson(input.plan),
+        evidenceRoot: input.evidenceRoot,
+        results: immutableResults,
+      }),
+    );
+    return immutableResults;
   } finally {
     if (execution !== undefined) {
       await removeControllerExecutionCopy(execution.copy).catch(
