@@ -4,6 +4,8 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { runCli, type CliController } from "../../src/ingest/cli.ts";
+import { openIngestionAuditController } from "../../src/ingest/controller.ts";
+import { safeError, safeJson } from "../../src/ingest/safe-output.ts";
 
 function controller(overrides: Partial<CliController> = {}): CliController {
   return {
@@ -67,6 +69,46 @@ test("production CLI rejects fixture adapters and hidden e2e commands before con
 
   assert.equal(fixture.exitCode, 3);
   assert.equal(hidden.exitCode, 3);
+  assert.equal(calls, 0);
+});
+
+test("production audit and CLI reject fixture tag configuration", async () => {
+  const previousCodex = process.env.CODEX_EXECUTABLE;
+  const previousCommand = process.env.INGEST_COMMAND_AGENT_CONFIG;
+  let opened:
+    Awaited<ReturnType<typeof openIngestionAuditController>> | undefined;
+  delete process.env.CODEX_EXECUTABLE;
+  delete process.env.INGEST_COMMAND_AGENT_CONFIG;
+  try {
+    await assert.rejects(async () => {
+      opened = await (
+        openIngestionAuditController as unknown as (
+          options: unknown,
+        ) => ReturnType<typeof openIngestionAuditController>
+      )({ fixtureAuditTags: { "fixture-request-blocks": "a".repeat(40) } });
+    }, /auditoría.*configuración|configuración.*auditoría/i);
+  } finally {
+    await opened?.dispose().catch(() => undefined);
+    if (previousCodex === undefined) delete process.env.CODEX_EXECUTABLE;
+    else process.env.CODEX_EXECUTABLE = previousCodex;
+    if (previousCommand === undefined)
+      delete process.env.INGEST_COMMAND_AGENT_CONFIG;
+    else process.env.INGEST_COMMAND_AGENT_CONFIG = previousCommand;
+  }
+
+  let calls = 0;
+  const result = await runCli(
+    ["status", "safe-change", "--fixture-audit-tags", "fixture-request-blocks"],
+    {
+      controller: controller({
+        async status() {
+          calls += 1;
+          return { kind: "success", value: { changeId: "safe-change" } };
+        },
+      }),
+    },
+  );
+  assert.equal(result.exitCode, 3);
   assert.equal(calls, 0);
 });
 
@@ -149,6 +191,14 @@ test("CLI output and operational errors remove environment, argv and runtime int
   assert.doesNotMatch(failedPath.stderr, /private-artifact|file:\/\//iu);
 });
 
+test("safe output redacts absolute paths after punctuation delimiters", () => {
+  assert.equal(safeError(new Error("failure(/tmp/benign)")), "fallo operativo");
+  assert.deepEqual(
+    safeJson({ nested: { note: "x[/Users/example/private]" } }),
+    { nested: { note: "[redactado]" } },
+  );
+});
+
 test("unknown and malformed options fail before a transition", async () => {
   let calls = 0;
   const result = await runCli(["status", "safe-change", "--unexpected"], {
@@ -194,7 +244,10 @@ test("production CLI and controller source graphs do not import fixture or test 
       /from\s+["'][^"']*(?:fixture|tests|e2e)[^"']*["']/iu,
       path,
     );
-    assert.doesNotMatch(source, /FixtureAgent|TestApprovalPrompt|--record/iu);
+    assert.doesNotMatch(
+      source,
+      /FixtureAgent|TestApprovalPrompt|--record|fixtureAuditTags/iu,
+    );
   }
 });
 

@@ -85,6 +85,37 @@ const matrix = Object.freeze([
     changeId: "fixture-page-freeform",
   }),
 ]);
+const recordableChangeIds: ReadonlySet<string> = new Set(
+  matrix.map((entry) => entry.changeId),
+);
+const recordableDossierFiles = Object.freeze([
+  "approvals/gate-1.json",
+  "approvals/gate-2.json",
+  "attempts/attempt-000001.json",
+  "candidate.json",
+  "plan.json",
+  "request.json",
+]);
+
+interface MainSnapshot {
+  readonly main: string;
+  readonly head: string;
+}
+
+interface RecordableMainSnapshot extends MainSnapshot {
+  /** Exact untracked dossier files accepted between the three planned records. */
+  readonly untracked: readonly string[];
+}
+
+function isRecordableMainSnapshot(
+  snapshot: MainSnapshot | RecordableMainSnapshot,
+): snapshot is RecordableMainSnapshot {
+  return (
+    "untracked" in snapshot &&
+    Array.isArray(snapshot.untracked) &&
+    snapshot.untracked.every((path) => typeof path === "string")
+  );
+}
 
 export interface FixtureInvocation {
   readonly fixture: "detailed-request" | "supplied-page";
@@ -715,12 +746,12 @@ async function assertTagAbsent(root: string, tag: string): Promise<void> {
   }
 }
 
-async function assertArtifactsUsable(root: string): Promise<string> {
+async function assertChangesUsable(root: string): Promise<string> {
   const ignored = await runFixtureGit(root, [
     "check-ignore",
     "--quiet",
     "--",
-    ".artifacts",
+    "changes",
   ]).then(
     () => true,
     (error: unknown) => {
@@ -736,12 +767,12 @@ async function assertArtifactsUsable(root: string): Promise<string> {
     },
   );
   if (ignored) {
-    throw new TypeError("El directorio .artifacts ignora evidencia fixture");
+    throw new TypeError("El directorio changes ignora evidencia fixture");
   }
   return await trustedChildDirectory(
     root,
-    ".artifacts",
-    "La raíz de artefactos",
+    "changes",
+    "La raíz de dossiers fixture",
   );
 }
 
@@ -777,9 +808,7 @@ async function assertMainUnchanged(
   }
 }
 
-async function cleanMain(
-  root: string,
-): Promise<{ readonly main: string; readonly head: string }> {
+async function cleanMain(root: string): Promise<MainSnapshot> {
   const [main, head, status] = await Promise.all([
     runFixtureGit(root, ["rev-parse", "--verify", "refs/heads/main^{commit}"]),
     runFixtureGit(root, ["rev-parse", "--verify", "HEAD^{commit}"]),
@@ -789,6 +818,115 @@ async function cleanMain(
     throw new TypeError("El clon fixture debe iniciar limpio en main");
   }
   return Object.freeze({ main: main.stdout.trim(), head: head.stdout.trim() });
+}
+
+function recordableDossierPath(path: string): boolean {
+  const segments = path.split("/");
+  if (
+    segments.length < 3 ||
+    segments[0] !== "changes" ||
+    segments[1] === undefined ||
+    !recordableChangeIds.has(segments[1])
+  ) {
+    return false;
+  }
+  return safeDossierPath(segments.slice(2).join("/"));
+}
+
+async function assertRecordDirectoriesTrusted(root: string): Promise<void> {
+  const changes = join(root, "changes");
+  try {
+    await trustedDirectory(changes, "La raíz de dossiers fixture");
+  } catch (error: unknown) {
+    if (isMissingPath(error)) return;
+    throw error;
+  }
+  const entries = await readdir(changes, { withFileTypes: true });
+  for (const entry of entries) {
+    if (
+      entry.name === ".ingestion-fixture-staging" ||
+      !recordableChangeIds.has(entry.name) ||
+      !entry.isDirectory() ||
+      entry.isSymbolicLink()
+    ) {
+      throw new TypeError(
+        "El registro fixture sólo admite dossiers cerrados sin enlaces",
+      );
+    }
+    const dossier = join(changes, entry.name);
+    await trustedDirectory(dossier, "El dossier fixture previo");
+    const files = await collectStagedDossierFiles(dossier);
+    if (
+      files.length !== recordableDossierFiles.length ||
+      files.some((path, index) => path !== recordableDossierFiles[index])
+    ) {
+      throw new TypeError(
+        "El registro fixture sólo admite dossiers cerrados completos",
+      );
+    }
+  }
+}
+
+/**
+ * Record mode permits only untracked files from already completed members of
+ * the fixed matrix. It remains strict for index changes, tracked edits,
+ * staging leftovers, arbitrary change IDs, and symlinks.
+ */
+async function recordableMain(root: string): Promise<RecordableMainSnapshot> {
+  const [main, head, status] = await Promise.all([
+    runFixtureGit(root, ["rev-parse", "--verify", "refs/heads/main^{commit}"]),
+    runFixtureGit(root, ["rev-parse", "--verify", "HEAD^{commit}"]),
+    runFixtureGit(root, [
+      "status",
+      "--porcelain=v1",
+      "--untracked-files=all",
+      "-z",
+    ]),
+  ]);
+  if (main.stdout.trim() !== head.stdout.trim()) {
+    throw new TypeError("El registro fixture exige main protegido en HEAD");
+  }
+  const untracked = status.stdout
+    .split("\0")
+    .filter((entry) => entry !== "")
+    .map((entry) => {
+      if (!entry.startsWith("?? ")) {
+        throw new TypeError("El registro fixture no admite cambios preparados");
+      }
+      const path = entry.slice(3);
+      if (!recordableDossierPath(path)) {
+        throw new TypeError(
+          "El registro fixture no admite suciedad fuera de sus dossiers",
+        );
+      }
+      return path;
+    })
+    .sort();
+  if (new Set(untracked).size !== untracked.length) {
+    throw new TypeError(
+      "El registro fixture contiene rutas de dossier repetidas",
+    );
+  }
+  await assertRecordDirectoriesTrusted(root);
+  return Object.freeze({
+    main: main.stdout.trim(),
+    head: head.stdout.trim(),
+    untracked: Object.freeze(untracked),
+  });
+}
+
+/** Test-only inspection of the same preflight used by the non-executed recorder. */
+export async function inspectFixtureRecordWorkspace(
+  root: string,
+): Promise<{ readonly untracked: readonly string[] }> {
+  if (process.env.INGEST_TEST_MODE !== "true") {
+    throw new TypeError("La inspección fixture exige INGEST_TEST_MODE=true");
+  }
+  const physicalRoot = await realpath(root);
+  const snapshot = await recordableMain(
+    await trustedDirectory(physicalRoot, "La raíz fixture de inspección"),
+  );
+  return Object.freeze({ untracked: snapshot.untracked });
 }
 
 async function withController<T>(
@@ -816,7 +954,9 @@ export async function runFixtureE2e(
     throw new TypeError("El runner fixture exige INGEST_TEST_MODE=true");
   }
   const sourceRoot = process.cwd();
-  const sourceBefore = await cleanMain(sourceRoot);
+  const sourceBefore = checkedInvocation.record
+    ? await recordableMain(sourceRoot)
+    : await cleanMain(sourceRoot);
   const inputs = await mkdtemp(
     join(tmpdir(), "comunidadsolar-ingestion-input-"),
   );
@@ -912,6 +1052,11 @@ export async function runFixtureE2e(
       },
     );
     if (checkedInvocation.record) {
+      if (!isRecordableMainSnapshot(sourceBefore)) {
+        throw new TypeError(
+          "El registro fixture perdió su precondición durable",
+        );
+      }
       await recordFixtureEvidence(
         sourceRoot,
         clone,
@@ -948,10 +1093,14 @@ async function recordFixtureEvidence(
   clone: string,
   invocation: FixtureInvocation,
   candidate: CandidateManifest,
-  sourceBefore: { readonly main: string; readonly head: string },
+  sourceBefore: RecordableMainSnapshot,
 ): Promise<void> {
-  const before = await cleanMain(sourceRoot);
-  if (before.main !== sourceBefore.main || before.head !== sourceBefore.head) {
+  const before = await recordableMain(sourceRoot);
+  if (
+    before.main !== sourceBefore.main ||
+    before.head !== sourceBefore.head ||
+    canonicalJson(before.untracked) !== canonicalJson(sourceBefore.untracked)
+  ) {
     throw new TypeError(
       "La fuente principal cambió antes de registrar evidencia",
     );
@@ -1004,12 +1153,7 @@ async function recordFixtureEvidence(
     throw new TypeError("La referencia fixture no coincide con el candidato");
   }
   await assertTagAbsent(sourceRoot, tag);
-  const artifacts = await assertArtifactsUsable(sourceRoot);
-  const destinationParent = await trustedChildDirectory(
-    artifacts,
-    "ingestion-fixtures",
-    "La raíz de dossiers fixture",
-  );
+  const destinationParent = await assertChangesUsable(sourceRoot);
   const destination = resolve(destinationParent, invocation.changeId);
   if (!isWithin(destinationParent, destination)) {
     throw new TypeError("El destino del dossier fixture no es seguro");
@@ -1021,7 +1165,7 @@ async function recordFixtureEvidence(
     if (!isMissingPath(error)) throw error;
   }
   const stagingParent = await trustedChildDirectory(
-    artifacts,
+    destinationParent,
     ".ingestion-fixture-staging",
     "El staging de dossier fixture",
   );
@@ -1031,6 +1175,7 @@ async function recordFixtureEvidence(
     "El staging de dossier fixture",
   );
   let stagingPresent = true;
+  let stagingParentPresent = true;
   let dossierPublished = false;
   let tagCreated = false;
   let transferFetched = false;
@@ -1055,6 +1200,8 @@ async function recordFixtureEvidence(
     stagingPresent = false;
     dossierPublished = true;
     await verifyStagedDossier(destination, dossier);
+    await removeTrustedDirectory(destinationParent, stagingParent);
+    stagingParentPresent = false;
     await assertMainUnchanged(sourceRoot, sourceBefore);
     await runFixtureGit(sourceRoot, [
       "update-ref",
@@ -1067,6 +1214,22 @@ async function recordFixtureEvidence(
       throw new TypeError("La etiqueta fixture no coincide con el candidato");
     }
     await assertMainUnchanged(sourceRoot, sourceBefore);
+    const after = await recordableMain(sourceRoot);
+    const expectedUntracked = [
+      ...sourceBefore.untracked,
+      ...dossier.files.map(
+        (file) => `changes/${invocation.changeId}/${file.path}`,
+      ),
+    ].sort();
+    if (
+      after.main !== sourceBefore.main ||
+      after.head !== sourceBefore.head ||
+      canonicalJson(after.untracked) !== canonicalJson(expectedUntracked)
+    ) {
+      throw new TypeError(
+        "El registro fixture no dejó exactamente su dossier durable",
+      );
+    }
   } catch (error: unknown) {
     const cleanup: unknown[] = [];
     if (tagCreated) {
@@ -1084,6 +1247,11 @@ async function recordFixtureEvidence(
     }
     if (stagingPresent) {
       await removeTrustedDirectory(stagingParent, staging).catch(
+        (cleanupError: unknown) => cleanup.push(cleanupError),
+      );
+    }
+    if (stagingParentPresent) {
+      await removeTrustedDirectory(destinationParent, stagingParent).catch(
         (cleanupError: unknown) => cleanup.push(cleanupError),
       );
     }

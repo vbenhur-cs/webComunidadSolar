@@ -73,6 +73,10 @@ sigue cerrada. Consulte [la guía operativa de ingestión](docs/operations/inges
 para estados, evidencia, configuración de `CommandAgent` y recuperación de una
 reconciliación pendiente.
 
+Cuando se autorice la grabación de fixtures, sus expedientes saneados viven en
+`changes/<change-id>/` y se auditan junto con el tag de candidato asociado; las
+entradas y builds bajo `.artifacts/` nunca se versionan como evidencia.
+
 `npm run verify:ingestion` abre sólo el grafo de auditoría durable: no inicia
 agentes ni acepta su configuración. Sus errores y JSON se sanean antes de
 imprimirse, incluso si la configuración local contiene rutas o secretos.

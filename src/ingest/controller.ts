@@ -99,6 +99,13 @@ const attemptIdPattern = /^attempt-\d{6}$/u;
 const safeRelativePath =
   /^(?!\/)(?!.*(?:^|\/)\.\.(?:\/|$))[A-Za-z0-9][A-Za-z0-9._/-]*$/u;
 const schemaPath = "schemas/ingestion/agent-result.schema.json";
+const sha256Pattern = /^[a-f0-9]{64}$/u;
+const commitPattern = /^[a-f0-9]{40,64}$/u;
+const fixtureRecordChangeIds = new Set([
+  "fixture-request-blocks",
+  "fixture-request-hybrid",
+  "fixture-page-freeform",
+]);
 
 export type ControllerResult =
   | { readonly kind: "success"; readonly value: Record<string, unknown> }
@@ -304,40 +311,52 @@ async function collectTrustedRelativeFiles(
   return files.sort();
 }
 
-async function fixtureTagCommit(
+async function fixtureTagCommits(
   projectRoot: string,
-  changeId: string,
-): Promise<string | null> {
-  const ref = `refs/tags/ingestion-fixture/${changeId}`;
+): Promise<ReadonlyMap<string, string>> {
+  const prefix = "refs/tags/ingestion-fixture/";
   const found = await execFileAsync(
     "git",
-    ["-C", projectRoot, "for-each-ref", "--format=%(objectname)", ref],
+    [
+      "-C",
+      projectRoot,
+      "for-each-ref",
+      "--format=%(refname)",
+      "refs/tags/ingestion-fixture",
+    ],
     { encoding: "utf8", env: sanitizedGitEnv() },
   );
-  const objects = found.stdout
+  const refs = found.stdout
     .split("\n")
     .map((value) => value.trim())
     .filter((value) => value !== "");
-  if (objects.length === 0) return null;
-  if (
-    objects.length !== 1 ||
-    objects[0] === undefined ||
-    !/^[a-f0-9]{40,64}$/u.test(objects[0])
-  ) {
-    throw new TypeError("La etiqueta fixture no tiene una identidad válida");
+  const tags = new Map<string, string>();
+  for (const ref of refs) {
+    if (!ref.startsWith(prefix)) {
+      throw new TypeError("La etiqueta fixture no pertenece a su namespace");
+    }
+    const changeId = ref.slice(prefix.length);
+    if (!fixtureRecordChangeIds.has(changeId) || tags.has(changeId)) {
+      throw new TypeError(
+        "La etiqueta fixture no pertenece a la matriz cerrada",
+      );
+    }
+    const resolved = await execFileAsync(
+      "git",
+      ["-C", projectRoot, "rev-parse", "--verify", `${ref}^{commit}`],
+      { encoding: "utf8", env: sanitizedGitEnv() },
+    ).catch(() => {
+      throw new TypeError(
+        "La etiqueta fixture no resuelve un commit candidato",
+      );
+    });
+    const commit = resolved.stdout.trim();
+    if (!commitPattern.test(commit)) {
+      throw new TypeError("La etiqueta fixture no resuelve un commit válido");
+    }
+    tags.set(changeId, commit);
   }
-  const resolved = await execFileAsync(
-    "git",
-    ["-C", projectRoot, "rev-parse", "--verify", `${ref}^{commit}`],
-    { encoding: "utf8", env: sanitizedGitEnv() },
-  ).catch(() => {
-    throw new TypeError("La etiqueta fixture no resuelve un commit candidato");
-  });
-  const commit = resolved.stdout.trim();
-  if (!/^[a-f0-9]{40,64}$/u.test(commit)) {
-    throw new TypeError("La etiqueta fixture no resuelve un commit válido");
-  }
-  return commit;
+  return tags;
 }
 
 async function verifyFixtureDossier(input: {
@@ -349,22 +368,13 @@ async function verifyFixtureDossier(input: {
   readonly attempt: AttemptRecord;
   readonly candidate: CandidateManifest;
 }): Promise<boolean> {
-  const artifactRoot = join(input.projectRoot, ".artifacts");
+  const changesRoot = join(input.projectRoot, "changes");
   if (
-    !(await trustedDirectoryIfPresent(artifactRoot, "La raíz de artefactos"))
+    !(await trustedDirectoryIfPresent(changesRoot, "La raíz de expedientes"))
   ) {
     return false;
   }
-  const fixtureRoot = join(artifactRoot, "ingestion-fixtures");
-  if (
-    !(await trustedDirectoryIfPresent(
-      fixtureRoot,
-      "La raíz de expedientes fixture",
-    ))
-  ) {
-    return false;
-  }
-  const root = join(fixtureRoot, input.candidate.changeId);
+  const root = join(changesRoot, input.candidate.changeId);
   if (!(await trustedDirectoryIfPresent(root, "El dossier fixture"))) {
     return false;
   }
@@ -417,6 +427,511 @@ async function verifyFixtureDossier(input: {
   return true;
 }
 
+type DurableRecord = Record<string, unknown>;
+
+interface DurableCandidateFacts {
+  readonly changeId: string;
+  readonly attemptId: string;
+  readonly requestSha256: string;
+  readonly planSha256: string;
+  readonly baselineCommit: string;
+  readonly candidateCommit: string;
+  readonly artifactSha256: string;
+  readonly approvalSubjectSha256: string;
+  readonly buildProfile: unknown;
+  readonly validations: ReadonlyMap<
+    string,
+    { readonly status: "passed" | "failed"; readonly evidence: string }
+  >;
+}
+
+function durableRecord(value: unknown, label: string): DurableRecord {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    throw new TypeError(`${label} no es un objeto durable válido`);
+  }
+  return value as DurableRecord;
+}
+
+function exactDurableRecord(
+  value: unknown,
+  label: string,
+  keys: readonly string[],
+): DurableRecord {
+  const record = durableRecord(value, label);
+  const expected = [...keys].sort();
+  const actual = Object.keys(record).sort();
+  if (
+    actual.length !== expected.length ||
+    actual.some((key, index) => key !== expected[index])
+  ) {
+    throw new TypeError(`${label} no conserva una forma saneada exacta`);
+  }
+  return record;
+}
+
+function durableString(
+  record: DurableRecord,
+  key: string,
+  label: string,
+): string {
+  const value = record[key];
+  if (typeof value !== "string" || value.length === 0) {
+    throw new TypeError(`${label} no contiene ${key} seguro`);
+  }
+  return value;
+}
+
+function durableHash(
+  record: DurableRecord,
+  key: string,
+  label: string,
+): string {
+  const value = durableString(record, key, label);
+  if (!sha256Pattern.test(value)) {
+    throw new TypeError(`${label} no contiene ${key} SHA-256`);
+  }
+  return value;
+}
+
+function durableCommit(
+  record: DurableRecord,
+  key: string,
+  label: string,
+): string {
+  const value = durableString(record, key, label);
+  if (!commitPattern.test(value)) {
+    throw new TypeError(`${label} no contiene ${key} commit`);
+  }
+  return value;
+}
+
+function durableChangeId(
+  record: DurableRecord,
+  key: string,
+  label: string,
+): string {
+  const value = durableString(record, key, label);
+  if (!changeIdPattern.test(value)) {
+    throw new TypeError(`${label} no contiene ${key} de cambio seguro`);
+  }
+  return value;
+}
+
+function durableStringArray(
+  value: unknown,
+  label: string,
+  valid: (entry: string) => boolean,
+): readonly string[] {
+  if (!Array.isArray(value)) {
+    throw new TypeError(`${label} no es una lista saneada`);
+  }
+  const result = value.map((entry) => {
+    if (typeof entry !== "string" || !valid(entry)) {
+      throw new TypeError(`${label} contiene una ruta o valor no permitido`);
+    }
+    return entry;
+  });
+  if (new Set(result).size !== result.length) {
+    throw new TypeError(`${label} contiene valores repetidos`);
+  }
+  return Object.freeze(result);
+}
+
+function durableValidationId(value: unknown, label: string): string {
+  if (typeof value !== "string" || !/^[a-z][a-z0-9-]{0,63}$/u.test(value)) {
+    throw new TypeError(`${label} no tiene identificador de validación seguro`);
+  }
+  return value;
+}
+
+function durableCandidateFacts(value: unknown): DurableCandidateFacts {
+  const candidate = exactDurableRecord(value, "El candidato fixture", [
+    "approvalSubjectSha256",
+    "artifactSha256",
+    "artifacts",
+    "attemptId",
+    "baselineCommit",
+    "buildProfile",
+    "candidateCommit",
+    "changeId",
+    "files",
+    "knownDifferences",
+    "planSha256",
+    "preview",
+    "requestSha256",
+    "routes",
+    "schemaVersion",
+    "validations",
+  ]);
+  if (candidate.schemaVersion !== 1) {
+    throw new TypeError("El candidato fixture tiene una versión inválida");
+  }
+  const changeId = durableChangeId(
+    candidate,
+    "changeId",
+    "El candidato fixture",
+  );
+  const attemptId = durableString(
+    candidate,
+    "attemptId",
+    "El candidato fixture",
+  );
+  if (!attemptIdPattern.test(attemptId)) {
+    throw new TypeError("El candidato fixture tiene un intento inválido");
+  }
+  const requestSha256 = durableHash(
+    candidate,
+    "requestSha256",
+    "El candidato fixture",
+  );
+  const planSha256 = durableHash(
+    candidate,
+    "planSha256",
+    "El candidato fixture",
+  );
+  const baselineCommit = durableCommit(
+    candidate,
+    "baselineCommit",
+    "El candidato fixture",
+  );
+  const candidateCommit = durableCommit(
+    candidate,
+    "candidateCommit",
+    "El candidato fixture",
+  );
+  const artifactSha256 = durableHash(
+    candidate,
+    "artifactSha256",
+    "El candidato fixture",
+  );
+  const approvalSubjectSha256 = durableHash(
+    candidate,
+    "approvalSubjectSha256",
+    "El candidato fixture",
+  );
+  durableStringArray(candidate.routes, "Las rutas candidatas", (route) =>
+    route.startsWith("/"),
+  );
+  durableStringArray(candidate.files, "Los archivos candidatos", (path) =>
+    safeRelativePath.test(path),
+  );
+  if (!Array.isArray(candidate.artifacts)) {
+    throw new TypeError("Los artefactos candidatos no son una lista");
+  }
+  for (const artifact of candidate.artifacts) {
+    const record = exactDurableRecord(artifact, "Un artefacto candidato", [
+      "bytes",
+      "path",
+      "sha256",
+    ]);
+    const path = durableString(record, "path", "Un artefacto candidato");
+    if (!path.startsWith("bundle/") || !safeRelativePath.test(path)) {
+      throw new TypeError("Un artefacto candidato tiene una ruta no permitida");
+    }
+    durableHash(record, "sha256", "Un artefacto candidato");
+    if (
+      typeof record.bytes !== "number" ||
+      !Number.isSafeInteger(record.bytes) ||
+      record.bytes < 0
+    ) {
+      throw new TypeError("Un artefacto candidato no tiene bytes válidos");
+    }
+  }
+  const preview = exactDurableRecord(
+    candidate.preview,
+    "El preview candidato",
+    ["command"],
+  );
+  if (preview.command !== "sealed verified candidate preview") {
+    throw new TypeError("El preview candidato no está saneado");
+  }
+  if (!Array.isArray(candidate.knownDifferences)) {
+    throw new TypeError("Las diferencias candidatas no son una lista");
+  }
+  for (const difference of candidate.knownDifferences) {
+    const record = exactDurableRecord(difference, "Una diferencia candidata", [
+      "approvalRequired",
+    ]);
+    if (record.approvalRequired !== true) {
+      throw new TypeError("Una diferencia candidata no conserva Gate 2");
+    }
+  }
+  if (!Array.isArray(candidate.validations)) {
+    throw new TypeError("Las validaciones candidatas no son una lista");
+  }
+  const validations = new Map<
+    string,
+    { readonly status: "passed" | "failed"; readonly evidence: string }
+  >();
+  for (const validation of candidate.validations) {
+    const record = exactDurableRecord(validation, "Una validación candidata", [
+      "evidence",
+      "id",
+      "status",
+    ]);
+    const id = durableValidationId(record.id, "Una validación candidata");
+    const status = record.status;
+    if (status !== "passed" && status !== "failed") {
+      throw new TypeError("Una validación candidata tiene estado inválido");
+    }
+    const evidence = durableString(
+      record,
+      "evidence",
+      "Una validación candidata",
+    );
+    if (evidence !== `evidence/${id}.json` || validations.has(id)) {
+      throw new TypeError("Una validación candidata no conserva su evidencia");
+    }
+    validations.set(id, { status, evidence });
+  }
+  if (validations.size === 0) {
+    throw new TypeError(
+      "El candidato fixture no tiene evidencia de validación",
+    );
+  }
+  return Object.freeze({
+    changeId,
+    attemptId,
+    requestSha256,
+    planSha256,
+    baselineCommit,
+    candidateCommit,
+    artifactSha256,
+    approvalSubjectSha256,
+    buildProfile: candidate.buildProfile,
+    validations,
+  });
+}
+
+function assertDurableAttempt(
+  value: unknown,
+  candidate: DurableCandidateFacts,
+): void {
+  const attempt = exactDurableRecord(value, "El intento fixture", [
+    "adapter",
+    "attemptId",
+    "baselineCommit",
+    "changeId",
+    "failure",
+    "finishedAt",
+    "generatedFiles",
+    "logs",
+    "planSha256",
+    "requestSha256",
+    "resumeState",
+    "schemaVersion",
+    "startedAt",
+    "status",
+    "validations",
+  ]);
+  if (
+    attempt.schemaVersion !== 1 ||
+    attempt.status !== "validated" ||
+    attempt.resumeState !== null ||
+    typeof attempt.adapter !== "string" ||
+    attempt.failure !== null ||
+    typeof attempt.startedAt !== "string" ||
+    typeof attempt.finishedAt !== "string" ||
+    !Number.isFinite(Date.parse(attempt.startedAt)) ||
+    !Number.isFinite(Date.parse(attempt.finishedAt))
+  ) {
+    throw new TypeError("El intento fixture no conserva sus hechos validados");
+  }
+  if (
+    durableChangeId(attempt, "changeId", "El intento fixture") !==
+      candidate.changeId ||
+    durableString(attempt, "attemptId", "El intento fixture") !==
+      candidate.attemptId ||
+    durableHash(attempt, "requestSha256", "El intento fixture") !==
+      candidate.requestSha256 ||
+    durableHash(attempt, "planSha256", "El intento fixture") !==
+      candidate.planSha256 ||
+    durableCommit(attempt, "baselineCommit", "El intento fixture") !==
+      candidate.baselineCommit
+  ) {
+    throw new TypeError("El intento fixture no coincide con el candidato");
+  }
+  durableStringArray(attempt.generatedFiles, "Los archivos generados", (path) =>
+    safeRelativePath.test(path),
+  );
+  const logs = exactDurableRecord(attempt.logs, "Los logs del intento", [
+    "finalMessage",
+    "stderr",
+    "stdout",
+  ]);
+  if (
+    logs.stdout !== null ||
+    logs.stderr !== null ||
+    logs.finalMessage !== null
+  ) {
+    throw new TypeError("El intento fixture no tiene logs saneados");
+  }
+  if (!Array.isArray(attempt.validations)) {
+    throw new TypeError("Las validaciones del intento no son una lista");
+  }
+  const validations = new Map<string, string>();
+  for (const validation of attempt.validations) {
+    const record = exactDurableRecord(validation, "Una validación de intento", [
+      "evidence",
+      "evidenceSha256",
+      "id",
+      "status",
+    ]);
+    const id = durableValidationId(record.id, "Una validación de intento");
+    const candidateValidation = candidate.validations.get(id);
+    if (
+      candidateValidation === undefined ||
+      record.status !== candidateValidation.status ||
+      record.evidence !== candidateValidation.evidence ||
+      validations.has(id)
+    ) {
+      throw new TypeError(
+        "La evidencia del intento no coincide con el candidato",
+      );
+    }
+    validations.set(
+      id,
+      durableHash(record, "evidenceSha256", "Una validación de intento"),
+    );
+  }
+  if (validations.size !== candidate.validations.size) {
+    throw new TypeError("Falta evidencia sellada del candidato fixture");
+  }
+}
+
+async function durableFixtureDossierIds(
+  projectRoot: string,
+): Promise<ReadonlySet<string>> {
+  const changes = join(projectRoot, "changes");
+  if (!(await trustedDirectoryIfPresent(changes, "La raíz de expedientes"))) {
+    return new Set();
+  }
+  const ids = new Set<string>();
+  const entries = await readdir(changes, { withFileTypes: true });
+  for (const entry of entries) {
+    if (fixtureRecordChangeIds.has(entry.name)) ids.add(entry.name);
+  }
+  return ids;
+}
+
+async function verifyDurableFixtureDossier(
+  projectRoot: string,
+  changeId: string,
+): Promise<{
+  readonly artifactSha256: string;
+  readonly candidateCommit: string;
+}> {
+  const root = join(projectRoot, "changes", changeId);
+  if (!(await trustedDirectoryIfPresent(root, "El dossier fixture"))) {
+    throw new TypeError("Falta el dossier fixture durable");
+  }
+  const candidate = durableCandidateFacts(
+    await readCanonicalDossierJson(
+      join(root, "candidate.json"),
+      "El candidato fixture durable",
+    ),
+  );
+  const expected = [
+    "approvals/gate-1.json",
+    "approvals/gate-2.json",
+    `attempts/${candidate.attemptId}.json`,
+    "candidate.json",
+    "plan.json",
+    "request.json",
+  ].sort();
+  const actual = await collectTrustedRelativeFiles(root);
+  if (
+    actual.length !== expected.length ||
+    actual.some((path, index) => path !== expected[index])
+  ) {
+    throw new TypeError(
+      "El dossier fixture no conserva exactamente sus archivos",
+    );
+  }
+  const [requestValue, planValue, gate1Value, gate2Value, attemptValue] =
+    await Promise.all([
+      readCanonicalDossierJson(
+        join(root, "request.json"),
+        "La solicitud fixture",
+      ),
+      readCanonicalDossierJson(join(root, "plan.json"), "El plan fixture"),
+      readCanonicalDossierJson(
+        join(root, "approvals", "gate-1.json"),
+        "El Gate 1 fixture",
+      ),
+      readCanonicalDossierJson(
+        join(root, "approvals", "gate-2.json"),
+        "El Gate 2 fixture",
+      ),
+      readCanonicalDossierJson(
+        join(root, "attempts", `${candidate.attemptId}.json`),
+        "El intento fixture",
+      ),
+    ]);
+  const request = exactDurableRecord(requestValue, "La solicitud fixture", [
+    "changeId",
+    "inputKind",
+    "inputSha256",
+    "mode",
+    "privacy",
+    "schemaVersion",
+    "targetPath",
+  ]);
+  if (
+    request.schemaVersion !== 1 ||
+    (request.inputKind !== "request" && request.inputKind !== "page") ||
+    typeof request.mode !== "string" ||
+    typeof request.targetPath !== "string" ||
+    !request.targetPath.startsWith("/")
+  ) {
+    throw new TypeError("La solicitud fixture no conserva hechos saneados");
+  }
+  const privacy = exactDurableRecord(request.privacy, "La privacidad fixture", [
+    "area",
+    "private",
+  ]);
+  if (
+    typeof privacy.private !== "boolean" ||
+    (privacy.area !== null && typeof privacy.area !== "string")
+  ) {
+    throw new TypeError("La privacidad fixture no es válida");
+  }
+  const plan = validateSchema<ChangePlan>("change-plan", planValue);
+  const gate1 = validateSchema<ApprovalRecord>("approval", gate1Value);
+  const gate2 = validateSchema<ApprovalRecord>("approval", gate2Value);
+  if (
+    durableChangeId(request, "changeId", "La solicitud fixture") !== changeId ||
+    durableHash(request, "inputSha256", "La solicitud fixture") !==
+      candidate.requestSha256 ||
+    plan.changeId !== changeId ||
+    plan.requestSha256 !== candidate.requestSha256 ||
+    plan.planSha256 !== candidate.planSha256 ||
+    plan.baselineCommit !== candidate.baselineCommit ||
+    canonicalJson(plan.publication) !== canonicalJson(candidate.buildProfile) ||
+    gate1.environment !== "test" ||
+    gate1.gate !== 1 ||
+    gate1.changeId !== changeId ||
+    gate1.baselineCommit !== candidate.baselineCommit ||
+    gate1.subjectSha256 !== plan.planSha256 ||
+    gate1.candidateCommit !== null ||
+    gate1.artifactSha256 !== null ||
+    gate2.environment !== "test" ||
+    gate2.gate !== 2 ||
+    gate2.changeId !== changeId ||
+    gate2.baselineCommit !== candidate.baselineCommit ||
+    gate2.subjectSha256 !== candidate.approvalSubjectSha256 ||
+    gate2.candidateCommit !== candidate.candidateCommit ||
+    gate2.artifactSha256 !== candidate.artifactSha256
+  ) {
+    throw new TypeError("El dossier fixture no conserva sus bindings sellados");
+  }
+  assertDurableAttempt(attemptValue, candidate);
+  return Object.freeze({
+    artifactSha256: candidate.artifactSha256,
+    candidateCommit: candidate.candidateCommit,
+  });
+}
+
 async function readCanonicalJson(
   path: string,
   label: string,
@@ -430,6 +945,25 @@ async function readCanonicalJson(
     throw new TypeError(`${label} no contiene JSON válido`);
   }
   if (canonicalJson(value) !== source) {
+    throw new TypeError(`${label} no es canónico`);
+  }
+  return value;
+}
+
+/** Dossiers deliberately use one terminal newline, unlike mutable state JSON. */
+async function readCanonicalDossierJson(
+  path: string,
+  label: string,
+): Promise<unknown> {
+  const bytes = await trustedRegularFile(path, label);
+  const source = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  let value: unknown;
+  try {
+    value = JSON.parse(source) as unknown;
+  } catch {
+    throw new TypeError(`${label} no contiene JSON válido`);
+  }
+  if (`${canonicalJson(value)}\n` !== source) {
     throw new TypeError(`${label} no es canónico`);
   }
   return value;
@@ -879,50 +1413,63 @@ class DefaultIngestionController implements IngestionController {
     ) {
       throw new TypeError("Los metadatos de página no pueden estar vacíos");
     }
-    const artifactRoot = join(this.projectRoot, ".artifacts");
-    const request =
+    const preflight =
       input.kind === "request"
-        ? await importRequest(input.source, { artifactRoot })
-        : await importPage(input.source, input.metadata, { artifactRoot });
-    return await this.withChangeOperation(request.changeId, async (locked) => {
-      const paths = await this.paths(request.changeId);
-      try {
-        await locked.read();
-        throw new TypeError("El cambio ya tiene estado durable");
-      } catch (error: unknown) {
-        if (
-          !(error instanceof Error) ||
-          error.message !== "El estado del cambio no existe"
-        ) {
-          throw error;
+        ? await importRequest(input.source, { persistRaw: false })
+        : await importPage(input.source, input.metadata, { persistRaw: false });
+    return await this.withChangeOperation(
+      preflight.changeId,
+      async (locked) => {
+        const paths = await this.paths(preflight.changeId);
+        try {
+          await locked.read();
+          throw new TypeError("El cambio ya tiene estado durable");
+        } catch (error: unknown) {
+          if (
+            !(error instanceof Error) ||
+            error.message !== "El estado del cambio no existe"
+          ) {
+            throw error;
+          }
         }
-      }
-      await writeAtomic(
-        paths.request,
-        Buffer.from(canonicalJson(request), "utf8"),
-      );
-      await locked.transition({
-        type: "received",
-        to: "received",
-        payload: {
-          inputKind: request.inputKind,
-          inputSha256: request.inputSha256,
-        },
-      });
-      await locked.transition({
-        type: "normalized",
-        to: "normalized",
-        payload: { inputSha256: request.inputSha256 },
-      });
-      return {
-        kind: "success",
-        value: {
-          changeId: request.changeId,
-          inputKind: request.inputKind,
-          state: "normalized",
-        },
-      };
-    });
+        const artifactRoot = join(this.projectRoot, ".artifacts");
+        const request =
+          input.kind === "request"
+            ? await importRequest(input.source, {
+                artifactRoot,
+                expectedChangeId: preflight.changeId,
+              })
+            : await importPage(input.source, input.metadata, {
+                artifactRoot,
+                expectedChangeId: preflight.changeId,
+              });
+        await writeAtomic(
+          paths.request,
+          Buffer.from(canonicalJson(request), "utf8"),
+        );
+        await locked.transition({
+          type: "received",
+          to: "received",
+          payload: {
+            inputKind: request.inputKind,
+            inputSha256: request.inputSha256,
+          },
+        });
+        await locked.transition({
+          type: "normalized",
+          to: "normalized",
+          payload: { inputSha256: request.inputSha256 },
+        });
+        return {
+          kind: "success",
+          value: {
+            changeId: request.changeId,
+            inputKind: request.inputKind,
+            state: "normalized",
+          },
+        };
+      },
+    );
   }
 
   async plan(changeId: string): Promise<ControllerResult> {
@@ -1309,6 +1856,9 @@ class DefaultIngestionController implements IngestionController {
 
   async audit(): Promise<IngestionAudit> {
     this.assertOpen();
+    // Records outlive their execution clone.  Read their tag facts up front,
+    // but never construct an agent merely to inspect those durable facts.
+    const fixtureTags = await fixtureTagCommits(this.projectRoot);
     const stateRoot = join(this.projectRoot, ".change-state");
     let entries: string[] = [];
     try {
@@ -1329,9 +1879,10 @@ class DefaultIngestionController implements IngestionController {
         "code" in error &&
         error.code === "ENOENT"
       ) {
-        return Object.freeze({ ok: true, changes: [], missing: [] });
+        entries = [];
+      } else {
+        throw error;
       }
-      throw error;
     }
     const changes: Array<IngestionAudit["changes"][number]> = [];
     const missing: string[] = [];
@@ -1428,10 +1979,7 @@ class DefaultIngestionController implements IngestionController {
                 attempt,
                 candidate: loaded,
               });
-              const tagCommit = await fixtureTagCommit(
-                this.projectRoot,
-                changeId,
-              );
+              const tagCommit = fixtureTags.get(changeId) ?? null;
               if (
                 tagCommit !== null &&
                 (!dossierPresent || tagCommit !== loaded.candidateCommit)
@@ -1458,10 +2006,57 @@ class DefaultIngestionController implements IngestionController {
         missing.push(`change:${changeId}`);
       }
     }
+
+    // A normal audit often runs after the fixture clone has been removed, so
+    // `.change-state` is intentionally only supplemental.  The source-side
+    // tag and sanitized dossier are the durable record and must exist as a
+    // matched, internally-bound pair.
+    const dossierIds = await durableFixtureDossierIds(this.projectRoot);
+    const durableIds = new Set([...fixtureTags.keys(), ...dossierIds]);
+    const reported = new Set(changes.map((change) => change.changeId));
+    for (const changeId of [...durableIds].sort()) {
+      try {
+        const tagCommit = fixtureTags.get(changeId);
+        if (tagCommit === undefined || !dossierIds.has(changeId)) {
+          throw new TypeError("Falta un hecho durable del fixture");
+        }
+        const dossier = await verifyDurableFixtureDossier(
+          this.projectRoot,
+          changeId,
+        );
+        if (dossier.candidateCommit !== tagCommit) {
+          throw new TypeError(
+            "La etiqueta fixture no coincide con su dossier durable",
+          );
+        }
+        if (!reported.has(changeId)) {
+          changes.push({
+            changeId,
+            state: "gate2_approved",
+            revision: 0,
+            candidate: {
+              artifactSha256: dossier.artifactSha256,
+              candidateCommit: dossier.candidateCommit,
+            },
+          });
+          reported.add(changeId);
+        }
+      } catch {
+        missing.push(`fixture:${changeId}`);
+      }
+    }
     return Object.freeze({
       ok: missing.length === 0,
-      changes: Object.freeze(changes),
-      missing: Object.freeze(missing),
+      changes: Object.freeze(
+        changes.sort((left, right) =>
+          left.changeId < right.changeId
+            ? -1
+            : left.changeId > right.changeId
+              ? 1
+              : 0,
+        ),
+      ),
+      missing: Object.freeze(missing.sort()),
     });
   }
 
@@ -1515,6 +2110,9 @@ export async function openIngestionController(): Promise<IngestionController> {
  * rejected as an invocation error instead of being inspected or initialized.
  */
 export async function openIngestionAuditController(): Promise<IngestionController> {
+  if (arguments.length !== 0) {
+    throw new TypeError("La auditoría no admite configuración externa");
+  }
   if (
     (process.env.CODEX_EXECUTABLE !== undefined &&
       process.env.CODEX_EXECUTABLE !== "") ||

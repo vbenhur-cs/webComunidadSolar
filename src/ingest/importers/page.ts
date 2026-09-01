@@ -62,7 +62,12 @@ interface ParsedMetadata {
   packagePath: string | undefined;
 }
 
-export type ImportPageOptions = RawArtifactOptions;
+export interface ImportPageOptions extends RawArtifactOptions {
+  /** Parses without writing intake so a controller can acquire the change lock. */
+  readonly persistRaw?: boolean;
+  /** Rejects a package that changed identity between preflight and the lock. */
+  readonly expectedChangeId?: string;
+}
 
 function ownDataRecord(value: object): Record<string, unknown> {
   const prototype = Object.getPrototypeOf(value);
@@ -645,15 +650,23 @@ export async function importPage(
     },
     "page",
   );
-  await preserveRawFiles(
-    request,
-    [
-      ...supplied.rawFiles,
-      ...(metadataPath === undefined || metadata.raw === undefined
-        ? []
-        : [metadata.raw]),
-    ],
-    options,
-  );
+  if (
+    options.expectedChangeId !== undefined &&
+    request.changeId !== options.expectedChangeId
+  ) {
+    throw new TypeError("La página cambió de identidad durante la recepción");
+  }
+  if (options.persistRaw !== false) {
+    await preserveRawFiles(
+      request,
+      [
+        ...supplied.rawFiles,
+        ...(metadataPath === undefined || metadata.raw === undefined
+          ? []
+          : [metadata.raw]),
+      ],
+      options,
+    );
+  }
   return request;
 }

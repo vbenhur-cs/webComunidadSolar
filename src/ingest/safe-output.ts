@@ -3,7 +3,7 @@ const forbiddenField =
 const forbiddenValue =
   /api[_ -]?key|codex_executable|env(?:ironment)?|argv|args?|argument|pid|bundle|repository|repo|internal|capability|path|ruta|root|cwd|workspace|secret|token|password|credential|private[ _-]?key/iu;
 const absolutePath =
-  /file:\/\/|(?:^|[\s"'`:=])(?:\/[A-Za-z0-9_.~/-]*|[A-Za-z]:[\\/])/iu;
+  /file:\/\/|(?:^|[\s"'`:=()[\]{}<>,;!?])(?:\/[A-Za-z0-9_.~/-]*|[A-Za-z]:[\\/])/iu;
 
 function safeString(value: string): string {
   if (forbiddenValue.test(value) || absolutePath.test(value)) {

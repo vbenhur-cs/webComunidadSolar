@@ -11,7 +11,12 @@ import {
 import { parseMarkdownFrontmatter } from "./frontmatter.ts";
 import type { NormalizedRequest } from "../domain.ts";
 
-export type ImportRequestOptions = RawArtifactOptions;
+export interface ImportRequestOptions extends RawArtifactOptions {
+  /** Parses without writing intake so a controller can acquire the change lock. */
+  readonly persistRaw?: boolean;
+  /** Rejects a source that changed identity between preflight and the lock. */
+  readonly expectedChangeId?: string;
+}
 
 function parseJson(source: string): unknown {
   try {
@@ -45,6 +50,16 @@ export async function importRequest(
     new TextDecoder("utf-8", { fatal: true }).decode(bytes),
   );
   const request = normalizeRequestInput(parseInput(extension, source));
-  await copyRawRequest(bytes, request, extension, options);
+  if (
+    options.expectedChangeId !== undefined &&
+    request.changeId !== options.expectedChangeId
+  ) {
+    throw new TypeError(
+      "La solicitud cambió de identidad durante la recepción",
+    );
+  }
+  if (options.persistRaw !== false) {
+    await copyRawRequest(bytes, request, extension, options);
+  }
   return request;
 }

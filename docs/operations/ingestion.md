@@ -105,10 +105,26 @@ reservado a un procedimiento revisado: debe revalidar `main`, crear sólo el tag
 de candidato documentado y copiar únicamente el expediente saneado. Nunca debe
 fusionar `main` ni convertirse en una publicación externa.
 
+Cuando ese procedimiento sea autorizado, el único destino durable es
+`changes/<change-id>/`; `.artifacts/` conserva entradas y builds ignorados y no
+puede contener un expediente grabado. El runner acepta solamente las tres
+combinaciones fijas (`fixture-request-blocks`, `fixture-request-hybrid` y
+`fixture-page-freeform`). Antes de cada grabación exige `main == HEAD` y un
+árbol sin cambios, salvo expedientes completos y no indexados de esas mismas
+tres IDs que hayan sido grabados anteriormente. Rechaza cualquier cambio
+preparado, edición tracked, ID ajena, archivo parcial o enlace simbólico. Así
+se pueden completar las tres grabaciones planificadas antes de ejecutar
+`git add changes`, sin abrir el procedimiento a suciedad arbitraria.
+
 Antes de crear ese tag, el runner valida de nuevo la identidad del ref
 candidato, rechaza artefactos ignorados o enlaces simbólicos y escribe el
 expediente en staging no enlazable. Sólo publica el staging verificado de forma
-atómica y después crea el tag; un fallo deja sin tag ni expediente parcial.
+atómica y después crea el tag; un fallo deja sin tag ni expediente parcial. El
+tag `refs/tags/ingestion-fixture/<change-id>` y su dossier deben formar una
+pareja: `npm run verify:ingestion` descubre ambos desde el repositorio fuente,
+comprueba la identidad de commit, los bindings de request/plan/Gates/intento y
+los hashes de evidencia del candidato. La ausencia o modificación de cualquiera
+de los dos hace que la auditoría falle cerradamente sin inicializar un agente.
 
 **`--execute` no es una autorización implícita de deploy.** La CLI actual ni lo
 acepta; una publicación Cloudflare real sigue cerrada hasta que exista una

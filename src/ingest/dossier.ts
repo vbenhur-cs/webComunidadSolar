@@ -1,4 +1,4 @@
-import { canonicalJson } from "./canonical-json.ts";
+import { canonicalJson, sha256Canonical } from "./canonical-json.ts";
 import type {
   ApprovalRecord,
   AttemptRecord,
@@ -74,6 +74,9 @@ function sanitizedCandidate(candidate: CandidateManifest): object {
     baselineCommit: candidate.baselineCommit,
     candidateCommit: candidate.candidateCommit,
     artifactSha256: candidate.artifactSha256,
+    // Binds Gate 2 to the complete sealed manifest without copying its local
+    // preview endpoint or other non-durable operational details.
+    approvalSubjectSha256: sha256Canonical(candidate),
     buildProfile: candidate.buildProfile,
     routes: candidate.routes,
     files: candidate.files,
