@@ -714,7 +714,7 @@ test("keeps candidate A reachable from the controller repository after its priva
   });
 });
 
-test("reloads and rehashes the durable controller bundle without a checkout path", async () => {
+test("reloads and rehashes durable state without restoring preview authority", async () => {
   await withCandidateFixture({}, async (fixture) => {
     const candidate = await createCandidate(candidateInput(fixture));
     await releaseControllerCandidateStore(fixture.store);
@@ -728,6 +728,10 @@ test("reloads and rehashes the durable controller bundle without a checkout path
     });
     assert.deepEqual(reloaded, candidate);
     await assert.doesNotReject(verifyCandidateArtifact(reloaded));
+    await assert.rejects(
+      startCandidatePreview(reloaded),
+      /capability de preview/i,
+    );
 
     await writeFile(
       join(

@@ -48,3 +48,27 @@ The verifier rejects untracked or unstaged project files, creates a private Git
 archive without `.git` or a sibling checkout, and runs `npm ci`, check, test,
 and build inside it. Agents and automation do not publish directly; later
 migration and ingestion work still require their approved gates.
+
+## Ingestión de páginas verificable
+
+El flujo de ingestión recibe una solicitud o página aportada, exige Gate 1,
+genera y valida un candidato sellado, y exige Gate 2 antes de cualquier
+operación posterior. La CLI productiva acepta sólo los adaptadores `codex` y
+`command`; una aprobación pendiente termina con código 2 y un comando o
+adaptador prohibido con código 3.
+
+```bash
+npm run ingest -- receive request examples/requests/page-request.yaml
+npm run ingest -- plan ejemplo-autoconsumo-compartido
+npm run ingest -- approve ejemplo-autoconsumo-compartido --gate 1 --actor operador-responsable
+npm run ingest -- generate ejemplo-autoconsumo-compartido --adapter command
+npm run ingest -- validate ejemplo-autoconsumo-compartido
+npm run ingest -- preview ejemplo-autoconsumo-compartido --check-only
+npm run verify:ingestion
+```
+
+Los fixtures de ingestión se ejecutan sólo en clones temporales y no son parte
+de la CLI de producción. `--execute` no autoriza un deploy y Cloudflare real
+sigue cerrada. Consulte [la guía operativa de ingestión](docs/operations/ingestion.md)
+para estados, evidencia, configuración de `CommandAgent` y recuperación de una
+reconciliación pendiente.

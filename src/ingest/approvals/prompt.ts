@@ -238,7 +238,15 @@ export async function createFixtureApprovalRun(
   try {
     await execFileAsync(
       "git",
-      ["clone", "--quiet", "--branch", "main", source, repositoryRoot],
+      [
+        "clone",
+        "--no-hardlinks",
+        "--quiet",
+        "--branch",
+        "main",
+        source,
+        repositoryRoot,
+      ],
       {
         env: sanitizedGitEnv(),
       },

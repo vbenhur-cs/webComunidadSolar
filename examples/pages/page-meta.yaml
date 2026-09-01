@@ -1,0 +1,8 @@
+changeId: ejemplo-pagina-aportada
+intent: Presentar una página aportada por un operador
+audience: Comunidades locales
+targetPath: /ejemplo-pagina-aportada
+mode: freeform
+acceptanceCriteria:
+  - La ruta conserva una estructura principal accesible
+  - La entrada se inspecciona sin ejecutar contenido aportado

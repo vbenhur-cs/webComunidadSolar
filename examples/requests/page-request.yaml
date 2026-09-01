@@ -1,0 +1,23 @@
+schemaVersion: 1
+changeId: ejemplo-autoconsumo-compartido
+intent: Explicar cómo una comunidad puede compartir energía solar
+audience: Vecinas y vecinos que valoran una comunidad energética
+targetPath: /ejemplo-autoconsumo-compartido
+mode: auto
+content: |
+  El autoconsumo compartido permite repartir energía solar entre varios hogares.
+  La página debe explicar el proceso con lenguaje claro y enlaces internos.
+claims: []
+references: []
+assets: []
+seo:
+  title: Ejemplo de autoconsumo compartido
+  description: Información práctica sobre una comunidad solar
+  index: false
+privacy:
+  private: false
+  area: null
+allowedExternalLinks: []
+acceptanceCriteria:
+  - La ruta explica el reparto de energía
+  - La página mantiene enlaces y metadatos verificables
