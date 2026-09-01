@@ -23,6 +23,7 @@ import {
   verifyApproval,
 } from "../../src/ingest/approvals/service.ts";
 import {
+  createControllerApprovalTestPrompt,
   createFixtureApprovalRun,
   type FixtureApprovalRun,
   type FixtureApprovalPrompt,
@@ -525,6 +526,20 @@ test("refuses to create fixture prompts outside explicit test mode", async () =>
       /INGEST_TEST_MODE|fixture/i,
     );
   });
+});
+
+test("refuses to mint the controller test authority outside explicit test mode", () => {
+  const previous = process.env.INGEST_TEST_MODE;
+  delete process.env.INGEST_TEST_MODE;
+  try {
+    assert.throws(
+      () => createControllerApprovalTestPrompt({ answer: "0123456789ab" }),
+      /modo de pruebas|test/i,
+    );
+  } finally {
+    if (previous === undefined) delete process.env.INGEST_TEST_MODE;
+    else process.env.INGEST_TEST_MODE = previous;
+  }
 });
 
 test("refuses a symlink fixture source", async () => {

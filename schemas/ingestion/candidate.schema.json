@@ -96,7 +96,8 @@
       "properties": {
         "id": { "type": "string" },
         "status": { "const": "passed" },
-        "evidence": { "type": "string" }
+        "evidence": { "type": "string" },
+        "evidenceSha256": { "$ref": "#/$defs/hash" }
       }
     },
     "artifact": {

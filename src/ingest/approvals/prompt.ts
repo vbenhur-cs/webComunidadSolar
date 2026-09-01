@@ -20,6 +20,8 @@ export interface ApprovalConfirmation {
 interface ApprovalPrompt {
   readonly isTTY: boolean;
   readonly environment: "production" | "test";
+  /** Private issuance class; persisted provenance is derived only by service. */
+  readonly issuer: "controller" | "fixture";
   readonly fixtureProjectRoot: string | null;
   confirm(confirmation: ApprovalConfirmation): Promise<string>;
   revalidate(): Promise<void>;
@@ -29,6 +31,17 @@ interface ApprovalPrompt {
 
 export interface FixtureApprovalPrompt {
   readonly [fixturePromptBrand]: true;
+}
+
+declare const controllerApprovalTestPromptBrand: unique symbol;
+
+/**
+ * Test-only stand-in for the trusted controller prompt. It is deliberately
+ * separate from FixtureApprovalRun: a fixture prompt can only ever mint test
+ * provenance, whereas this opaque capability exercises the controller path.
+ */
+export interface ControllerApprovalTestPrompt {
+  readonly [controllerApprovalTestPromptBrand]: true;
 }
 
 export interface FixtureApprovalRun {
@@ -47,6 +60,10 @@ export interface FixtureApprovalRunOptions {
 }
 
 const fixturePrompts = new WeakMap<FixtureApprovalPrompt, ApprovalPrompt>();
+const controllerApprovalTestPrompts = new WeakMap<
+  ControllerApprovalTestPrompt,
+  ApprovalPrompt
+>();
 
 interface FilesystemIdentity {
   readonly device: number;
@@ -262,6 +279,7 @@ export async function createFixtureApprovalRun(
       fixturePrompts.set(capability, {
         isTTY,
         environment: "test",
+        issuer: "fixture",
         fixtureProjectRoot: repositoryRoot,
         confirm: async () => answer,
         beforePersist,
@@ -317,6 +335,7 @@ function createProductionApprovalPrompt(): ApprovalPrompt {
   return {
     isTTY: stdin.isTTY === true && stdout.isTTY === true,
     environment: "production",
+    issuer: "controller",
     fixtureProjectRoot: null,
     async revalidate() {},
     async acquireLease() {
@@ -336,14 +355,57 @@ function createProductionApprovalPrompt(): ApprovalPrompt {
   };
 }
 
+/**
+ * Mints an opaque test controller prompt without accepting a repository path,
+ * state path, environment, or issuer from the caller. Production issuance
+ * keeps using the real interactive controller prompt above.
+ */
+export function createControllerApprovalTestPrompt(options: {
+  answer: string;
+  beforePersist?: () => Promise<void>;
+}): ControllerApprovalTestPrompt {
+  if (process.env.INGEST_TEST_MODE !== "true") {
+    throw new TypeError(
+      "La autoridad de aprobación controladora sólo existe en modo de pruebas",
+    );
+  }
+  if (typeof options.answer !== "string") {
+    throw new TypeError("La confirmación controladora de prueba no es válida");
+  }
+  const capability = Object.freeze({}) as ControllerApprovalTestPrompt;
+  controllerApprovalTestPrompts.set(
+    capability,
+    Object.freeze({
+      isTTY: true,
+      environment: "production",
+      issuer: "controller",
+      fixtureProjectRoot: null,
+      confirm: async () => options.answer,
+      beforePersist: options.beforePersist,
+      async acquireLease() {
+        return () => {};
+      },
+      async revalidate() {},
+    }),
+  );
+  return capability;
+}
+
+export type ApprovalPromptCapability =
+  FixtureApprovalPrompt | ControllerApprovalTestPrompt;
+
 export function approvalPrompt(
-  fixturePrompt?: FixtureApprovalPrompt,
+  capability?: ApprovalPromptCapability,
 ): ApprovalPrompt {
-  if (fixturePrompt === undefined) return createProductionApprovalPrompt();
-  const prompt = fixturePrompts.get(fixturePrompt);
+  if (capability === undefined) return createProductionApprovalPrompt();
+  const prompt =
+    fixturePrompts.get(capability as FixtureApprovalPrompt) ??
+    controllerApprovalTestPrompts.get(
+      capability as ControllerApprovalTestPrompt,
+    );
   if (prompt === undefined)
     throw new TypeError(
-      "El prompt de aprobación debe ser una capacidad fixture autorizada",
+      "El prompt de aprobación debe ser una capacidad controladora autorizada",
     );
   return prompt;
 }

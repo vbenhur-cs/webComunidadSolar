@@ -25,6 +25,11 @@ export interface CandidateBoundBuildEvidence {
   }[];
 }
 
+/** The persisted build evidence adds the copied bundle digest after capture. */
+export interface PersistedCandidateBuildEvidence extends CandidateBoundBuildEvidence {
+  readonly artifactSha256: string;
+}
+
 /** A test-only capability; it contains data, never a checkout callback. */
 declare const candidateBuildTestCapabilityBrand: unique symbol;
 export interface CandidateBuildTestCapability {
@@ -136,7 +141,7 @@ export function validatedCandidateBuildValidations(
 
 /** A stable binding representation for persisted candidate-build evidence. */
 export function canonicalCandidateBuildEvidence(
-  evidence: CandidateBoundBuildEvidence,
+  evidence: PersistedCandidateBuildEvidence,
 ): string {
   return canonicalJson(evidence);
 }

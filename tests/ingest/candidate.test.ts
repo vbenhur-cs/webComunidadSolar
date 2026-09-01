@@ -247,19 +247,29 @@ function candidateBuildFixture(
     options.targetEnvironment ?? plan.publication.environment;
   const siteIndexable = options.siteIndexable ?? plan.publication.siteIndexable;
   const bindings = options.bindings ?? ["ASSETS", "DB"];
+  const destination = {
+    binding: "DB",
+    database_id: "00000000-0000-4000-8000-000000000000",
+    database_name: "candidate-fixture",
+    migrations_dir: "drizzle",
+  };
   const config = JSON.stringify({
     targetEnvironment,
+    name: "candidate-fixture",
     main: "_worker.js/index.js",
     assets: { binding: "ASSETS", directory: ".", run_worker_first: true },
     vars: { SITE_INDEXABLE: siteIndexable ? "true" : "false" },
     bindings,
+    d1_databases: [destination],
   });
   const nestedConfig = JSON.stringify({
     targetEnvironment,
+    name: "candidate-fixture",
     main: "../_worker.js/index.js",
     assets: { binding: "ASSETS", directory: "..", run_worker_first: true },
     vars: { SITE_INDEXABLE: siteIndexable ? "true" : "false" },
     bindings,
+    d1_databases: [destination],
   });
   return {
     files: {
@@ -521,7 +531,9 @@ test("creates a clean direct-child candidate with only approved output and immut
     assert.ok(
       candidate.validations.every(
         (validation) =>
-          validation.status === "passed" && validation.evidence.length > 0,
+          validation.status === "passed" &&
+          validation.evidence.length > 0 &&
+          /^[a-f0-9]{64}$/u.test(validation.evidenceSha256 ?? ""),
       ),
     );
     assert.ok(

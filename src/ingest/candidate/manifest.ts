@@ -22,12 +22,18 @@ import type {
   NormalizedRequest,
   ValidationResult,
 } from "../domain.ts";
-import { verifyApproval } from "../approvals/service.ts";
+import {
+  verifyApproval,
+  verifyPersistedApprovalProvenance,
+} from "../approvals/service.ts";
 import { assertNormalizedRequest } from "../importers/common.ts";
 import { ingestPaths } from "../paths.ts";
 import { validateSchema } from "../schema-validator.ts";
 import { createStateStore, writeAtomic } from "../state-store.ts";
-import { assertCandidateEligiblePreliminaryValidation } from "../validation/runner.ts";
+import {
+  assertCandidateEligiblePreliminaryValidation,
+  PRELIMINARY_STAGED_VALIDATION_SCOPE,
+} from "../validation/runner.ts";
 import type { StagedAgentOutput } from "../workspaces/policy.ts";
 
 import {
@@ -42,6 +48,7 @@ import {
   canonicalCandidateBuildEvidence,
   type CandidateBuildTestCapability,
   type CandidateBoundBuildEvidence,
+  type PersistedCandidateBuildEvidence,
 } from "./evidence.ts";
 import { hashTree } from "./tree-digest.ts";
 
@@ -114,12 +121,36 @@ export interface CandidateBundleConfiguration {
   readonly workerRelativePath: string;
   readonly assetsRelativePath: string;
   readonly configRelativePaths: readonly string[];
+  /** Hash of the exact verified flattened-config bytes and paths. */
+  readonly flattenedConfigSha256: string;
+  readonly destination: CandidatePublishDestination;
+}
+
+/** Semantic destination only; no config, bundle, checkout or root path leaks. */
+export interface CandidatePublishDestination {
+  readonly workerName: string;
+  readonly d1: {
+    readonly binding: "DB";
+    readonly databaseId: string;
+    readonly databaseName: string;
+  };
+}
+
+/** Narrow external profile compared with the sealed flattened config. */
+export interface CandidateOperatorProfile {
+  readonly adapter: ChangePlan["publication"]["adapter"];
+  readonly configSha256: string;
+  readonly environment: string | null;
+  readonly siteIndexable: boolean;
+  readonly flattenedConfigSha256: string;
+  readonly destination: CandidatePublishDestination;
 }
 
 /** Private preview state; it never crosses the candidate module boundary. */
 interface CandidatePreviewRecord {
   readonly store: ControllerCandidateStore;
   readonly attemptId: string;
+  readonly candidateTree: string;
   readonly bundlePath: string;
   readonly manifestPath: string;
   readonly configuration: CandidateBundleConfiguration;
@@ -143,6 +174,17 @@ interface FixedCloudflareInvocation {
   readonly argv: readonly string[];
   readonly cwd: string;
   readonly env: Readonly<Record<string, string>>;
+}
+
+/** Safe observer payload; it intentionally has no executable, argv, cwd or env. */
+export interface CloudflareDryRunAssertionDescriptor {
+  readonly publisher: "cloudflare";
+  readonly dryRun: true;
+  readonly changeId: string;
+  readonly artifactSha256: string;
+  readonly sealedRedirect: true;
+  readonly fixedDeployArguments: true;
+  readonly targetEnvironmentBound: true;
 }
 
 export interface PreviewHandle {
@@ -207,6 +249,7 @@ interface DurableCandidateProvenance {
   readonly changeId: string;
   readonly attemptId: string;
   readonly candidateCommit: string;
+  readonly candidateTree: string;
   readonly artifactSha256: string;
   readonly candidateRef: string;
   readonly bundle: string;
@@ -232,7 +275,7 @@ const candidatePreviewCapabilities = new WeakMap<
 >();
 const candidateCloudflareDryRunTestCapabilities = new WeakMap<
   CandidateCloudflareDryRunTestCapability,
-  (invocation: FixedCloudflareInvocation) => Promise<void>
+  (descriptor: CloudflareDryRunAssertionDescriptor) => Promise<void>
 >();
 const candidateLocalPublicationTestCapabilities =
   new WeakSet<CandidateLocalPublicationTestCapability>();
@@ -640,6 +683,7 @@ function durableCandidateLocations(
     changeId: plan.changeId,
     attemptId,
     candidateCommit: "",
+    candidateTree: "",
     artifactSha256: "",
     candidateRef: `refs/comunidadsolar/candidates/${plan.changeId}/${attemptId}`,
     bundle: `.artifacts/candidates/${plan.changeId}/${attemptId}/bundle`,
@@ -649,6 +693,7 @@ function durableCandidateLocations(
 
 function durableCandidateProvenance(
   candidate: CandidateManifest,
+  candidateTree: string,
 ): DurableCandidateProvenance {
   const locations = durableCandidateLocations(
     { changeId: candidate.changeId },
@@ -657,6 +702,7 @@ function durableCandidateProvenance(
   return Object.freeze({
     ...locations,
     candidateCommit: candidate.candidateCommit,
+    candidateTree,
     artifactSha256: candidate.artifactSha256,
   });
 }
@@ -950,6 +996,28 @@ function safeBinding(value: string): boolean {
   return /^[A-Z][A-Z0-9_]{0,63}$/u.test(value);
 }
 
+function safeWorkerName(value: string): boolean {
+  return /^[a-z0-9][a-z0-9-]{0,62}$/u.test(value);
+}
+
+function safeDatabaseId(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(
+    value,
+  );
+}
+
+function sameDestination(
+  left: CandidatePublishDestination,
+  right: CandidatePublishDestination,
+): boolean {
+  return (
+    left.workerName === right.workerName &&
+    left.d1.binding === right.d1.binding &&
+    left.d1.databaseId === right.d1.databaseId &&
+    left.d1.databaseName === right.d1.databaseName
+  );
+}
+
 async function resolveFlattenedConfigPath(
   root: string,
   redirectPath: string,
@@ -1041,12 +1109,12 @@ async function validateFlattenedConfig(
 ): Promise<{
   readonly workerRelativePath: string;
   readonly assetsRelativePath: string;
+  readonly configSha256: string;
+  readonly destination: CandidatePublishDestination;
 }> {
   const configPath = join(root, ...relativeConfigPath.split("/"));
-  const config = strictJsonRecord(
-    (await readStableRegularFile(configPath)).bytes,
-    "El config aplanado",
-  );
+  const configFile = await readStableRegularFile(configPath);
+  const config = strictJsonRecord(configFile.bytes, "El config aplanado");
   const targetEnvironment = config.targetEnvironment;
   if (targetEnvironment !== plan.publication.environment) {
     throw new TypeError(
@@ -1120,9 +1188,62 @@ async function validateFlattenedConfig(
       "Los bindings del build no coinciden con el perfil aprobado",
     );
   }
+  const workerName = requiredString(config, "name", "El config aplanado");
+  if (!safeWorkerName(workerName)) {
+    throw new TypeError("El config aplanado no tiene un Worker permitido");
+  }
+  if (!Array.isArray(config.d1_databases) || config.d1_databases.length !== 1) {
+    throw new TypeError("El config aplanado requiere un destino D1 único");
+  }
+  const database = asRecord(config.d1_databases[0]);
+  if (database === null) {
+    throw new TypeError("El config aplanado tiene un destino D1 inválido");
+  }
+  exactKeys(
+    database,
+    ["binding", "database_id", "database_name", "migrations_dir"],
+    "El destino D1 aplanado",
+  );
+  const databaseBinding = requiredString(
+    database,
+    "binding",
+    "El destino D1 aplanado",
+  );
+  const databaseId = requiredString(
+    database,
+    "database_id",
+    "El destino D1 aplanado",
+  );
+  const databaseName = requiredString(
+    database,
+    "database_name",
+    "El destino D1 aplanado",
+  );
+  const migrationsDirectory = requiredString(
+    database,
+    "migrations_dir",
+    "El destino D1 aplanado",
+  );
+  if (
+    databaseBinding !== "DB" ||
+    !safeDatabaseId(databaseId) ||
+    !safeWorkerName(databaseName) ||
+    !safeRedirectPath(migrationsDirectory)
+  ) {
+    throw new TypeError("El config aplanado tiene un destino D1 inválido");
+  }
   return Object.freeze({
     workerRelativePath: relative(root, workerPath).split(sep).join("/"),
     assetsRelativePath: relative(root, assetsPath).split(sep).join("/"),
+    configSha256: configFile.sha256,
+    destination: Object.freeze({
+      workerName,
+      d1: Object.freeze({
+        binding: "DB" as const,
+        databaseId,
+        databaseName,
+      }),
+    }),
   });
 }
 
@@ -1171,14 +1292,28 @@ async function readCandidateBundleConfiguration(
     | {
         readonly workerRelativePath: string;
         readonly assetsRelativePath: string;
+        readonly configSha256: string;
+        readonly destination: CandidatePublishDestination;
       }
     | undefined;
+  const verifiedConfigurations: Array<{
+    readonly path: string;
+    readonly sha256: string;
+    readonly destination: CandidatePublishDestination;
+  }> = [];
   for (const configPath of configRelativePaths) {
     const verified = await validateFlattenedConfig(
       root,
       configPath,
       plan,
       configPath === primaryConfigRelativePath,
+    );
+    verifiedConfigurations.push(
+      Object.freeze({
+        path: configPath,
+        sha256: verified.configSha256,
+        destination: verified.destination,
+      }),
     );
     if (configPath === primaryConfigRelativePath) primary = verified;
   }
@@ -1187,12 +1322,34 @@ async function readCandidateBundleConfiguration(
       "El redirect de deploy no conserva un config principal",
     );
   }
+  if (
+    verifiedConfigurations.some(
+      (configuration) =>
+        !sameDestination(configuration.destination, primary.destination),
+    )
+  ) {
+    throw new TypeError(
+      "Los configs aplanados no comparten el destino Cloudflare sellado",
+    );
+  }
   return Object.freeze({
     redirectRelativePath: fixedDeployRedirectPath,
     primaryConfigRelativePath,
     workerRelativePath: primary.workerRelativePath,
     assetsRelativePath: primary.assetsRelativePath,
     configRelativePaths: Object.freeze(configRelativePaths),
+    flattenedConfigSha256: createHash("sha256")
+      .update(
+        canonicalJson(
+          verifiedConfigurations.map((configuration) => ({
+            path: configuration.path,
+            sha256: configuration.sha256,
+          })),
+        ),
+        "utf8",
+      )
+      .digest("hex"),
+    destination: primary.destination,
   });
 }
 
@@ -1220,6 +1377,7 @@ async function persistPreliminaryEvidence(
     readonly id: string;
     readonly status: "passed";
     readonly evidence: string;
+    readonly evidenceSha256: string;
   }[]
 > {
   const preliminaryPath = await createChildDirectory(
@@ -1232,6 +1390,7 @@ async function persistPreliminaryEvidence(
     readonly id: string;
     readonly status: "passed";
     readonly evidence: string;
+    readonly evidenceSha256: string;
   }> = [];
   for (const validation of validations) {
     if (
@@ -1253,12 +1412,13 @@ async function persistPreliminaryEvidence(
     }
     const fileName = `${validation.id}.json`;
     const destination = join(preliminaryPath, fileName);
-    await writeControllerFile(destination, source.bytes);
+    const evidenceSha256 = await writeControllerFile(destination, source.bytes);
     persisted.push(
       Object.freeze({
         id: validation.id,
         status: "passed" as const,
         evidence: `evidence/preliminary/${fileName}`,
+        evidenceSha256,
       }),
     );
   }
@@ -1267,25 +1427,32 @@ async function persistPreliminaryEvidence(
 
 async function persistCandidateBuildEvidence(
   evidence: CandidateBoundBuildEvidence,
+  artifactSha256: string,
   evidencePath: string,
 ): Promise<
   readonly {
     readonly id: string;
     readonly status: "passed";
     readonly evidence: string;
+    readonly evidenceSha256: string;
   }[]
 > {
   const path = join(evidencePath, "candidate-build.json");
+  const persisted: PersistedCandidateBuildEvidence = Object.freeze({
+    ...evidence,
+    artifactSha256,
+  });
   const bytes = Buffer.from(
-    `${canonicalCandidateBuildEvidence(evidence)}\n`,
+    `${canonicalCandidateBuildEvidence(persisted)}\n`,
     "utf8",
   );
-  await writeControllerFile(path, bytes);
-  const validations = evidence.validations.map((validation) =>
+  const evidenceSha256 = await writeControllerFile(path, bytes);
+  const validations = persisted.validations.map((validation) =>
     Object.freeze({
       id: validation.id,
       status: "passed" as const,
       evidence: `evidence/candidate-build.json#${validation.id}`,
+      evidenceSha256,
     }),
   );
   if (
@@ -1413,6 +1580,7 @@ export async function createCandidate(
     );
     const buildValidations = await persistCandidateBuildEvidence(
       buildEvidence,
+      artifactSha256,
       directories.evidencePath,
     );
     const validations = [...preliminaryValidations, ...buildValidations];
@@ -1466,7 +1634,9 @@ export async function createCandidate(
     await writeControllerFile(
       join(directories.stateCandidatePath, "candidate-provenance.json"),
       Buffer.from(
-        `${canonicalJson(durableCandidateProvenance(manifest))}\n`,
+        `${canonicalJson(
+          durableCandidateProvenance(manifest, candidateCommit.candidateTree),
+        )}\n`,
         "utf8",
       ),
     );
@@ -1476,6 +1646,7 @@ export async function createCandidate(
       Object.freeze({
         store: input.store,
         attemptId: input.attemptId,
+        candidateTree: candidateCommit.candidateTree,
         bundlePath: directories.bundlePath,
         manifestPath,
         configuration: copiedConfiguration,
@@ -1507,7 +1678,7 @@ function verifiedDurableProvenance(
   candidate: CandidateManifest,
   changeId: string,
   attemptId: string,
-): void {
+): string {
   exactKeys(
     value,
     [
@@ -1515,6 +1686,7 @@ function verifiedDurableProvenance(
       "attemptId",
       "bundle",
       "candidateCommit",
+      "candidateTree",
       "candidateRef",
       "changeId",
       "manifest",
@@ -1522,19 +1694,22 @@ function verifiedDurableProvenance(
     ],
     "La procedencia durable candidata",
   );
-  const expected = durableCandidateProvenance(candidate);
+  const locations = durableCandidateLocations({ changeId }, attemptId);
   if (
     value.schemaVersion !== 1 ||
     value.changeId !== changeId ||
     value.attemptId !== attemptId ||
     value.candidateCommit !== candidate.candidateCommit ||
     value.artifactSha256 !== candidate.artifactSha256 ||
-    value.candidateRef !== expected.candidateRef ||
-    value.bundle !== expected.bundle ||
-    value.manifest !== expected.manifest
+    typeof value.candidateTree !== "string" ||
+    !candidateCommitPattern.test(value.candidateTree) ||
+    value.candidateRef !== locations.candidateRef ||
+    value.bundle !== locations.bundle ||
+    value.manifest !== locations.manifest
   ) {
     throw new TypeError("La procedencia durable no coincide con el candidato");
   }
+  return value.candidateTree;
 }
 
 async function verifyPersistedArtifactEntries(
@@ -1580,10 +1755,12 @@ async function verifyPersistedArtifactEntries(
 async function assertDurableCandidateStoreCommit(
   store: ControllerCandidateStore,
   candidate: CandidateManifest,
+  candidateTree: string,
 ): Promise<void> {
   if (
     !candidateCommitPattern.test(candidate.candidateCommit) ||
-    !candidateCommitPattern.test(candidate.baselineCommit)
+    !candidateCommitPattern.test(candidate.baselineCommit) ||
+    !candidateCommitPattern.test(candidateTree)
   ) {
     throw new TypeError("El commit durable candidato no es válido");
   }
@@ -1592,7 +1769,7 @@ async function assertDurableCandidateStoreCommit(
     { changeId: candidate.changeId },
     candidate.attemptId,
   );
-  const [resolved, parent, object] = await Promise.all([
+  const [resolved, parent, tree, object] = await Promise.all([
     runStoreGit(
       record.root.path,
       ["rev-parse", "--verify", "--quiet", locations.candidateRef],
@@ -1605,6 +1782,11 @@ async function assertDurableCandidateStoreCommit(
     ),
     runStoreGit(
       record.root.path,
+      ["rev-parse", `${candidate.candidateCommit}^{tree}`],
+      "No se pudo leer el árbol durable del candidato",
+    ),
+    runStoreGit(
+      record.root.path,
       ["cat-file", "-e", `${candidate.candidateCommit}^{commit}`],
       "El commit candidato durable no existe",
     ),
@@ -1612,6 +1794,7 @@ async function assertDurableCandidateStoreCommit(
   if (
     resolved !== candidate.candidateCommit ||
     parent !== candidate.baselineCommit ||
+    tree !== candidateTree ||
     object !== ""
   ) {
     throw new TypeError(
@@ -1659,13 +1842,13 @@ export async function loadCandidate(
       "El manifiesto durable no coincide con la identidad candidata",
     );
   }
-  verifiedDurableProvenance(
+  const candidateTree = verifiedDurableProvenance(
     strictJsonRecord(provenanceFile.bytes, "La procedencia durable candidata"),
     manifest,
     input.changeId,
     input.attemptId,
   );
-  await assertDurableCandidateStoreCommit(store, manifest);
+  await assertDurableCandidateStoreCommit(store, manifest, candidateTree);
   const configuration = await readCandidateBundleConfiguration(
     paths.bundlePath,
     { publication: manifest.buildProfile },
@@ -1679,6 +1862,7 @@ export async function loadCandidate(
     Object.freeze({
       store,
       attemptId: input.attemptId,
+      candidateTree,
       bundlePath: paths.bundlePath,
       manifestPath: paths.manifestPath,
       configuration,
@@ -1694,7 +1878,11 @@ export async function verifyCandidateArtifact(
 ): Promise<void> {
   const record = candidateRecord(candidate);
   await assertControllerCandidateStore(record.store);
-  await assertDurableCandidateStoreCommit(record.store, candidate);
+  await assertDurableCandidateStoreCommit(
+    record.store,
+    candidate,
+    record.candidateTree,
+  );
   const digest = await hashTree(record.bundlePath);
   if (digest !== candidate.artifactSha256) {
     throw new TypeError("El digest no coincide con el artefacto candidato");
@@ -1713,12 +1901,329 @@ export async function verifyCandidateArtifact(
   await verifyPersistedArtifactEntries(candidate, record.bundlePath);
 }
 
+function assertOperatorProfileShape(
+  operator: CandidateOperatorProfile,
+): CandidateOperatorProfile {
+  const value = asRecord(operator);
+  if (value === null) {
+    throw new TypeError("El perfil operador no tiene una forma permitida");
+  }
+  exactKeys(
+    value,
+    [
+      "adapter",
+      "configSha256",
+      "destination",
+      "environment",
+      "flattenedConfigSha256",
+      "siteIndexable",
+    ],
+    "El perfil operador",
+  );
+  const destination = asRecord(value.destination);
+  const d1 = destination === null ? null : asRecord(destination.d1);
+  if (
+    destination === null ||
+    d1 === null ||
+    (value.adapter !== "local" && value.adapter !== "cloudflare") ||
+    typeof value.configSha256 !== "string" ||
+    !sha256Pattern.test(value.configSha256) ||
+    (value.environment !== null && typeof value.environment !== "string") ||
+    typeof value.siteIndexable !== "boolean" ||
+    typeof value.flattenedConfigSha256 !== "string" ||
+    !sha256Pattern.test(value.flattenedConfigSha256)
+  ) {
+    throw new TypeError("El perfil operador no tiene una forma permitida");
+  }
+  exactKeys(destination, ["d1", "workerName"], "El destino operador");
+  exactKeys(d1, ["binding", "databaseId", "databaseName"], "El D1 operador");
+  if (
+    !safeWorkerName(
+      typeof destination.workerName === "string" ? destination.workerName : "",
+    ) ||
+    d1.binding !== "DB" ||
+    !safeDatabaseId(typeof d1.databaseId === "string" ? d1.databaseId : "") ||
+    !safeWorkerName(typeof d1.databaseName === "string" ? d1.databaseName : "")
+  ) {
+    throw new TypeError("El destino operador no tiene una forma permitida");
+  }
+  return operator;
+}
+
+function operatorMatchesCandidate(
+  operator: CandidateOperatorProfile,
+  candidate: CandidateManifest,
+  configuration: CandidateBundleConfiguration,
+): boolean {
+  return (
+    operator.adapter === candidate.buildProfile.adapter &&
+    operator.configSha256 === candidate.buildProfile.configSha256 &&
+    operator.environment === candidate.buildProfile.environment &&
+    operator.siteIndexable === candidate.buildProfile.siteIndexable &&
+    operator.flattenedConfigSha256 === configuration.flattenedConfigSha256 &&
+    sameDestination(operator.destination, configuration.destination)
+  );
+}
+
+async function assertCandidateOperatorProfile(
+  candidate: CandidateManifest,
+  operator: CandidateOperatorProfile,
+): Promise<void> {
+  const checked = assertOperatorProfileShape(operator);
+  const record = candidateRecord(candidate);
+  if (!operatorMatchesCandidate(checked, candidate, record.configuration)) {
+    throw new TypeError(
+      "El operador no coincide con el perfil y destino candidato sellados",
+    );
+  }
+}
+
 interface CandidatePublicationState {
   readonly request: NormalizedRequest;
   readonly plan: ChangePlan;
   readonly gate1: ApprovalRecord;
   readonly gate2: ApprovalRecord;
   readonly attempt: AttemptRecord;
+  readonly gate1Provenance: Awaited<
+    ReturnType<typeof verifyPersistedApprovalProvenance>
+  >;
+  readonly gate2Provenance: Awaited<
+    ReturnType<typeof verifyPersistedApprovalProvenance>
+  >;
+}
+
+async function sealedCandidateEvidenceRoot(
+  record: CandidatePreviewRecord,
+): Promise<string> {
+  const root = dirname(record.manifestPath);
+  const evidence = join(root, "evidence");
+  if (!isStrictlyWithin(root, evidence)) {
+    throw new TypeError("La evidencia candidata escapa el estado sellado");
+  }
+  try {
+    const entry = await lstat(evidence);
+    if (
+      entry.isSymbolicLink() ||
+      !entry.isDirectory() ||
+      (await realpath(evidence)) !== evidence
+    ) {
+      throw new TypeError(
+        "La evidencia candidata no tiene un directorio seguro",
+      );
+    }
+  } catch (error: unknown) {
+    if (error instanceof TypeError) throw error;
+    throw new TypeError("Falta el directorio de evidencia candidata sellada");
+  }
+  return root;
+}
+
+async function sealedCandidateEvidenceFile(
+  root: string,
+  relativePath: string,
+): Promise<StableFile> {
+  if (!safeRelativePath(relativePath)) {
+    throw new TypeError("La evidencia candidata tiene una ruta no permitida");
+  }
+  const path = join(root, ...relativePath.split("/"));
+  if (!isStrictlyWithin(root, path)) {
+    throw new TypeError("La evidencia candidata escapa el estado sellado");
+  }
+  try {
+    return await readStableRegularFile(path);
+  } catch (error: unknown) {
+    if (error instanceof TypeError) throw error;
+    throw new TypeError("Falta un archivo de evidencia candidata sellada");
+  }
+}
+
+function candidateEvidenceSha256(
+  validation: CandidateManifest["validations"][number],
+): string {
+  if (
+    typeof validation.evidenceSha256 !== "string" ||
+    !sha256Pattern.test(validation.evidenceSha256)
+  ) {
+    throw new TypeError("La evidencia candidata no tiene un hash sellado");
+  }
+  return validation.evidenceSha256;
+}
+
+function matchedAttemptValidation(
+  validations: ReadonlyMap<string, ValidationResult>,
+  candidate: CandidateManifest,
+  validation: CandidateManifest["validations"][number],
+): ValidationResult {
+  const attempt = validations.get(validation.id);
+  const expectedPath = `candidates/${candidate.attemptId}/${validation.evidence}`;
+  const evidenceSha256 = candidateEvidenceSha256(validation);
+  if (
+    attempt === undefined ||
+    attempt.status !== "passed" ||
+    attempt.evidence !== expectedPath ||
+    attempt.evidenceSha256 !== evidenceSha256
+  ) {
+    throw new TypeError(
+      "La evidencia de intento no coincide con la evidencia candidata sellada",
+    );
+  }
+  return attempt;
+}
+
+function verifyPreliminaryEvidenceBinding(
+  bytes: Buffer,
+  candidate: CandidateManifest,
+  validation: CandidateManifest["validations"][number],
+): void {
+  const value = strictJsonRecord(bytes, "La evidencia preliminar candidata");
+  const preliminary = asRecord(value.preliminary);
+  if (
+    value.schemaVersion !== 2 ||
+    value.attemptId !== candidate.attemptId ||
+    value.id !== validation.id ||
+    value.status !== "passed" ||
+    preliminary === null ||
+    preliminary.scope !== PRELIMINARY_STAGED_VALIDATION_SCOPE ||
+    preliminary.planSha256 !== candidate.planSha256 ||
+    preliminary.executionCopy === null ||
+    !isRecord(preliminary.approvedOutputSha256)
+  ) {
+    throw new TypeError(
+      "La evidencia preliminar no está ligada al plan e intento candidato",
+    );
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return asRecord(value) !== null;
+}
+
+function verifyCandidateBuildEvidenceBinding(
+  bytes: Buffer,
+  candidate: CandidateManifest,
+  candidateTree: string,
+  validations: readonly CandidateManifest["validations"][number][],
+): void {
+  const value = strictJsonRecord(bytes, "La evidencia de build candidata");
+  exactKeys(
+    value,
+    [
+      "artifactSha256",
+      "attemptId",
+      "candidateCommit",
+      "candidateTree",
+      "planSha256",
+      "validations",
+    ],
+    "La evidencia de build candidata",
+  );
+  if (
+    value.artifactSha256 !== candidate.artifactSha256 ||
+    value.attemptId !== candidate.attemptId ||
+    value.candidateCommit !== candidate.candidateCommit ||
+    value.candidateTree !== candidateTree ||
+    value.planSha256 !== candidate.planSha256 ||
+    !Array.isArray(value.validations)
+  ) {
+    throw new TypeError(
+      "La evidencia de build no está ligada al candidato, árbol y artefacto",
+    );
+  }
+  const expectedIds = new Set(validations.map((validation) => validation.id));
+  const seen = new Set<string>();
+  for (const entry of value.validations) {
+    const validation = asRecord(entry);
+    if (validation === null) {
+      throw new TypeError(
+        "La evidencia de build contiene una validación inválida",
+      );
+    }
+    exactKeys(validation, ["evidence", "id", "status"], "La validación build");
+    if (
+      typeof validation.id !== "string" ||
+      !expectedIds.has(validation.id) ||
+      seen.has(validation.id) ||
+      validation.status !== "passed" ||
+      typeof validation.evidence !== "string" ||
+      validation.evidence.length === 0
+    ) {
+      throw new TypeError("La evidencia de build no conserva sus validaciones");
+    }
+    seen.add(validation.id);
+  }
+  if (seen.size !== expectedIds.size) {
+    throw new TypeError(
+      "La evidencia de build no conserva todas sus validaciones",
+    );
+  }
+}
+
+async function verifyCandidatePublicationEvidence(
+  candidate: CandidateManifest,
+  attempt: AttemptRecord,
+): Promise<void> {
+  const record = candidateRecord(candidate);
+  const evidenceRoot = await sealedCandidateEvidenceRoot(record);
+  const attemptValidations = new Map<string, ValidationResult>();
+  for (const validation of attempt.validations) {
+    if (attemptValidations.has(validation.id)) {
+      throw new TypeError("El intento candidato repite una validación");
+    }
+    attemptValidations.set(validation.id, validation);
+  }
+  const preliminary: CandidateManifest["validations"] = [];
+  const build: CandidateManifest["validations"] = [];
+  const identifiers = new Set<string>();
+  for (const validation of candidate.validations) {
+    if (identifiers.has(validation.id)) {
+      throw new TypeError("El candidato repite una evidencia de validación");
+    }
+    identifiers.add(validation.id);
+    if (validation.evidence === `evidence/preliminary/${validation.id}.json`) {
+      preliminary.push(validation);
+    } else if (
+      validation.evidence === `evidence/candidate-build.json#${validation.id}`
+    ) {
+      build.push(validation);
+    } else {
+      throw new TypeError("El candidato referencia una evidencia no permitida");
+    }
+  }
+  if (
+    preliminary.length === 0 ||
+    build.length === 0 ||
+    preliminary.length !== attemptValidations.size
+  ) {
+    throw new TypeError(
+      "El candidato no conserva la evidencia durable completa",
+    );
+  }
+  for (const validation of preliminary) {
+    matchedAttemptValidation(attemptValidations, candidate, validation);
+    const evidence = await sealedCandidateEvidenceFile(
+      evidenceRoot,
+      validation.evidence,
+    );
+    if (evidence.sha256 !== candidateEvidenceSha256(validation)) {
+      throw new TypeError("El hash de evidencia candidata no coincide");
+    }
+    verifyPreliminaryEvidenceBinding(evidence.bytes, candidate, validation);
+  }
+  const buildEvidence = await sealedCandidateEvidenceFile(
+    evidenceRoot,
+    "evidence/candidate-build.json",
+  );
+  for (const validation of build) {
+    if (buildEvidence.sha256 !== candidateEvidenceSha256(validation)) {
+      throw new TypeError("El hash de evidencia build candidata no coincide");
+    }
+  }
+  verifyCandidateBuildEvidenceBinding(
+    buildEvidence.bytes,
+    candidate,
+    record.candidateTree,
+    build,
+  );
 }
 
 async function readCandidateControllerJson(
@@ -1800,6 +2305,7 @@ async function candidatePublicationState(
       "El journal candidato no conserva solicitud, plan, intento y evidencia aprobados",
     );
   }
+  await verifyCandidatePublicationEvidence(candidate, attempt);
   const state = createStateStore({ stateRoot: store.stateRoot.path });
   const [change, journal] = await Promise.all([
     state.readChange(candidate.changeId),
@@ -1815,10 +2321,31 @@ async function candidatePublicationState(
   }
   verifyApproval(gate1, plan, candidate.baselineCommit);
   verifyApproval(gate2, candidate, candidate.baselineCommit);
-  if (gate1.environment !== gate2.environment) {
+  const [gate1Provenance, gate2Provenance] = await Promise.all([
+    verifyPersistedApprovalProvenance(gate1, {
+      stateRoot: store.stateRoot.path,
+    }),
+    verifyPersistedApprovalProvenance(gate2, {
+      stateRoot: store.stateRoot.path,
+    }),
+  ]);
+  if (
+    gate1.environment !== gate2.environment ||
+    gate1Provenance.environment !== gate1.environment ||
+    gate2Provenance.environment !== gate2.environment ||
+    gate1Provenance.issuer !== gate2Provenance.issuer
+  ) {
     throw new TypeError("Los Gates candidato no comparten procedencia");
   }
-  return Object.freeze({ request, plan, gate1, gate2, attempt });
+  return Object.freeze({
+    request,
+    plan,
+    gate1,
+    gate2,
+    attempt,
+    gate1Provenance,
+    gate2Provenance,
+  });
 }
 
 async function assertCandidateMainBaseline(
@@ -1874,19 +2401,33 @@ async function assertCandidatePublication(
   candidate: CandidateManifest,
   operation: "local" | "cloudflare" | "promotion",
   testCapability?: CandidateLocalPublicationTestCapability,
+  operator?: CandidateOperatorProfile,
 ): Promise<void> {
   const publication = await candidatePublicationState(candidate);
+  const controllerProduction =
+    publication.gate1Provenance.issuer === "controller" &&
+    publication.gate2Provenance.issuer === "controller" &&
+    publication.gate1Provenance.environment === "production" &&
+    publication.gate2Provenance.environment === "production";
+  const fixtureTest =
+    publication.gate1Provenance.issuer === "fixture" &&
+    publication.gate2Provenance.issuer === "fixture" &&
+    publication.gate1Provenance.environment === "test" &&
+    publication.gate2Provenance.environment === "test";
   if (
-    publication.gate1.environment !== "production" ||
-    publication.gate2.environment !== "production"
+    !controllerProduction &&
+    (operation !== "local" ||
+      !fixtureTest ||
+      !localTestApprovalAllowed(testCapability))
   ) {
-    if (operation !== "local" || !localTestApprovalAllowed(testCapability)) {
-      throw new TypeError(
-        "Las aprobaciones de prueba no autorizan Cloudflare, promoción ni main",
-      );
-    }
+    throw new TypeError(
+      "Las aprobaciones de prueba no autorizan Cloudflare, promoción ni main",
+    );
   }
   await verifyCandidateArtifact(candidate);
+  if (operator !== undefined) {
+    await assertCandidateOperatorProfile(candidate, operator);
+  }
   await assertCandidateMainBaseline(candidate);
 }
 
@@ -1897,15 +2438,27 @@ async function assertCandidatePublication(
 export async function assertCandidateLocalPublication(
   candidate: CandidateManifest,
   testCapability?: CandidateLocalPublicationTestCapability,
+  operator?: CandidateOperatorProfile,
 ): Promise<void> {
-  await assertCandidatePublication(candidate, "local", testCapability);
+  await assertCandidatePublication(
+    candidate,
+    "local",
+    testCapability,
+    operator,
+  );
 }
 
 /** Revalidates all durable gates before a Cloudflare operation. */
 export async function assertCandidateCloudflarePublication(
   candidate: CandidateManifest,
+  operator?: CandidateOperatorProfile,
 ): Promise<void> {
-  await assertCandidatePublication(candidate, "cloudflare");
+  await assertCandidatePublication(
+    candidate,
+    "cloudflare",
+    undefined,
+    operator,
+  );
 }
 
 /** Revalidates all durable gates before a protected main fast-forward. */
@@ -2029,6 +2582,48 @@ function expectedDossierPaths(candidate: CandidateManifest): readonly string[] {
   ]);
 }
 
+/**
+ * Checks every parent/destination that the fixed dossier writer will use
+ * without creating worktree files. This must run before the fast-forward so a
+ * regular or occupied `changes` path cannot leave main at candidate A.
+ */
+async function assertDossierDestinationAvailable(
+  store: ArtifactStoreRecord,
+  candidate: CandidateManifest,
+): Promise<void> {
+  const changes = join(store.root.path, "changes");
+  const destination = join(changes, candidate.changeId);
+  if (
+    !isStrictlyWithin(store.root.path, changes) ||
+    !isStrictlyWithin(changes, destination)
+  ) {
+    throw new TypeError(
+      "El destino de expediente escapa el checkout controlador",
+    );
+  }
+  let changesEntry: Awaited<ReturnType<typeof lstat>>;
+  try {
+    changesEntry = await lstat(changes);
+  } catch (error: unknown) {
+    if (missingPath(error)) return;
+    throw error;
+  }
+  if (
+    changesEntry.isSymbolicLink() ||
+    !changesEntry.isDirectory() ||
+    (await realpath(changes)) !== changes
+  ) {
+    throw new TypeError("El directorio de expedientes no está disponible");
+  }
+  try {
+    await lstat(destination);
+  } catch (error: unknown) {
+    if (missingPath(error)) return;
+    throw error;
+  }
+  throw new TypeError("El destino de expediente candidato ya está ocupado");
+}
+
 async function writeCandidateDossier(
   candidate: CandidateManifest,
 ): Promise<readonly string[]> {
@@ -2051,6 +2646,7 @@ async function writeCandidateDossier(
   ) {
     throw new TypeError("El expediente candidato no tiene una forma permitida");
   }
+  await assertDossierDestinationAvailable(store, candidate);
   const changes = await createChildDirectory(store.root.path, "changes", true);
   const destination = await createChildDirectory(
     changes,
@@ -2124,6 +2720,7 @@ export async function promoteCandidateWithDossier(
   const store = await assertControllerCandidateStore(record.store);
   await verifyCandidateArtifact(candidate);
   await assertCandidateMainBaseline(candidate);
+  await assertDossierDestinationAvailable(store, candidate);
   await runStorePromotionGit(
     store.root.path,
     ["merge", "--ff-only", candidate.candidateCommit],
@@ -2320,9 +2917,23 @@ async function fixedCloudflareDryRunInvocation(
   });
 }
 
+function cloudflareDryRunAssertion(
+  candidate: CandidateManifest,
+): CloudflareDryRunAssertionDescriptor {
+  return Object.freeze({
+    publisher: "cloudflare",
+    dryRun: true,
+    changeId: candidate.changeId,
+    artifactSha256: candidate.artifactSha256,
+    sealedRedirect: true,
+    fixedDeployArguments: true,
+    targetEnvironmentBound: true,
+  });
+}
+
 /** Mints a test-only observer for the already fixed, non-executing dry-run. */
 export function createCandidateCloudflareDryRunTestCapability(
-  observer: (invocation: FixedCloudflareInvocation) => Promise<void>,
+  observer: (descriptor: CloudflareDryRunAssertionDescriptor) => Promise<void>,
 ): CandidateCloudflareDryRunTestCapability {
   if (
     process.env.INGEST_TEST_MODE !== "true" ||
@@ -2341,11 +2952,12 @@ export function createCandidateCloudflareDryRunTestCapability(
 
 /**
  * Inspects only a reverified fixed dry-run. It never starts Wrangler and the
- * raw invocation reaches only an opaque test observer.
+ * observer receives semantic assertions, never process control or paths.
  */
 export async function inspectCandidateCloudflareDryRun(
   candidate: CandidateManifest,
   capability: CandidateCloudflareDryRunTestCapability,
+  operator: CandidateOperatorProfile,
 ): Promise<void> {
   if (process.env.INGEST_TEST_MODE !== "true") {
     throw new TypeError(
@@ -2356,7 +2968,9 @@ export async function inspectCandidateCloudflareDryRun(
   if (observer === undefined) {
     throw new TypeError("La capability Cloudflare no pertenece al controlador");
   }
-  await observer(await fixedCloudflareDryRunInvocation(candidate));
+  await assertCandidateCloudflarePublication(candidate, operator);
+  await fixedCloudflareDryRunInvocation(candidate);
+  await observer(cloudflareDryRunAssertion(candidate));
 }
 
 async function runFixedCloudflareDryRun(
@@ -2396,6 +3010,7 @@ async function runFixedCloudflareDryRun(
 export async function runCandidateCloudflareDryRun(
   candidate: CandidateManifest,
   capability: CandidateCloudflareDryRunTestCapability,
+  operator: CandidateOperatorProfile,
 ): Promise<void> {
   if (process.env.INGEST_TEST_MODE !== "true") {
     throw new TypeError("El dry-run Cloudflare sólo existe en modo de pruebas");
@@ -2404,9 +3019,9 @@ export async function runCandidateCloudflareDryRun(
   if (observer === undefined) {
     throw new TypeError("La capability Cloudflare no pertenece al controlador");
   }
-  await assertCandidateCloudflarePublication(candidate);
-  await observer(await fixedCloudflareDryRunInvocation(candidate));
-  await assertCandidateCloudflarePublication(candidate);
+  await assertCandidateCloudflarePublication(candidate, operator);
+  await observer(cloudflareDryRunAssertion(candidate));
+  await assertCandidateCloudflarePublication(candidate, operator);
   await runFixedCloudflareDryRun(
     await fixedCloudflareDryRunInvocation(candidate),
   );

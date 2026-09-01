@@ -179,6 +179,8 @@ export interface CandidateManifest {
     id: string;
     status: "passed" | "failed";
     evidence: string;
+    /** Digest of the sealed candidate-state evidence bytes. */
+    evidenceSha256?: string;
   }>;
   artifacts: Array<{ path: string; sha256: string; bytes: number }>;
   preview: { command: string; url: string };

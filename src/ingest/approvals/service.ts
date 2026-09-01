@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { lstat, readFile, realpath } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
@@ -19,12 +20,28 @@ import {
   approvalPrompt,
   assertPromptStateRoot,
   beforeApprovalPersist,
-  type FixtureApprovalPrompt,
+  type ApprovalPromptCapability,
 } from "./prompt.ts";
 
 export type ApprovalStorageOptions = IngestPathOptions;
 
 const execFileAsync = promisify(execFile);
+const approvalProvenanceKey = randomBytes(32);
+const sha256Pattern = /^[a-f0-9]{64}$/u;
+
+interface ApprovalProvenanceRecord {
+  readonly schemaVersion: 1;
+  readonly issuer: "controller" | "fixture";
+  readonly environment: "production" | "test";
+  readonly approvalSha256: string;
+  readonly signature: string;
+}
+
+/** The only authority information publication consumes from an approval. */
+export interface VerifiedApprovalProvenance {
+  readonly issuer: "controller" | "fixture";
+  readonly environment: "production" | "test";
+}
 
 interface ApprovalOptions extends ApprovalStorageOptions {
   actor: string;
@@ -39,6 +56,145 @@ export interface Gate1ApprovalInput extends ApprovalOptions {
 export interface Gate2ApprovalInput extends ApprovalOptions {
   plan: ChangePlan;
   candidate: CandidateManifest;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function provenancePayload(
+  value: Pick<
+    ApprovalProvenanceRecord,
+    "schemaVersion" | "issuer" | "environment" | "approvalSha256"
+  >,
+): string {
+  return canonicalJson({
+    approvalSha256: value.approvalSha256,
+    environment: value.environment,
+    issuer: value.issuer,
+    schemaVersion: value.schemaVersion,
+  });
+}
+
+function approvalProvenanceSignature(
+  value: Pick<
+    ApprovalProvenanceRecord,
+    "schemaVersion" | "issuer" | "environment" | "approvalSha256"
+  >,
+): string {
+  return createHmac("sha256", approvalProvenanceKey)
+    .update(provenancePayload(value), "utf8")
+    .digest("hex");
+}
+
+function approvalProvenancePath(
+  approvalsDir: string,
+  gate: ApprovalRecord["gate"],
+): string {
+  return join(approvalsDir, `gate-${gate}.provenance.json`);
+}
+
+function signedApprovalProvenance(
+  approval: ApprovalRecord,
+  prompt: ReturnType<typeof approvalPrompt>,
+): ApprovalProvenanceRecord {
+  const unsigned = {
+    schemaVersion: 1 as const,
+    issuer: prompt.issuer,
+    environment: prompt.environment,
+    approvalSha256: sha256Canonical(approval),
+  };
+  return Object.freeze({
+    ...unsigned,
+    signature: approvalProvenanceSignature(unsigned),
+  });
+}
+
+function parsedApprovalProvenance(bytes: Uint8Array): ApprovalProvenanceRecord {
+  let source: string;
+  let value: unknown;
+  try {
+    source = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    value = JSON.parse(source) as unknown;
+  } catch {
+    throw new TypeError("La procedencia de aprobación no contiene JSON válido");
+  }
+  if (!isRecord(value) || canonicalJson(value) !== source) {
+    throw new TypeError("La procedencia de aprobación no es canónica");
+  }
+  const expected = [
+    "approvalSha256",
+    "environment",
+    "issuer",
+    "schemaVersion",
+    "signature",
+  ];
+  const actual = Object.keys(value).sort();
+  if (
+    actual.length !== expected.length ||
+    actual.some((key, index) => key !== expected[index]) ||
+    value.schemaVersion !== 1 ||
+    (value.issuer !== "controller" && value.issuer !== "fixture") ||
+    (value.environment !== "production" && value.environment !== "test") ||
+    typeof value.approvalSha256 !== "string" ||
+    !sha256Pattern.test(value.approvalSha256) ||
+    typeof value.signature !== "string" ||
+    !sha256Pattern.test(value.signature)
+  ) {
+    throw new TypeError(
+      "La procedencia de aprobación no tiene una forma válida",
+    );
+  }
+  return Object.freeze({
+    schemaVersion: 1,
+    issuer: value.issuer,
+    environment: value.environment,
+    approvalSha256: value.approvalSha256,
+    signature: value.signature,
+  });
+}
+
+/**
+ * Re-reads the controller-written provenance sidecar. The private process key
+ * deliberately makes a missing authority fail closed after a controller
+ * restart until the later trusted controller integration can re-open it.
+ */
+export async function verifyPersistedApprovalProvenance(
+  approval: ApprovalRecord,
+  options: ApprovalStorageOptions,
+): Promise<VerifiedApprovalProvenance> {
+  validateSchema<ApprovalRecord>("approval", approval);
+  const paths = await ingestPaths(approval.changeId, options);
+  const path = approvalProvenancePath(paths.approvalsDir, approval.gate);
+  let bytes: Uint8Array;
+  try {
+    const entry = await lstat(path);
+    if (entry.isSymbolicLink() || !entry.isFile() || entry.nlink !== 1) {
+      throw new TypeError("La procedencia de aprobación no es segura");
+    }
+    bytes = await readFile(path);
+  } catch (error: unknown) {
+    if (error instanceof TypeError) throw error;
+    throw new TypeError("Falta la procedencia sellada de aprobación");
+  }
+  const provenance = parsedApprovalProvenance(bytes);
+  const expectedSignature = Buffer.from(
+    approvalProvenanceSignature(provenance),
+    "hex",
+  );
+  const actualSignature = Buffer.from(provenance.signature, "hex");
+  if (
+    expectedSignature.byteLength !== actualSignature.byteLength ||
+    !timingSafeEqual(expectedSignature, actualSignature) ||
+    provenance.approvalSha256 !== sha256Canonical(approval) ||
+    provenance.environment !== approval.environment
+  ) {
+    throw new TypeError("La procedencia sellada no coincide con la aprobación");
+  }
+  return Object.freeze({
+    issuer: provenance.issuer,
+    environment: provenance.environment,
+  });
 }
 
 async function protectedMainBaseline(repositoryRoot: string): Promise<string> {
@@ -224,12 +380,18 @@ async function persistApproval(
     join(paths.approvalsDir, filename),
     new TextEncoder().encode(canonicalJson(approval)),
   );
+  await writeAtomic(
+    approvalProvenancePath(paths.approvalsDir, approval.gate),
+    new TextEncoder().encode(
+      canonicalJson(signedApprovalProvenance(approval, prompt)),
+    ),
+  );
   return approval;
 }
 
 export async function approveGate1(
   input: Gate1ApprovalInput,
-  fixturePrompt?: FixtureApprovalPrompt,
+  fixturePrompt?: ApprovalPromptCapability,
 ): Promise<ApprovalRecord> {
   assertActor(input.actor);
   const subjectSha256 = planSubject(input.plan);
@@ -264,7 +426,7 @@ export async function approveGate1(
 
 export async function approveGate2(
   input: Gate2ApprovalInput,
-  fixturePrompt?: FixtureApprovalPrompt,
+  fixturePrompt?: ApprovalPromptCapability,
 ): Promise<ApprovalRecord> {
   assertActor(input.actor);
   const approvedPlanSha256 = planSubject(input.plan);

@@ -320,10 +320,19 @@ async function runFixture(): Promise<void> {
         "dist/index.html": "<main>immutable fixture</main>\n",
         "dist/wrangler.json": JSON.stringify({
           targetEnvironment: plan.publication.environment,
+          name: "candidate-fixture",
           main: "_worker.js/index.js",
           assets: { binding: "ASSETS", directory: ".", run_worker_first: true },
           vars: { SITE_INDEXABLE: "false" },
           bindings: ["ASSETS", "DB"],
+          d1_databases: [
+            {
+              binding: "DB",
+              database_id: "00000000-0000-4000-8000-000000000000",
+              database_name: "candidate-fixture",
+              migrations_dir: "drizzle",
+            },
+          ],
         }),
         ".wrangler/deploy/config.json": JSON.stringify({
           configPath: "../../dist/wrangler.json",

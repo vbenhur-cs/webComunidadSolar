@@ -19,13 +19,7 @@ export { createCandidateCloudflareDryRunTestCapability as createCloudflarePublis
 function assertCloudflareOperator(input: CloudflarePublicationInput): void {
   const profile = input.candidate.buildProfile;
   const operator = input.operator;
-  if (
-    profile.adapter !== "cloudflare" ||
-    operator.adapter !== "cloudflare" ||
-    operator.configSha256 !== profile.configSha256 ||
-    operator.environment !== profile.environment ||
-    operator.siteIndexable !== profile.siteIndexable
-  ) {
+  if (profile.adapter !== "cloudflare" || operator.adapter !== "cloudflare") {
     throw new TypeError(
       "El operador Cloudflare no coincide con el perfil de build candidato",
     );
@@ -68,12 +62,19 @@ export class CloudflarePublisher implements Publisher<
   ): Promise<CloudflareDryRunDescription> {
     assertNoCloudflareExecutionOverride(input);
     assertCloudflareOperator(input);
-    await inspectCandidateCloudflareDryRun(input.candidate, capability);
+    await inspectCandidateCloudflareDryRun(
+      input.candidate,
+      capability,
+      input.operator,
+    );
     return Object.freeze({
       publisher: "cloudflare",
       dryRun: true,
       changeId: input.candidate.changeId,
       artifactSha256: input.candidate.artifactSha256,
+      sealedRedirect: true,
+      fixedDeployArguments: true,
+      targetEnvironmentBound: true,
     });
   }
 
@@ -81,13 +82,20 @@ export class CloudflarePublisher implements Publisher<
     try {
       assertNoCloudflareExecutionOverride(input);
       assertCloudflareOperator(input);
-      await assertCandidateCloudflarePublication(input.candidate);
+      await assertCandidateCloudflarePublication(
+        input.candidate,
+        input.operator,
+      );
       if (this.testCapability === undefined) {
         throw new TypeError(
           "No existe una capability Cloudflare confiable para ejecutar el dry-run",
         );
       }
-      await runCandidateCloudflareDryRun(input.candidate, this.testCapability);
+      await runCandidateCloudflareDryRun(
+        input.candidate,
+        this.testCapability,
+        input.operator,
+      );
       return Object.freeze({
         status: "published",
         publisher: "cloudflare",

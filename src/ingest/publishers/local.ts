@@ -16,13 +16,7 @@ export { createCandidateLocalPublicationTestCapability as createLocalPublisherTe
 function assertLocalOperator(input: LocalPublicationInput): void {
   const profile = input.candidate.buildProfile;
   const operator = input.operator;
-  if (
-    profile.adapter !== "local" ||
-    operator.adapter !== "local" ||
-    operator.configSha256 !== profile.configSha256 ||
-    operator.environment !== profile.environment ||
-    operator.siteIndexable !== profile.siteIndexable
-  ) {
+  if (profile.adapter !== "local" || operator.adapter !== "local") {
     throw new TypeError(
       "El operador local no coincide con el perfil de build candidato",
     );
@@ -60,6 +54,7 @@ export class LocalPublisher implements Publisher<
       await assertCandidateLocalPublication(
         input.candidate,
         input.testCapability,
+        input.operator,
       );
       const preview = await startCandidatePreview(input.candidate);
       try {
