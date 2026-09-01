@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
+import { spawn, type ChildProcess } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
   chmod,
@@ -15,7 +15,7 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import test from "node:test";
+import test, { type TestContext } from "node:test";
 import { promisify } from "node:util";
 
 import { sha256Canonical } from "../../src/ingest/canonical-json.ts";
@@ -517,6 +517,90 @@ function candidateInput(
     buildCapability: fixture.build,
     ...(preview === undefined ? {} : { previewCapability: preview }),
   };
+}
+
+type ProcessGroupSignal = NodeJS.Signals | number | undefined;
+
+interface StartedDetachedPreview {
+  readonly handle: Awaited<ReturnType<typeof startCandidatePreview>>;
+  readonly pid: number;
+  readonly closed: Promise<void>;
+}
+
+function processGroupError(code: "EPERM" | "ESRCH"): NodeJS.ErrnoException {
+  const error = new Error(`kill ${code}`) as NodeJS.ErrnoException;
+  error.code = code;
+  return error;
+}
+
+async function startDetachedPreview(
+  fixture: CandidateFixture,
+  onExit: () => void = () => undefined,
+): Promise<StartedDetachedPreview> {
+  await installFixtureWrangler(fixture.repositoryRoot);
+  let child: ChildProcess | undefined;
+  let closed: Promise<void> | undefined;
+  const preview = createCandidatePreviewTestCapability(async () => {
+    const launched = spawn(
+      process.execPath,
+      ["-e", "setInterval(() => undefined, 1_000);"],
+      { detached: true, stdio: "ignore" },
+    );
+    child = launched;
+    launched.once("exit", onExit);
+    closed = new Promise<void>((resolveClosed) => {
+      launched.once("close", () => resolveClosed());
+    });
+    return { child: launched, url: "http://127.0.0.1:43124" };
+  });
+  const candidate = await createCandidate(candidateInput(fixture, preview));
+  const handle = await startCandidatePreview(candidate);
+  const launched = child;
+  const close = closed;
+  if (
+    launched === undefined ||
+    typeof launched.pid !== "number" ||
+    close === undefined
+  ) {
+    throw new Error("El fixture de preview no inició un proceso");
+  }
+  return Object.freeze({ handle, pid: launched.pid, closed: close });
+}
+
+function interceptPreviewProcessGroup(
+  t: TestContext,
+  pid: number,
+  intercept: (signal: ProcessGroupSignal) => boolean,
+): typeof process.kill {
+  const originalKill = process.kill.bind(process);
+  t.mock.method(
+    process,
+    "kill",
+    (target: number, signal?: ProcessGroupSignal): boolean => {
+      if (target === -pid) return intercept(signal);
+      return originalKill(target, signal);
+    },
+  );
+  return originalKill;
+}
+
+async function reapDetachedPreview(
+  preview: StartedDetachedPreview,
+  kill: typeof process.kill,
+): Promise<void> {
+  try {
+    kill(-preview.pid, "SIGKILL");
+  } catch (error: unknown) {
+    if (
+      typeof error !== "object" ||
+      error === null ||
+      !("code" in error) ||
+      error.code !== "ESRCH"
+    ) {
+      throw error;
+    }
+  }
+  await preview.closed;
 }
 
 test("hashTree is stable across mtimes and rejects link-based trees", async (t) => {
@@ -1066,6 +1150,162 @@ test(
       await closed;
       assert.ok(previewPid !== undefined);
       assert.throws(() => process.kill(previewPid!, 0), /ESRCH/u);
+    });
+  },
+);
+
+test(
+  "forces present, TERM, EPERM, owned reap, then ESRCH for preview cleanup",
+  { skip: process.platform === "win32" },
+  async (t) => {
+    let reaped = false;
+    await withCandidateFixture({}, async (fixture) => {
+      const preview = await startDetachedPreview(fixture, () => {
+        reaped = true;
+      });
+      const originalKill = process.kill.bind(process);
+      const signals: ProcessGroupSignal[] = [];
+      let probes = 0;
+      try {
+        interceptPreviewProcessGroup(t, preview.pid, (signal) => {
+          signals.push(signal);
+          if (signal === "SIGTERM") {
+            return originalKill(-preview.pid, signal);
+          }
+          assert.equal(signal, 0);
+          probes += 1;
+          if (probes === 1) return true;
+          if (probes === 2) throw processGroupError("EPERM");
+          if (probes === 3) {
+            assert.equal(reaped, true);
+            throw processGroupError("ESRCH");
+          }
+          assert.fail(`sondeo de grupo inesperado: ${probes.toString()}`);
+        });
+
+        await assert.doesNotReject(preview.handle.stop());
+        await preview.closed;
+        assert.deepEqual(signals, [0, "SIGTERM", 0, 0]);
+        assert.equal(reaped, true);
+        assert.throws(() => originalKill(-preview.pid, 0), { code: "ESRCH" });
+      } finally {
+        t.mock.restoreAll();
+        await reapDetachedPreview(preview, originalKill);
+      }
+    });
+  },
+);
+
+test(
+  "fails closed when the initial preview group probe is EPERM",
+  { skip: process.platform === "win32" },
+  async (t) => {
+    await withCandidateFixture({}, async (fixture) => {
+      const preview = await startDetachedPreview(fixture);
+      const originalKill = process.kill.bind(process);
+      const signals: ProcessGroupSignal[] = [];
+      try {
+        interceptPreviewProcessGroup(t, preview.pid, (signal) => {
+          signals.push(signal);
+          throw processGroupError("EPERM");
+        });
+
+        await assert.rejects(
+          preview.handle.stop(),
+          /No se pudo verificar el grupo de preview candidato antes de detenerlo/i,
+        );
+        assert.deepEqual(signals, [0]);
+      } finally {
+        t.mock.restoreAll();
+        await reapDetachedPreview(preview, originalKill);
+      }
+    });
+  },
+);
+
+test(
+  "fails closed when EPERM persists after the owned preview child reaps",
+  { skip: process.platform === "win32" },
+  async (t) => {
+    let reaped = false;
+    await withCandidateFixture({}, async (fixture) => {
+      const preview = await startDetachedPreview(fixture, () => {
+        reaped = true;
+      });
+      const originalKill = process.kill.bind(process);
+      const signals: ProcessGroupSignal[] = [];
+      let probes = 0;
+      try {
+        interceptPreviewProcessGroup(t, preview.pid, (signal) => {
+          signals.push(signal);
+          if (signal === "SIGTERM") {
+            return originalKill(-preview.pid, signal);
+          }
+          assert.equal(signal, 0);
+          probes += 1;
+          if (probes === 1) return true;
+          if (probes === 2) throw processGroupError("EPERM");
+          if (probes === 3) {
+            assert.equal(reaped, true);
+            throw processGroupError("EPERM");
+          }
+          assert.fail(`sondeo de grupo inesperado: ${probes.toString()}`);
+        });
+
+        await assert.rejects(
+          preview.handle.stop(),
+          /No se pudo verificar que el grupo de preview candidato terminara/i,
+        );
+        await preview.closed;
+        assert.deepEqual(signals, [0, "SIGTERM", 0, 0]);
+        assert.equal(reaped, true);
+      } finally {
+        t.mock.restoreAll();
+        await reapDetachedPreview(preview, originalKill);
+      }
+    });
+  },
+);
+
+test(
+  "keeps a live preview group on TERM until group SIGKILL confirms descendant cleanup",
+  { skip: process.platform === "win32" },
+  async (t) => {
+    await withCandidateFixture({}, async (fixture) => {
+      const preview = await startDetachedPreview(fixture);
+      const originalKill = process.kill.bind(process);
+      const signals: ProcessGroupSignal[] = [];
+      let killed = false;
+      try {
+        interceptPreviewProcessGroup(t, preview.pid, (signal) => {
+          signals.push(signal);
+          if (signal === 0) {
+            if (killed) throw processGroupError("ESRCH");
+            return true;
+          }
+          if (signal === "SIGTERM") {
+            // Keep the simulated group alive, like a surviving descendant.
+            return true;
+          }
+          if (signal === "SIGKILL") {
+            killed = true;
+            return originalKill(-preview.pid, signal);
+          }
+          assert.fail(`señal de grupo inesperada: ${String(signal)}`);
+        });
+
+        await assert.doesNotReject(preview.handle.stop());
+        await preview.closed;
+        assert.equal(signals[0], 0);
+        assert.equal(signals[1], "SIGTERM");
+        assert.equal(signals.at(-2), "SIGKILL");
+        assert.equal(signals.at(-1), 0);
+        assert.ok(signals.filter((signal) => signal === 0).length > 2);
+        assert.throws(() => originalKill(-preview.pid, 0), { code: "ESRCH" });
+      } finally {
+        t.mock.restoreAll();
+        await reapDetachedPreview(preview, originalKill);
+      }
     });
   },
 );
