@@ -9,10 +9,11 @@ import { promisify } from "node:util";
 import { sha256Canonical } from "../../../src/ingest/canonical-json.ts";
 import {
   createCandidate,
-  createCandidateArtifactStore,
-  removeCandidateArtifactStore,
+  createControllerCandidateStoreTestInitialization,
+  openControllerCandidateStore,
+  releaseControllerCandidateStore,
   verifyCandidateArtifact,
-  type CandidateArtifactStore,
+  type ControllerCandidateStore,
 } from "../../../src/ingest/candidate/manifest.ts";
 import { createCandidateBuildTestCapability } from "../../../src/ingest/candidate/evidence.ts";
 import {
@@ -206,7 +207,7 @@ async function runFixture(): Promise<void> {
   let workspace: Awaited<ReturnType<typeof createAgentWorkspace>> | undefined;
   let output: StagedAgentOutput | undefined;
   let evidenceRoot: ValidationEvidenceRoot | undefined;
-  let artifactStore: CandidateArtifactStore | undefined;
+  let store: ControllerCandidateStore | undefined;
   let preview: PreviewHandle | undefined;
   try {
     await execFileAsync("git", [
@@ -300,7 +301,9 @@ async function runFixture(): Promise<void> {
       { output, plan, attemptId, evidenceRoot, publicationProfile },
       { commands: async (command) => passedCommand(command) },
     );
-    artifactStore = await createCandidateArtifactStore(output, plan, attemptId);
+    const storeInitialization =
+      await createControllerCandidateStoreTestInitialization(repositoryRoot);
+    store = await openControllerCandidateStore(storeInitialization);
     const build = createCandidateBuildTestCapability({
       files: {
         "dist/_worker.js/index.js":
@@ -351,7 +354,7 @@ async function runFixture(): Promise<void> {
       plan,
       attemptId,
       preliminaryValidations: preliminary,
-      artifactStore,
+      store,
       buildCapability: build,
       previewCapability,
     });
@@ -373,8 +376,8 @@ async function runFixture(): Promise<void> {
     );
   } finally {
     await preview?.stop().catch(() => undefined);
-    if (artifactStore !== undefined) {
-      await removeCandidateArtifactStore(artifactStore).catch(() => undefined);
+    if (store !== undefined) {
+      await releaseControllerCandidateStore(store).catch(() => undefined);
     }
     if (output !== undefined) {
       await removeStagedAgentOutput(output).catch(() => undefined);

@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import type { ChildProcess } from "node:child_process";
+import { spawn, type ChildProcess } from "node:child_process";
 import { constants } from "node:fs";
 import {
   chmod,
@@ -22,12 +22,11 @@ import type {
 import { validateSchema } from "../schema-validator.ts";
 import { assertCandidateEligiblePreliminaryValidation } from "../validation/runner.ts";
 import {
-  controllerCandidateRepositoryRoot,
+  assertControllerCandidateStoreOutput,
   type StagedAgentOutput,
 } from "../workspaces/policy.ts";
 
 import {
-  assertDurableCandidateCommit,
   captureCandidateBuildArtifacts,
   createCandidateCommit,
   persistCandidateCommit,
@@ -49,10 +48,36 @@ const artifactMaximumBytes = 128 * 1024 * 1024;
 const artifactMaximumFiles = 10_000;
 const fixedDeployRedirectPath = ".wrangler/deploy/config.json";
 const fixedWorkerRelativePath = "dist/_worker.js/index.js";
+const candidateCommitPattern = /^[a-f0-9]{40,64}$/u;
+const gitExecutable = "/usr/bin/git";
+const fixedGitArguments = Object.freeze([
+  "-c",
+  "core.hooksPath=/dev/null",
+  "-c",
+  "core.fsmonitor=false",
+  "-c",
+  "core.untrackedCache=false",
+]);
+const fixedGitEnvironment = Object.freeze({
+  PATH: "/usr/bin:/bin",
+  LANG: "C",
+  LC_ALL: "C",
+  GIT_CONFIG: "/dev/null",
+  GIT_CONFIG_NOSYSTEM: "1",
+  GIT_CONFIG_GLOBAL: "/dev/null",
+  GIT_CONFIG_SYSTEM: "/dev/null",
+  GIT_OPTIONAL_LOCKS: "0",
+  GIT_TERMINAL_PROMPT: "0",
+});
 
-declare const candidateArtifactStoreBrand: unique symbol;
-export interface CandidateArtifactStore {
-  readonly [candidateArtifactStoreBrand]: true;
+declare const controllerCandidateStoreBrand: unique symbol;
+export interface ControllerCandidateStore {
+  readonly [controllerCandidateStoreBrand]: true;
+}
+
+declare const controllerCandidateStoreTestInitializationBrand: unique symbol;
+export interface ControllerCandidateStoreTestInitialization {
+  readonly [controllerCandidateStoreTestInitializationBrand]: true;
 }
 
 interface DirectoryIdentity {
@@ -65,9 +90,6 @@ interface ArtifactStoreRecord {
   readonly root: DirectoryIdentity;
   readonly artifactRoot: DirectoryIdentity;
   readonly stateRoot: DirectoryIdentity;
-  readonly output: StagedAgentOutput;
-  readonly attemptId: string;
-  readonly planCanonical: string;
 }
 
 export interface CandidateArtifactEntry {
@@ -86,9 +108,7 @@ export interface CandidateBundleConfiguration {
 
 /** Private preview state; it never crosses the candidate module boundary. */
 interface CandidatePreviewRecord {
-  readonly store: CandidateArtifactStore;
-  readonly output: StagedAgentOutput;
-  readonly plan: ChangePlan;
+  readonly store: ControllerCandidateStore;
   readonly attemptId: string;
   readonly bundlePath: string;
   readonly manifestPath: string;
@@ -131,8 +151,8 @@ export interface CandidateCreationInput {
   readonly attemptId: string;
   /** Exact frozen array minted by Task 9; copied or supplied evidence rejects. */
   readonly preliminaryValidations: readonly ValidationResult[];
-  /** Opaque controller artifact state; callers never select a bundle path. */
-  readonly artifactStore: CandidateArtifactStore;
+  /** Opaque durable controller state; callers never select a bundle path. */
+  readonly store: ControllerCandidateStore;
   /** Opaque fixture/controller capability; a missing production adapter fails closed. */
   readonly buildCapability?: CandidateBuildTestCapability;
   /** Optional opaque fixture preview capability retained privately with the candidate. */
@@ -140,14 +160,14 @@ export interface CandidateCreationInput {
 }
 
 /**
- * Reopens only a candidate bound to controller-minted staged authority. It
- * deliberately accepts neither a repository path nor an artifact path.
+ * Reopens persistent candidate state from an opaque controller-owned store
+ * plus safe identity. It accepts neither a staged output, plan, repository
+ * path, nor artifact path.
  */
 export interface CandidateLoadInput {
-  readonly output: StagedAgentOutput;
-  readonly plan: ChangePlan;
+  readonly store: ControllerCandidateStore;
+  readonly changeId: string;
   readonly attemptId: string;
-  readonly previewCapability?: CandidatePreviewTestCapability;
 }
 
 interface DurableCandidateProvenance {
@@ -161,9 +181,13 @@ interface DurableCandidateProvenance {
   readonly manifest: string;
 }
 
-const artifactStores = new WeakMap<
-  CandidateArtifactStore,
+const controllerCandidateStores = new WeakMap<
+  ControllerCandidateStore,
   ArtifactStoreRecord
+>();
+const controllerCandidateStoreTestInitializations = new WeakMap<
+  ControllerCandidateStoreTestInitialization,
+  string
 >();
 const candidateRecords = new WeakMap<
   CandidateManifest,
@@ -249,30 +273,20 @@ async function assertDirectory(identity: DirectoryIdentity): Promise<void> {
   }
 }
 
-function artifactStoreRecord(
-  store: CandidateArtifactStore,
+function controllerCandidateStoreRecord(
+  store: ControllerCandidateStore,
 ): ArtifactStoreRecord {
-  const record = artifactStores.get(store);
+  const record = controllerCandidateStores.get(store);
   if (record === undefined) {
-    throw new TypeError("El store de artefactos no pertenece al controlador");
+    throw new TypeError("El store candidato no pertenece al controlador");
   }
   return record;
 }
 
-async function assertArtifactStore(
-  store: CandidateArtifactStore,
-  output?: StagedAgentOutput,
-  plan?: ChangePlan,
-  attemptId?: string,
+async function assertControllerCandidateStore(
+  store: ControllerCandidateStore,
 ): Promise<ArtifactStoreRecord> {
-  const record = artifactStoreRecord(store);
-  if (
-    (output !== undefined && record.output !== output) ||
-    (plan !== undefined && record.planCanonical !== canonicalJson(plan)) ||
-    (attemptId !== undefined && record.attemptId !== attemptId)
-  ) {
-    throw new TypeError("El store de artefactos no coincide con el candidato");
-  }
+  const record = controllerCandidateStoreRecord(store);
   await Promise.all([
     assertDirectory(record.root),
     assertDirectory(record.artifactRoot),
@@ -282,26 +296,71 @@ async function assertArtifactStore(
     !isStrictlyWithin(record.root.path, record.artifactRoot.path) ||
     !isStrictlyWithin(record.root.path, record.stateRoot.path)
   ) {
-    throw new TypeError("El store de artefactos escapa su estado controlador");
+    throw new TypeError("El store candidato escapa su estado controlador");
   }
   return record;
 }
 
-/**
- * Mints durable controller state under the trusted repository already bound to
- * the staged output. No caller can select a repository, temporary root, or
- * artifact path.
- */
-export async function createCandidateArtifactStore(
-  output: StagedAgentOutput,
-  plan: ChangePlan,
-  attemptId: string,
-): Promise<CandidateArtifactStore> {
-  const rootPath = await controllerCandidateRepositoryRoot(
-    output,
-    plan,
-    attemptId,
+function collectGit(
+  child: ChildProcess,
+  stream: "stdout" | "stderr",
+): Buffer[] {
+  const chunks: Buffer[] = [];
+  child[stream]?.on("data", (chunk: Buffer) => chunks.push(chunk));
+  return chunks;
+}
+
+async function gitExitCode(child: ChildProcess): Promise<number> {
+  return await new Promise<number>((resolveExit, rejectExit) => {
+    child.once("error", rejectExit);
+    child.once("close", (code) => resolveExit(code ?? 1));
+  });
+}
+
+async function runStoreGit(
+  root: string,
+  arguments_: readonly string[],
+  failure: string,
+): Promise<string> {
+  const child = spawn(
+    gitExecutable,
+    [...fixedGitArguments, "-C", root, ...arguments_],
+    {
+      env: fixedGitEnvironment,
+      shell: false,
+      stdio: ["ignore", "pipe", "pipe"],
+    },
   );
+  const output = collectGit(child, "stdout");
+  const errors = collectGit(child, "stderr");
+  if ((await gitExitCode(child)) !== 0) {
+    const detail = Buffer.concat(errors).toString("utf8").trim();
+    throw new TypeError(detail === "" ? failure : `${failure}: ${detail}`);
+  }
+  return Buffer.concat(output).toString("utf8").trim();
+}
+
+async function controllerRepositoryRoot(rootInput: string): Promise<string> {
+  const rootPath = await realpath(rootInput);
+  const entry = await lstat(rootPath);
+  if (entry.isSymbolicLink() || !entry.isDirectory()) {
+    throw new TypeError("El repositorio controlador candidato no es seguro");
+  }
+  const topLevel = await runStoreGit(
+    rootPath,
+    ["rev-parse", "--show-toplevel"],
+    "No se pudo abrir el repositorio controlador candidato",
+  );
+  if (topLevel !== rootPath) {
+    throw new TypeError("El store candidato exige la raíz Git controladora");
+  }
+  return rootPath;
+}
+
+async function openStoreAtRoot(
+  rootInput: string,
+): Promise<ControllerCandidateStore> {
+  const rootPath = await controllerRepositoryRoot(rootInput);
   const artifactPath = join(rootPath, ".artifacts");
   const statePath = join(rootPath, ".change-state");
   await Promise.all([
@@ -331,26 +390,66 @@ export async function createCandidateArtifactStore(
   ) {
     throw new TypeError("No se pudo crear un estado candidato durable");
   }
-  const store = Object.freeze({}) as CandidateArtifactStore;
-  artifactStores.set(
+  const store = Object.freeze({}) as ControllerCandidateStore;
+  controllerCandidateStores.set(
     store,
     Object.freeze({
       root: directoryIdentity(rootPath, rootEntry),
       artifactRoot: directoryIdentity(artifactPath, artifactEntry),
       stateRoot: directoryIdentity(statePath, stateEntry),
-      output,
-      attemptId,
-      planCanonical: canonicalJson(plan),
     }),
   );
   return store;
 }
 
-export async function removeCandidateArtifactStore(
-  store: CandidateArtifactStore,
+/** Test-only trusted initialization for an isolated controller repository. */
+export async function createControllerCandidateStoreTestInitialization(
+  repositoryRoot: string,
+): Promise<ControllerCandidateStoreTestInitialization> {
+  if (process.env.INGEST_TEST_MODE !== "true") {
+    throw new TypeError(
+      "La inicialización de store candidato sólo existe en modo de pruebas",
+    );
+  }
+  const root = await controllerRepositoryRoot(repositoryRoot);
+  const initialization = Object.freeze(
+    {},
+  ) as ControllerCandidateStoreTestInitialization;
+  controllerCandidateStoreTestInitializations.set(initialization, root);
+  return initialization;
+}
+
+/**
+ * Opens controller-owned persistent candidate state. Production resolves only
+ * the trusted controller startup directory; test initialization is opaque.
+ */
+export async function openControllerCandidateStore(
+  testInitialization?: ControllerCandidateStoreTestInitialization,
+): Promise<ControllerCandidateStore> {
+  if (testInitialization === undefined) {
+    return await openStoreAtRoot(process.cwd());
+  }
+  if (process.env.INGEST_TEST_MODE !== "true") {
+    throw new TypeError(
+      "El store candidato no acepta inicialización de pruebas",
+    );
+  }
+  const root =
+    controllerCandidateStoreTestInitializations.get(testInitialization);
+  if (root === undefined) {
+    throw new TypeError(
+      "La inicialización de store no pertenece al controlador",
+    );
+  }
+  return await openStoreAtRoot(root);
+}
+
+/** Releases only in-memory store authority; durable state deliberately remains. */
+export async function releaseControllerCandidateStore(
+  store: ControllerCandidateStore,
 ): Promise<void> {
-  await assertArtifactStore(store);
-  artifactStores.delete(store);
+  await assertControllerCandidateStore(store);
+  controllerCandidateStores.delete(store);
 }
 
 async function createChildDirectory(
@@ -390,7 +489,7 @@ async function createChildDirectory(
 }
 
 async function candidateDirectories(
-  store: CandidateArtifactStore,
+  store: ControllerCandidateStore,
   plan: ChangePlan,
   attemptId: string,
 ): Promise<{
@@ -399,7 +498,7 @@ async function candidateDirectories(
   readonly stateCandidatePath: string;
   readonly evidencePath: string;
 }> {
-  const record = await assertArtifactStore(store);
+  const record = await assertControllerCandidateStore(store);
   if (
     !changeIdPattern.test(plan.changeId) ||
     !attemptIdPattern.test(attemptId)
@@ -513,15 +612,15 @@ async function existingChildDirectory(
 }
 
 async function durableCandidatePaths(
-  store: CandidateArtifactStore,
-  plan: ChangePlan,
+  store: ControllerCandidateStore,
+  plan: Pick<ChangePlan, "changeId">,
   attemptId: string,
 ): Promise<{
   readonly bundlePath: string;
   readonly manifestPath: string;
   readonly provenancePath: string;
 }> {
-  const record = await assertArtifactStore(store);
+  const record = await assertControllerCandidateStore(store);
   durableCandidateLocations(plan, attemptId);
   const artifactCandidates = await existingChildDirectory(
     record.artifactRoot.path,
@@ -1339,18 +1438,6 @@ function frozenCandidateManifest(value: CandidateManifest): CandidateManifest {
   }) as CandidateManifest;
 }
 
-function frozenCandidatePlan(plan: ChangePlan): ChangePlan {
-  return Object.freeze({
-    ...plan,
-    files: Object.freeze(plan.files.map((file) => Object.freeze({ ...file }))),
-    components: Object.freeze([...plan.components]),
-    islands: Object.freeze([...plan.islands]),
-    dependencies: Object.freeze([...plan.dependencies]),
-    validations: Object.freeze([...plan.validations]),
-    publication: Object.freeze({ ...plan.publication }),
-  }) as ChangePlan;
-}
-
 function candidateRecord(candidate: CandidateManifest): CandidatePreviewRecord {
   const record = candidateRecords.get(candidate);
   if (record === undefined) {
@@ -1373,11 +1460,12 @@ export async function createCandidate(
   if (!changeIdPattern.test(input.plan.changeId)) {
     throw new TypeError("El plan candidato no es seguro");
   }
-  await assertArtifactStore(
-    input.artifactStore,
+  const storeRecord = await assertControllerCandidateStore(input.store);
+  await assertControllerCandidateStoreOutput(
     input.output,
     input.plan,
     input.attemptId,
+    storeRecord.root.path,
   );
   const preliminary = await assertCandidateEligiblePreliminaryValidation(
     input.preliminaryValidations,
@@ -1411,7 +1499,7 @@ export async function createCandidate(
       );
     }
     const directories = await candidateDirectories(
-      input.artifactStore,
+      input.store,
       input.plan,
       input.attemptId,
     );
@@ -1493,9 +1581,7 @@ export async function createCandidate(
     candidateRecords.set(
       manifest,
       Object.freeze({
-        store: input.artifactStore,
-        output: input.output,
-        plan: frozenCandidatePlan(input.plan),
+        store: input.store,
         attemptId: input.attemptId,
         bundlePath: directories.bundlePath,
         manifestPath,
@@ -1526,7 +1612,7 @@ export async function createCandidate(
 function verifiedDurableProvenance(
   value: Record<string, unknown>,
   candidate: CandidateManifest,
-  plan: ChangePlan,
+  changeId: string,
   attemptId: string,
 ): void {
   exactKeys(
@@ -1546,7 +1632,7 @@ function verifiedDurableProvenance(
   const expected = durableCandidateProvenance(candidate);
   if (
     value.schemaVersion !== 1 ||
-    value.changeId !== plan.changeId ||
+    value.changeId !== changeId ||
     value.attemptId !== attemptId ||
     value.candidateCommit !== candidate.candidateCommit ||
     value.artifactSha256 !== candidate.artifactSha256 ||
@@ -1598,26 +1684,70 @@ async function verifyPersistedArtifactEntries(
   }
 }
 
+async function assertDurableCandidateStoreCommit(
+  store: ControllerCandidateStore,
+  candidate: CandidateManifest,
+): Promise<void> {
+  if (
+    !candidateCommitPattern.test(candidate.candidateCommit) ||
+    !candidateCommitPattern.test(candidate.baselineCommit)
+  ) {
+    throw new TypeError("El commit durable candidato no es válido");
+  }
+  const record = await assertControllerCandidateStore(store);
+  const locations = durableCandidateLocations(
+    { changeId: candidate.changeId },
+    candidate.attemptId,
+  );
+  const [resolved, parent, object] = await Promise.all([
+    runStoreGit(
+      record.root.path,
+      ["rev-parse", "--verify", "--quiet", locations.candidateRef],
+      "No se pudo resolver la ref candidata durable",
+    ),
+    runStoreGit(
+      record.root.path,
+      ["rev-parse", `${candidate.candidateCommit}^`],
+      "No se pudo leer el padre durable del candidato",
+    ),
+    runStoreGit(
+      record.root.path,
+      ["cat-file", "-e", `${candidate.candidateCommit}^{commit}`],
+      "El commit candidato durable no existe",
+    ),
+  ]);
+  if (
+    resolved !== candidate.candidateCommit ||
+    parent !== candidate.baselineCommit ||
+    object !== ""
+  ) {
+    throw new TypeError(
+      "El commit candidato durable no conserva su procedencia",
+    );
+  }
+}
+
 /**
- * Reopens a persisted candidate through its controller-minted output and
- * deterministic locations. It fails closed for a missing private ref, state,
- * bundle, digest, manifest, or provenance binding.
+ * Reopens persistent state through only a controller-owned store and safe
+ * identity. It deliberately accepts no staged output, plan, repository, or
+ * checkout path.
  */
 export async function loadCandidate(
   input: CandidateLoadInput,
 ): Promise<CandidateManifest> {
   if (
-    !changeIdPattern.test(input.plan.changeId) ||
+    !changeIdPattern.test(input.changeId) ||
     !attemptIdPattern.test(input.attemptId)
   ) {
     throw new TypeError("El cambio o intento candidato no es seguro");
   }
-  const store = await createCandidateArtifactStore(
-    input.output,
-    input.plan,
+  const store = input.store;
+  await assertControllerCandidateStore(store);
+  const paths = await durableCandidatePaths(
+    store,
+    { changeId: input.changeId },
     input.attemptId,
   );
-  const paths = await durableCandidatePaths(store, input.plan, input.attemptId);
   const [manifestFile, provenanceFile] = await Promise.all([
     readStableRegularFile(paths.manifestPath),
     readStableRegularFile(paths.provenancePath),
@@ -1629,33 +1759,23 @@ export async function loadCandidate(
     ),
   );
   if (
-    manifest.changeId !== input.plan.changeId ||
-    manifest.attemptId !== input.attemptId ||
-    manifest.requestSha256 !== input.plan.requestSha256 ||
-    manifest.planSha256 !== input.plan.planSha256 ||
-    manifest.baselineCommit !== input.plan.baselineCommit ||
-    canonicalJson(manifest.buildProfile) !==
-      canonicalJson(input.plan.publication)
+    manifest.changeId !== input.changeId ||
+    manifest.attemptId !== input.attemptId
   ) {
     throw new TypeError(
-      "El manifiesto durable no coincide con el plan candidato",
+      "El manifiesto durable no coincide con la identidad candidata",
     );
   }
   verifiedDurableProvenance(
     strictJsonRecord(provenanceFile.bytes, "La procedencia durable candidata"),
     manifest,
-    input.plan,
+    input.changeId,
     input.attemptId,
   );
-  await assertDurableCandidateCommit(
-    input.output,
-    input.plan,
-    input.attemptId,
-    manifest.candidateCommit,
-  );
+  await assertDurableCandidateStoreCommit(store, manifest);
   const configuration = await readCandidateBundleConfiguration(
     paths.bundlePath,
-    input.plan,
+    { publication: manifest.buildProfile },
   );
   await verifyPersistedArtifactEntries(manifest, paths.bundlePath);
   if ((await hashTree(paths.bundlePath)) !== manifest.artifactSha256) {
@@ -1665,13 +1785,11 @@ export async function loadCandidate(
     manifest,
     Object.freeze({
       store,
-      output: input.output,
-      plan: frozenCandidatePlan(input.plan),
       attemptId: input.attemptId,
       bundlePath: paths.bundlePath,
       manifestPath: paths.manifestPath,
       configuration,
-      previewCapability: input.previewCapability,
+      previewCapability: undefined,
     }),
   );
   return manifest;
@@ -1682,13 +1800,8 @@ export async function verifyCandidateArtifact(
   candidate: CandidateManifest,
 ): Promise<void> {
   const record = candidateRecord(candidate);
-  await assertArtifactStore(record.store);
-  await assertDurableCandidateCommit(
-    record.output,
-    record.plan,
-    record.attemptId,
-    candidate.candidateCommit,
-  );
+  await assertControllerCandidateStore(record.store);
+  await assertDurableCandidateStoreCommit(record.store, candidate);
   const digest = await hashTree(record.bundlePath);
   if (digest !== candidate.artifactSha256) {
     throw new TypeError("El digest no coincide con el artefacto candidato");

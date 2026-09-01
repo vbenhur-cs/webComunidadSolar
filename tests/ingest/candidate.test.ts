@@ -5,6 +5,7 @@ import {
   link,
   mkdir,
   mkdtemp,
+  readFile,
   rm,
   symlink,
   utimes,
@@ -19,13 +20,15 @@ import { sha256Canonical } from "../../src/ingest/canonical-json.ts";
 import {
   candidateTestInspection,
   createCandidate,
-  createCandidateArtifactStore,
+  createControllerCandidateStoreTestInitialization,
   createCandidateTestInspectionCapability,
   loadCandidate,
-  removeCandidateArtifactStore,
+  openControllerCandidateStore,
+  releaseControllerCandidateStore,
   verifyCandidateArtifact,
-  type CandidateArtifactStore,
   type CandidateCreationInput,
+  type ControllerCandidateStore,
+  type ControllerCandidateStoreTestInitialization,
   type CandidateTestInspectionCapability,
 } from "../../src/ingest/candidate/manifest.ts";
 import {
@@ -276,7 +279,8 @@ interface CandidateFixture {
   readonly output: StagedAgentOutput;
   readonly plan: ChangePlan;
   readonly validations: ValidationResult[];
-  readonly artifactStore: CandidateArtifactStore;
+  readonly store: ControllerCandidateStore;
+  readonly storeInitialization: ControllerCandidateStoreTestInitialization;
   readonly build: CandidateBuildTestCapability;
   readonly inspection: CandidateTestInspectionCapability;
 }
@@ -294,7 +298,7 @@ async function withCandidateFixture(
   let workspace: Awaited<ReturnType<typeof createAgentWorkspace>> | undefined;
   let output: StagedAgentOutput | undefined;
   let evidenceRoot: ValidationEvidenceRoot | undefined;
-  let artifactStore: CandidateArtifactStore | undefined;
+  let store: ControllerCandidateStore | undefined;
   try {
     await execFileAsync("git", [
       "init",
@@ -389,7 +393,9 @@ async function withCandidateFixture(
       },
       { commands: async (command) => await commandResult(command) },
     );
-    artifactStore = await createCandidateArtifactStore(output, plan, attemptId);
+    const storeInitialization =
+      await createControllerCandidateStoreTestInitialization(repositoryRoot);
+    store = await openControllerCandidateStore(storeInitialization);
     const build = createCandidateBuildTestCapability(
       candidateBuildFixture(plan, buildOptions),
     );
@@ -398,13 +404,14 @@ async function withCandidateFixture(
       output,
       plan,
       validations,
-      artifactStore,
+      store,
+      storeInitialization,
       build,
       inspection: createCandidateTestInspectionCapability(),
     });
   } finally {
-    if (artifactStore !== undefined) {
-      await removeCandidateArtifactStore(artifactStore).catch(() => undefined);
+    if (store !== undefined) {
+      await releaseControllerCandidateStore(store).catch(() => undefined);
     }
     if (output !== undefined) {
       await removeStagedAgentOutput(output).catch(() => undefined);
@@ -432,7 +439,7 @@ function candidateInput(
     plan: fixture.plan,
     attemptId,
     preliminaryValidations: fixture.validations,
-    artifactStore: fixture.artifactStore,
+    store: fixture.store,
     buildCapability: fixture.build,
     ...(preview === undefined ? {} : { previewCapability: preview }),
   };
@@ -550,10 +557,13 @@ test("keeps candidate A reachable from the controller repository after its priva
 test("reloads and rehashes the durable controller bundle without a checkout path", async () => {
   await withCandidateFixture({}, async (fixture) => {
     const candidate = await createCandidate(candidateInput(fixture));
-    await removeCandidateArtifactStore(fixture.artifactStore);
+    await releaseControllerCandidateStore(fixture.store);
+    const reloadedStore = await openControllerCandidateStore(
+      fixture.storeInitialization,
+    );
     const reloaded = await loadCandidate({
-      output: fixture.output,
-      plan: fixture.plan,
+      store: reloadedStore,
+      changeId,
       attemptId,
     });
     assert.deepEqual(reloaded, candidate);
@@ -574,13 +584,102 @@ test("reloads and rehashes the durable controller bundle without a checkout path
     );
     await assert.rejects(
       loadCandidate({
-        output: fixture.output,
-        plan: fixture.plan,
+        store: reloadedStore,
+        changeId,
         attemptId,
       }),
       /digest|artefacto/i,
     );
   });
+});
+
+test("reloads durable state from a fresh controller store after staging is released", async () => {
+  await withCandidateFixture({}, async (fixture) => {
+    const candidate = await createCandidate(candidateInput(fixture));
+    await releaseControllerCandidateStore(fixture.store);
+    await removeStagedAgentOutput(fixture.output);
+
+    const freshStore = await openControllerCandidateStore(
+      fixture.storeInitialization,
+    );
+    const reloaded = await loadCandidate({
+      store: freshStore,
+      changeId,
+      attemptId,
+    });
+    assert.deepEqual(reloaded, candidate);
+    await assert.doesNotReject(verifyCandidateArtifact(reloaded));
+  });
+});
+
+test("rejects a forged controller candidate store before candidate creation", async () => {
+  await withCandidateFixture({}, async (fixture) => {
+    await assert.rejects(
+      createCandidate({
+        ...candidateInput(fixture),
+        store: Object.freeze({}),
+      } as unknown as CandidateCreationInput),
+      /store|controlador/i,
+    );
+  });
+});
+
+test("rejects a controller store opened for another repository", async (t) => {
+  const otherRepository = await mkdtemp(
+    join(tmpdir(), "candidate-other-store-"),
+  );
+  t.after(
+    async () => await rm(otherRepository, { recursive: true, force: true }),
+  );
+  await execFileAsync("git", [
+    "init",
+    "--quiet",
+    "--object-format=sha256",
+    "--initial-branch=main",
+    otherRepository,
+  ]);
+  const initialization =
+    await createControllerCandidateStoreTestInitialization(otherRepository);
+  const mismatchedStore = await openControllerCandidateStore(initialization);
+  try {
+    await withCandidateFixture({}, async (fixture) => {
+      await assert.rejects(
+        createCandidate({
+          ...candidateInput(fixture),
+          store: mismatchedStore,
+        }),
+        /store|repositorio|controlador/i,
+      );
+    });
+  } finally {
+    await releaseControllerCandidateStore(mismatchedStore).catch(
+      () => undefined,
+    );
+  }
+});
+
+test("candidate workspace policy exports no repository-root or checkout callback authority", async () => {
+  const policy = await import("../../src/ingest/workspaces/policy.ts");
+  assert.equal("controllerCandidateRepositoryRoot" in policy, false);
+  assert.equal("withControllerCandidateCheckout" in policy, false);
+  assert.equal("createControllerCandidateCheckout" in policy, false);
+});
+
+test("candidate reload exposes only durable store identity", async () => {
+  const source = await readFile(
+    new URL("../../src/ingest/candidate/manifest.ts", import.meta.url),
+    "utf8",
+  );
+  const declaration = source.match(
+    /export interface CandidateLoadInput \{([\s\S]*?)\n\}/u,
+  );
+  assert.notEqual(declaration, null);
+  assert.deepEqual(
+    [...declaration![1].matchAll(/^\x20{2}readonly ([A-Za-z]+)\??:/gmu)].map(
+      (match) => match[1],
+    ),
+    ["store", "changeId", "attemptId"],
+  );
 });
 
 test("rejects forged, failed, mismatched and mutated preliminary inputs before Git or build", async () => {

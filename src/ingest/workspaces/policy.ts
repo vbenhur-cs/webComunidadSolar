@@ -11,11 +11,18 @@ import {
   readdir,
   realpath,
   rm,
+  writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, relative, sep } from "node:path";
 
 import { canonicalJson } from "../canonical-json.ts";
+import {
+  copyCandidateBundle,
+  readCandidateBundleConfiguration,
+  type CandidateArtifactEntry,
+  type CandidateBundleConfiguration,
+} from "../candidate/manifest.ts";
 import type { ChangePlan } from "../domain.ts";
 import {
   AGENT_ACCEPTED_OUTPUT_MAX_BYTES,
@@ -52,6 +59,10 @@ const fixedGitEnvironment = Object.freeze({
   GIT_CONFIG_SYSTEM: "/dev/null",
   GIT_OPTIONAL_LOCKS: "0",
   GIT_TERMINAL_PROMPT: "0",
+  GIT_AUTHOR_NAME: "Comunidad Solar Candidate",
+  GIT_AUTHOR_EMAIL: "candidate@comunidadsolar.invalid",
+  GIT_COMMITTER_NAME: "Comunidad Solar Candidate",
+  GIT_COMMITTER_EMAIL: "candidate@comunidadsolar.invalid",
 });
 const fixedGitArguments = Object.freeze([
   "-c",
@@ -120,7 +131,7 @@ const executionCopyRecords = new WeakMap<
  * Its Git path and source repository never leave the controller capability.
  */
 declare const controllerCandidateCheckoutBrand: unique symbol;
-export interface ControllerCandidateCheckout {
+interface ControllerCandidateCheckout {
   readonly [controllerCandidateCheckoutBrand]: true;
 }
 
@@ -141,6 +152,31 @@ const candidateCheckoutRecords = new WeakMap<
   ControllerCandidateCheckout,
   CandidateCheckoutRecord
 >();
+
+/** Immutable commit identity backed by a private controller checkout record. */
+export interface ControllerCandidateCommit {
+  readonly candidateCommit: string;
+  readonly candidateTree: string;
+}
+
+interface ControllerCandidateCommitRecord {
+  readonly checkout: ControllerCandidateCheckout;
+  readonly output: StagedAgentOutput;
+  readonly attemptId: string;
+  readonly planCanonical: string;
+  readonly baselineCommit: string;
+}
+
+const controllerCandidateCommitRecords = new WeakMap<
+  ControllerCandidateCommit,
+  ControllerCandidateCommitRecord
+>();
+
+export interface ControllerCandidateCapturedBuild {
+  readonly sourceConfiguration: CandidateBundleConfiguration;
+  readonly copiedConfiguration: CandidateBundleConfiguration;
+  readonly copiedArtifacts: readonly CandidateArtifactEntry[];
+}
 
 function errorCode(error: unknown): string | undefined {
   if (typeof error !== "object" || error === null || !("code" in error)) {
@@ -1230,7 +1266,7 @@ function controllerCandidateRef(plan: ChangePlan, attemptId: string): string {
  *
  * @internal Candidate persistence uses this to create controller-owned state.
  */
-export async function controllerCandidateRepositoryRoot(
+async function controllerCandidateRepositoryRoot(
   output: StagedAgentOutput,
   plan: ChangePlan,
   attemptId: string,
@@ -1268,10 +1304,32 @@ export async function controllerCandidateRepositoryRoot(
 }
 
 /**
+ * Binds an opaque controller store to the same trusted repository as an exact
+ * staged handoff. It neither returns a repository path nor opens a checkout.
+ */
+export async function assertControllerCandidateStoreOutput(
+  output: StagedAgentOutput,
+  plan: ChangePlan,
+  attemptId: string,
+  storeRepositoryRoot: string,
+): Promise<void> {
+  const repositoryRoot = await controllerCandidateRepositoryRoot(
+    output,
+    plan,
+    attemptId,
+  );
+  if (repositoryRoot !== storeRepositoryRoot) {
+    throw new TypeError(
+      "El store candidato no pertenece al repositorio del output aprobado",
+    );
+  }
+}
+
+/**
  * Transfers commit A into the trusted controller object database and anchors
  * it at a deterministic private ref. It never changes a branch such as main.
  */
-export async function persistControllerCandidateRef(
+async function persistControllerCandidateRef(
   checkout: ControllerCandidateCheckout,
   output: StagedAgentOutput,
   plan: ChangePlan,
@@ -1344,53 +1402,12 @@ export async function persistControllerCandidateRef(
   return ref;
 }
 
-/** Verifies a durable candidate ref through the staged controller authority. */
-export async function assertControllerCandidateRef(
-  output: StagedAgentOutput,
-  plan: ChangePlan,
-  attemptId: string,
-  candidateCommit: string,
-): Promise<void> {
-  if (!candidateCommitPattern.test(candidateCommit)) {
-    throw new TypeError("El commit candidato no es válido");
-  }
-  const repositoryRoot = await controllerCandidateRepositoryRoot(
-    output,
-    plan,
-    attemptId,
-  );
-  const ref = controllerCandidateRef(plan, attemptId);
-  const [resolved, parent, object] = await Promise.all([
-    runFixedGit(
-      ["-C", repositoryRoot, "rev-parse", "--verify", "--quiet", ref],
-      "No se pudo resolver la ref candidata durable",
-    ),
-    runFixedGit(
-      ["-C", repositoryRoot, "rev-parse", `${candidateCommit}^`],
-      "No se pudo leer el padre durable del candidato",
-    ),
-    runFixedGit(
-      ["-C", repositoryRoot, "cat-file", "-e", `${candidateCommit}^{commit}`],
-      "El commit candidato durable no existe",
-    ),
-  ]);
-  if (
-    resolved !== candidateCommit ||
-    parent !== plan.baselineCommit ||
-    object !== ""
-  ) {
-    throw new TypeError(
-      "El commit candidato durable no conserva su procedencia",
-    );
-  }
-}
-
 /**
  * Materializes a Git checkout from the private trusted baseline record and
  * copies only the rechecked staged bytes. The returned object intentionally
  * contains no filesystem path or Git/repository authority.
  */
-export async function createControllerCandidateCheckout(
+async function createControllerCandidateCheckout(
   output: StagedAgentOutput,
   plan: ChangePlan,
   attemptId: string,
@@ -1527,7 +1544,7 @@ export async function createControllerCandidateCheckout(
 }
 
 /** Rechecks the bound approved bytes inside the private candidate checkout. */
-export async function assertControllerCandidateCheckout(
+async function assertControllerCandidateCheckout(
   checkout: ControllerCandidateCheckout,
   output: StagedAgentOutput,
   plan: ChangePlan,
@@ -1571,7 +1588,7 @@ export async function assertControllerCandidateCheckout(
  * Grants a path only to the controller's fixed operation after the opaque
  * checkout has been revalidated. It is not a public artifact or agent API.
  */
-export async function withControllerCandidateCheckout<T>(
+async function withControllerCandidateCheckout<T>(
   checkout: ControllerCandidateCheckout,
   output: StagedAgentOutput,
   plan: ChangePlan,
@@ -1582,13 +1599,549 @@ export async function withControllerCandidateCheckout<T>(
   return await operation(candidateCheckoutRecord(checkout).path);
 }
 
-export async function removeControllerCandidateCheckout(
+async function removeControllerCandidateCheckout(
   checkout: ControllerCandidateCheckout,
 ): Promise<void> {
   const record = candidateCheckoutRecord(checkout);
   await assertCandidateCheckoutLocation(record);
   await rm(record.root, { recursive: true, force: false });
   candidateCheckoutRecords.delete(checkout);
+}
+
+function sortedCandidatePaths(paths: readonly string[]): string[] {
+  const result = [...paths].sort((left, right) =>
+    left < right ? -1 : left > right ? 1 : 0,
+  );
+  if (result.length === 0 || new Set(result).size !== result.length) {
+    throw new TypeError(
+      "El candidato requiere un inventario aprobado no vacío",
+    );
+  }
+  return result;
+}
+
+function sameCandidatePaths(
+  left: readonly string[],
+  right: readonly string[],
+): boolean {
+  return (
+    left.length === right.length &&
+    left.every((path, index) => path === right[index])
+  );
+}
+
+function candidatePathWithin(root: string, path: string): boolean {
+  const remainder = relative(root, path);
+  return (
+    remainder === "" ||
+    (!isAbsolute(remainder) &&
+      remainder !== ".." &&
+      !remainder.startsWith(`..${sep}`))
+  );
+}
+
+function safeCandidateBuildRelativePath(path: string): boolean {
+  return (
+    path.length > 0 &&
+    !isAbsolute(path) &&
+    !path.includes("\\") &&
+    !path.includes("\0") &&
+    path
+      .split("/")
+      .every((segment) => segment !== "" && segment !== "." && segment !== "..")
+  );
+}
+
+async function writeControllerCandidateFixtureFile(
+  checkoutPath: string,
+  relativePath: string,
+  contents: string | Uint8Array,
+): Promise<void> {
+  if (!safeCandidateBuildRelativePath(relativePath)) {
+    throw new TypeError("La fixture de build contiene una ruta insegura");
+  }
+  const path = join(checkoutPath, ...relativePath.split("/"));
+  const parent = dirname(path);
+  if (
+    !candidatePathWithin(checkoutPath, path) ||
+    !candidatePathWithin(checkoutPath, parent)
+  ) {
+    throw new TypeError("La fixture de build escapa el checkout candidato");
+  }
+  await mkdir(parent, { recursive: true, mode: 0o700 });
+  if ((await realpath(parent)) !== parent) {
+    throw new TypeError("La fixture de build atraviesa un directorio inseguro");
+  }
+  try {
+    const existing = await lstat(path);
+    if (
+      existing.isSymbolicLink() ||
+      (!existing.isFile() && !existing.isDirectory())
+    ) {
+      throw new TypeError("La fixture de build contiene un destino inseguro");
+    }
+    if (existing.isDirectory()) {
+      throw new TypeError(
+        "La fixture de build no puede reemplazar un directorio",
+      );
+    }
+  } catch (error: unknown) {
+    if (errorCode(error) !== "ENOENT") throw error;
+  }
+  await writeFile(path, contents, { mode: 0o600 });
+}
+
+async function assertCandidateGitObjectsMatchApprovedBytes(
+  checkoutPath: string,
+  revision: string,
+  approvedPaths: readonly string[],
+): Promise<void> {
+  for (const path of approvedPaths) {
+    const [rawBlob, recordedBlob] = await Promise.all([
+      runFixedGit(
+        ["-C", checkoutPath, "hash-object", "--no-filters", "--", path],
+        "No se pudo calcular el blob aprobado",
+      ),
+      runFixedGit(
+        ["-C", checkoutPath, "rev-parse", `${revision}:${path}`],
+        "No se pudo leer el blob candidato",
+      ),
+    ]);
+    if (
+      !candidateCommitPattern.test(rawBlob) ||
+      !candidateCommitPattern.test(recordedBlob) ||
+      rawBlob !== recordedBlob
+    ) {
+      throw new TypeError(
+        "El objeto Git candidato no conserva los bytes aprobados exactamente",
+      );
+    }
+  }
+}
+
+async function assertOnlyApprovedCandidateDiff(
+  checkoutPath: string,
+  baselineCommit: string,
+  approvedPaths: readonly string[],
+): Promise<void> {
+  const changed = await runFixedGit(
+    ["-C", checkoutPath, "diff", "--name-only", "--no-renames", baselineCommit],
+    "No se pudo comprobar el diff candidato",
+  );
+  const actualPaths = changed === "" ? [] : changed.split("\n").sort();
+  if (!sameCandidatePaths(actualPaths, approvedPaths)) {
+    throw new TypeError("El candidato contiene un diff no aprobado");
+  }
+}
+
+function permittedGeneratedCandidatePath(path: string): boolean {
+  return (
+    path === "dist" ||
+    path.startsWith("dist/") ||
+    path === ".wrangler/deploy/config.json" ||
+    path === ".wrangler/"
+  );
+}
+
+async function assertGeneratedCandidateWranglerTree(
+  checkoutPath: string,
+): Promise<void> {
+  const wranglerPath = join(checkoutPath, ".wrangler");
+  let wrangler: Awaited<ReturnType<typeof lstat>>;
+  try {
+    wrangler = await lstat(wranglerPath);
+  } catch (error: unknown) {
+    if (errorCode(error) === "ENOENT") return;
+    throw error;
+  }
+  if (wrangler.isSymbolicLink() || !wrangler.isDirectory()) {
+    throw new TypeError("El output de build contiene .wrangler inseguro");
+  }
+  const wranglerEntries = await readdir(wranglerPath);
+  if (wranglerEntries.length !== 1 || wranglerEntries[0] !== "deploy") {
+    throw new TypeError(
+      "El build candidato contiene output .wrangler no aprobado",
+    );
+  }
+  const deployPath = join(wranglerPath, "deploy");
+  const deploy = await lstat(deployPath);
+  if (deploy.isSymbolicLink() || !deploy.isDirectory()) {
+    throw new TypeError("El output de build contiene deploy inseguro");
+  }
+  const deployEntries = await readdir(deployPath);
+  if (deployEntries.length !== 1 || deployEntries[0] !== "config.json") {
+    throw new TypeError(
+      "El build candidato contiene output deploy no aprobado",
+    );
+  }
+  const config = await lstat(join(deployPath, "config.json"));
+  if (config.isSymbolicLink() || !config.isFile() || config.nlink !== 1) {
+    throw new TypeError("El config de deploy candidato no es seguro");
+  }
+}
+
+async function assertPermittedCandidateBuildStatus(
+  checkoutPath: string,
+  status: string,
+): Promise<void> {
+  for (const line of status === "" ? [] : status.split("\n")) {
+    if (
+      line.length < 4 ||
+      (line.slice(0, 2) !== "??" && line.slice(0, 2) !== "!!") ||
+      line[2] !== " " ||
+      !permittedGeneratedCandidatePath(line.slice(3))
+    ) {
+      throw new TypeError("El build candidato contiene cambios no aprobados");
+    }
+  }
+  await assertGeneratedCandidateWranglerTree(checkoutPath);
+}
+
+function controllerCandidateCommitRecord(
+  candidate: ControllerCandidateCommit,
+): ControllerCandidateCommitRecord {
+  const record = controllerCandidateCommitRecords.get(candidate);
+  if (
+    record === undefined ||
+    !candidateCommitPattern.test(candidate.candidateCommit) ||
+    !candidateCommitPattern.test(candidate.candidateTree)
+  ) {
+    throw new TypeError("El commit candidato no pertenece al controlador");
+  }
+  return record;
+}
+
+async function assertControllerCandidateCommitIdentity(
+  checkoutPath: string,
+  candidate: ControllerCandidateCommit,
+  baselineCommit: string,
+): Promise<void> {
+  const [head, parent, tree, worktreeDiff, indexDiff, status] =
+    await Promise.all([
+      runFixedGit(
+        ["-C", checkoutPath, "rev-parse", "HEAD"],
+        "No se pudo leer el commit candidato",
+      ),
+      runFixedGit(
+        ["-C", checkoutPath, "rev-parse", "HEAD^"],
+        "No se pudo leer el padre candidato",
+      ),
+      runFixedGit(
+        ["-C", checkoutPath, "rev-parse", "HEAD^{tree}"],
+        "No se pudo leer el árbol candidato",
+      ),
+      runFixedGit(
+        ["-C", checkoutPath, "diff", "--name-only", "--no-renames", "HEAD"],
+        "No se pudo comprobar el worktree candidato",
+      ),
+      runFixedGit(
+        ["-C", checkoutPath, "diff", "--cached", "--name-only", "--no-renames"],
+        "No se pudo comprobar el índice candidato",
+      ),
+      runFixedGit(
+        [
+          "-C",
+          checkoutPath,
+          "status",
+          "--porcelain=v1",
+          "--untracked-files=all",
+          "--ignored=matching",
+        ],
+        "No se pudo comprobar el estado post-build candidato",
+      ),
+    ]);
+  await assertPermittedCandidateBuildStatus(checkoutPath, status);
+  if (
+    head !== candidate.candidateCommit ||
+    parent !== baselineCommit ||
+    tree !== candidate.candidateTree ||
+    worktreeDiff !== "" ||
+    indexDiff !== ""
+  ) {
+    throw new TypeError(
+      "El checkout ya no representa el commit candidato inmutable",
+    );
+  }
+}
+
+async function withVerifiedControllerCandidateCommit<T>(
+  candidate: ControllerCandidateCommit,
+  plan: ChangePlan,
+  attemptId: string,
+  operation: (checkoutPath: string) => Promise<T>,
+): Promise<T> {
+  const record = controllerCandidateCommitRecord(candidate);
+  if (
+    record.planCanonical !== canonicalJson(plan) ||
+    record.attemptId !== attemptId ||
+    record.baselineCommit !== plan.baselineCommit
+  ) {
+    throw new TypeError(
+      "El commit candidato no coincide con el plan o intento",
+    );
+  }
+  return await withControllerCandidateCheckout(
+    record.checkout,
+    record.output,
+    plan,
+    attemptId,
+    async (checkoutPath) => {
+      await assertControllerCandidateCommitIdentity(
+        checkoutPath,
+        candidate,
+        record.baselineCommit,
+      );
+      const result = await operation(checkoutPath);
+      await assertControllerCandidateCommitIdentity(
+        checkoutPath,
+        candidate,
+        record.baselineCommit,
+      );
+      return result;
+    },
+  );
+}
+
+/** Creates commit A with only controller-verified staged bytes. */
+export async function createControllerCandidateCommit(
+  output: StagedAgentOutput,
+  plan: ChangePlan,
+  attemptId: string,
+): Promise<ControllerCandidateCommit> {
+  const checkout = await createControllerCandidateCheckout(
+    output,
+    plan,
+    attemptId,
+  );
+  try {
+    const approvedPaths = sortedCandidatePaths(output.files);
+    const identity = await withControllerCandidateCheckout(
+      checkout,
+      output,
+      plan,
+      attemptId,
+      async (checkoutPath) => {
+        const head = await runFixedGit(
+          ["-C", checkoutPath, "rev-parse", "HEAD"],
+          "No se pudo leer el baseline candidato",
+        );
+        if (head !== plan.baselineCommit) {
+          throw new TypeError(
+            "El checkout candidato no parte del baseline aprobado",
+          );
+        }
+        await runFixedGit(
+          ["-C", checkoutPath, "add", "--", ...approvedPaths],
+          "No se pudo indexar el output candidato",
+        );
+        const staged = await runFixedGit(
+          [
+            "-C",
+            checkoutPath,
+            "diff",
+            "--cached",
+            "--name-only",
+            "--no-renames",
+            plan.baselineCommit,
+          ],
+          "No se pudo comprobar el índice candidato",
+        );
+        const stagedPaths = staged === "" ? [] : staged.split("\n").sort();
+        if (!sameCandidatePaths(stagedPaths, approvedPaths)) {
+          throw new TypeError(
+            "El índice candidato contiene paths no aprobados",
+          );
+        }
+        await assertCandidateGitObjectsMatchApprovedBytes(
+          checkoutPath,
+          "",
+          approvedPaths,
+        );
+        await runFixedGit(
+          [
+            "-C",
+            checkoutPath,
+            "commit",
+            "--quiet",
+            "--no-verify",
+            "-m",
+            "Candidate generated output",
+          ],
+          "No se pudo crear el commit candidato",
+        );
+        const [candidateCommit, parent, candidateTree, status] =
+          await Promise.all([
+            runFixedGit(
+              ["-C", checkoutPath, "rev-parse", "HEAD"],
+              "No se pudo leer el commit candidato",
+            ),
+            runFixedGit(
+              ["-C", checkoutPath, "rev-parse", "HEAD^"],
+              "No se pudo leer el padre candidato",
+            ),
+            runFixedGit(
+              ["-C", checkoutPath, "rev-parse", "HEAD^{tree}"],
+              "No se pudo leer el árbol candidato",
+            ),
+            runFixedGit(
+              [
+                "-C",
+                checkoutPath,
+                "status",
+                "--porcelain=v1",
+                "--untracked-files=all",
+              ],
+              "No se pudo comprobar la limpieza candidata",
+            ),
+          ]);
+        if (
+          parent !== plan.baselineCommit ||
+          status !== "" ||
+          !candidateCommitPattern.test(candidateCommit) ||
+          !candidateCommitPattern.test(candidateTree)
+        ) {
+          throw new TypeError(
+            "El commit candidato no conserva un padre y checkout limpios",
+          );
+        }
+        await assertCandidateGitObjectsMatchApprovedBytes(
+          checkoutPath,
+          candidateCommit,
+          approvedPaths,
+        );
+        await assertOnlyApprovedCandidateDiff(
+          checkoutPath,
+          plan.baselineCommit,
+          approvedPaths,
+        );
+        return Object.freeze({ candidateCommit, candidateTree });
+      },
+    );
+    await assertControllerCandidateCheckout(checkout, output, plan, attemptId);
+    const candidate = Object.freeze({
+      candidateCommit: identity.candidateCommit,
+      candidateTree: identity.candidateTree,
+    });
+    controllerCandidateCommitRecords.set(
+      candidate,
+      Object.freeze({
+        checkout,
+        output,
+        attemptId,
+        planCanonical: canonicalJson(plan),
+        baselineCommit: plan.baselineCommit,
+      }),
+    );
+    return candidate;
+  } catch (error: unknown) {
+    await removeControllerCandidateCheckout(checkout).catch(() => undefined);
+    throw error;
+  }
+}
+
+/** Applies declarative controller fixture bytes without yielding a checkout path. */
+export async function runControllerCandidateBuildFiles(
+  candidate: ControllerCandidateCommit,
+  plan: ChangePlan,
+  attemptId: string,
+  files: Readonly<Record<string, string | Uint8Array>>,
+): Promise<void> {
+  await withVerifiedControllerCandidateCommit(
+    candidate,
+    plan,
+    attemptId,
+    async (checkoutPath) => {
+      for (const path of Object.keys(files).sort()) {
+        await writeControllerCandidateFixtureFile(
+          checkoutPath,
+          path,
+          files[path]!,
+        );
+      }
+    },
+  );
+}
+
+/** Revalidates one private commit checkout without exposing its filesystem path. */
+export async function assertControllerCandidateCommit(
+  candidate: ControllerCandidateCommit,
+  plan: ChangePlan,
+  attemptId: string,
+): Promise<void> {
+  await withVerifiedControllerCandidateCommit(
+    candidate,
+    plan,
+    attemptId,
+    async () => undefined,
+  );
+}
+
+/** Copies fixed generated output through the sealed checkout lifecycle. */
+export async function captureControllerCandidateBuildArtifacts(
+  candidate: ControllerCandidateCommit,
+  plan: ChangePlan,
+  attemptId: string,
+  bundlePath: string,
+): Promise<ControllerCandidateCapturedBuild> {
+  let sourceConfiguration: CandidateBundleConfiguration | undefined;
+  let copiedArtifacts: readonly CandidateArtifactEntry[] | undefined;
+  await withVerifiedControllerCandidateCommit(
+    candidate,
+    plan,
+    attemptId,
+    async (checkoutPath) => {
+      sourceConfiguration = await readCandidateBundleConfiguration(
+        checkoutPath,
+        plan,
+      );
+      copiedArtifacts = await copyCandidateBundle(checkoutPath, bundlePath);
+    },
+  );
+  if (sourceConfiguration === undefined || copiedArtifacts === undefined) {
+    throw new TypeError("No se pudo capturar el bundle candidato");
+  }
+  const copiedConfiguration = await readCandidateBundleConfiguration(
+    bundlePath,
+    plan,
+  );
+  if (
+    canonicalJson(copiedConfiguration) !== canonicalJson(sourceConfiguration)
+  ) {
+    throw new TypeError(
+      "La configuración copiada no coincide con el build candidato",
+    );
+  }
+  return Object.freeze({
+    sourceConfiguration,
+    copiedConfiguration,
+    copiedArtifacts,
+  });
+}
+
+/** Transfers a sealed candidate commit only after its durable state is ready. */
+export async function persistControllerCandidateCommit(
+  candidate: ControllerCandidateCommit,
+  plan: ChangePlan,
+  attemptId: string,
+): Promise<void> {
+  const record = controllerCandidateCommitRecord(candidate);
+  await assertControllerCandidateCommit(candidate, plan, attemptId);
+  await persistControllerCandidateRef(
+    record.checkout,
+    record.output,
+    plan,
+    attemptId,
+    candidate.candidateCommit,
+  );
+}
+
+/** Removes only the controller-owned temporary checkout behind a commit. */
+export async function removeControllerCandidateCommit(
+  candidate: ControllerCandidateCommit,
+): Promise<void> {
+  const record = controllerCandidateCommitRecord(candidate);
+  await removeControllerCandidateCheckout(record.checkout);
+  controllerCandidateCommitRecords.delete(candidate);
 }
 
 export interface StagedPackageBaselines {
