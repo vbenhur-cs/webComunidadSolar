@@ -167,6 +167,7 @@ interface PlanChanges {
   readonly selectedMode?: ChangePlan["selectedMode"];
   readonly overwritesExistingRoute?: boolean;
   readonly publication?: ChangePlan["publication"];
+  readonly components?: string[];
 }
 
 function planWithPublication(
@@ -212,7 +213,7 @@ function planWithPublication(
         operation: "create" as const,
       },
     ],
-    components: ["SiteLayout"],
+    components: changes.components ?? ["SiteLayout"],
     islands: [],
     dependencies: [],
     validations: ["output-policy", "build"],
@@ -255,6 +256,16 @@ import SiteLayout from "../layouts/SiteLayout.astro";
 import "../styles/generated/${currentPlan.changeId}.css";
 ---
 <SiteLayout page="inicio"><main class="generated-${currentPlan.changeId}">${body}</main></SiteLayout>
+`;
+}
+
+function pageHeroRoute(currentPlan: ChangePlan, attributes: string): string {
+  return `---
+import SiteLayout from "../layouts/SiteLayout.astro";
+import PageHero from "../components/site/PageHero.astro";
+import "../styles/generated/${currentPlan.changeId}.css";
+---
+<SiteLayout page="inicio"><main class="generated-${currentPlan.changeId}"><PageHero ${attributes} /></main></SiteLayout>
 `;
 }
 
@@ -381,6 +392,7 @@ async function withStagedOutput(
       "dist/.gitkeep": "\n",
       "drizzle/0000_fixture.sql": "SELECT 1;\n",
       "public/guide.pdf": "fixture guide\n",
+      "public/hero.png": validPngHeader,
       "wrangler.jsonc":
         options.publicationConfig ??
         (publicationAdapter === "cloudflare"
@@ -1501,6 +1513,213 @@ test("resolves known public assets and rejects missing same-origin asset links",
       },
     );
   });
+});
+
+test("validates static canonical PageHero image props before commands", async (t) => {
+  await t.test("rejects a missing PageHero image asset", async () => {
+    await withStagedOutput(
+      {
+        planChanges: {
+          selectedMode: "freeform",
+          components: ["SiteLayout", "PageHero"],
+        },
+        output: (approvedPlan) =>
+          validOutput(approvedPlan, {
+            route: pageHeroRoute(
+              approvedPlan,
+              'tone="green" eyebrow="Solar" title="Seguro" lead="Estático" image="/definitely-missing.png" imageAlt="Imagen de prueba"',
+            ),
+          }),
+      },
+      async (output, approvedPlan, evidenceRoot, publicationProfile) => {
+        const calls: CommandInvocation[] = [];
+        const results = await runValidation(
+          validationInput(
+            output,
+            approvedPlan,
+            evidenceRoot,
+            publicationProfile,
+          ),
+          {
+            commands: async (command) => {
+              calls.push(command);
+              return passingResult(command);
+            },
+          },
+        );
+        assert.equal(
+          results.find((result) => result.id === "output-policy")?.status,
+          "passed",
+        );
+        assert.equal(
+          results.find((result) => result.id === "links")?.status,
+          "failed",
+        );
+        assert.equal(calls.length, 0);
+      },
+    );
+  });
+
+  await t.test("requires meaningful PageHero imageAlt", async () => {
+    await withStagedOutput(
+      {
+        planChanges: {
+          selectedMode: "freeform",
+          components: ["SiteLayout", "PageHero"],
+        },
+        output: (approvedPlan) =>
+          validOutput(approvedPlan, {
+            route: pageHeroRoute(
+              approvedPlan,
+              'tone="green" eyebrow="Solar" title="Seguro" lead="Estático" image="/hero.png"',
+            ),
+          }),
+      },
+      async (output, approvedPlan, evidenceRoot, publicationProfile) => {
+        const calls: CommandInvocation[] = [];
+        const results = await runValidation(
+          validationInput(
+            output,
+            approvedPlan,
+            evidenceRoot,
+            publicationProfile,
+          ),
+          {
+            commands: async (command) => {
+              calls.push(command);
+              return passingResult(command);
+            },
+          },
+        );
+        assert.equal(
+          results.find((result) => result.id === "output-policy")?.status,
+          "passed",
+        );
+        assert.equal(
+          results.find((result) => result.id === "links")?.status,
+          "passed",
+        );
+        assert.equal(
+          results.find((result) => result.id === "accessibility")?.status,
+          "failed",
+        );
+        assert.equal(calls.length, 0);
+      },
+    );
+  });
+
+  await t.test(
+    "accepts a known PageHero asset with static alt text",
+    async () => {
+      await withStagedOutput(
+        {
+          planChanges: {
+            selectedMode: "freeform",
+            components: ["SiteLayout", "PageHero"],
+          },
+          output: (approvedPlan) =>
+            validOutput(approvedPlan, {
+              route: pageHeroRoute(
+                approvedPlan,
+                'tone="green" eyebrow="Solar" title="Seguro" lead="Estático" image="/hero.png" imageAlt="Paneles solares junto a una casa"',
+              ),
+            }),
+        },
+        async (output, approvedPlan, evidenceRoot, publicationProfile) => {
+          const results = await runValidation(
+            validationInput(
+              output,
+              approvedPlan,
+              evidenceRoot,
+              publicationProfile,
+            ),
+            { commands: async (command) => passingResult(command) },
+          );
+          assert.equal(
+            results.find((result) => result.id === "links")?.status,
+            "passed",
+          );
+          assert.equal(
+            results.find((result) => result.id === "accessibility")?.status,
+            "passed",
+          );
+        },
+      );
+    },
+  );
+});
+
+test("terminates a silent detached group after its npm leader closes", async (t) => {
+  if (process.platform === "win32") {
+    t.skip("la regresión de grupo de procesos usa el shell POSIX fijo");
+    return;
+  }
+  const runnerModule =
+    (await import("../../src/ingest/validation/runner.ts")) as unknown as {
+      createValidationTimeoutTestCapability?: () => unknown;
+    };
+  const createTimeoutTestCapability =
+    runnerModule.createValidationTimeoutTestCapability;
+  assert.equal(typeof createTimeoutTestCapability, "function");
+  if (createTimeoutTestCapability === undefined) return;
+  const timeoutTestController = createTimeoutTestCapability();
+  let childPid: number | undefined;
+
+  try {
+    await withStagedOutput(
+      {
+        packageJson: `${JSON.stringify({
+          name: "fixture",
+          version: "1.0.0",
+          private: true,
+          scripts: {
+            "format:check":
+              'sh -c \'sleep 4 >/dev/null 2>&1 & printf \\"child=%s\\\\n\\" \\"$!\\" >&2\'',
+          },
+        })}\n`,
+      },
+      async (output, approvedPlan, evidenceRoot, publicationProfile) => {
+        const started = performance.now();
+        const results = await runValidation(
+          validationInput(
+            output,
+            approvedPlan,
+            evidenceRoot,
+            publicationProfile,
+          ),
+          {
+            testController: timeoutTestController,
+          } as unknown as Parameters<typeof runValidation>[1],
+        );
+        const format = results.find((result) => result.id === "format");
+        const evidence = JSON.parse(
+          await readFile(format!.evidence!, "utf8"),
+        ) as {
+          details: {
+            result: { stderr: string; timedOut: boolean; aborted: boolean };
+          };
+        };
+        childPid = Number(
+          /child="?(\d+)/u.exec(evidence.details.result.stderr)?.[1],
+        );
+        assert.ok(Number.isSafeInteger(childPid) && childPid > 0);
+        assert.equal(format?.status, "failed");
+        assert.equal(evidence.details.result.timedOut, true);
+        assert.equal(evidence.details.result.aborted, true);
+        assert.ok(performance.now() - started < 3_000);
+        await new Promise<void>((done) => setTimeout(done, 100));
+        assert.throws(() => process.kill(childPid!, 0), /ESRCH/u);
+      },
+    );
+  } finally {
+    if (childPid !== undefined) {
+      try {
+        process.kill(childPid, "SIGKILL");
+      } catch {
+        // The passing behavior already removed the child.
+      }
+    }
+  }
 });
 
 test("terminates a pipe-holding descendant after its npm leader exits", async (t) => {

@@ -75,6 +75,7 @@ const executableExtensions = new Set([
 const capturedOutputMaximumBytes = 64 * 1024;
 const processTerminationGraceMs = 5_000;
 const processTerminationSettleMs = 1_000;
+const processGroupPollMs = 25;
 const timeoutRegressionMs = 500;
 const timeoutRegressionCommandId = "format";
 const controllerNpmExecutable = join(dirname(process.execPath), "npm");
@@ -1055,6 +1056,17 @@ function signalProcessGroup(
   child.kill(signal);
 }
 
+/** A detached leader is not complete while its POSIX process group survives. */
+function detachedProcessGroupExists(child: ReturnType<typeof spawn>): boolean {
+  if (process.platform === "win32" || child.pid === undefined) return false;
+  try {
+    process.kill(-child.pid, 0);
+    return true;
+  } catch (error: unknown) {
+    return errorCode(error) !== "ESRCH";
+  }
+}
+
 function processTiming(
   command: CommandInvocation,
   testController: ValidationTimeoutTestCapability | undefined,
@@ -1098,6 +1110,13 @@ async function runFixedControllerCommand(
     let closed = false;
     let terminationTimer: NodeJS.Timeout | undefined;
     let settlementTimer: NodeJS.Timeout | undefined;
+    let groupPollTimer: NodeJS.Timeout | undefined;
+    let closeResult:
+      | {
+          readonly exitCode: number | null;
+          readonly signal: NodeJS.Signals | null;
+        }
+      | undefined;
     let child: ReturnType<typeof spawn> | undefined;
     let stdout: { rendered: () => string } = { rendered: () => "" };
     let stderr: { rendered: () => string } = { rendered: () => "" };
@@ -1111,6 +1130,7 @@ async function runFixedControllerCommand(
       clearTimeout(timeout);
       if (terminationTimer !== undefined) clearTimeout(terminationTimer);
       if (settlementTimer !== undefined) clearTimeout(settlementTimer);
+      if (groupPollTimer !== undefined) clearTimeout(groupPollTimer);
       const error =
         spawnFailure === undefined ? "" : `\n${spawnFailure.message}`;
       resolve(
@@ -1155,6 +1175,14 @@ async function runFixedControllerCommand(
     }
     stdout = capture(child.stdout);
     stderr = capture(child.stderr);
+    const settleClosedProcessGroup = (): void => {
+      if (closed || closeResult === undefined) return;
+      if (!detachedProcessGroupExists(child!)) {
+        finish(closeResult.exitCode, closeResult.signal);
+        return;
+      }
+      groupPollTimer = setTimeout(settleClosedProcessGroup, processGroupPollMs);
+    };
     const timeout = setTimeout(() => {
       if (closed) return;
       timedOut = true;
@@ -1171,7 +1199,10 @@ async function runFixedControllerCommand(
       spawnFailure = error;
       finish(null, "SIGTERM", true);
     });
-    child.once("close", finish);
+    child.once("close", (exitCode, signal) => {
+      closeResult = { exitCode, signal };
+      settleClosedProcessGroup();
+    });
   });
 }
 
@@ -1351,12 +1382,14 @@ export async function runValidation(
   };
   const validator = (
     id: string,
-    check: (files: ReadonlyMap<string, Buffer>) => readonly string[],
+    check: (
+      files: ReadonlyMap<string, Buffer>,
+    ) => readonly string[] | Promise<readonly string[]>,
   ): PipelineStep => ({
     id,
     execute: async () => {
       const current = await files();
-      const findings = check(current);
+      const findings = await check(current);
       return { findings, details: { findings } };
     },
   });
@@ -1427,7 +1460,7 @@ export async function runValidation(
           ensureExecution(),
         ]);
         const targets = await knownInternalTargets(state.copy, input);
-        const findings = validateGeneratedLinks(
+        const findings = await validateGeneratedLinks(
           input.plan,
           current,
           targets.routes,
@@ -1437,7 +1470,7 @@ export async function runValidation(
       },
     },
     validator("seo", (current) => validateGeneratedSeo(input.plan, current)),
-    validator("accessibility", (current) =>
+    validator("accessibility", async (current) =>
       validateGeneratedAccessibility(input.plan, current),
     ),
     ...commandSteps,

@@ -1,6 +1,8 @@
 import { isApprovedGeneratedLink } from "../../content/block-catalog.ts";
 import type { ChangePlan } from "../domain.ts";
 
+import { staticCanonicalPageHeroes } from "./canonical-page-hero.ts";
+
 function routePath(plan: ChangePlan): string {
   return plan.targetPath === "/"
     ? "src/pages/index.astro"
@@ -49,18 +51,23 @@ function normalizedRoutePath(path: string): string {
 }
 
 /** Checks static generated links and resolves freeform fragment references locally. */
-export function validateGeneratedLinks(
+export async function validateGeneratedLinks(
   plan: ChangePlan,
   files: ReadonlyMap<string, Buffer>,
   knownRoutes: ReadonlySet<string> = new Set(["/", plan.targetPath]),
   knownAssets: ReadonlySet<string> = new Set(),
-): readonly string[] {
+): Promise<readonly string[]> {
   const findings: string[] = [];
   const routeSource = files.get(routePath(plan));
   const contentSource = files.get(contentPath(plan));
   const source = routeSource === undefined ? null : decode(routeSource);
   if (source === null) {
     findings.push("link.source: la ruta no contiene UTF-8 estático válido");
+    return findings;
+  }
+  const heroes = await staticCanonicalPageHeroes(source);
+  if (heroes === null) {
+    findings.push("link.source: la ruta no contiene Astro estático válido");
     return findings;
   }
 
@@ -87,10 +94,15 @@ export function validateGeneratedLinks(
       );
     }
   }
+  const pageHeroImages: string[] = [];
+  for (const hero of heroes) {
+    if (hero.image !== undefined) pageHeroImages.push(hero.image);
+  }
 
   for (const value of [
     ...routeLinks.map((link) => link.value),
     ...contentLinks,
+    ...pageHeroImages,
   ]) {
     if (!isApprovedGeneratedLink(value)) {
       findings.push(
@@ -105,6 +117,7 @@ export function validateGeneratedLinks(
       allowsRoute: link.kind === "href",
     })),
     ...contentLinks.map((value) => ({ value, allowsRoute: true })),
+    ...pageHeroImages.map((value) => ({ value, allowsRoute: false })),
   ]) {
     if (
       !isApprovedGeneratedLink(reference.value) ||

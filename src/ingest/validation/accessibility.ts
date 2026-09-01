@@ -1,5 +1,7 @@
 import type { ChangePlan } from "../domain.ts";
 
+import { staticCanonicalPageHeroes } from "./canonical-page-hero.ts";
+
 function routePath(plan: ChangePlan): string {
   return plan.targetPath === "/"
     ? "src/pages/index.astro"
@@ -14,10 +16,10 @@ function quotedAttribute(source: string, name: string): string | undefined {
 }
 
 /** Performs the static accessibility checks that can run before a browser audit. */
-export function validateGeneratedAccessibility(
+export async function validateGeneratedAccessibility(
   plan: ChangePlan,
   files: ReadonlyMap<string, Buffer>,
-): readonly string[] {
+): Promise<readonly string[]> {
   if (plan.selectedMode === "blocks") return [];
   const bytes = files.get(routePath(plan));
   if (bytes === undefined) return ["a11y.route: falta la ruta generada"];
@@ -29,11 +31,25 @@ export function validateGeneratedAccessibility(
   }
 
   const findings: string[] = [];
+  const heroes = await staticCanonicalPageHeroes(source);
+  if (heroes === null) {
+    return ["a11y.route: la ruta no contiene Astro estático válido"];
+  }
   for (const match of source.matchAll(/<img\b[^>]*>/giu)) {
     const tag = match[0];
     if (quotedAttribute(tag, "alt") === undefined) {
       findings.push(
         "a11y.alt: toda imagen generada debe declarar texto alternativo",
+      );
+    }
+  }
+  for (const hero of heroes) {
+    if (
+      hero.image !== undefined &&
+      (hero.imageAlt === undefined || hero.imageAlt.trim().length === 0)
+    ) {
+      findings.push(
+        "a11y.page-hero-alt: PageHero con imagen requiere imageAlt estático no vacío",
       );
     }
   }
