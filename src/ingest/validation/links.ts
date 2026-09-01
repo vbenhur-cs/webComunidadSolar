@@ -31,10 +31,29 @@ function jsonLinks(value: unknown, result: string[] = []): string[] {
   return result;
 }
 
+function normalizedInternalRoute(value: string): string | null {
+  try {
+    const url = new URL(value, "https://comunidadsolar.es");
+    if (url.origin !== "https://comunidadsolar.es") return null;
+    if (!value.startsWith("/") && !value.startsWith("https://")) {
+      return null;
+    }
+    return url.pathname === "/" ? "/" : url.pathname.replace(/\/+$/u, "");
+  } catch {
+    return null;
+  }
+}
+
+function routeLikePath(path: string): boolean {
+  const lastSegment = path.split("/").at(-1) ?? "";
+  return !/\.[a-z0-9]{1,12}$/iu.test(lastSegment);
+}
+
 /** Checks static generated links and resolves freeform fragment references locally. */
 export function validateGeneratedLinks(
   plan: ChangePlan,
   files: ReadonlyMap<string, Buffer>,
+  knownRoutes: ReadonlySet<string> = new Set(["/", plan.targetPath]),
 ): readonly string[] {
   const findings: string[] = [];
   const routeSource = files.get(routePath(plan));
@@ -47,7 +66,7 @@ export function validateGeneratedLinks(
 
   const routeLinks: Array<{
     readonly value: string;
-    readonly fragment: boolean;
+    readonly href: boolean;
   }> = [];
   for (const match of source.matchAll(
     /\b(?:href|src)\s*=\s*(["'])(.*?)\1/giu,
@@ -55,7 +74,7 @@ export function validateGeneratedLinks(
     const value = match[2] ?? "";
     routeLinks.push({
       value,
-      fragment: match[0]?.toLowerCase().startsWith("href") ?? false,
+      href: match[0]?.toLowerCase().startsWith("href") ?? false,
     });
   }
   const contentLinks: string[] = [];
@@ -82,6 +101,17 @@ export function validateGeneratedLinks(
     }
   }
 
+  for (const value of [
+    ...routeLinks.filter((link) => link.href).map((link) => link.value),
+    ...contentLinks,
+  ]) {
+    if (!isApprovedGeneratedLink(value) || value.startsWith("#")) continue;
+    const path = normalizedInternalRoute(value);
+    if (path !== null && routeLikePath(path) && !knownRoutes.has(path)) {
+      findings.push(`link.internal: ${value} no resuelve a una ruta aprobada`);
+    }
+  }
+
   if (plan.selectedMode !== "blocks") {
     const ids = new Set(
       [...source.matchAll(/\bid\s*=\s*(["'])(.*?)\1/giu)].map(
@@ -90,7 +120,7 @@ export function validateGeneratedLinks(
     );
     for (const link of routeLinks) {
       if (
-        !link.fragment ||
+        !link.href ||
         !link.value.startsWith("#") ||
         link.value.length === 1
       ) {

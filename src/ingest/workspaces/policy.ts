@@ -73,6 +73,7 @@ interface StagedOutputRecord {
   readonly path: string;
   readonly repositoryRoot: string;
   readonly baselineCommit: string;
+  readonly attemptId: string;
   readonly changeId: string;
   readonly planSha256: string;
   readonly planCanonical: string;
@@ -83,6 +84,32 @@ interface StagedOutputRecord {
 const stagedOutputRecords = new WeakMap<
   StagedAgentOutput,
   StagedOutputRecord
+>();
+
+/** Opaque, controller-minted copy used only as a command execution directory. */
+export interface ControllerExecutionCopy {
+  readonly path: string;
+}
+
+export interface ControllerExecutionIntegrity {
+  readonly outputSha256: Readonly<Record<string, string>>;
+  readonly sha256: string;
+}
+
+interface ExecutionCopyRecord {
+  readonly root: string;
+  readonly path: string;
+  readonly output: StagedAgentOutput;
+  readonly attemptId: string;
+  readonly planCanonical: string;
+  readonly outputSha256: Readonly<Record<string, string>>;
+  readonly rootIdentity: { readonly device: number; readonly inode: number };
+  readonly pathIdentity: { readonly device: number; readonly inode: number };
+}
+
+const executionCopyRecords = new WeakMap<
+  ControllerExecutionCopy,
+  ExecutionCopyRecord
 >();
 
 function errorCode(error: unknown): string | undefined {
@@ -104,6 +131,7 @@ async function createControllerStaging(
   workspacePath: string,
   repositoryRoot: string,
   baselineCommit: string,
+  attemptId: string,
   changeId: string,
   planSha256: string,
   planCanonical: string,
@@ -131,6 +159,7 @@ async function createControllerStaging(
       path,
       repositoryRoot,
       baselineCommit,
+      attemptId,
       changeId,
       planSha256,
       planCanonical,
@@ -213,7 +242,8 @@ async function exitCode(child: ChildProcess): Promise<number> {
 }
 
 async function exportBaseline(
-  workspace: AgentWorkspace,
+  repositoryRoot: string,
+  baselineCommit: string,
   destination: string,
 ): Promise<void> {
   const archive = spawn(
@@ -221,10 +251,10 @@ async function exportBaseline(
     [
       ...fixedGitArguments,
       "-C",
-      workspace.repositoryRoot,
+      repositoryRoot,
       "archive",
       "--format=tar",
-      workspace.baselineCommit,
+      baselineCommit,
     ],
     {
       env: fixedGitEnvironment,
@@ -628,13 +658,13 @@ async function regularFileDigest(
 }
 
 async function copyAcceptedFile(
-  workspace: AgentWorkspace,
+  sourceRoot: string,
   stagingPath: string,
   path: string,
   expected: ManifestEntry,
   remainingBytes: number,
 ): Promise<string> {
-  const source = join(workspace.path, ...path.split("/"));
+  const source = join(sourceRoot, ...path.split("/"));
   const destination = join(stagingPath, ...path.split("/"));
   if (
     expected.kind !== "file" ||
@@ -746,12 +776,17 @@ export async function validateAgentWorkspaceOutput(
       workspace.path,
       workspace.repositoryRoot,
       workspace.baselineCommit,
+      workspace.attemptId,
       plan.changeId,
       plan.planSha256,
       canonicalJson(plan),
     );
     const stagingPath = staging.path;
-    await exportBaseline(workspace, stagingPath);
+    await exportBaseline(
+      workspace.repositoryRoot,
+      workspace.baselineCommit,
+      stagingPath,
+    );
     await stripOperationalFiles(stagingPath);
     assertSameManifest(
       await captureManifest(stagingPath),
@@ -767,7 +802,7 @@ export async function validateAgentWorkspaceOutput(
       hashes.set(
         path,
         await copyAcceptedFile(
-          workspace,
+          workspace.path,
           stagingPath,
           path,
           expected,
@@ -796,10 +831,10 @@ export async function validateAgentWorkspaceOutput(
   }
 }
 
-/** Proves that a staging handoff was minted by this controller instance. */
-export async function assertControllerStagedOutput(
+async function assertControllerStagedOutputForAttempt(
   output: StagedAgentOutput,
   plan: ChangePlan,
+  attemptId: string | undefined,
 ): Promise<void> {
   const record = stagedOutputRecord(output);
   if (
@@ -813,7 +848,262 @@ export async function assertControllerStagedOutput(
       "El path o plan no coincide con el staging controlador",
     );
   }
+  if (attemptId !== undefined && attemptId !== record.attemptId) {
+    throw new TypeError("El intento no coincide con el staging controlador");
+  }
   await assertStagedOutputLocation(record);
+}
+
+/** Proves that a staging handoff was minted by this controller instance. */
+export async function assertControllerStagedOutput(
+  output: StagedAgentOutput,
+  plan: ChangePlan,
+): Promise<void> {
+  await assertControllerStagedOutputForAttempt(output, plan, undefined);
+}
+
+/** Binds one minted staged output to its exact plan and workspace attempt. */
+export async function assertControllerStagedOutputAttempt(
+  output: StagedAgentOutput,
+  plan: ChangePlan,
+  attemptId: string,
+): Promise<void> {
+  await assertControllerStagedOutputForAttempt(output, plan, attemptId);
+}
+
+function exactOutputPaths(output: StagedAgentOutput): readonly string[] {
+  const paths = [...output.files].sort();
+  if (
+    paths.length !== output.files.length ||
+    new Set(paths).size !== paths.length ||
+    Object.keys(output.sha256).sort().join("\0") !== paths.join("\0")
+  ) {
+    throw new TypeError("El inventario del staging no conserva forma exacta");
+  }
+  for (const path of paths) {
+    validateRelativePath(path);
+    if (!/^[a-f0-9]{64}$/u.test(output.sha256[path] ?? "")) {
+      throw new TypeError(
+        "El inventario del staging contiene un hash inválido",
+      );
+    }
+  }
+  return Object.freeze(paths);
+}
+
+async function verifiedStagedOutputHashes(
+  output: StagedAgentOutput,
+  plan: ChangePlan,
+  attemptId: string,
+): Promise<Readonly<Record<string, string>>> {
+  await assertControllerStagedOutputAttempt(output, plan, attemptId);
+  const hashes: Record<string, string> = {};
+  let remainingBytes = AGENT_ACCEPTED_OUTPUT_MAX_BYTES;
+  for (const path of exactOutputPaths(output)) {
+    const expected = output.sha256[path]!;
+    const file = await regularFileDigest(
+      join(output.path, ...path.split("/")),
+      remainingBytes,
+    );
+    if (file.sha256 !== expected || file.bytes > remainingBytes) {
+      throw new TypeError(
+        "El archivo de staging ya no coincide con su inventario aprobado",
+      );
+    }
+    remainingBytes -= file.bytes;
+    hashes[path] = file.sha256;
+  }
+  await assertControllerStagedOutputAttempt(output, plan, attemptId);
+  return Object.freeze(hashes);
+}
+
+function outputHashesDigest(hashes: Readonly<Record<string, string>>): string {
+  const digest = createHash("sha256");
+  for (const path of Object.keys(hashes).sort()) {
+    digest.update(path, "utf8");
+    digest.update("\0", "utf8");
+    digest.update(hashes[path]!, "utf8");
+    digest.update("\n", "utf8");
+  }
+  return digest.digest("hex");
+}
+
+function executionCopyRecord(
+  copy: ControllerExecutionCopy,
+): ExecutionCopyRecord {
+  const record = executionCopyRecords.get(copy);
+  if (record === undefined || copy.path !== record.path) {
+    throw new TypeError("La copia de ejecución no pertenece al controlador");
+  }
+  return record;
+}
+
+async function assertExecutionCopyLocation(
+  record: ExecutionCopyRecord,
+): Promise<void> {
+  const [rootEntry, pathEntry] = await Promise.all([
+    lstat(record.root),
+    lstat(record.path),
+  ]);
+  if (
+    dirname(record.path) !== record.root ||
+    rootEntry.isSymbolicLink() ||
+    !rootEntry.isDirectory() ||
+    rootEntry.dev !== record.rootIdentity.device ||
+    rootEntry.ino !== record.rootIdentity.inode ||
+    pathEntry.isSymbolicLink() ||
+    !pathEntry.isDirectory() ||
+    pathEntry.dev !== record.pathIdentity.device ||
+    pathEntry.ino !== record.pathIdentity.inode ||
+    (await realpath(record.root)) !== record.root ||
+    (await realpath(record.path)) !== record.path
+  ) {
+    throw new TypeError("La identidad de la copia de ejecución cambió");
+  }
+}
+
+/**
+ * Re-materializes the trusted Git baseline plus the rechecked approved output.
+ * The mutable staged input is never returned as an execution directory.
+ */
+export async function createControllerExecutionCopy(
+  output: StagedAgentOutput,
+  plan: ChangePlan,
+  attemptId: string,
+): Promise<ControllerExecutionCopy> {
+  const staging = stagedOutputRecord(output);
+  const approvedHashes = await verifiedStagedOutputHashes(
+    output,
+    plan,
+    attemptId,
+  );
+  let root: string | undefined;
+  try {
+    root = await realpath(
+      await mkdtemp(join(tmpdir(), "comunidadsolar-validation-execution-")),
+    );
+    const path = await realpath(await mkdtemp(join(root, "copy-")));
+    await exportBaseline(staging.repositoryRoot, staging.baselineCommit, path);
+    await stripOperationalFiles(path);
+
+    let remainingBytes = AGENT_ACCEPTED_OUTPUT_MAX_BYTES;
+    for (const relativePath of exactOutputPaths(output)) {
+      const expectedHash = approvedHashes[relativePath]!;
+      const source = join(output.path, ...relativePath.split("/"));
+      const current = await regularFileDigest(source, remainingBytes);
+      if (current.sha256 !== expectedHash || current.bytes > remainingBytes) {
+        throw new TypeError(
+          "La salida de staging cambió antes de la materialización",
+        );
+      }
+      await copyAcceptedFile(
+        output.path,
+        path,
+        relativePath,
+        {
+          kind: "file",
+          mode: 0o600,
+          bytes: current.bytes,
+          sha256: expectedHash,
+        },
+        remainingBytes,
+      );
+      remainingBytes -= current.bytes;
+    }
+    const recheckedHashes = await verifiedStagedOutputHashes(
+      output,
+      plan,
+      attemptId,
+    );
+    if (
+      outputHashesDigest(recheckedHashes) !== outputHashesDigest(approvedHashes)
+    ) {
+      throw new TypeError(
+        "La salida de staging cambió durante la materialización",
+      );
+    }
+    const [rootEntry, pathEntry] = await Promise.all([
+      lstat(root),
+      lstat(path),
+    ]);
+    const copy: ControllerExecutionCopy = Object.freeze({ path });
+    executionCopyRecords.set(
+      copy,
+      Object.freeze({
+        root,
+        path,
+        output,
+        attemptId,
+        planCanonical: canonicalJson(plan),
+        outputSha256: approvedHashes,
+        rootIdentity: Object.freeze({
+          device: rootEntry.dev,
+          inode: rootEntry.ino,
+        }),
+        pathIdentity: Object.freeze({
+          device: pathEntry.dev,
+          inode: pathEntry.ino,
+        }),
+      }),
+    );
+    await assertControllerExecutionCopy(copy, output, plan, attemptId);
+    return copy;
+  } catch (error: unknown) {
+    if (root !== undefined) {
+      await rm(root, { recursive: true, force: true }).catch(() => undefined);
+    }
+    throw error;
+  }
+}
+
+/** Rechecks the exact approved bytes in a controller-minted execution copy. */
+export async function assertControllerExecutionCopy(
+  copy: ControllerExecutionCopy,
+  output: StagedAgentOutput,
+  plan: ChangePlan,
+  attemptId: string,
+): Promise<ControllerExecutionIntegrity> {
+  const record = executionCopyRecord(copy);
+  if (
+    record.output !== output ||
+    record.attemptId !== attemptId ||
+    record.planCanonical !== canonicalJson(plan)
+  ) {
+    throw new TypeError(
+      "La copia de ejecución no coincide con el output, plan o intento",
+    );
+  }
+  await assertExecutionCopyLocation(record);
+  let remainingBytes = AGENT_ACCEPTED_OUTPUT_MAX_BYTES;
+  const hashes: Record<string, string> = {};
+  for (const relativePath of Object.keys(record.outputSha256).sort()) {
+    const expected = record.outputSha256[relativePath]!;
+    const file = await regularFileDigest(
+      join(record.path, ...relativePath.split("/")),
+      remainingBytes,
+    );
+    if (file.sha256 !== expected || file.bytes > remainingBytes) {
+      throw new TypeError(
+        "La copia de ejecución ya no coincide con el output aprobado",
+      );
+    }
+    remainingBytes -= file.bytes;
+    hashes[relativePath] = file.sha256;
+  }
+  const immutableHashes = Object.freeze(hashes);
+  return Object.freeze({
+    outputSha256: immutableHashes,
+    sha256: outputHashesDigest(immutableHashes),
+  });
+}
+
+export async function removeControllerExecutionCopy(
+  copy: ControllerExecutionCopy,
+): Promise<void> {
+  const record = executionCopyRecord(copy);
+  await assertExecutionCopyLocation(record);
+  await rm(record.root, { recursive: true, force: false });
+  executionCopyRecords.delete(copy);
 }
 
 export interface StagedPackageBaselines {

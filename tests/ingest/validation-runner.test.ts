@@ -10,11 +10,15 @@ import { promisify } from "node:util";
 import { sha256Canonical } from "../../src/ingest/canonical-json.ts";
 import type { ChangePlan } from "../../src/ingest/domain.ts";
 import {
+  createControllerPublicationProfile,
   createValidationEvidenceRoot,
+  PRELIMINARY_STAGED_VALIDATION_SCOPE,
   runValidation,
   type CommandInvocation,
   type CommandResult,
+  type ControllerPublicationProfile,
   type ValidationEvidenceRoot,
+  type ValidationInput,
 } from "../../src/ingest/validation/runner.ts";
 import {
   removeStagedAgentOutput,
@@ -30,9 +34,14 @@ process.env.INGEST_TEST_MODE ??= "true";
 
 const execFileAsync = promisify(execFile);
 const changeId = "validation-output";
+const stagingAttemptId = "attempt-000001";
 const digest = (source: string | Uint8Array) =>
   createHash("sha256").update(source).digest("hex");
 const fixedHash = (character: string) => character.repeat(64);
+const sanitizedPublicationConfig = Buffer.from(
+  '{"name":"validation-fixture","compatibility_date":"2025-01-01"}\n',
+  "utf8",
+);
 
 const expectedIds = [
   "output-policy",
@@ -155,7 +164,7 @@ function plan(baselineCommit: string, changes: PlanChanges = {}): ChangePlan {
       changes.publication ??
       ({
         adapter: "local" as const,
-        configSha256: fixedHash("c"),
+        configSha256: digest(sanitizedPublicationConfig),
         environment: null,
         siteIndexable: false,
       } satisfies ChangePlan["publication"]),
@@ -264,12 +273,28 @@ interface StageOptions {
   readonly output?: (approvedPlan: ChangePlan) => OutputFiles;
 }
 
+function validationInput(
+  output: StagedAgentOutput,
+  approvedPlan: ChangePlan,
+  evidenceRoot: ValidationEvidenceRoot,
+  publicationProfile: ControllerPublicationProfile | undefined,
+): ValidationInput {
+  return {
+    output,
+    plan: approvedPlan,
+    attemptId: stagingAttemptId,
+    evidenceRoot,
+    ...(publicationProfile === undefined ? {} : { publicationProfile }),
+  };
+}
+
 async function withStagedOutput(
   options: StageOptions,
   run: (
     output: StagedAgentOutput,
     approvedPlan: ChangePlan,
     evidenceRoot: ValidationEvidenceRoot,
+    publicationProfile: ControllerPublicationProfile | undefined,
   ) => Promise<void>,
 ): Promise<void> {
   const repositoryRoot = await mkdtemp(
@@ -281,11 +306,9 @@ async function withStagedOutput(
   const authorityRoot = await mkdtemp(
     join(tmpdir(), "validation-runner-input-"),
   );
-  const evidencePath = await mkdtemp(
-    join(tmpdir(), "validation-runner-evidence-"),
-  );
   let workspace: Awaited<ReturnType<typeof createAgentWorkspace>> | undefined;
   let output: StagedAgentOutput | undefined;
+  let evidenceRoot: ValidationEvidenceRoot | undefined;
   try {
     await execFileAsync("git", [
       "init",
@@ -297,6 +320,8 @@ async function withStagedOutput(
     await git(repositoryRoot, ["config", "user.name", "Fixture Human"]);
     await writeFiles(repositoryRoot, {
       "README.md": "fixture\n",
+      "src/pages/index.astro": "<main>Inicio</main>\n",
+      "src/pages/contacto.astro": "<main>Contacto</main>\n",
       "package.json": '{"name":"fixture","version":"1.0.0","private":true}\n',
       "package-lock.json":
         '{"name":"fixture","version":"1.0.0","lockfileVersion":3,"requires":true,"packages":{"":{"name":"fixture","version":"1.0.0"}}}\n',
@@ -320,7 +345,7 @@ async function withStagedOutput(
       workspaceRoot,
       approvedPlan,
       changeId,
-      attemptId: "attempt-000001",
+      attemptId: stagingAttemptId,
       baselineCommit,
       requestPath,
       planPath,
@@ -332,11 +357,22 @@ async function withStagedOutput(
       options.output?.(approvedPlan) ?? validOutput(approvedPlan),
     );
     output = await validateAgentWorkspaceOutput(workspace, approvedPlan);
-    await run(
+    evidenceRoot = await createValidationEvidenceRoot(
       output,
       approvedPlan,
-      await createValidationEvidenceRoot(evidencePath),
+      stagingAttemptId,
     );
+    const publicationProfile =
+      approvedPlan.publication.configSha256 ===
+      digest(sanitizedPublicationConfig)
+        ? await createControllerPublicationProfile(
+            output,
+            approvedPlan,
+            stagingAttemptId,
+            sanitizedPublicationConfig,
+          )
+        : undefined;
+    await run(output, approvedPlan, evidenceRoot, publicationProfile);
   } finally {
     if (output !== undefined) {
       await removeStagedAgentOutput(output).catch(() => undefined);
@@ -348,12 +384,14 @@ async function withStagedOutput(
       rm(repositoryRoot, { recursive: true, force: true }),
       rm(workspaceRoot, { recursive: true, force: true }),
       rm(authorityRoot, { recursive: true, force: true }),
-      rm(evidencePath, { recursive: true, force: true }),
+      ...(evidenceRoot === undefined
+        ? []
+        : [rm(evidenceRoot.path, { recursive: true, force: true })]),
     ]);
   }
 }
 
-function passingResult(): CommandResult {
+function passingResult(command?: CommandInvocation): CommandResult {
   return {
     exitCode: 0,
     stdout: "fixture command passed",
@@ -361,6 +399,14 @@ function passingResult(): CommandResult {
     timedOut: false,
     aborted: false,
     unsupported: false,
+    ...(command?.browser === undefined
+      ? {}
+      : {
+          browserProof: {
+            ...command.browser,
+            evidenceSha256: fixedHash("e"),
+          },
+        }),
   };
 }
 
@@ -372,19 +418,14 @@ test("never runs a command after an output-policy violation", async () => {
         return validOutput(approvedPlan, { route });
       },
     },
-    async (output, approvedPlan, evidenceRoot) => {
+    async (output, approvedPlan, evidenceRoot, publicationProfile) => {
       const calls: CommandInvocation[] = [];
       const results = await runValidation(
-        {
-          output,
-          plan: approvedPlan,
-          attemptId: "attempt-policy",
-          evidenceRoot,
-        },
+        validationInput(output, approvedPlan, evidenceRoot, publicationProfile),
         {
           commands: async (command) => {
             calls.push(command);
-            return passingResult();
+            return passingResult(command);
           },
         },
       );
@@ -399,149 +440,179 @@ test("never runs a command after an output-policy violation", async () => {
 });
 
 test("records a digest of actual evidence for every successful validator in fixed order", async () => {
-  await withStagedOutput({}, async (output, approvedPlan, evidenceRoot) => {
-    const results = await runValidation(
-      {
-        output,
-        plan: approvedPlan,
-        attemptId: "attempt-success",
-        evidenceRoot,
-      },
-      { commands: async () => passingResult() },
-    );
-    assert.deepEqual(
-      results.map((result) => result.id),
-      expectedIds,
-    );
-    assert.ok(results.every((result) => result.status === "passed"));
-    for (const result of results) {
-      assert.match(result.evidence ?? "", /attempt-success\/\d{2}-.+\.json$/u);
-      assert.match(result.evidenceSha256 ?? "", /^[a-f0-9]{64}$/u);
-      const evidence = await readFile(result.evidence!);
-      assert.equal(digest(evidence), result.evidenceSha256);
-    }
-  });
+  await withStagedOutput(
+    {},
+    async (output, approvedPlan, evidenceRoot, publicationProfile) => {
+      const results = await runValidation(
+        validationInput(output, approvedPlan, evidenceRoot, publicationProfile),
+        { commands: async (command) => passingResult(command) },
+      );
+      assert.deepEqual(
+        results.map((result) => result.id),
+        expectedIds,
+      );
+      assert.ok(results.every((result) => result.status === "passed"));
+      for (const result of results) {
+        assert.match(result.evidence ?? "", /attempt-000001\/\d{2}-.+\.json$/u);
+        assert.match(result.evidenceSha256 ?? "", /^[a-f0-9]{64}$/u);
+        const evidence = await readFile(result.evidence!);
+        assert.equal(digest(evidence), result.evidenceSha256);
+        const record = JSON.parse(evidence.toString("utf8")) as {
+          preliminary: {
+            scope: string;
+            approvedOutputSha256: Record<string, string>;
+            executionCopy: { sha256: string } | null;
+          };
+        };
+        assert.equal(
+          record.preliminary.scope,
+          PRELIMINARY_STAGED_VALIDATION_SCOPE,
+        );
+        assert.deepEqual(
+          record.preliminary.approvedOutputSha256,
+          output.sha256,
+        );
+        assert.match(
+          record.preliminary.executionCopy?.sha256 ?? "",
+          /^[a-f0-9]{64}$/u,
+        );
+      }
+    },
+  );
 });
 
 test("records bounded sanitized command evidence and skips dependent commands", async () => {
-  await withStagedOutput({}, async (output, approvedPlan, evidenceRoot) => {
-    const calls: CommandInvocation[] = [];
-    const results = await runValidation(
-      {
-        output,
-        plan: approvedPlan,
-        attemptId: "attempt-command-failure",
-        evidenceRoot,
-      },
-      {
-        commands: async (command) => {
-          calls.push(command);
-          if (command.id === "format") {
-            return {
-              exitCode: 1,
-              stdout: `API_KEY=not-for-evidence\n${"x".repeat(100_000)}`,
-              stderr: "failure\u0000details",
-              timedOut: false,
-              aborted: false,
-              unsupported: false,
-            };
-          }
-          return passingResult();
+  await withStagedOutput(
+    {},
+    async (output, approvedPlan, evidenceRoot, publicationProfile) => {
+      const calls: CommandInvocation[] = [];
+      const results = await runValidation(
+        validationInput(output, approvedPlan, evidenceRoot, publicationProfile),
+        {
+          commands: async (command) => {
+            calls.push(command);
+            if (command.id === "format") {
+              return {
+                exitCode: 1,
+                stdout: `API_KEY=not-for-evidence\n${"x".repeat(100_000)}`,
+                stderr: "failure\u0000details",
+                timedOut: false,
+                aborted: false,
+                unsupported: false,
+              };
+            }
+            return passingResult(command);
+          },
         },
-      },
-    );
-    const format = results.find((result) => result.id === "format");
-    assert.equal(format?.status, "failed");
-    const evidence = await readFile(format!.evidence!, "utf8");
-    assert.ok(evidence.length < 20_000);
-    assert.ok(!evidence.includes("not-for-evidence"));
-    assert.ok(
-      results
-        .slice(results.indexOf(format!) + 1)
-        .every((result) => result.status === "skipped"),
-    );
-    assert.deepEqual(
-      calls.map((command) => command.id),
-      ["npm-ci", "format"],
-    );
-  });
+      );
+      const format = results.find((result) => result.id === "format");
+      assert.equal(format?.status, "failed");
+      const evidence = await readFile(format!.evidence!, "utf8");
+      assert.ok(evidence.length < 20_000);
+      assert.ok(!evidence.includes("not-for-evidence"));
+      assert.ok(
+        results
+          .slice(results.indexOf(format!) + 1)
+          .every((result) => result.status === "skipped"),
+      );
+      assert.deepEqual(
+        calls.map((command) => command.id),
+        ["npm-ci", "format"],
+      );
+    },
+  );
 });
 
 test("rejects forged staging and a mismatched plan before command execution", async () => {
-  await withStagedOutput({}, async (output, approvedPlan, evidenceRoot) => {
-    const calls: CommandInvocation[] = [];
-    const commands = async (command: CommandInvocation) => {
-      calls.push(command);
-      return passingResult();
-    };
-    await assert.rejects(
-      runValidation(
-        {
-          output: { ...output },
-          plan: approvedPlan,
-          attemptId: "attempt-forged",
-          evidenceRoot,
-        },
-        { commands },
-      ),
-      /staging|controlador/iu,
-    );
-    const mismatchedPlan = {
-      ...approvedPlan,
-      changeId: "other-change",
-      planSha256: fixedHash("d"),
-    };
-    await assert.rejects(
-      runValidation(
-        {
-          output,
-          plan: mismatchedPlan,
-          attemptId: "attempt-mismatch",
-          evidenceRoot,
-        },
-        { commands },
-      ),
-      /plan|staging|controlador/iu,
-    );
-    assert.equal(calls.length, 0);
-  });
+  await withStagedOutput(
+    {},
+    async (output, approvedPlan, evidenceRoot, publicationProfile) => {
+      const calls: CommandInvocation[] = [];
+      const commands = async (command: CommandInvocation) => {
+        calls.push(command);
+        return passingResult(command);
+      };
+      await assert.rejects(
+        runValidation(
+          {
+            ...validationInput(
+              output,
+              approvedPlan,
+              evidenceRoot,
+              publicationProfile,
+            ),
+            output: { ...output },
+          },
+          { commands },
+        ),
+        /staging|controlador/iu,
+      );
+      const mismatchedPlan = {
+        ...approvedPlan,
+        changeId: "other-change",
+        planSha256: fixedHash("d"),
+      };
+      await assert.rejects(
+        runValidation(
+          validationInput(
+            output,
+            mismatchedPlan,
+            evidenceRoot,
+            publicationProfile,
+          ),
+          { commands },
+        ),
+        /plan|staging|controlador/iu,
+      );
+      assert.equal(calls.length, 0);
+    },
+  );
 });
 
 test("hands an injected runner only fixed argv, cwd, timeout and safe local environment", async () => {
-  await withStagedOutput({}, async (output, approvedPlan, evidenceRoot) => {
-    const calls: CommandInvocation[] = [];
-    await runValidation(
-      {
-        output,
-        plan: approvedPlan,
-        attemptId: "attempt-authority",
-        evidenceRoot,
-      },
-      {
-        commands: async (command) => {
-          calls.push(command);
-          return passingResult();
+  await withStagedOutput(
+    {},
+    async (output, approvedPlan, evidenceRoot, publicationProfile) => {
+      const calls: CommandInvocation[] = [];
+      let materializedConfig: string | undefined;
+      await runValidation(
+        validationInput(output, approvedPlan, evidenceRoot, publicationProfile),
+        {
+          commands: async (command) => {
+            calls.push(command);
+            if (command.id === "format") {
+              materializedConfig = await readFile(
+                join(command.cwd, "wrangler.jsonc"),
+                "utf8",
+              );
+            }
+            return passingResult(command);
+          },
         },
-      },
-    );
-    const format = calls.find((command) => command.id === "format");
-    assert.ok(format);
-    assert.deepEqual(format.argv.slice(1), ["run", "format:check"]);
-    assert.equal(format.cwd, output.path);
-    assert.equal(format.timeoutMs, 600_000);
-    assert.deepEqual(format.env, {
-      PATH: `${dirname(process.execPath)}:/usr/bin:/bin`,
-      HOME: "/tmp",
-      LANG: "C",
-      LC_ALL: "C",
-      CI: "true",
-      NO_COLOR: "1",
-      npm_config_audit: "false",
-      npm_config_fund: "false",
-      npm_config_update_notifier: "false",
-    });
-    assert.ok(!Object.hasOwn(format.env, "CLOUDFLARE_CONFIG_PATH"));
-  });
+      );
+      const format = calls.find((command) => command.id === "format");
+      assert.ok(format);
+      assert.deepEqual(format.argv.slice(1), ["run", "format:check"]);
+      assert.notEqual(format.cwd, output.path);
+      assert.equal(format.timeoutMs, 600_000);
+      assert.deepEqual(format.env, {
+        PATH: `${dirname(process.execPath)}:/usr/bin:/bin`,
+        HOME: "/tmp",
+        LANG: "C",
+        LC_ALL: "C",
+        CI: "true",
+        NO_COLOR: "1",
+        npm_config_audit: "false",
+        npm_config_fund: "false",
+        npm_config_update_notifier: "false",
+      });
+      assert.ok(!Object.hasOwn(format.env, "CLOUDFLARE_CONFIG_PATH"));
+      assert.equal(
+        materializedConfig,
+        sanitizedPublicationConfig.toString("utf8"),
+      );
+    },
+  );
 });
 
 test("fails the build validator explicitly when a Cloudflare profile is unavailable", async () => {
@@ -559,28 +630,23 @@ test("fails the build validator explicitly when a Cloudflare profile is unavaila
     async (output, approvedPlan, evidenceRoot) => {
       const calls: CommandInvocation[] = [];
       const results = await runValidation(
-        {
-          output,
-          plan: approvedPlan,
-          attemptId: "attempt-cloudflare-profile",
-          evidenceRoot,
-        },
+        validationInput(output, approvedPlan, evidenceRoot, undefined),
         {
           commands: async (command) => {
             calls.push(command);
-            return passingResult();
+            return passingResult(command);
           },
         },
       );
       assert.equal(
-        results.find((result) => result.id === "build")?.status,
+        results.find((result) => result.id === "npm-ci")?.status,
         "failed",
       );
       assert.equal(
         results.find((result) => result.id === "preview")?.status,
         "skipped",
       );
-      assert.ok(!calls.some((command) => command.id === "build"));
+      assert.ok(!calls.some((command) => command.id === "npm-ci"));
     },
   );
 });
@@ -591,13 +657,8 @@ test("attributes route, asset, link, SEO and accessibility defects before build"
       { planChanges: { targetPath: "/two--hyphens" } },
       async (output, approvedPlan, evidenceRoot) => {
         const results = await runValidation(
-          {
-            output,
-            plan: approvedPlan,
-            attemptId: "attempt-route",
-            evidenceRoot,
-          },
-          { commands: async () => passingResult() },
+          validationInput(output, approvedPlan, evidenceRoot, undefined),
+          { commands: async (command) => passingResult(command) },
         );
         assert.equal(
           results.find((result) => result.id === "routes")?.status,
@@ -626,13 +687,8 @@ test("attributes route, asset, link, SEO and accessibility defects before build"
       },
       async (output, approvedPlan, evidenceRoot) => {
         const results = await runValidation(
-          {
-            output,
-            plan: approvedPlan,
-            attemptId: "attempt-asset",
-            evidenceRoot,
-          },
-          { commands: async () => passingResult() },
+          validationInput(output, approvedPlan, evidenceRoot, undefined),
+          { commands: async (command) => passingResult(command) },
         );
         assert.equal(
           results.find((result) => result.id === "assets")?.status,
@@ -660,13 +716,8 @@ test("attributes route, asset, link, SEO and accessibility defects before build"
       },
       async (output, approvedPlan, evidenceRoot) => {
         const results = await runValidation(
-          {
-            output,
-            plan: approvedPlan,
-            attemptId: "attempt-link",
-            evidenceRoot,
-          },
-          { commands: async () => passingResult() },
+          validationInput(output, approvedPlan, evidenceRoot, undefined),
+          { commands: async (command) => passingResult(command) },
         );
         assert.equal(
           results.find((result) => result.id === "links")?.status,
@@ -690,13 +741,8 @@ test("attributes route, asset, link, SEO and accessibility defects before build"
       },
       async (output, approvedPlan, evidenceRoot) => {
         const results = await runValidation(
-          {
-            output,
-            plan: approvedPlan,
-            attemptId: "attempt-seo",
-            evidenceRoot,
-          },
-          { commands: async () => passingResult() },
+          validationInput(output, approvedPlan, evidenceRoot, undefined),
+          { commands: async (command) => passingResult(command) },
         );
         assert.equal(
           results.find((result) => result.id === "seo")?.status,
@@ -724,13 +770,8 @@ test("attributes route, asset, link, SEO and accessibility defects before build"
       },
       async (output, approvedPlan, evidenceRoot) => {
         const results = await runValidation(
-          {
-            output,
-            plan: approvedPlan,
-            attemptId: "attempt-accessibility",
-            evidenceRoot,
-          },
-          { commands: async () => passingResult() },
+          validationInput(output, approvedPlan, evidenceRoot, undefined),
+          { commands: async (command) => passingResult(command) },
         );
         assert.equal(
           results.find((result) => result.id === "accessibility")?.status,
@@ -748,19 +789,14 @@ test("attributes route, asset, link, SEO and accessibility defects before build"
 test("runs HTML and visual comparison only for an overwrite", async () => {
   await withStagedOutput(
     { planChanges: { overwritesExistingRoute: true } },
-    async (output, approvedPlan, evidenceRoot) => {
+    async (output, approvedPlan, evidenceRoot, publicationProfile) => {
       const calls: CommandInvocation[] = [];
       const results = await runValidation(
-        {
-          output,
-          plan: approvedPlan,
-          attemptId: "attempt-overwrite",
-          evidenceRoot,
-        },
+        validationInput(output, approvedPlan, evidenceRoot, publicationProfile),
         {
           commands: async (command) => {
             calls.push(command);
-            return passingResult();
+            return passingResult(command);
           },
         },
       );
@@ -770,4 +806,187 @@ test("runs HTML and visual comparison only for an overwrite", async () => {
       );
     },
   );
+});
+
+test("never uses the mutable staged input as a command cwd", async () => {
+  await withStagedOutput(
+    {},
+    async (output, approvedPlan, evidenceRoot, publicationProfile) => {
+      const calls: CommandInvocation[] = [];
+      await runValidation(
+        validationInput(output, approvedPlan, evidenceRoot, publicationProfile),
+        {
+          commands: async (command) => {
+            calls.push(command);
+            return passingResult(command);
+          },
+        },
+      );
+      assert.ok(calls.length > 0);
+      assert.ok(calls.every((command) => command.cwd !== output.path));
+    },
+  );
+});
+
+test("requires the staged output attempt that minted its evidence", async () => {
+  await withStagedOutput(
+    {},
+    async (output, approvedPlan, evidenceRoot, publicationProfile) => {
+      await assert.rejects(
+        runValidation(
+          {
+            ...validationInput(
+              output,
+              approvedPlan,
+              evidenceRoot,
+              publicationProfile,
+            ),
+            attemptId: "attempt-from-another-workspace",
+          },
+          { commands: async (command) => passingResult(command) },
+        ),
+        /intento|attempt|staging/iu,
+      );
+    },
+  );
+});
+
+test("rejects forged or reused evidence and a profile from another attempt before commands", async () => {
+  await withStagedOutput(
+    {},
+    async (output, approvedPlan, evidenceRoot, publicationProfile) => {
+      await assert.rejects(
+        createControllerPublicationProfile(
+          output,
+          approvedPlan,
+          "attempt-from-another-workspace",
+          sanitizedPublicationConfig,
+        ),
+        /intento|attempt|staging/iu,
+      );
+      const calls: CommandInvocation[] = [];
+      const commands = async (command: CommandInvocation) => {
+        calls.push(command);
+        return passingResult(command);
+      };
+      const input = validationInput(
+        output,
+        approvedPlan,
+        evidenceRoot,
+        publicationProfile,
+      );
+      await assert.rejects(
+        runValidation(
+          { ...input, evidenceRoot: { path: evidenceRoot.path } },
+          { commands },
+        ),
+        /evidencia|controlador/iu,
+      );
+      assert.equal(calls.length, 0);
+      await runValidation(input, { commands });
+      const completedCalls = calls.length;
+      await assert.rejects(
+        runValidation(input, { commands }),
+        /reutilizada|reuso|evidencia/iu,
+      );
+      assert.equal(calls.length, completedCalls);
+    },
+  );
+});
+
+test("fails a browser stage when a zero-exit runner has no route proof", async () => {
+  await withStagedOutput(
+    {},
+    async (output, approvedPlan, evidenceRoot, publicationProfile) => {
+      const results = await runValidation(
+        validationInput(output, approvedPlan, evidenceRoot, publicationProfile),
+        {
+          commands: async (command) =>
+            command.id === "e2e" ? passingResult() : passingResult(command),
+        },
+      );
+      assert.equal(
+        results.find((result) => result.id === "e2e")?.status,
+        "failed",
+      );
+    },
+  );
+});
+
+test("rejects browser evidence for a route other than the approved target", async () => {
+  await withStagedOutput(
+    {},
+    async (output, approvedPlan, evidenceRoot, publicationProfile) => {
+      const results = await runValidation(
+        validationInput(output, approvedPlan, evidenceRoot, publicationProfile),
+        {
+          commands: async (command) => {
+            if (command.id === "e2e") {
+              return {
+                ...passingResult(command),
+                browserProof: {
+                  check: "e2e",
+                  targetPath: "/another-route",
+                  evidenceSha256: fixedHash("b"),
+                },
+              } as CommandResult;
+            }
+            return passingResult(command);
+          },
+        },
+      );
+      assert.equal(
+        results.find((result) => result.id === "e2e")?.status,
+        "failed",
+      );
+    },
+  );
+});
+
+test("resolves internal generated links against known clean routes", async () => {
+  await withStagedOutput(
+    {
+      planChanges: { selectedMode: "freeform" },
+      output: (approvedPlan) =>
+        validOutput(approvedPlan, {
+          route: freeformRoute(
+            approvedPlan,
+            '<h1>Generada</h1><a href="/definitely-missing">No existe</a>',
+          ),
+        }),
+    },
+    async (output, approvedPlan, evidenceRoot) => {
+      const results = await runValidation(
+        validationInput(output, approvedPlan, evidenceRoot, undefined),
+        { commands: async (command) => passingResult(command) },
+      );
+      assert.equal(
+        results.find((result) => result.id === "links")?.status,
+        "failed",
+      );
+    },
+  );
+});
+
+test("keeps raw command construction and execution private", async () => {
+  const source = await readFile(
+    new URL("../../src/ingest/validation/commands.ts", import.meta.url),
+    "utf8",
+  );
+  assert.doesNotMatch(
+    source,
+    /export\s+(?:async\s+)?function\s+(?:controllerCommand|runControllerCommand)\b/u,
+  );
+});
+
+test("keeps default process termination bounded to a detached process group", async () => {
+  const source = await readFile(
+    new URL("../../src/ingest/validation/runner.ts", import.meta.url),
+    "utf8",
+  );
+  assert.match(source, /detached:\s*process\.platform\s*!==\s*"win32"/u);
+  assert.match(source, /process\.kill\(-child\.pid, signal\)/u);
+  assert.match(source, /signalProcessGroup\(child!, "SIGTERM"\)/u);
+  assert.match(source, /signalProcessGroup\(child!, "SIGKILL"\)/u);
+  assert.match(source, /processTerminationSettleMs/u);
 });

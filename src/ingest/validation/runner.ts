@@ -1,29 +1,40 @@
+import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { constants } from "node:fs";
 import {
   lstat,
   mkdir,
+  mkdtemp,
   open,
+  opendir,
   readFile,
   realpath,
+  rm,
   writeFile,
 } from "node:fs/promises";
-import { isAbsolute, join, relative, sep } from "node:path";
+import { tmpdir } from "node:os";
+import { dirname, isAbsolute, join, relative, sep } from "node:path";
 
 import { canonicalJson } from "../canonical-json.ts";
 import type { ChangePlan, ValidationResult } from "../domain.ts";
 import { assertNoSuppliedSecretsBytes } from "../importers/secret-scan.ts";
 import {
-  assertControllerStagedOutput,
+  assertControllerExecutionCopy,
+  assertControllerStagedOutputAttempt,
+  createControllerExecutionCopy,
+  removeControllerExecutionCopy,
+  type ControllerExecutionCopy,
+  type ControllerExecutionIntegrity,
   type StagedAgentOutput,
 } from "../workspaces/policy.ts";
 
 import { validateGeneratedAccessibility } from "./accessibility.ts";
 import {
-  controllerCommand,
-  runControllerCommand,
+  COMMAND_TIMEOUT_MS,
   sanitizeCommandOutput,
-  type CloudflareCommandProfile,
+  type BrowserCaptureDevice,
+  type BrowserCheck,
+  type BrowserValidationProof,
   type CommandCapability,
   type CommandInvocation,
   type CommandResult,
@@ -36,6 +47,10 @@ import { validateGeneratedRoutes } from "./routes.ts";
 import { validateGeneratedSeo } from "./seo.ts";
 
 export type {
+  BrowserCaptureDevice,
+  BrowserCheck,
+  BrowserValidationProof,
+  BrowserValidationRequest,
   CommandInvocation,
   CommandResult,
   CommandRunner,
@@ -51,15 +66,47 @@ const executableExtensions = new Set([
   ".ts",
   ".tsx",
 ]);
+const capturedOutputMaximumBytes = 64 * 1024;
+const processTerminationGraceMs = 5_000;
+const processTerminationSettleMs = 1_000;
+const controllerNpmExecutable = join(dirname(process.execPath), "npm");
+const safeEnvironment = Object.freeze({
+  PATH: `${dirname(process.execPath)}:/usr/bin:/bin`,
+  HOME: "/tmp",
+  LANG: "C",
+  LC_ALL: "C",
+  CI: "true",
+  NO_COLOR: "1",
+  npm_config_audit: "false",
+  npm_config_fund: "false",
+  npm_config_update_notifier: "false",
+});
+
+/**
+ * Task 9 proves only the staged-output handoff. Task 10 must re-materialize
+ * candidate A, recheck the approved hashes, and rerun candidate-bound command
+ * and build validation before treating any result as final.
+ */
+export const PRELIMINARY_STAGED_VALIDATION_SCOPE =
+  "preliminary-staged-output" as const;
+
+export interface PreliminaryStagedValidationEvidence {
+  readonly scope: typeof PRELIMINARY_STAGED_VALIDATION_SCOPE;
+  readonly planSha256: string;
+  readonly approvedOutputSha256: Readonly<Record<string, string>>;
+  readonly executionCopy: {
+    readonly outputSha256: Readonly<Record<string, string>>;
+    readonly sha256: string;
+  } | null;
+}
 
 export interface ValidationEvidenceRoot {
   readonly path: string;
 }
 
 export interface ControllerPublicationProfile {
-  readonly path: string;
   readonly sha256: string;
-  readonly environment: string;
+  readonly environment: string | null;
 }
 
 export interface ValidationInput {
@@ -67,7 +114,10 @@ export interface ValidationInput {
   readonly plan: ChangePlan;
   readonly attemptId: string;
   readonly evidenceRoot: ValidationEvidenceRoot;
-  /** Required only for Cloudflare plans and minted from a controller profile. */
+  /**
+   * Opaque controller capability minted from exact sanitized config bytes.
+   * No caller-supplied config path or environment is accepted.
+   */
   readonly publicationProfile?: ControllerPublicationProfile;
 }
 
@@ -82,10 +132,33 @@ interface DirectoryRecord {
   readonly inode: number;
 }
 
-interface PublicationProfileRecord extends DirectoryRecord {
-  readonly sha256: string;
-  readonly environment: string;
+interface EvidenceRootRecord extends DirectoryRecord {
+  readonly output: StagedAgentOutput;
+  readonly attemptId: string;
   readonly planCanonical: string;
+  readonly attemptPath: string;
+  readonly attemptIdentity: { readonly device: number; readonly inode: number };
+}
+
+interface PublicationProfileRecord {
+  readonly output: StagedAgentOutput;
+  readonly attemptId: string;
+  readonly planCanonical: string;
+  readonly sha256: string;
+  readonly environment: string | null;
+  readonly bytes: Buffer;
+}
+
+interface MaterializedPublicationProfile {
+  readonly path: string;
+  readonly sha256: string;
+  readonly environment: string | null;
+}
+
+interface ExecutionState {
+  readonly copy: ControllerExecutionCopy;
+  integrity: ControllerExecutionIntegrity;
+  profile?: MaterializedPublicationProfile;
 }
 
 interface StepOutcome {
@@ -98,14 +171,21 @@ interface PipelineStep {
   readonly execute: () => Promise<StepOutcome>;
 }
 
+interface BrowserDefinition {
+  readonly check: BrowserCheck;
+  readonly device?: BrowserCaptureDevice;
+}
+
 interface CommandDefinition {
   readonly id: string;
   readonly args: readonly string[];
   readonly capability: CommandCapability;
   readonly publicationScoped?: boolean;
+  readonly browser?: BrowserDefinition;
 }
 
-const evidenceRoots = new WeakMap<ValidationEvidenceRoot, DirectoryRecord>();
+const evidenceRoots = new WeakMap<ValidationEvidenceRoot, EvidenceRootRecord>();
+const consumedEvidenceRoots = new WeakSet<ValidationEvidenceRoot>();
 const publicationProfiles = new WeakMap<
   ControllerPublicationProfile,
   PublicationProfileRecord
@@ -135,6 +215,14 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : null;
+}
+
+function errorCode(error: unknown): string | undefined {
+  return typeof error === "object" && error !== null && "code" in error
+    ? typeof error.code === "string"
+      ? error.code
+      : undefined
+    : undefined;
 }
 
 function errorMessage(error: unknown): string {
@@ -181,180 +269,9 @@ async function regularFileBytes(path: string): Promise<{
   }
 }
 
-/** Mints an opaque controller evidence-root capability from an existing directory. */
-export async function createValidationEvidenceRoot(
-  path: string,
-): Promise<ValidationEvidenceRoot> {
-  if (!isAbsolute(path)) {
-    throw new TypeError("El root de evidencia debe ser una ruta absoluta");
-  }
-  const entry = await lstat(path);
-  if (entry.isSymbolicLink() || !entry.isDirectory()) {
-    throw new TypeError("El root de evidencia debe ser un directorio regular");
-  }
-  const canonical = await realpath(path);
-  const canonicalEntry = await lstat(canonical);
-  if (canonicalEntry.isSymbolicLink() || !canonicalEntry.isDirectory()) {
-    throw new TypeError("El root de evidencia no conserva identidad canónica");
-  }
-  const root: ValidationEvidenceRoot = Object.freeze({ path: canonical });
-  evidenceRoots.set(
-    root,
-    Object.freeze({
-      path: canonical,
-      device: canonicalEntry.dev,
-      inode: canonicalEntry.ino,
-    }),
-  );
-  return root;
-}
-
-async function assertEvidenceRoot(
-  root: ValidationEvidenceRoot,
-  stagingPath: string,
-): Promise<DirectoryRecord> {
-  const record = evidenceRoots.get(root);
-  if (record === undefined || root.path !== record.path) {
-    throw new TypeError("El root de evidencia no pertenece a este controlador");
-  }
-  const entry = await lstat(record.path);
-  if (
-    entry.isSymbolicLink() ||
-    !entry.isDirectory() ||
-    entry.dev !== record.device ||
-    entry.ino !== record.inode ||
-    (await realpath(record.path)) !== record.path ||
-    isSameOrWithin(record.path, stagingPath) ||
-    isSameOrWithin(stagingPath, record.path)
-  ) {
-    throw new TypeError(
-      "El root de evidencia no es seguro o solapa el staging",
-    );
-  }
-  return record;
-}
-
-async function createAttemptDirectory(
-  root: DirectoryRecord,
-  attemptId: string,
-): Promise<string> {
-  if (!attemptIdPattern.test(attemptId)) {
-    throw new TypeError("El identificador de intento no es seguro");
-  }
-  const path = join(root.path, attemptId);
-  if (!isSameOrWithin(root.path, path) || path === root.path) {
-    throw new TypeError(
-      "El identificador de intento escapa del root de evidencia",
-    );
-  }
-  await mkdir(path, { mode: 0o700 });
-  const entry = await lstat(path);
-  if (
-    entry.isSymbolicLink() ||
-    !entry.isDirectory() ||
-    (await realpath(path)) !== path
-  ) {
-    throw new TypeError("El directorio de intento no es seguro");
-  }
-  return path;
-}
-
-/**
- * Mints a Cloudflare config capability only after its digest matches the exact
- * approved publication profile. It never accepts env values from the caller.
- */
-export async function createControllerPublicationProfile(
-  path: string,
-  plan: ChangePlan,
-): Promise<ControllerPublicationProfile> {
-  if (
-    plan.publication.adapter !== "cloudflare" ||
-    typeof plan.publication.environment !== "string" ||
-    plan.publication.environment.length === 0 ||
-    !sha256Pattern.test(plan.publication.configSha256) ||
-    !isAbsolute(path)
-  ) {
-    throw new TypeError("El perfil Cloudflare no corresponde al plan aprobado");
-  }
-  const entry = await lstat(path);
-  if (entry.isSymbolicLink() || !entry.isFile() || entry.nlink !== 1) {
-    throw new TypeError("El perfil Cloudflare debe ser un archivo regular");
-  }
-  const canonical = await realpath(path);
-  const file = await regularFileBytes(canonical);
-  if (file.sha256 !== plan.publication.configSha256) {
-    throw new TypeError(
-      "El hash del perfil Cloudflare no coincide con el plan",
-    );
-  }
-  const profile: ControllerPublicationProfile = Object.freeze({
-    path: canonical,
-    sha256: file.sha256,
-    environment: plan.publication.environment,
-  });
-  publicationProfiles.set(
-    profile,
-    Object.freeze({
-      path: canonical,
-      sha256: file.sha256,
-      environment: plan.publication.environment,
-      planCanonical: canonicalJson(plan),
-      device: file.device,
-      inode: file.inode,
-    }),
-  );
-  return profile;
-}
-
-async function cloudflareProfileFor(
-  plan: ChangePlan,
-  supplied: ControllerPublicationProfile | undefined,
-  stagingPath: string,
-): Promise<CloudflareCommandProfile | undefined> {
-  if (plan.publication.adapter === "local") {
-    if (supplied !== undefined) {
-      throw new TypeError("El plan local no admite un perfil Cloudflare");
-    }
-    return undefined;
-  }
-  if (supplied === undefined) return undefined;
-  const record = publicationProfiles.get(supplied);
-  if (
-    record === undefined ||
-    supplied.path !== record.path ||
-    supplied.sha256 !== record.sha256 ||
-    supplied.environment !== record.environment ||
-    canonicalJson(plan) !== record.planCanonical ||
-    isSameOrWithin(stagingPath, record.path) ||
-    isSameOrWithin(record.path, stagingPath)
-  ) {
-    throw new TypeError(
-      "El perfil Cloudflare no pertenece al plan controlador",
-    );
-  }
-  const entry = await lstat(record.path);
-  if (
-    entry.isSymbolicLink() ||
-    !entry.isFile() ||
-    entry.nlink !== 1 ||
-    entry.dev !== record.device ||
-    entry.ino !== record.inode ||
-    (await realpath(record.path)) !== record.path
-  ) {
-    throw new TypeError("La identidad del perfil Cloudflare cambió");
-  }
-  const current = await regularFileBytes(record.path);
-  if (current.sha256 !== record.sha256) {
-    throw new TypeError("El perfil Cloudflare cambió durante la validación");
-  }
-  return Object.freeze({ path: record.path, environment: record.environment });
-}
-
-async function approvedInventory(
+function exactOutputHashes(
   output: StagedAgentOutput,
-  plan: ChangePlan,
-): Promise<ReadonlyMap<string, Buffer>> {
-  await assertControllerStagedOutput(output, plan);
+): Readonly<Record<string, string>> {
   const paths = [...output.files].sort();
   if (
     paths.length !== output.files.length ||
@@ -363,27 +280,366 @@ async function approvedInventory(
   ) {
     throw new TypeError("El inventario controlador no conserva forma exacta");
   }
-  const files = new Map<string, Buffer>();
+  const hashes: Record<string, string> = {};
   for (const path of paths) {
-    const expected = output.sha256[path];
+    const hash = output.sha256[path];
     if (
       !safeRelativePath(path) ||
-      expected === undefined ||
-      !sha256Pattern.test(expected)
+      hash === undefined ||
+      !sha256Pattern.test(hash)
     ) {
       throw new TypeError(
         "El inventario controlador contiene un path o hash inválido",
       );
     }
+    hashes[path] = hash;
+  }
+  return Object.freeze(hashes);
+}
+
+/**
+ * Mints a fresh evidence directory for one exact staged capability, plan and
+ * workspace attempt. The caller never supplies an existing directory.
+ */
+export async function createValidationEvidenceRoot(
+  output: StagedAgentOutput,
+  plan: ChangePlan,
+  attemptId: string,
+): Promise<ValidationEvidenceRoot> {
+  if (!attemptIdPattern.test(attemptId)) {
+    throw new TypeError("El identificador de intento no es seguro");
+  }
+  await assertControllerStagedOutputAttempt(output, plan, attemptId);
+  let rootPath: string | undefined;
+  try {
+    rootPath = await realpath(
+      await mkdtemp(join(tmpdir(), "comunidadsolar-validation-evidence-")),
+    );
+    const attemptPath = join(rootPath, attemptId);
+    await mkdir(attemptPath, { mode: 0o700 });
+    const [rootEntry, attemptEntry] = await Promise.all([
+      lstat(rootPath),
+      lstat(attemptPath),
+    ]);
+    if (
+      rootEntry.isSymbolicLink() ||
+      !rootEntry.isDirectory() ||
+      attemptEntry.isSymbolicLink() ||
+      !attemptEntry.isDirectory() ||
+      (await realpath(rootPath)) !== rootPath ||
+      (await realpath(attemptPath)) !== attemptPath
+    ) {
+      throw new TypeError("No se pudo crear una raíz de evidencia segura");
+    }
+    const root: ValidationEvidenceRoot = Object.freeze({ path: rootPath });
+    evidenceRoots.set(
+      root,
+      Object.freeze({
+        path: rootPath,
+        device: rootEntry.dev,
+        inode: rootEntry.ino,
+        output,
+        attemptId,
+        planCanonical: canonicalJson(plan),
+        attemptPath,
+        attemptIdentity: Object.freeze({
+          device: attemptEntry.dev,
+          inode: attemptEntry.ino,
+        }),
+      }),
+    );
+    return root;
+  } catch (error: unknown) {
+    if (rootPath !== undefined) {
+      await rm(rootPath, { recursive: true, force: true }).catch(
+        () => undefined,
+      );
+    }
+    throw error;
+  }
+}
+
+async function assertEvidenceRoot(
+  root: ValidationEvidenceRoot,
+  output: StagedAgentOutput,
+  plan: ChangePlan,
+  attemptId: string,
+): Promise<EvidenceRootRecord> {
+  const record = evidenceRoots.get(root);
+  if (
+    record === undefined ||
+    root.path !== record.path ||
+    record.output !== output ||
+    record.attemptId !== attemptId ||
+    record.planCanonical !== canonicalJson(plan)
+  ) {
+    throw new TypeError(
+      "El root de evidencia no pertenece al output, plan e intento del controlador",
+    );
+  }
+  const [rootEntry, attemptEntry] = await Promise.all([
+    lstat(record.path),
+    lstat(record.attemptPath),
+  ]);
+  if (
+    rootEntry.isSymbolicLink() ||
+    !rootEntry.isDirectory() ||
+    rootEntry.dev !== record.device ||
+    rootEntry.ino !== record.inode ||
+    attemptEntry.isSymbolicLink() ||
+    !attemptEntry.isDirectory() ||
+    attemptEntry.dev !== record.attemptIdentity.device ||
+    attemptEntry.ino !== record.attemptIdentity.inode ||
+    (await realpath(record.path)) !== record.path ||
+    (await realpath(record.attemptPath)) !== record.attemptPath ||
+    dirname(record.attemptPath) !== record.path ||
+    isSameOrWithin(record.path, output.path) ||
+    isSameOrWithin(output.path, record.path)
+  ) {
+    throw new TypeError(
+      "El root de evidencia no es seguro o solapa el staging",
+    );
+  }
+  return record;
+}
+
+/**
+ * Mints a digest-bound sanitized profile from controller-held bytes, never a
+ * caller path or environment. The plan digest is the authority for the bytes.
+ */
+export async function createControllerPublicationProfile(
+  output: StagedAgentOutput,
+  plan: ChangePlan,
+  attemptId: string,
+  sanitizedConfig: Uint8Array,
+): Promise<ControllerPublicationProfile> {
+  if (
+    !sha256Pattern.test(plan.publication.configSha256) ||
+    !(sanitizedConfig instanceof Uint8Array) ||
+    sanitizedConfig.byteLength === 0 ||
+    sanitizedConfig.byteLength > 1024 * 1024 ||
+    (plan.publication.adapter === "local" &&
+      plan.publication.environment !== null) ||
+    (plan.publication.adapter === "cloudflare" &&
+      (typeof plan.publication.environment !== "string" ||
+        plan.publication.environment.length === 0))
+  ) {
+    throw new TypeError(
+      "El perfil de publicación no corresponde al plan aprobado",
+    );
+  }
+  await assertControllerStagedOutputAttempt(output, plan, attemptId);
+  const bytes = Buffer.from(sanitizedConfig);
+  try {
+    new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+    assertNoSuppliedSecretsBytes(bytes);
+  } catch {
+    throw new TypeError("El perfil de publicación no está saneado");
+  }
+  const sha256 = createHash("sha256").update(bytes).digest("hex");
+  if (sha256 !== plan.publication.configSha256) {
+    throw new TypeError("El hash del perfil no coincide con el plan");
+  }
+  const profile: ControllerPublicationProfile = Object.freeze({
+    sha256,
+    environment: plan.publication.environment,
+  });
+  publicationProfiles.set(
+    profile,
+    Object.freeze({
+      output,
+      attemptId,
+      planCanonical: canonicalJson(plan),
+      sha256,
+      environment: plan.publication.environment,
+      bytes,
+    }),
+  );
+  return profile;
+}
+
+async function publicationProfileFor(
+  input: ValidationInput,
+): Promise<PublicationProfileRecord> {
+  if (input.publicationProfile === undefined) {
+    throw new TypeError(
+      "publication.profile: falta el perfil saneado y ligado al plan",
+    );
+  }
+  const record = publicationProfiles.get(input.publicationProfile);
+  if (
+    record === undefined ||
+    input.publicationProfile.sha256 !== record.sha256 ||
+    input.publicationProfile.environment !== record.environment ||
+    record.output !== input.output ||
+    record.attemptId !== input.attemptId ||
+    record.planCanonical !== canonicalJson(input.plan) ||
+    createHash("sha256").update(record.bytes).digest("hex") !== record.sha256
+  ) {
+    throw new TypeError(
+      "publication.profile: el perfil no pertenece al output, plan e intento",
+    );
+  }
+  return record;
+}
+
+async function writeNewControllerFile(
+  path: string,
+  bytes: Buffer,
+): Promise<void> {
+  const handle = await open(
+    path,
+    constants.O_WRONLY |
+      constants.O_CREAT |
+      constants.O_EXCL |
+      (constants.O_NOFOLLOW ?? 0),
+    0o600,
+  );
+  try {
+    let written = 0;
+    while (written < bytes.byteLength) {
+      const result = await handle.write(
+        bytes,
+        written,
+        bytes.byteLength - written,
+        null,
+      );
+      if (result.bytesWritten === 0) {
+        throw new TypeError("No se pudo materializar el perfil de publicación");
+      }
+      written += result.bytesWritten;
+    }
+  } finally {
+    await handle.close();
+  }
+}
+
+async function materializePublicationProfile(
+  state: ExecutionState,
+  input: ValidationInput,
+): Promise<MaterializedPublicationProfile> {
+  if (state.profile !== undefined) return state.profile;
+  state.integrity = await assertControllerExecutionCopy(
+    state.copy,
+    input.output,
+    input.plan,
+    input.attemptId,
+  );
+  const profile = await publicationProfileFor(input);
+  const path = join(state.copy.path, "wrangler.jsonc");
+  await writeNewControllerFile(path, profile.bytes);
+  const actual = await regularFileBytes(path);
+  if (actual.sha256 !== profile.sha256) {
+    throw new TypeError("El perfil materializado no conserva su digest");
+  }
+  const materialized: MaterializedPublicationProfile = Object.freeze({
+    path,
+    sha256: actual.sha256,
+    environment: profile.environment,
+  });
+  state.profile = materialized;
+  return materialized;
+}
+
+async function assertMaterializedPublicationProfile(
+  profile: MaterializedPublicationProfile,
+): Promise<void> {
+  const actual = await regularFileBytes(profile.path);
+  if (actual.sha256 !== profile.sha256) {
+    throw new TypeError("El perfil materializado cambió durante la validación");
+  }
+}
+
+async function approvedInventory(
+  output: StagedAgentOutput,
+  plan: ChangePlan,
+  attemptId: string,
+): Promise<ReadonlyMap<string, Buffer>> {
+  await assertControllerStagedOutputAttempt(output, plan, attemptId);
+  const hashes = exactOutputHashes(output);
+  const files = new Map<string, Buffer>();
+  for (const path of Object.keys(hashes).sort()) {
     const file = await regularFileBytes(join(output.path, ...path.split("/")));
-    if (file.sha256 !== expected) {
+    if (file.sha256 !== hashes[path]) {
       throw new TypeError(
         "El archivo de staging ya no coincide con su inventario",
       );
     }
     files.set(path, file.bytes);
   }
+  await assertControllerStagedOutputAttempt(output, plan, attemptId);
   return files;
+}
+
+async function knownInternalRoutes(
+  copy: ControllerExecutionCopy,
+  input: ValidationInput,
+): Promise<ReadonlySet<string>> {
+  await assertControllerExecutionCopy(
+    copy,
+    input.output,
+    input.plan,
+    input.attemptId,
+  );
+  const routes = new Set<string>(["/", input.plan.targetPath]);
+  const pagesRoot = join(copy.path, "src", "pages");
+
+  async function visit(relativeDirectory: string): Promise<void> {
+    const directory =
+      relativeDirectory === ""
+        ? pagesRoot
+        : join(pagesRoot, ...relativeDirectory.split("/"));
+    const handle = await opendir(directory);
+    const entries: string[] = [];
+    for await (const entry of handle) entries.push(entry.name);
+    for (const name of entries.sort()) {
+      const relativePath =
+        relativeDirectory === "" ? name : `${relativeDirectory}/${name}`;
+      if (!safeRelativePath(relativePath)) {
+        throw new TypeError("La ruta interna contiene un path inseguro");
+      }
+      const absolute = join(pagesRoot, ...relativePath.split("/"));
+      const entry = await lstat(absolute);
+      if (entry.isSymbolicLink()) {
+        throw new TypeError("La ruta interna no puede atravesar enlaces");
+      }
+      if (entry.isDirectory()) {
+        await visit(relativePath);
+        continue;
+      }
+      if (
+        !entry.isFile() ||
+        !/\.(?:astro|md|mdx)$/iu.test(name) ||
+        relativePath.split("/").some((segment) => segment.includes("["))
+      ) {
+        continue;
+      }
+      const withoutExtension = relativePath.replace(
+        /\.(?:astro|md|mdx)$/iu,
+        "",
+      );
+      const segments = withoutExtension.split("/");
+      if (segments.at(-1) === "index") segments.pop();
+      routes.add(segments.length === 0 ? "/" : `/${segments.join("/")}`);
+    }
+  }
+
+  try {
+    const root = await lstat(pagesRoot);
+    if (root.isSymbolicLink() || !root.isDirectory()) {
+      throw new TypeError("El árbol de rutas no es un directorio seguro");
+    }
+    await visit("");
+  } catch (error: unknown) {
+    if (errorCode(error) !== "ENOENT") throw error;
+  }
+  await assertControllerExecutionCopy(
+    copy,
+    input.output,
+    input.plan,
+    input.attemptId,
+  );
+  return Object.freeze(routes);
 }
 
 function validateImportsDependenciesAndSecrets(
@@ -412,6 +668,36 @@ function validateImportsDependenciesAndSecrets(
   return findings;
 }
 
+function normalizedBrowserProof(
+  value: unknown,
+): BrowserValidationProof | undefined {
+  const proof = asRecord(value);
+  const evidenceSha256 =
+    proof !== null && typeof proof.evidenceSha256 === "string"
+      ? proof.evidenceSha256
+      : "";
+  if (
+    proof === null ||
+    typeof proof.check !== "string" ||
+    typeof proof.targetPath !== "string" ||
+    !sha256Pattern.test(evidenceSha256) ||
+    (proof.device !== undefined &&
+      proof.device !== "desktop" &&
+      proof.device !== "tablet" &&
+      proof.device !== "mobile")
+  ) {
+    return undefined;
+  }
+  return Object.freeze({
+    check: proof.check as BrowserCheck,
+    targetPath: proof.targetPath as `/${string}`,
+    ...(proof.device === undefined
+      ? {}
+      : { device: proof.device as BrowserCaptureDevice }),
+    evidenceSha256,
+  });
+}
+
 function normalizedCommandResult(value: unknown): CommandResult {
   const result = asRecord(value);
   if (result === null) {
@@ -424,6 +710,7 @@ function normalizedCommandResult(value: unknown): CommandResult {
       unsupported: false,
     };
   }
+  const proof = normalizedBrowserProof(result.browserProof);
   return Object.freeze({
     exitCode:
       typeof result.exitCode === "number" && Number.isInteger(result.exitCode)
@@ -442,10 +729,33 @@ function normalizedCommandResult(value: unknown): CommandResult {
     timedOut: result.timedOut === true,
     aborted: result.aborted === true,
     unsupported: result.unsupported === true,
+    ...(proof === undefined ? {} : { browserProof: proof }),
   });
 }
 
-function commandFailure(result: CommandResult): string | null {
+function browserProofFailure(
+  command: CommandInvocation,
+  result: CommandResult,
+): string | null {
+  if (command.browser === undefined) return null;
+  const proof = result.browserProof;
+  if (proof === undefined) {
+    return "browser.proof: falta evidencia estructurada para la ruta solicitada";
+  }
+  if (
+    proof.check !== command.browser.check ||
+    proof.targetPath !== command.browser.targetPath ||
+    proof.device !== command.browser.device
+  ) {
+    return "browser.proof: la evidencia no corresponde a la ruta, check o dispositivo solicitado";
+  }
+  return null;
+}
+
+function commandFailure(
+  command: CommandInvocation,
+  result: CommandResult,
+): string | null {
   if (result.unsupported)
     return "command.unsupported: falta una capability exacta del controlador";
   if (result.timedOut)
@@ -453,7 +763,7 @@ function commandFailure(result: CommandResult): string | null {
   if (result.aborted) return "command.aborted: el comando fue abortado";
   if (result.exitCode !== 0)
     return `command.exit: el comando terminó con código ${result.exitCode ?? "nulo"}`;
-  return null;
+  return browserProofFailure(command, result);
 }
 
 function commandDetails(
@@ -464,9 +774,10 @@ function commandDetails(
     command: {
       argv: command.argv,
       capability: command.capability,
-      cwd: "controller-staging",
+      cwd: "controller-execution-copy",
       timeoutMs: command.timeoutMs,
       environmentKeys: Object.keys(command.env).sort(),
+      ...(command.browser === undefined ? {} : { browser: command.browser }),
     },
     result: {
       exitCode: result.exitCode,
@@ -475,11 +786,24 @@ function commandDetails(
       timedOut: result.timedOut,
       aborted: result.aborted,
       unsupported: result.unsupported,
+      ...(result.browserProof === undefined
+        ? {}
+        : { browserProof: result.browserProof }),
     },
   };
 }
 
-function commandDefinitions(overwrite: boolean): readonly CommandDefinition[] {
+function commandDefinitions(plan: ChangePlan): readonly CommandDefinition[] {
+  const target = plan.targetPath;
+  const browserArgs = (grep: string): readonly string[] => [
+    "run",
+    "test:e2e",
+    "--",
+    "--grep",
+    grep,
+    "--target-path",
+    target,
+  ];
   return [
     { id: "npm-ci", args: ["ci"], capability: "process" },
     { id: "format", args: ["run", "format:check"], capability: "process" },
@@ -508,52 +832,283 @@ function commandDefinitions(overwrite: boolean): readonly CommandDefinition[] {
       id: "preview",
       args: ["run", "preview", "--", "--host", "127.0.0.1", "--port", "4321"],
       capability: "preview",
+      browser: { check: "preview" },
     },
     {
       id: "e2e",
-      args: ["run", "test:e2e", "--", "--grep-invert", "@ingestion"],
+      args: [
+        "run",
+        "test:e2e",
+        "--",
+        "--grep-invert",
+        "@ingestion",
+        "--target-path",
+        target,
+      ],
       capability: "browser",
+      browser: { check: "e2e" },
     },
     {
       id: "route-smoke",
-      args: ["run", "test:e2e", "--", "--grep", "@route-smoke"],
+      args: browserArgs("@route-smoke"),
       capability: "browser",
+      browser: { check: "route-smoke" },
     },
     {
       id: "console-errors",
-      args: ["run", "test:e2e", "--", "--grep", "@console-errors"],
+      args: browserArgs("@console-errors"),
       capability: "browser",
+      browser: { check: "console-errors" },
     },
     {
       id: "axe",
-      args: ["run", "test:e2e", "--", "--grep", "@axe"],
+      args: browserArgs("@axe"),
       capability: "browser",
+      browser: { check: "axe" },
     },
     {
       id: "capture-desktop",
-      args: ["run", "test:e2e", "--", "--grep", "@capture-desktop"],
+      args: browserArgs("@capture-desktop"),
       capability: "browser",
+      browser: { check: "capture", device: "desktop" },
     },
     {
       id: "capture-tablet",
-      args: ["run", "test:e2e", "--", "--grep", "@capture-tablet"],
+      args: browserArgs("@capture-tablet"),
       capability: "browser",
+      browser: { check: "capture", device: "tablet" },
     },
     {
       id: "capture-mobile",
-      args: ["run", "test:e2e", "--", "--grep", "@capture-mobile"],
+      args: browserArgs("@capture-mobile"),
       capability: "browser",
+      browser: { check: "capture", device: "mobile" },
     },
-    ...(overwrite
+    ...(plan.overwritesExistingRoute
       ? [
           {
             id: "html-visual-comparison",
-            args: ["run", "parity:visual", "--", "--scope", "overwrite"],
+            args: [
+              "run",
+              "parity:visual",
+              "--",
+              "--scope",
+              "overwrite",
+              "--target-path",
+              target,
+            ],
             capability: "browser" as const,
+            browser: { check: "html-visual-comparison" as const },
           },
         ]
       : []),
   ];
+}
+
+function capture(stream: NodeJS.ReadableStream | null): {
+  rendered: () => string;
+} {
+  const chunks: Buffer[] = [];
+  let bytes = 0;
+  let truncated = false;
+  stream?.on("data", (chunk: Buffer | Uint8Array | string) => {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    const remaining = capturedOutputMaximumBytes - bytes;
+    if (remaining <= 0) {
+      truncated = true;
+      return;
+    }
+    const selected = buffer.subarray(0, remaining);
+    chunks.push(selected);
+    bytes += selected.byteLength;
+    if (selected.byteLength < buffer.byteLength) truncated = true;
+  });
+  return {
+    rendered: () =>
+      sanitizeCommandOutput(
+        `${Buffer.concat(chunks).toString("utf8")}${truncated ? "\n[captured output truncated]" : ""}`,
+      ),
+  };
+}
+
+function unsupportedResult(message: string): CommandResult {
+  return Object.freeze({
+    exitCode: null,
+    stdout: "",
+    stderr: message,
+    timedOut: false,
+    aborted: false,
+    unsupported: true,
+  });
+}
+
+function signalProcessGroup(
+  child: ReturnType<typeof spawn>,
+  signal: NodeJS.Signals,
+): void {
+  if (process.platform !== "win32" && child.pid !== undefined) {
+    try {
+      process.kill(-child.pid, signal);
+      return;
+    } catch (error: unknown) {
+      if (errorCode(error) === "ESRCH") return;
+    }
+  }
+  child.kill(signal);
+}
+
+/**
+ * Private raw execution: only fixed commands built below can reach this
+ * function. It cannot be imported as a generic argv/cwd/env executor.
+ */
+async function runFixedControllerCommand(
+  command: CommandInvocation,
+): Promise<CommandResult> {
+  if (command.capability !== "process") {
+    return unsupportedResult(
+      `La capability ${command.capability} requiere un adapter exacto del controlador`,
+    );
+  }
+  return await new Promise<CommandResult>((resolve) => {
+    let timedOut = false;
+    let spawnFailure: Error | undefined;
+    let closed = false;
+    let terminationTimer: NodeJS.Timeout | undefined;
+    let settlementTimer: NodeJS.Timeout | undefined;
+    let child: ReturnType<typeof spawn> | undefined;
+    let stdout: { rendered: () => string } = { rendered: () => "" };
+    let stderr: { rendered: () => string } = { rendered: () => "" };
+    const finish = (
+      exitCode: number | null,
+      signal: NodeJS.Signals | null,
+      forceAborted = false,
+    ): void => {
+      if (closed) return;
+      closed = true;
+      clearTimeout(timeout);
+      if (terminationTimer !== undefined) clearTimeout(terminationTimer);
+      if (settlementTimer !== undefined) clearTimeout(settlementTimer);
+      const error =
+        spawnFailure === undefined ? "" : `\n${spawnFailure.message}`;
+      resolve(
+        Object.freeze({
+          exitCode: spawnFailure === undefined ? exitCode : null,
+          stdout: stdout.rendered(),
+          stderr: sanitizeCommandOutput(`${stderr.rendered()}${error}`),
+          timedOut,
+          aborted:
+            forceAborted ||
+            timedOut ||
+            spawnFailure !== undefined ||
+            signal !== null,
+          unsupported: false,
+        }),
+      );
+    };
+    try {
+      child = spawn(command.argv[0]!, command.argv.slice(1), {
+        cwd: command.cwd,
+        env: command.env,
+        shell: false,
+        detached: process.platform !== "win32",
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+    } catch (error: unknown) {
+      spawnFailure =
+        error instanceof Error
+          ? error
+          : new Error("No se pudo iniciar el comando");
+      resolve(
+        Object.freeze({
+          exitCode: null,
+          stdout: "",
+          stderr: sanitizeCommandOutput(spawnFailure.message),
+          timedOut: false,
+          aborted: true,
+          unsupported: false,
+        }),
+      );
+      return;
+    }
+    stdout = capture(child.stdout);
+    stderr = capture(child.stderr);
+    const timeout = setTimeout(() => {
+      if (closed || child?.exitCode !== null) return;
+      timedOut = true;
+      signalProcessGroup(child!, "SIGTERM");
+      terminationTimer = setTimeout(() => {
+        if (closed) return;
+        signalProcessGroup(child!, "SIGKILL");
+        settlementTimer = setTimeout(() => {
+          finish(null, "SIGKILL", true);
+        }, processTerminationSettleMs);
+      }, processTerminationGraceMs);
+    }, command.timeoutMs);
+    child.once("error", (error: Error) => {
+      spawnFailure = error;
+      finish(null, "SIGTERM", true);
+    });
+    child.once("close", finish);
+  });
+}
+
+function commandEnvironment(
+  profile: MaterializedPublicationProfile,
+  publicationScoped: boolean | undefined,
+): Readonly<Record<string, string>> {
+  if (!publicationScoped || profile.environment === null)
+    return safeEnvironment;
+  return Object.freeze({
+    ...safeEnvironment,
+    CLOUDFLARE_CONFIG_PATH: profile.path,
+    CLOUDFLARE_ENV: profile.environment,
+  });
+}
+
+function fixedControllerCommand(
+  definition: CommandDefinition,
+  targetPath: ChangePlan["targetPath"],
+  cwd: string,
+  profile: MaterializedPublicationProfile,
+): CommandInvocation {
+  const browser =
+    definition.browser === undefined
+      ? undefined
+      : Object.freeze({
+          check: definition.browser.check,
+          targetPath,
+          ...(definition.browser.device === undefined
+            ? {}
+            : { device: definition.browser.device }),
+        });
+  return Object.freeze({
+    id: definition.id,
+    capability: definition.capability,
+    argv: Object.freeze([controllerNpmExecutable, ...definition.args]),
+    cwd,
+    timeoutMs: COMMAND_TIMEOUT_MS,
+    env: commandEnvironment(profile, definition.publicationScoped),
+    ...(browser === undefined ? {} : { browser }),
+  });
+}
+
+function preliminaryEvidence(
+  input: ValidationInput,
+  execution: ExecutionState | undefined,
+): PreliminaryStagedValidationEvidence {
+  const outputSha256 = exactOutputHashes(input.output);
+  return Object.freeze({
+    scope: PRELIMINARY_STAGED_VALIDATION_SCOPE,
+    planSha256: input.plan.planSha256,
+    approvedOutputSha256: outputSha256,
+    executionCopy:
+      execution === undefined
+        ? null
+        : Object.freeze({
+            outputSha256: execution.integrity.outputSha256,
+            sha256: execution.integrity.sha256,
+          }),
+  });
 }
 
 async function persistEvidence(
@@ -562,12 +1117,24 @@ async function persistEvidence(
   attemptId: string,
   id: string,
   status: ValidationResult["status"],
+  preliminary: PreliminaryStagedValidationEvidence,
   details: Record<string, unknown>,
 ): Promise<ValidationResult> {
   const filename = `${String(index).padStart(2, "0")}-${id}.json`;
   const path = join(directory, filename);
   const bytes = Buffer.from(
-    `${JSON.stringify({ schemaVersion: 1, attemptId, id, status, details }, null, 2)}\n`,
+    `${JSON.stringify(
+      {
+        schemaVersion: 2,
+        attemptId,
+        id,
+        status,
+        preliminary,
+        details,
+      },
+      null,
+      2,
+    )}\n`,
     "utf8",
   );
   await writeFile(path, bytes, { encoding: "utf8", flag: "wx", mode: 0o600 });
@@ -582,27 +1149,63 @@ async function persistEvidence(
 
 /**
  * Executes the fixed, fail-closed validation sequence over controller-minted
- * staging. A failed step records later steps as skipped for this attempt only.
+ * staged output. Command results are preliminary and never candidate-final.
  */
 export async function runValidation(
   input: ValidationInput,
   options: ValidationOptions = {},
 ): Promise<ValidationResult[]> {
-  await assertControllerStagedOutput(input.output, input.plan);
-  const evidenceRoot = await assertEvidenceRoot(
-    input.evidenceRoot,
-    input.output.path,
-  );
-  const attemptDirectory = await createAttemptDirectory(
-    evidenceRoot,
+  await assertControllerStagedOutputAttempt(
+    input.output,
+    input.plan,
     input.attemptId,
   );
-  const commandRunner = options.commands ?? runControllerCommand;
+  const evidenceRoot = await assertEvidenceRoot(
+    input.evidenceRoot,
+    input.output,
+    input.plan,
+    input.attemptId,
+  );
+  if (consumedEvidenceRoots.has(input.evidenceRoot)) {
+    throw new TypeError("La evidencia del intento ya fue utilizada");
+  }
+  consumedEvidenceRoots.add(input.evidenceRoot);
+  const commandRunner = options.commands ?? runFixedControllerCommand;
   let inventory: ReadonlyMap<string, Buffer> | undefined;
+  let execution: ExecutionState | undefined;
+
   const files = async (): Promise<ReadonlyMap<string, Buffer>> => {
-    if (inventory === undefined)
-      inventory = await approvedInventory(input.output, input.plan);
+    if (inventory === undefined) {
+      inventory = await approvedInventory(
+        input.output,
+        input.plan,
+        input.attemptId,
+      );
+    }
     return inventory;
+  };
+  const ensureExecution = async (): Promise<ExecutionState> => {
+    if (execution !== undefined) return execution;
+    const copy = await createControllerExecutionCopy(
+      input.output,
+      input.plan,
+      input.attemptId,
+    );
+    try {
+      execution = {
+        copy,
+        integrity: await assertControllerExecutionCopy(
+          copy,
+          input.output,
+          input.plan,
+          input.attemptId,
+        ),
+      };
+      return execution;
+    } catch (error: unknown) {
+      await removeControllerExecutionCopy(copy).catch(() => undefined);
+      throw error;
+    }
   };
   const validator = (
     id: string,
@@ -615,38 +1218,34 @@ export async function runValidation(
       return { findings, details: { findings } };
     },
   });
-  const commands = commandDefinitions(input.plan.overwritesExistingRoute).map(
+  const commandSteps = commandDefinitions(input.plan).map(
     (definition): PipelineStep => ({
       id: definition.id,
       execute: async () => {
-        let profile: CloudflareCommandProfile | undefined;
-        if (definition.publicationScoped) {
-          if (
-            input.plan.publication.adapter === "cloudflare" &&
-            input.publicationProfile === undefined
-          ) {
-            return {
-              findings: [
-                "publication.profile: falta el perfil Cloudflare saneado y ligado al plan",
-              ],
-              details: { findings: ["publication.profile: unavailable"] },
-            };
-          }
-          profile = await cloudflareProfileFor(
-            input.plan,
-            input.publicationProfile,
-            input.output.path,
-          );
-        }
-        const command = controllerCommand(
-          definition.id,
-          definition.args,
-          input.output.path,
-          definition.capability,
+        const state = await ensureExecution();
+        const profile = await materializePublicationProfile(state, input);
+        state.integrity = await assertControllerExecutionCopy(
+          state.copy,
+          input.output,
+          input.plan,
+          input.attemptId,
+        );
+        await assertMaterializedPublicationProfile(profile);
+        const command = fixedControllerCommand(
+          definition,
+          input.plan.targetPath,
+          state.copy.path,
           profile,
         );
         const result = normalizedCommandResult(await commandRunner(command));
-        const failure = commandFailure(result);
+        state.integrity = await assertControllerExecutionCopy(
+          state.copy,
+          input.output,
+          input.plan,
+          input.attemptId,
+        );
+        await assertMaterializedPublicationProfile(profile);
+        const failure = commandFailure(command, result);
         return {
           findings: failure === null ? [] : [failure],
           details: commandDetails(command, result),
@@ -678,54 +1277,83 @@ export async function runValidation(
     validator("imports-dependencies-secrets", (current) =>
       validateImportsDependenciesAndSecrets(input.plan, current),
     ),
-    validator("links", (current) =>
-      validateGeneratedLinks(input.plan, current),
-    ),
+    {
+      id: "links",
+      execute: async () => {
+        const [current, state] = await Promise.all([
+          files(),
+          ensureExecution(),
+        ]);
+        const routes = await knownInternalRoutes(state.copy, input);
+        const findings = validateGeneratedLinks(input.plan, current, routes);
+        return { findings, details: { findings } };
+      },
+    },
     validator("seo", (current) => validateGeneratedSeo(input.plan, current)),
     validator("accessibility", (current) =>
       validateGeneratedAccessibility(input.plan, current),
     ),
-    ...commands,
+    ...commandSteps,
   ];
 
   const results: ValidationResult[] = [];
   let failed = false;
-  for (const [index, step] of steps.entries()) {
-    if (failed) {
+  try {
+    for (const [index, step] of steps.entries()) {
+      if (failed) {
+        results.push(
+          await persistEvidence(
+            evidenceRoot.attemptPath,
+            index,
+            input.attemptId,
+            step.id,
+            "skipped",
+            preliminaryEvidence(input, execution),
+            { reason: "Una validación dependiente anterior falló" },
+          ),
+        );
+        continue;
+      }
+      let outcome: StepOutcome;
+      try {
+        outcome = await step.execute();
+        if (step.id === "output-policy" && outcome.findings.length === 0) {
+          const state = await ensureExecution();
+          outcome = {
+            findings: outcome.findings,
+            details: {
+              ...outcome.details,
+              executionCopy: { sha256: state.integrity.sha256 },
+            },
+          };
+        }
+      } catch (error: unknown) {
+        outcome = {
+          findings: [`validator.error: ${errorMessage(error)}`],
+          details: { error: errorMessage(error) },
+        };
+      }
+      const status: ValidationResult["status"] =
+        outcome.findings.length === 0 ? "passed" : "failed";
       results.push(
         await persistEvidence(
-          attemptDirectory,
+          evidenceRoot.attemptPath,
           index,
           input.attemptId,
           step.id,
-          "skipped",
-          { reason: "Una validación dependiente anterior falló" },
+          status,
+          preliminaryEvidence(input, execution),
+          outcome.details,
         ),
       );
-      continue;
+      failed = status === "failed";
     }
-    let outcome: StepOutcome;
-    try {
-      outcome = await step.execute();
-    } catch (error: unknown) {
-      outcome = {
-        findings: [`validator.error: ${errorMessage(error)}`],
-        details: { error: errorMessage(error) },
-      };
+    return results;
+  } finally {
+    if (execution !== undefined) {
+      await removeControllerExecutionCopy(execution.copy).catch(
+        () => undefined,
+      );
     }
-    const status: ValidationResult["status"] =
-      outcome.findings.length === 0 ? "passed" : "failed";
-    results.push(
-      await persistEvidence(
-        attemptDirectory,
-        index,
-        input.attemptId,
-        step.id,
-        status,
-        outcome.details,
-      ),
-    );
-    failed = status === "failed";
   }
-  return results;
 }
