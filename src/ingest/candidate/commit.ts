@@ -1,4 +1,5 @@
 import type { ChangePlan } from "../domain.ts";
+import type { ControllerCandidateStore } from "./manifest.ts";
 import {
   assertControllerCandidateCommit,
   captureControllerCandidateBuildArtifacts,
@@ -26,8 +27,9 @@ export async function createCandidateCommit(
   output: StagedAgentOutput,
   plan: ChangePlan,
   attemptId: string,
+  store: ControllerCandidateStore,
 ): Promise<CandidateCommit> {
-  return await createControllerCandidateCommit(output, plan, attemptId);
+  return await createControllerCandidateCommit(output, plan, attemptId, store);
 }
 
 /** Applies declarative controller fixture bytes through the sealed lifecycle. */
@@ -59,13 +61,11 @@ export async function captureCandidateBuildArtifacts(
   candidate: CandidateCommit,
   plan: ChangePlan,
   attemptId: string,
-  bundlePath: string,
 ): Promise<CandidateCapturedBuild> {
   return await captureControllerCandidateBuildArtifacts(
     candidate,
     plan,
     attemptId,
-    bundlePath,
   );
 }
 

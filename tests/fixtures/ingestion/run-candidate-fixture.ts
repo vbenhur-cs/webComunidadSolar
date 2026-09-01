@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
@@ -255,6 +255,15 @@ async function runFixture(): Promise<void> {
     await git(repositoryRoot, ["add", "."]);
     await git(repositoryRoot, ["commit", "--quiet", "-m", "fixture baseline"]);
     const baselineCommit = await git(repositoryRoot, ["rev-parse", "HEAD"]);
+    const wranglerExecutable = join(
+      repositoryRoot,
+      "node_modules",
+      ".bin",
+      "wrangler",
+    );
+    await mkdir(dirname(wranglerExecutable), { recursive: true });
+    await writeFile(wranglerExecutable, "#!/bin/sh\nexit 0\n");
+    await chmod(wranglerExecutable, 0o700);
     const preparedPublication = await preparePlanningPublication({
       adapter: "local",
       projectRoot: repositoryRoot,

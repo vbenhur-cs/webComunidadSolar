@@ -2,10 +2,12 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
+  chmod,
   link,
   mkdir,
   mkdtemp,
   readFile,
+  realpath,
   rm,
   symlink,
   utimes,
@@ -200,6 +202,14 @@ async function writeFiles(root: string, files: OutputFiles): Promise<void> {
     await mkdir(dirname(destination), { recursive: true });
     await writeFile(destination, source);
   }
+}
+
+async function installFixtureWrangler(repositoryRoot: string): Promise<string> {
+  const executable = join(repositoryRoot, "node_modules", ".bin", "wrangler");
+  await mkdir(dirname(executable), { recursive: true });
+  await writeFile(executable, "#!/bin/sh\nexit 0\n");
+  await chmod(executable, 0o700);
+  return executable;
 }
 
 function passingResult(command: CommandInvocation): CommandResult {
@@ -658,11 +668,17 @@ test("rejects a controller store opened for another repository", async (t) => {
   }
 });
 
-test("candidate workspace policy exports no repository-root or checkout callback authority", async () => {
-  const policy = await import("../../src/ingest/workspaces/policy.ts");
+test("candidate public modules expose no raw root, checkout, or bundle helpers", async () => {
+  const [policy, manifest] = await Promise.all([
+    import("../../src/ingest/workspaces/policy.ts"),
+    import("../../src/ingest/candidate/manifest.ts"),
+  ]);
   assert.equal("controllerCandidateRepositoryRoot" in policy, false);
   assert.equal("withControllerCandidateCheckout" in policy, false);
   assert.equal("createControllerCandidateCheckout" in policy, false);
+  assert.equal("assertControllerCandidateStoreOutput" in policy, false);
+  assert.equal("copyCandidateBundle" in manifest, false);
+  assert.equal("readCandidateBundleConfiguration" in manifest, false);
 });
 
 test("candidate reload exposes only durable store identity", async () => {
@@ -862,6 +878,7 @@ test("rehashes the copied bundle and refuses a changed output byte", async () =>
 
 test("previews only the verified copied bundle with fixed local Wrangler argv and kills its group", async (t) => {
   await withCandidateFixture({}, async (fixture) => {
+    await installFixtureWrangler(fixture.repositoryRoot);
     let invocation: FixedPreviewInvocation | undefined;
     const preview = createCandidatePreviewTestCapability(async (current) => {
       invocation = current;
@@ -912,6 +929,46 @@ test("previews only the verified copied bundle with fixed local Wrangler argv an
         async () => process.kill(previewPid, 0),
         /ESRCH|no such process/i,
       );
+    }
+  });
+});
+
+test("preview resolves Wrangler from its sealed store root after cwd changes", async (t) => {
+  const otherRoot = await mkdtemp(join(tmpdir(), "candidate-preview-cwd-"));
+  const initialCwd = process.cwd();
+  t.after(async () => {
+    if (process.cwd() !== initialCwd) process.chdir(initialCwd);
+    await rm(otherRoot, { recursive: true, force: true });
+  });
+  await withCandidateFixture({}, async (fixture) => {
+    const trustedRoot = await realpath(fixture.repositoryRoot);
+    const trustedExecutable = await installFixtureWrangler(trustedRoot);
+    const otherExecutable = join(otherRoot, "node_modules", ".bin", "wrangler");
+    await mkdir(dirname(otherExecutable), { recursive: true });
+    await writeFile(otherExecutable, "#!/bin/sh\nexit 0\n");
+    await chmod(otherExecutable, 0o700);
+
+    let invocation: FixedPreviewInvocation | undefined;
+    let handle: Awaited<ReturnType<typeof startCandidatePreview>> | undefined;
+    const preview = createCandidatePreviewTestCapability(async (current) => {
+      invocation = current;
+      const child = spawn(
+        process.execPath,
+        ["-e", "setInterval(() => undefined, 1_000);"],
+        { detached: true, stdio: "ignore" },
+      );
+      return { child, url: "http://127.0.0.1:43123" };
+    });
+    const candidate = await createCandidate(candidateInput(fixture, preview));
+    process.chdir(otherRoot);
+    try {
+      handle = await startCandidatePreview(candidate);
+      assert.equal(invocation?.executable, trustedExecutable);
+      assert.equal(invocation?.argv[0], trustedExecutable);
+      assert.notEqual(invocation?.executable, otherExecutable);
+    } finally {
+      await handle?.stop().catch(() => undefined);
+      process.chdir(initialCwd);
     }
   });
 });

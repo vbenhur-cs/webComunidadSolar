@@ -2,11 +2,10 @@ import { createHash } from "node:crypto";
 import { spawn, type ChildProcess } from "node:child_process";
 import { constants } from "node:fs";
 import {
-  chmod,
+  access,
   lstat,
   mkdir,
   open,
-  opendir,
   realpath,
   rm,
   writeFile,
@@ -21,10 +20,7 @@ import type {
 } from "../domain.ts";
 import { validateSchema } from "../schema-validator.ts";
 import { assertCandidateEligiblePreliminaryValidation } from "../validation/runner.ts";
-import {
-  assertControllerCandidateStoreOutput,
-  type StagedAgentOutput,
-} from "../workspaces/policy.ts";
+import type { StagedAgentOutput } from "../workspaces/policy.ts";
 
 import {
   captureCandidateBuildArtifacts,
@@ -45,7 +41,6 @@ const changeIdPattern = /^[a-z0-9](?:[a-z0-9-]{1,62}[a-z0-9])$/u;
 const attemptIdPattern = /^[a-z0-9](?:[a-z0-9-]{0,63})$/u;
 const sha256Pattern = /^[a-f0-9]{64}$/u;
 const artifactMaximumBytes = 128 * 1024 * 1024;
-const artifactMaximumFiles = 10_000;
 const fixedDeployRedirectPath = ".wrangler/deploy/config.json";
 const fixedWorkerRelativePath = "dist/_worker.js/index.js";
 const candidateCommitPattern = /^[a-f0-9]{40,64}$/u;
@@ -452,6 +447,17 @@ export async function releaseControllerCandidateStore(
   controllerCandidateStores.delete(store);
 }
 
+/**
+ * Returns only a one-way store/repository binding for sealed controller
+ * operations. It deliberately cannot reveal the controller repository path.
+ */
+export async function controllerCandidateStoreRepositoryFingerprint(
+  store: ControllerCandidateStore,
+): Promise<string> {
+  const record = await assertControllerCandidateStore(store);
+  return createHash("sha256").update(record.root.path).digest("hex");
+}
+
 async function createChildDirectory(
   parent: string,
   segment: string,
@@ -699,138 +705,6 @@ async function readStableRegularFile(
   } finally {
     await handle.close();
   }
-}
-
-async function copyRegularFile(
-  source: string,
-  destination: string,
-  remainingBytes: number,
-): Promise<CandidateArtifactEntry> {
-  const sourceFile = await readStableRegularFile(source, remainingBytes);
-  const destinationHandle = await open(
-    destination,
-    constants.O_WRONLY |
-      constants.O_CREAT |
-      constants.O_EXCL |
-      (constants.O_NOFOLLOW ?? 0),
-    (sourceFile.mode & 0o111) === 0 ? 0o644 : 0o755,
-  );
-  try {
-    let offset = 0;
-    while (offset < sourceFile.bytes.byteLength) {
-      const written = await destinationHandle.write(
-        sourceFile.bytes,
-        offset,
-        sourceFile.bytes.byteLength - offset,
-        null,
-      );
-      if (written.bytesWritten === 0) {
-        throw new TypeError("No se pudo completar la copia del artefacto");
-      }
-      offset += written.bytesWritten;
-    }
-  } finally {
-    await destinationHandle.close();
-  }
-  await chmod(destination, (sourceFile.mode & 0o111) === 0 ? 0o644 : 0o755);
-  const copied = await readStableRegularFile(destination, remainingBytes);
-  if (
-    copied.bytes.byteLength !== sourceFile.bytes.byteLength ||
-    copied.sha256 !== sourceFile.sha256
-  ) {
-    throw new TypeError("La copia del artefacto no coincide con su fuente");
-  }
-  return Object.freeze({
-    path: destination,
-    sha256: copied.sha256,
-    bytes: copied.bytes.byteLength,
-  });
-}
-
-async function copyArtifactTree(
-  sourceRoot: string,
-  destinationRoot: string,
-  relativePath = "",
-  state: { bytes: number; files: number } = { bytes: 0, files: 0 },
-): Promise<CandidateArtifactEntry[]> {
-  const sourceDirectory =
-    relativePath === ""
-      ? sourceRoot
-      : join(sourceRoot, ...relativePath.split("/"));
-  const destinationDirectory =
-    relativePath === ""
-      ? destinationRoot
-      : join(destinationRoot, ...relativePath.split("/"));
-  const entry = await lstat(sourceDirectory);
-  if (entry.isSymbolicLink() || !entry.isDirectory()) {
-    throw new TypeError("El dist candidato contiene un directorio inseguro");
-  }
-  if (relativePath !== "") {
-    await mkdir(destinationDirectory, { mode: 0o700 });
-  }
-  const handle = await opendir(sourceDirectory);
-  const names: string[] = [];
-  for await (const child of handle) {
-    if (!safeName(child.name)) {
-      throw new TypeError("El dist candidato contiene una ruta no segura");
-    }
-    names.push(child.name);
-  }
-  names.sort(lexicalCompare);
-  const files: CandidateArtifactEntry[] = [];
-  for (const name of names) {
-    const childRelative =
-      relativePath === "" ? name : `${relativePath}/${name}`;
-    const source = join(sourceRoot, ...childRelative.split("/"));
-    const destination = join(destinationRoot, ...childRelative.split("/"));
-    if (
-      !isWithin(sourceRoot, source) ||
-      !isWithin(destinationRoot, destination)
-    ) {
-      throw new TypeError("El dist candidato escapa su raíz");
-    }
-    const child = await lstat(source);
-    if (child.isSymbolicLink()) {
-      throw new TypeError("El dist candidato contiene un enlace simbólico");
-    }
-    if (child.isDirectory()) {
-      files.push(
-        ...(await copyArtifactTree(
-          sourceRoot,
-          destinationRoot,
-          childRelative,
-          state,
-        )),
-      );
-      continue;
-    }
-    if (!child.isFile() || child.nlink !== 1) {
-      throw new TypeError(
-        "El dist candidato contiene un archivo especial o hardlink",
-      );
-    }
-    state.files += 1;
-    if (
-      state.files > artifactMaximumFiles ||
-      child.size > artifactMaximumBytes - state.bytes
-    ) {
-      throw new TypeError("El dist candidato excede los límites de artefacto");
-    }
-    const copied = await copyRegularFile(
-      source,
-      destination,
-      artifactMaximumBytes - state.bytes,
-    );
-    state.bytes += copied.bytes;
-    files.push(
-      Object.freeze({
-        path: childRelative,
-        sha256: copied.sha256,
-        bytes: copied.bytes,
-      }),
-    );
-  }
-  return files;
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -1186,7 +1060,7 @@ async function validateFlattenedConfig(
   });
 }
 
-export async function readCandidateBundleConfiguration(
+async function readCandidateBundleConfiguration(
   rootInput: string,
   plan: Pick<ChangePlan, "publication">,
 ): Promise<CandidateBundleConfiguration> {
@@ -1357,50 +1231,6 @@ async function persistCandidateBuildEvidence(
   return Object.freeze(validations);
 }
 
-export async function copyCandidateBundle(
-  checkoutPath: string,
-  bundlePath: string,
-): Promise<readonly CandidateArtifactEntry[]> {
-  const sourceDist = join(checkoutPath, "dist");
-  const destinationDist = join(bundlePath, "dist");
-  const sourceDeploy = join(
-    checkoutPath,
-    ...fixedDeployRedirectPath.split("/"),
-  );
-  const destinationDeploy = join(
-    bundlePath,
-    ...fixedDeployRedirectPath.split("/"),
-  );
-  const deployParent = dirname(destinationDeploy);
-  await Promise.all([
-    mkdir(destinationDist, { mode: 0o700 }),
-    mkdir(deployParent, { recursive: true, mode: 0o700 }),
-  ]);
-  const copiedDist = (await copyArtifactTree(sourceDist, destinationDist)).map(
-    (file) =>
-      Object.freeze({
-        ...file,
-        path: `dist/${file.path}`,
-      }),
-  );
-  const copiedDeploy = await copyRegularFile(
-    sourceDeploy,
-    destinationDeploy,
-    artifactMaximumBytes -
-      copiedDist.reduce((sum, file) => sum + file.bytes, 0),
-  );
-  return Object.freeze(
-    [
-      ...copiedDist,
-      Object.freeze({
-        path: fixedDeployRedirectPath,
-        sha256: copiedDeploy.sha256,
-        bytes: copiedDeploy.bytes,
-      }),
-    ].sort((left, right) => lexicalCompare(left.path, right.path)),
-  );
-}
-
 function artifactManifestPaths(
   plan: ChangePlan,
   attemptId: string,
@@ -1460,13 +1290,7 @@ export async function createCandidate(
   if (!changeIdPattern.test(input.plan.changeId)) {
     throw new TypeError("El plan candidato no es seguro");
   }
-  const storeRecord = await assertControllerCandidateStore(input.store);
-  await assertControllerCandidateStoreOutput(
-    input.output,
-    input.plan,
-    input.attemptId,
-    storeRecord.root.path,
-  );
+  await assertControllerCandidateStore(input.store);
   const preliminary = await assertCandidateEligiblePreliminaryValidation(
     input.preliminaryValidations,
     input.output,
@@ -1481,6 +1305,7 @@ export async function createCandidate(
       input.output,
       input.plan,
       input.attemptId,
+      input.store,
     );
     const buildEvidence = await runCandidateBoundBuild(
       candidateCommit,
@@ -1509,10 +1334,12 @@ export async function createCandidate(
       candidateCommit,
       input.plan,
       input.attemptId,
-      directories.bundlePath,
     );
     const copiedArtifacts = capturedBuild.copiedArtifacts;
-    const copiedConfiguration = capturedBuild.copiedConfiguration;
+    const copiedConfiguration = await readCandidateBundleConfiguration(
+      directories.bundlePath,
+      input.plan,
+    );
     const artifactSha256 = await hashTree(directories.bundlePath);
     const preliminaryValidations = await persistPreliminaryEvidence(
       preliminary,
@@ -1840,8 +1667,45 @@ export function createCandidatePreviewTestCapability(
   return capability;
 }
 
-function localWranglerPath(): string {
-  return resolve(process.cwd(), "node_modules", ".bin", "wrangler");
+async function localWranglerPath(
+  store: ControllerCandidateStore,
+): Promise<string> {
+  const record = await assertControllerCandidateStore(store);
+  const root = record.root.path;
+  const nodeModules = join(root, "node_modules");
+  const bin = join(nodeModules, ".bin");
+  const executable = join(bin, "wrangler");
+  if (
+    !isStrictlyWithin(root, nodeModules) ||
+    !isStrictlyWithin(root, bin) ||
+    !isStrictlyWithin(root, executable)
+  ) {
+    throw new TypeError("El ejecutable de preview escapa el store controlador");
+  }
+  const [nodeModulesEntry, binEntry, executableEntry] = await Promise.all([
+    lstat(nodeModules),
+    lstat(bin),
+    lstat(executable),
+  ]);
+  if (
+    nodeModulesEntry.isSymbolicLink() ||
+    !nodeModulesEntry.isDirectory() ||
+    binEntry.isSymbolicLink() ||
+    !binEntry.isDirectory() ||
+    executableEntry.isSymbolicLink() ||
+    !executableEntry.isFile() ||
+    executableEntry.nlink !== 1 ||
+    (await realpath(nodeModules)) !== nodeModules ||
+    (await realpath(bin)) !== bin ||
+    (await realpath(executable)) !== executable
+  ) {
+    throw new TypeError(
+      "El ejecutable de preview no pertenece al store seguro",
+    );
+  }
+  await access(executable, constants.X_OK);
+  await assertControllerCandidateStore(store);
+  return executable;
 }
 
 function fixedPreviewEnvironment(): Readonly<Record<string, string>> {
@@ -1874,7 +1738,7 @@ async function fixedPreviewInvocation(
       throw new TypeError("El preview candidato escapa el bundle verificado");
     }
   }
-  const executable = localWranglerPath();
+  const executable = await localWranglerPath(record.store);
   return Object.freeze({
     executable,
     argv: Object.freeze([
