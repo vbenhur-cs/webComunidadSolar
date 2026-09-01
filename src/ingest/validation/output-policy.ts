@@ -297,7 +297,19 @@ function validateCanonicalComponentProps(
 ): PolicyViolation[] {
   const violations: PolicyViolation[] = [];
   const policies = canonicalComponentPropPolicies[componentName];
+  const seenProps = new Set<string>();
   for (const attribute of node.attributes) {
+    if (seenProps.has(attribute.name)) {
+      violations.push(
+        violation(
+          "component.prop",
+          `La prop ${attribute.name} de ${componentName} no puede declararse más de una vez`,
+          path,
+        ),
+      );
+      continue;
+    }
+    seenProps.add(attribute.name);
     const policy = Object.hasOwn(policies, attribute.name)
       ? policies[attribute.name]
       : undefined;

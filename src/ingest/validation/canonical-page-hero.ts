@@ -6,11 +6,18 @@ export interface StaticCanonicalPageHero {
   readonly imageAlt?: string;
 }
 
-function quotedProp(node: TagLikeNode, name: string): string | undefined {
-  const attribute = node.attributes.find(
-    (candidate) => candidate.name === name && candidate.kind === "quoted",
-  );
-  return attribute?.kind === "quoted" ? attribute.value : undefined;
+function staticProps(node: TagLikeNode): StaticCanonicalPageHero | null {
+  const values: { image?: string; imageAlt?: string } = {};
+  const seenProps = new Set<string>();
+  for (const attribute of node.attributes) {
+    if (attribute.name !== "image" && attribute.name !== "imageAlt") {
+      continue;
+    }
+    if (seenProps.has(attribute.name)) return null;
+    seenProps.add(attribute.name);
+    if (attribute.kind === "quoted") values[attribute.name] = attribute.value;
+  }
+  return Object.freeze(values);
 }
 
 /**
@@ -32,19 +39,16 @@ export async function staticCanonicalPageHeroes(
   }
 
   const heroes: StaticCanonicalPageHero[] = [];
+  let ambiguous = false;
   const visit = (node: AstroNode): void => {
     if (node.type === "component" && node.name === "PageHero") {
-      const image = quotedProp(node, "image");
-      const imageAlt = quotedProp(node, "imageAlt");
-      heroes.push(
-        Object.freeze({
-          ...(image === undefined ? {} : { image }),
-          ...(imageAlt === undefined ? {} : { imageAlt }),
-        }),
-      );
+      const props = staticProps(node);
+      if (props === null) ambiguous = true;
+      else heroes.push(props);
     }
     if ("children" in node) node.children.forEach(visit);
   };
   visit(parsed.ast);
+  if (ambiguous) return null;
   return Object.freeze(heroes);
 }

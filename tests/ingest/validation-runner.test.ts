@@ -20,6 +20,7 @@ import {
   preparePlanningPublication,
   type PreparedPlanningPublication,
 } from "../../src/ingest/planning/plan.ts";
+import { staticCanonicalPageHeroes } from "../../src/ingest/validation/canonical-page-hero.ts";
 import {
   createControllerPublicationProfile,
   createValidationEvidenceRoot,
@@ -1647,6 +1648,49 @@ test("validates static canonical PageHero image props before commands", async (t
       );
     },
   );
+});
+
+test("rejects duplicate canonical PageHero props before commands", async () => {
+  await withStagedOutput(
+    {
+      planChanges: {
+        selectedMode: "freeform",
+        components: ["SiteLayout", "PageHero"],
+      },
+      output: (approvedPlan) =>
+        validOutput(approvedPlan, {
+          route: pageHeroRoute(
+            approvedPlan,
+            'tone="green" eyebrow="Solar" title="Seguro" lead="Estático" image="/hero.png" image="/definitely-missing.png" imageAlt="válido" imageAlt=""',
+          ),
+        }),
+    },
+    async (output, approvedPlan, evidenceRoot, publicationProfile) => {
+      const calls: CommandInvocation[] = [];
+      const results = await runValidation(
+        validationInput(output, approvedPlan, evidenceRoot, publicationProfile),
+        {
+          commands: async (command) => {
+            calls.push(command);
+            return passingResult(command);
+          },
+        },
+      );
+      assert.equal(results[0]?.id, "output-policy");
+      assert.equal(results[0]?.status, "failed");
+      assert.equal(calls.length, 0);
+      assert.ok(
+        results.slice(1).every((result) => result.status === "skipped"),
+      );
+    },
+  );
+});
+
+test("does not select canonical PageHero values from duplicate props", async () => {
+  const heroes = await staticCanonicalPageHeroes(
+    '<PageHero image="/hero.png" image="/definitely-missing.png" imageAlt="válido" imageAlt="" />',
+  );
+  assert.equal(heroes, null);
 });
 
 test("terminates a silent detached group after its npm leader closes", async (t) => {
