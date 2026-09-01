@@ -31,22 +31,21 @@ function jsonLinks(value: unknown, result: string[] = []): string[] {
   return result;
 }
 
-function normalizedInternalRoute(value: string): string | null {
+function normalizedInternalPath(value: string): string | null {
   try {
     const url = new URL(value, "https://comunidadsolar.es");
     if (url.origin !== "https://comunidadsolar.es") return null;
     if (!value.startsWith("/") && !value.startsWith("https://")) {
       return null;
     }
-    return url.pathname === "/" ? "/" : url.pathname.replace(/\/+$/u, "");
+    return url.pathname;
   } catch {
     return null;
   }
 }
 
-function routeLikePath(path: string): boolean {
-  const lastSegment = path.split("/").at(-1) ?? "";
-  return !/\.[a-z0-9]{1,12}$/iu.test(lastSegment);
+function normalizedRoutePath(path: string): string {
+  return path === "/" ? "/" : path.replace(/\/+$/u, "");
 }
 
 /** Checks static generated links and resolves freeform fragment references locally. */
@@ -54,6 +53,7 @@ export function validateGeneratedLinks(
   plan: ChangePlan,
   files: ReadonlyMap<string, Buffer>,
   knownRoutes: ReadonlySet<string> = new Set(["/", plan.targetPath]),
+  knownAssets: ReadonlySet<string> = new Set(),
 ): readonly string[] {
   const findings: string[] = [];
   const routeSource = files.get(routePath(plan));
@@ -66,15 +66,13 @@ export function validateGeneratedLinks(
 
   const routeLinks: Array<{
     readonly value: string;
-    readonly href: boolean;
+    readonly kind: "href" | "src";
   }> = [];
-  for (const match of source.matchAll(
-    /\b(?:href|src)\s*=\s*(["'])(.*?)\1/giu,
-  )) {
-    const value = match[2] ?? "";
+  for (const match of source.matchAll(/\b(href|src)\s*=\s*(["'])(.*?)\2/giu)) {
+    const value = match[3] ?? "";
     routeLinks.push({
       value,
-      href: match[0]?.toLowerCase().startsWith("href") ?? false,
+      kind: match[1]?.toLowerCase() === "src" ? "src" : "href",
     });
   }
   const contentLinks: string[] = [];
@@ -101,14 +99,28 @@ export function validateGeneratedLinks(
     }
   }
 
-  for (const value of [
-    ...routeLinks.filter((link) => link.href).map((link) => link.value),
-    ...contentLinks,
+  for (const reference of [
+    ...routeLinks.map((link) => ({
+      value: link.value,
+      allowsRoute: link.kind === "href",
+    })),
+    ...contentLinks.map((value) => ({ value, allowsRoute: true })),
   ]) {
-    if (!isApprovedGeneratedLink(value) || value.startsWith("#")) continue;
-    const path = normalizedInternalRoute(value);
-    if (path !== null && routeLikePath(path) && !knownRoutes.has(path)) {
-      findings.push(`link.internal: ${value} no resuelve a una ruta aprobada`);
+    if (
+      !isApprovedGeneratedLink(reference.value) ||
+      reference.value.startsWith("#")
+    ) {
+      continue;
+    }
+    const path = normalizedInternalPath(reference.value);
+    if (
+      path !== null &&
+      !(reference.allowsRoute && knownRoutes.has(normalizedRoutePath(path))) &&
+      !knownAssets.has(path)
+    ) {
+      findings.push(
+        `link.internal: ${reference.value} no resuelve a un destino aprobado`,
+      );
     }
   }
 
@@ -120,7 +132,7 @@ export function validateGeneratedLinks(
     );
     for (const link of routeLinks) {
       if (
-        !link.href ||
+        link.kind !== "href" ||
         !link.value.startsWith("#") ||
         link.value.length === 1
       ) {

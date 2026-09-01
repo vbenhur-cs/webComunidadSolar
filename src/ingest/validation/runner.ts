@@ -19,6 +19,12 @@ import { canonicalJson } from "../canonical-json.ts";
 import type { ChangePlan, ValidationResult } from "../domain.ts";
 import { assertNoSuppliedSecretsBytes } from "../importers/secret-scan.ts";
 import {
+  createRelocatablePlanningPublication,
+  materializeRelocatablePlanningPublication,
+  type PreparedPlanningPublication,
+  type RelocatablePlanningPublication,
+} from "../planning/plan.ts";
+import {
   assertControllerExecutionCopy,
   assertControllerStagedOutputAttempt,
   createControllerExecutionCopy,
@@ -69,6 +75,8 @@ const executableExtensions = new Set([
 const capturedOutputMaximumBytes = 64 * 1024;
 const processTerminationGraceMs = 5_000;
 const processTerminationSettleMs = 1_000;
+const timeoutRegressionMs = 500;
+const timeoutRegressionCommandId = "format";
 const controllerNpmExecutable = join(dirname(process.execPath), "npm");
 const safeEnvironment = Object.freeze({
   PATH: `${dirname(process.execPath)}:/usr/bin:/bin`,
@@ -98,6 +106,10 @@ export interface PreliminaryStagedValidationEvidence {
     readonly outputSha256: Readonly<Record<string, string>>;
     readonly sha256: string;
   } | null;
+  readonly publicationProfile: {
+    readonly sourceSha256: string;
+    readonly generatedSha256: string;
+  } | null;
 }
 
 export interface ValidationEvidenceRoot {
@@ -124,6 +136,14 @@ export interface ValidationInput {
 export interface ValidationOptions {
   /** Trusted controller/test capability; command authority is not input data. */
   readonly commands?: CommandRunner;
+  /** Fixed, opaque test-only timing seam; it accepts no caller-selected values. */
+  readonly testController?: ValidationTimeoutTestCapability;
+}
+
+/** Opaque capability for the one bounded process-group timeout regression. */
+declare const validationTimeoutTestCapabilityBrand: unique symbol;
+export interface ValidationTimeoutTestCapability {
+  readonly [validationTimeoutTestCapabilityBrand]: true;
 }
 
 interface DirectoryRecord {
@@ -146,12 +166,13 @@ interface PublicationProfileRecord {
   readonly planCanonical: string;
   readonly sha256: string;
   readonly environment: string | null;
-  readonly bytes: Buffer;
+  readonly relocatable: RelocatablePlanningPublication;
 }
 
 interface MaterializedPublicationProfile {
   readonly path: string;
   readonly sha256: string;
+  readonly sourceSha256: string;
   readonly environment: string | null;
 }
 
@@ -190,6 +211,28 @@ const publicationProfiles = new WeakMap<
   ControllerPublicationProfile,
   PublicationProfileRecord
 >();
+const timeoutTestControllers = new WeakSet<ValidationTimeoutTestCapability>();
+
+interface ProcessTiming {
+  readonly timeoutMs: number;
+  readonly terminateGraceMs: number;
+  readonly settleMs: number;
+}
+
+/**
+ * Test-only and no-argument: it can shorten a fixed controller invocation but
+ * cannot change its argv, cwd, environment, or production timeout policy.
+ */
+export function createValidationTimeoutTestCapability(): ValidationTimeoutTestCapability {
+  if (process.env.INGEST_TEST_MODE !== "true") {
+    throw new TypeError(
+      "La capability de timeout sólo existe en modo de pruebas",
+    );
+  }
+  const capability = Object.freeze({}) as ValidationTimeoutTestCapability;
+  timeoutTestControllers.add(capability);
+  return capability;
+}
 
 function isSameOrWithin(root: string, candidate: string): boolean {
   const path = relative(root, candidate);
@@ -404,20 +447,18 @@ async function assertEvidenceRoot(
 }
 
 /**
- * Mints a digest-bound sanitized profile from controller-held bytes, never a
- * caller path or environment. The plan digest is the authority for the bytes.
+ * Mints a digest-bound profile from the opaque Phase 3 planning capability.
+ * Its source path stays private to planning; callers cannot supply bytes,
+ * paths or environment values.
  */
 export async function createControllerPublicationProfile(
   output: StagedAgentOutput,
   plan: ChangePlan,
   attemptId: string,
-  sanitizedConfig: Uint8Array,
+  publication: PreparedPlanningPublication,
 ): Promise<ControllerPublicationProfile> {
   if (
     !sha256Pattern.test(plan.publication.configSha256) ||
-    !(sanitizedConfig instanceof Uint8Array) ||
-    sanitizedConfig.byteLength === 0 ||
-    sanitizedConfig.byteLength > 1024 * 1024 ||
     (plan.publication.adapter === "local" &&
       plan.publication.environment !== null) ||
     (plan.publication.adapter === "cloudflare" &&
@@ -429,19 +470,17 @@ export async function createControllerPublicationProfile(
     );
   }
   await assertControllerStagedOutputAttempt(output, plan, attemptId);
-  const bytes = Buffer.from(sanitizedConfig);
-  try {
-    new TextDecoder("utf-8", { fatal: true }).decode(bytes);
-    assertNoSuppliedSecretsBytes(bytes);
-  } catch {
-    throw new TypeError("El perfil de publicación no está saneado");
-  }
-  const sha256 = createHash("sha256").update(bytes).digest("hex");
-  if (sha256 !== plan.publication.configSha256) {
+  const relocatable = await createRelocatablePlanningPublication(
+    publication,
+    output,
+    plan,
+    attemptId,
+  );
+  if (relocatable.sourceSha256 !== plan.publication.configSha256) {
     throw new TypeError("El hash del perfil no coincide con el plan");
   }
   const profile: ControllerPublicationProfile = Object.freeze({
-    sha256,
+    sha256: relocatable.sourceSha256,
     environment: plan.publication.environment,
   });
   publicationProfiles.set(
@@ -450,9 +489,9 @@ export async function createControllerPublicationProfile(
       output,
       attemptId,
       planCanonical: canonicalJson(plan),
-      sha256,
+      sha256: relocatable.sourceSha256,
       environment: plan.publication.environment,
-      bytes,
+      relocatable,
     }),
   );
   return profile;
@@ -474,7 +513,7 @@ async function publicationProfileFor(
     record.output !== input.output ||
     record.attemptId !== input.attemptId ||
     record.planCanonical !== canonicalJson(input.plan) ||
-    createHash("sha256").update(record.bytes).digest("hex") !== record.sha256
+    record.sha256 !== input.plan.publication.configSha256
   ) {
     throw new TypeError(
       "publication.profile: el perfil no pertenece al output, plan e intento",
@@ -526,15 +565,23 @@ async function materializePublicationProfile(
     input.attemptId,
   );
   const profile = await publicationProfileFor(input);
+  const transformed = materializeRelocatablePlanningPublication(
+    profile.relocatable,
+    state.copy.path,
+  );
+  if (transformed.sourceSha256 !== profile.sha256) {
+    throw new TypeError("El perfil relocatable no conserva su procedencia");
+  }
   const path = join(state.copy.path, "wrangler.jsonc");
-  await writeNewControllerFile(path, profile.bytes);
+  await writeNewControllerFile(path, transformed.bytes);
   const actual = await regularFileBytes(path);
-  if (actual.sha256 !== profile.sha256) {
+  if (actual.sha256 !== transformed.sha256) {
     throw new TypeError("El perfil materializado no conserva su digest");
   }
   const materialized: MaterializedPublicationProfile = Object.freeze({
     path,
     sha256: actual.sha256,
+    sourceSha256: transformed.sourceSha256,
     environment: profile.environment,
   });
   state.profile = materialized;
@@ -571,10 +618,15 @@ async function approvedInventory(
   return files;
 }
 
-async function knownInternalRoutes(
+interface KnownInternalTargets {
+  readonly routes: ReadonlySet<string>;
+  readonly assets: ReadonlySet<string>;
+}
+
+async function knownInternalTargets(
   copy: ControllerExecutionCopy,
   input: ValidationInput,
-): Promise<ReadonlySet<string>> {
+): Promise<KnownInternalTargets> {
   await assertControllerExecutionCopy(
     copy,
     input.output,
@@ -582,7 +634,9 @@ async function knownInternalRoutes(
     input.attemptId,
   );
   const routes = new Set<string>(["/", input.plan.targetPath]);
+  const assets = new Set<string>();
   const pagesRoot = join(copy.path, "src", "pages");
+  const publicRoot = join(copy.path, "public");
 
   async function visit(relativeDirectory: string): Promise<void> {
     const directory =
@@ -624,6 +678,38 @@ async function knownInternalRoutes(
     }
   }
 
+  async function visitAssets(relativeDirectory: string): Promise<void> {
+    const directory =
+      relativeDirectory === ""
+        ? publicRoot
+        : join(publicRoot, ...relativeDirectory.split("/"));
+    const handle = await opendir(directory);
+    const entries: string[] = [];
+    for await (const entry of handle) entries.push(entry.name);
+    for (const name of entries.sort()) {
+      const relativePath =
+        relativeDirectory === "" ? name : `${relativeDirectory}/${name}`;
+      if (!safeRelativePath(relativePath)) {
+        throw new TypeError("El árbol de assets contiene un path inseguro");
+      }
+      const absolute = join(publicRoot, ...relativePath.split("/"));
+      const entry = await lstat(absolute);
+      if (entry.isSymbolicLink()) {
+        throw new TypeError("El árbol de assets no puede atravesar enlaces");
+      }
+      if (entry.isDirectory()) {
+        await visitAssets(relativePath);
+        continue;
+      }
+      if (!entry.isFile()) {
+        throw new TypeError(
+          "El árbol de assets contiene una entrada no regular",
+        );
+      }
+      assets.add(`/${relativePath}`);
+    }
+  }
+
   try {
     const root = await lstat(pagesRoot);
     if (root.isSymbolicLink() || !root.isDirectory()) {
@@ -633,13 +719,25 @@ async function knownInternalRoutes(
   } catch (error: unknown) {
     if (errorCode(error) !== "ENOENT") throw error;
   }
+  try {
+    const root = await lstat(publicRoot);
+    if (root.isSymbolicLink() || !root.isDirectory()) {
+      throw new TypeError("El árbol de assets no es un directorio seguro");
+    }
+    await visitAssets("");
+  } catch (error: unknown) {
+    if (errorCode(error) !== "ENOENT") throw error;
+  }
   await assertControllerExecutionCopy(
     copy,
     input.output,
     input.plan,
     input.attemptId,
   );
-  return Object.freeze(routes);
+  return Object.freeze({
+    routes: Object.freeze(routes),
+    assets: Object.freeze(assets),
+  });
 }
 
 function validateImportsDependenciesAndSecrets(
@@ -957,12 +1055,37 @@ function signalProcessGroup(
   child.kill(signal);
 }
 
+function processTiming(
+  command: CommandInvocation,
+  testController: ValidationTimeoutTestCapability | undefined,
+): ProcessTiming {
+  if (
+    testController === undefined ||
+    command.id !== timeoutRegressionCommandId
+  ) {
+    return Object.freeze({
+      timeoutMs: command.timeoutMs,
+      terminateGraceMs: processTerminationGraceMs,
+      settleMs: processTerminationSettleMs,
+    });
+  }
+  if (!timeoutTestControllers.has(testController)) {
+    throw new TypeError("La capability de timeout no pertenece al controlador");
+  }
+  return Object.freeze({
+    timeoutMs: timeoutRegressionMs,
+    terminateGraceMs: timeoutRegressionMs,
+    settleMs: timeoutRegressionMs,
+  });
+}
+
 /**
  * Private raw execution: only fixed commands built below can reach this
  * function. It cannot be imported as a generic argv/cwd/env executor.
  */
 async function runFixedControllerCommand(
   command: CommandInvocation,
+  timing: ProcessTiming,
 ): Promise<CommandResult> {
   if (command.capability !== "process") {
     return unsupportedResult(
@@ -1033,7 +1156,7 @@ async function runFixedControllerCommand(
     stdout = capture(child.stdout);
     stderr = capture(child.stderr);
     const timeout = setTimeout(() => {
-      if (closed || child?.exitCode !== null) return;
+      if (closed) return;
       timedOut = true;
       signalProcessGroup(child!, "SIGTERM");
       terminationTimer = setTimeout(() => {
@@ -1041,9 +1164,9 @@ async function runFixedControllerCommand(
         signalProcessGroup(child!, "SIGKILL");
         settlementTimer = setTimeout(() => {
           finish(null, "SIGKILL", true);
-        }, processTerminationSettleMs);
-      }, processTerminationGraceMs);
-    }, command.timeoutMs);
+        }, timing.settleMs);
+      }, timing.terminateGraceMs);
+    }, timing.timeoutMs);
     child.once("error", (error: Error) => {
       spawnFailure = error;
       finish(null, "SIGTERM", true);
@@ -1108,6 +1231,13 @@ function preliminaryEvidence(
             outputSha256: execution.integrity.outputSha256,
             sha256: execution.integrity.sha256,
           }),
+    publicationProfile:
+      execution?.profile === undefined
+        ? null
+        : Object.freeze({
+            sourceSha256: execution.profile.sourceSha256,
+            generatedSha256: execution.profile.sha256,
+          }),
   });
 }
 
@@ -1170,7 +1300,19 @@ export async function runValidation(
     throw new TypeError("La evidencia del intento ya fue utilizada");
   }
   consumedEvidenceRoots.add(input.evidenceRoot);
-  const commandRunner = options.commands ?? runFixedControllerCommand;
+  if (
+    options.testController !== undefined &&
+    !timeoutTestControllers.has(options.testController)
+  ) {
+    throw new TypeError("La capability de timeout no pertenece al controlador");
+  }
+  const commandRunner: CommandRunner =
+    options.commands ??
+    (async (command) =>
+      await runFixedControllerCommand(
+        command,
+        processTiming(command, options.testController),
+      ));
   let inventory: ReadonlyMap<string, Buffer> | undefined;
   let execution: ExecutionState | undefined;
 
@@ -1284,8 +1426,13 @@ export async function runValidation(
           files(),
           ensureExecution(),
         ]);
-        const routes = await knownInternalRoutes(state.copy, input);
-        const findings = validateGeneratedLinks(input.plan, current, routes);
+        const targets = await knownInternalTargets(state.copy, input);
+        const findings = validateGeneratedLinks(
+          input.plan,
+          current,
+          targets.routes,
+          targets.assets,
+        );
         return { findings, details: { findings } };
       },
     },

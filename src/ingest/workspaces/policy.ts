@@ -871,6 +871,25 @@ export async function assertControllerStagedOutputAttempt(
   await assertControllerStagedOutputForAttempt(output, plan, attemptId);
 }
 
+/**
+ * Binds a Phase 3 controller profile source to the exact repository that
+ * minted this staged output without exposing repository authority to callers.
+ */
+export async function assertControllerStagedRepository(
+  output: StagedAgentOutput,
+  plan: ChangePlan,
+  attemptId: string,
+  repositoryRoot: string,
+): Promise<void> {
+  await assertControllerStagedOutputAttempt(output, plan, attemptId);
+  const record = stagedOutputRecord(output);
+  if (record.repositoryRoot !== repositoryRoot) {
+    throw new TypeError(
+      "El proyecto del perfil no coincide con el staging del controlador",
+    );
+  }
+}
+
 function exactOutputPaths(output: StagedAgentOutput): readonly string[] {
   const paths = [...output.files].sort();
   if (

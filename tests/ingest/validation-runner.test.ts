@@ -1,14 +1,25 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  readdir,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import test from "node:test";
 import { promisify } from "node:util";
 
 import { sha256Canonical } from "../../src/ingest/canonical-json.ts";
 import type { ChangePlan } from "../../src/ingest/domain.ts";
+import {
+  preparePlanningPublication,
+  type PreparedPlanningPublication,
+} from "../../src/ingest/planning/plan.ts";
 import {
   createControllerPublicationProfile,
   createValidationEvidenceRoot,
@@ -38,10 +49,51 @@ const stagingAttemptId = "attempt-000001";
 const digest = (source: string | Uint8Array) =>
   createHash("sha256").update(source).digest("hex");
 const fixedHash = (character: string) => character.repeat(64);
-const sanitizedPublicationConfig = Buffer.from(
-  '{"name":"validation-fixture","compatibility_date":"2025-01-01"}\n',
-  "utf8",
-);
+const validPngHeader = Buffer.from([
+  137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 1, 0,
+  0, 0, 1,
+]);
+const controllerPublicationConfig = `${JSON.stringify({
+  name: "validation-fixture",
+  main: "./src/worker.ts",
+  compatibility_date: "2026-08-21",
+  compatibility_flags: ["nodejs_compat"],
+  assets: {
+    binding: "ASSETS",
+    directory: "./dist",
+    run_worker_first: true,
+  },
+  d1_databases: [
+    {
+      binding: "DB",
+      database_name: "validation-fixture",
+      database_id: "00000000-0000-4000-8000-000000000000",
+      migrations_dir: "./drizzle",
+    },
+  ],
+  vars: { SITE_INDEXABLE: "false" },
+})}\n`;
+const cloudflareControllerPublicationConfig = `${JSON.stringify({
+  name: "validation-fixture",
+  main: "./src/worker.ts",
+  compatibility_date: "2026-08-21",
+  compatibility_flags: ["nodejs_compat"],
+  assets: {
+    binding: "ASSETS",
+    directory: "./dist",
+    run_worker_first: true,
+  },
+  d1_databases: [
+    {
+      binding: "DB",
+      database_name: "validation-fixture",
+      database_id: "11111111-2222-4333-8444-555555555555",
+      migrations_dir: "./drizzle",
+    },
+  ],
+  vars: { SITE_INDEXABLE: "true" },
+  env: { preview: { vars: { SITE_INDEXABLE: "false" } } },
+})}\n`;
 
 const expectedIds = [
   "output-policy",
@@ -117,7 +169,11 @@ interface PlanChanges {
   readonly publication?: ChangePlan["publication"];
 }
 
-function plan(baselineCommit: string, changes: PlanChanges = {}): ChangePlan {
+function planWithPublication(
+  baselineCommit: string,
+  publication: ChangePlan["publication"],
+  changes: PlanChanges = {},
+): ChangePlan {
   const targetPath = changes.targetPath ?? "/generated";
   const selectedMode = changes.selectedMode ?? "blocks";
   const route =
@@ -160,14 +216,7 @@ function plan(baselineCommit: string, changes: PlanChanges = {}): ChangePlan {
     islands: [],
     dependencies: [],
     validations: ["output-policy", "build"],
-    publication:
-      changes.publication ??
-      ({
-        adapter: "local" as const,
-        configSha256: digest(sanitizedPublicationConfig),
-        environment: null,
-        siteIndexable: false,
-      } satisfies ChangePlan["publication"]),
+    publication: changes.publication ?? publication,
   };
   return { ...unsigned, planSha256: sha256Canonical(unsigned) };
 }
@@ -271,6 +320,9 @@ async function writeFiles(root: string, files: OutputFiles): Promise<void> {
 interface StageOptions {
   readonly planChanges?: PlanChanges;
   readonly output?: (approvedPlan: ChangePlan) => OutputFiles;
+  readonly packageJson?: string;
+  readonly publicationAdapter?: "local" | "cloudflare";
+  readonly publicationConfig?: string;
 }
 
 function validationInput(
@@ -295,6 +347,8 @@ async function withStagedOutput(
     approvedPlan: ChangePlan,
     evidenceRoot: ValidationEvidenceRoot,
     publicationProfile: ControllerPublicationProfile | undefined,
+    preparedPublication: PreparedPlanningPublication,
+    repositoryRoot: string,
   ) => Promise<void>,
 ): Promise<void> {
   const repositoryRoot = await mkdtemp(
@@ -310,6 +364,7 @@ async function withStagedOutput(
   let output: StagedAgentOutput | undefined;
   let evidenceRoot: ValidationEvidenceRoot | undefined;
   try {
+    const publicationAdapter = options.publicationAdapter ?? "local";
     await execFileAsync("git", [
       "init",
       "--quiet",
@@ -322,14 +377,41 @@ async function withStagedOutput(
       "README.md": "fixture\n",
       "src/pages/index.astro": "<main>Inicio</main>\n",
       "src/pages/contacto.astro": "<main>Contacto</main>\n",
-      "package.json": '{"name":"fixture","version":"1.0.0","private":true}\n',
+      "src/worker.ts": "export default {};\n",
+      "dist/.gitkeep": "\n",
+      "drizzle/0000_fixture.sql": "SELECT 1;\n",
+      "public/guide.pdf": "fixture guide\n",
+      "wrangler.jsonc":
+        options.publicationConfig ??
+        (publicationAdapter === "cloudflare"
+          ? cloudflareControllerPublicationConfig
+          : controllerPublicationConfig),
+      "package.json":
+        options.packageJson ??
+        '{"name":"fixture","version":"1.0.0","private":true}\n',
       "package-lock.json":
         '{"name":"fixture","version":"1.0.0","lockfileVersion":3,"requires":true,"packages":{"":{"name":"fixture","version":"1.0.0"}}}\n',
     });
     await git(repositoryRoot, ["add", "."]);
     await git(repositoryRoot, ["commit", "--quiet", "-m", "fixture baseline"]);
     const baselineCommit = await git(repositoryRoot, ["rev-parse", "HEAD"]);
-    const approvedPlan = plan(baselineCommit, options.planChanges);
+    const preparedPublication = await preparePlanningPublication({
+      adapter: publicationAdapter,
+      projectRoot: repositoryRoot,
+      ...(publicationAdapter === "cloudflare"
+        ? { environment: "preview" }
+        : {}),
+      stateArtifactRoot: join(
+        repositoryRoot,
+        ".change-state",
+        "validation-profile",
+      ),
+    });
+    const approvedPlan = planWithPublication(
+      baselineCommit,
+      preparedPublication,
+      options.planChanges,
+    );
     const requestPath = join(authorityRoot, "request.json");
     const planPath = join(authorityRoot, "plan.json");
     const policyPath = join(authorityRoot, "policy.json");
@@ -363,16 +445,22 @@ async function withStagedOutput(
       stagingAttemptId,
     );
     const publicationProfile =
-      approvedPlan.publication.configSha256 ===
-      digest(sanitizedPublicationConfig)
+      approvedPlan.publication.configSha256 === preparedPublication.configSha256
         ? await createControllerPublicationProfile(
             output,
             approvedPlan,
             stagingAttemptId,
-            sanitizedPublicationConfig,
+            preparedPublication,
           )
         : undefined;
-    await run(output, approvedPlan, evidenceRoot, publicationProfile);
+    await run(
+      output,
+      approvedPlan,
+      evidenceRoot,
+      publicationProfile,
+      preparedPublication,
+      repositoryRoot,
+    );
   } finally {
     if (output !== undefined) {
       await removeStagedAgentOutput(output).catch(() => undefined);
@@ -462,6 +550,10 @@ test("records a digest of actual evidence for every successful validator in fixe
             scope: string;
             approvedOutputSha256: Record<string, string>;
             executionCopy: { sha256: string } | null;
+            publicationProfile: {
+              sourceSha256: string;
+              generatedSha256: string;
+            } | null;
           };
         };
         assert.equal(
@@ -476,6 +568,16 @@ test("records a digest of actual evidence for every successful validator in fixe
           record.preliminary.executionCopy?.sha256 ?? "",
           /^[a-f0-9]{64}$/u,
         );
+        if (result.id === "npm-ci") {
+          assert.equal(
+            record.preliminary.publicationProfile?.sourceSha256,
+            approvedPlan.publication.configSha256,
+          );
+          assert.match(
+            record.preliminary.publicationProfile?.generatedSha256 ?? "",
+            /^[a-f0-9]{64}$/u,
+          );
+        }
       }
     },
   );
@@ -607,10 +709,15 @@ test("hands an injected runner only fixed argv, cwd, timeout and safe local envi
         npm_config_update_notifier: "false",
       });
       assert.ok(!Object.hasOwn(format.env, "CLOUDFLARE_CONFIG_PATH"));
-      assert.equal(
-        materializedConfig,
-        sanitizedPublicationConfig.toString("utf8"),
-      );
+      assert.ok(materializedConfig);
+      const materialized = JSON.parse(materializedConfig) as {
+        main: string;
+        assets: { directory: string };
+        d1_databases: Array<{ migrations_dir: string }>;
+      };
+      assert.equal(materialized.main, "./src/worker.ts");
+      assert.equal(materialized.assets.directory, "./dist");
+      assert.equal(materialized.d1_databases[0]?.migrations_dir, "./drizzle");
     },
   );
 });
@@ -764,7 +871,7 @@ test("attributes route, asset, link, SEO and accessibility defects before build"
           validOutput(approvedPlan, {
             route: freeformRoute(
               approvedPlan,
-              '<h1>Generada</h1><img src="/generated/missing.png">',
+              '<h1>Generada</h1><img src="/guide.pdf">',
             ),
           }),
       },
@@ -854,13 +961,19 @@ test("requires the staged output attempt that minted its evidence", async () => 
 test("rejects forged or reused evidence and a profile from another attempt before commands", async () => {
   await withStagedOutput(
     {},
-    async (output, approvedPlan, evidenceRoot, publicationProfile) => {
+    async (
+      output,
+      approvedPlan,
+      evidenceRoot,
+      publicationProfile,
+      preparedPublication,
+    ) => {
       await assert.rejects(
         createControllerPublicationProfile(
           output,
           approvedPlan,
           "attempt-from-another-workspace",
-          sanitizedPublicationConfig,
+          preparedPublication,
         ),
         /intento|attempt|staging/iu,
       );
@@ -892,6 +1005,154 @@ test("rejects forged or reused evidence and a profile from another attempt befor
       assert.equal(calls.length, completedCalls);
     },
   );
+});
+
+test("binds publication profiles to the prepared project and original digest", async (t) => {
+  await t.test(
+    "rejects a same-digest profile prepared for another project",
+    async () => {
+      await withStagedOutput({}, async (output, approvedPlan) => {
+        const foreignRoot = await mkdtemp(
+          join(tmpdir(), "validation-runner-foreign-profile-"),
+        );
+        try {
+          await writeFiles(foreignRoot, {
+            "src/worker.ts": "export default {};\n",
+            "dist/.gitkeep": "\n",
+            "drizzle/0000_fixture.sql": "SELECT 1;\n",
+            "wrangler.jsonc": controllerPublicationConfig,
+          });
+          const foreignPublication = await preparePlanningPublication({
+            adapter: "local",
+            projectRoot: foreignRoot,
+            stateArtifactRoot: join(
+              foreignRoot,
+              ".change-state",
+              "validation-profile",
+            ),
+          });
+          assert.equal(
+            foreignPublication.configSha256,
+            approvedPlan.publication.configSha256,
+          );
+          await assert.rejects(
+            createControllerPublicationProfile(
+              output,
+              approvedPlan,
+              stagingAttemptId,
+              foreignPublication,
+            ),
+            /proyecto.*staging/iu,
+          );
+        } finally {
+          await rm(foreignRoot, { recursive: true, force: true });
+        }
+      });
+    },
+  );
+
+  await t.test("rejects a changed or malformed source artifact", async () => {
+    await withStagedOutput(
+      {},
+      async (
+        output,
+        approvedPlan,
+        _evidenceRoot,
+        _profile,
+        publication,
+        root,
+      ) => {
+        const artifactRoot = join(root, ".change-state", "validation-profile");
+        const profileName = (await readdir(artifactRoot)).find((name) =>
+          name.startsWith("cloudflare-"),
+        );
+        assert.ok(profileName);
+        await writeFile(
+          join(artifactRoot, profileName),
+          '{"main":"../../../../outside.mjs"}\n',
+          "utf8",
+        );
+        await assert.rejects(
+          createControllerPublicationProfile(
+            output,
+            approvedPlan,
+            stagingAttemptId,
+            publication,
+          ),
+          /cambi[oó].*planificaci[oó]n/iu,
+        );
+      },
+    );
+  });
+});
+
+test("rejects malformed and escaping operational path fields before profile mint", async () => {
+  const root = await mkdtemp(
+    join(tmpdir(), "validation-runner-unsafe-profile-"),
+  );
+  try {
+    const configPath = join(root, "wrangler.jsonc");
+    const base = JSON.parse(controllerPublicationConfig) as {
+      main: string;
+      assets: { directory: string };
+      d1_databases: Array<{ migrations_dir: string }>;
+    };
+    const cases: Array<{
+      readonly label: string;
+      readonly config: () => Record<string, unknown>;
+      readonly expected: RegExp;
+    }> = [
+      {
+        label: "main outside project",
+        config: () => ({ ...base, main: "../outside.mjs" }),
+        expected: /main|fuera/iu,
+      },
+      {
+        label: "assets outside project",
+        config: () => ({
+          ...base,
+          assets: { ...base.assets, directory: "../outside" },
+        }),
+        expected: /assets|fuera/iu,
+      },
+      {
+        label: "migrations outside project",
+        config: () => ({
+          ...base,
+          d1_databases: [
+            {
+              ...base.d1_databases[0],
+              migrations_dir: "../outside",
+            },
+          ],
+        }),
+        expected: /migration|fuera/iu,
+      },
+      {
+        label: "malformed assets",
+        config: () => ({ ...base, assets: { binding: "ASSETS" } }),
+        expected: /assets/iu,
+      },
+    ];
+    for (const current of cases) {
+      await writeFile(
+        configPath,
+        `${JSON.stringify(current.config())}\n`,
+        "utf8",
+      );
+      await assert.rejects(
+        preparePlanningPublication({
+          adapter: "local",
+          projectRoot: root,
+          stateArtifactRoot: join(root, ".change-state", current.label),
+        }),
+        current.expected,
+        current.label,
+      );
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test("fails a browser stage when a zero-exit runner has no route proof", async () => {
@@ -989,4 +1250,313 @@ test("keeps default process termination bounded to a detached process group", as
   assert.match(source, /signalProcessGroup\(child!, "SIGTERM"\)/u);
   assert.match(source, /signalProcessGroup\(child!, "SIGKILL"\)/u);
   assert.match(source, /processTerminationSettleMs/u);
+});
+
+function isSameOrWithin(root: string, candidate: string): boolean {
+  const path = relative(root, candidate);
+  return (
+    path === "" ||
+    (!isAbsolute(path) && path !== ".." && !path.startsWith("../"))
+  );
+}
+
+test("materializes a relocatable publication config without execution-copy escapes", async () => {
+  await withStagedOutput(
+    {},
+    async (
+      output,
+      approvedPlan,
+      evidenceRoot,
+      publicationProfile,
+      _preparedPublication,
+      repositoryRoot,
+    ) => {
+      const artifactRoot = join(
+        repositoryRoot,
+        ".change-state",
+        "validation-profile",
+      );
+      const profileName = (await readdir(artifactRoot)).find((name) =>
+        name.startsWith("cloudflare-"),
+      );
+      assert.ok(profileName);
+      const source = await readFile(join(artifactRoot, profileName), "utf8");
+      assert.match(source, /"main":"\.\.\/\.\.\/src\/worker\.ts"/u);
+      assert.match(source, /"directory":"\.\.\/\.\.\/dist"/u);
+      assert.match(source, /"migrations_dir":"\.\.\/\.\.\/drizzle"/u);
+      let executionCopy = "";
+      let materialized: Record<string, unknown> | undefined;
+      await runValidation(
+        validationInput(output, approvedPlan, evidenceRoot, publicationProfile),
+        {
+          commands: async (command) => {
+            if (command.id === "format") {
+              executionCopy = command.cwd;
+              materialized = JSON.parse(
+                await readFile(join(command.cwd, "wrangler.jsonc"), "utf8"),
+              ) as Record<string, unknown>;
+            }
+            return passingResult(command);
+          },
+        },
+      );
+      assert.ok(materialized);
+      const assets = materialized.assets as Record<string, unknown>;
+      const database = (
+        materialized.d1_databases as Record<string, unknown>[]
+      )[0];
+      for (const value of [
+        materialized.main,
+        assets.directory,
+        database?.migrations_dir,
+      ]) {
+        assert.equal(typeof value, "string");
+        if (typeof value !== "string") {
+          throw new TypeError("El perfil materializado no contiene un path");
+        }
+        assert.ok(
+          isSameOrWithin(executionCopy, resolve(executionCopy, value)),
+          `${String(value)} escaped the execution copy`,
+        );
+      }
+    },
+  );
+});
+
+test("rebases the selected Cloudflare profile into the execution copy", async () => {
+  await withStagedOutput(
+    { publicationAdapter: "cloudflare" },
+    async (output, approvedPlan, evidenceRoot, publicationProfile) => {
+      let build: CommandInvocation | undefined;
+      let materialized: Record<string, unknown> | undefined;
+      await runValidation(
+        validationInput(output, approvedPlan, evidenceRoot, publicationProfile),
+        {
+          commands: async (command) => {
+            if (command.id === "build") {
+              build = command;
+              materialized = JSON.parse(
+                await readFile(join(command.cwd, "wrangler.jsonc"), "utf8"),
+              ) as Record<string, unknown>;
+            }
+            return passingResult(command);
+          },
+        },
+      );
+      assert.ok(build);
+      assert.equal(build.env.CLOUDFLARE_ENV, "preview");
+      assert.equal(
+        build.env.CLOUDFLARE_CONFIG_PATH,
+        join(build.cwd, "wrangler.jsonc"),
+      );
+      assert.ok(materialized);
+      const assets = materialized.assets as Record<string, unknown>;
+      const baseDatabase = (
+        materialized.d1_databases as Record<string, unknown>[]
+      )[0];
+      const environments = materialized.env as Record<
+        string,
+        Record<string, unknown>
+      >;
+      const previewDatabase = (
+        environments.preview?.d1_databases as Record<string, unknown>[]
+      )?.[0];
+      for (const value of [
+        materialized.main,
+        assets.directory,
+        baseDatabase?.migrations_dir,
+        previewDatabase?.migrations_dir,
+      ]) {
+        assert.equal(typeof value, "string");
+        if (typeof value !== "string") {
+          throw new TypeError("El perfil Cloudflare no contiene un path");
+        }
+        assert.ok(isSameOrWithin(build.cwd, resolve(build.cwd, value)));
+      }
+      assert.deepEqual(environments.preview?.vars, { SITE_INDEXABLE: "false" });
+    },
+  );
+});
+
+test("resolves known public assets and rejects missing same-origin asset links", async (t) => {
+  await t.test("accepts a public asset with query and fragment", async () => {
+    await withStagedOutput(
+      {
+        planChanges: { selectedMode: "freeform" },
+        output: (approvedPlan) =>
+          validOutput(approvedPlan, {
+            route: freeformRoute(
+              approvedPlan,
+              '<h1>Generada</h1><a href="/guide.pdf?download=1#section">Guía</a>',
+            ),
+          }),
+      },
+      async (output, approvedPlan, evidenceRoot, publicationProfile) => {
+        const results = await runValidation(
+          validationInput(
+            output,
+            approvedPlan,
+            evidenceRoot,
+            publicationProfile,
+          ),
+          { commands: async (command) => passingResult(command) },
+        );
+        assert.equal(
+          results.find((result) => result.id === "links")?.status,
+          "passed",
+        );
+      },
+    );
+  });
+
+  await t.test("accepts a generated public asset", async () => {
+    await withStagedOutput(
+      {
+        planChanges: { selectedMode: "freeform" },
+        output: (approvedPlan) =>
+          validOutput(approvedPlan, {
+            route: freeformRoute(
+              approvedPlan,
+              `<h1>Generada</h1><img src="/generated/${approvedPlan.changeId}/valid.png" alt="Válida">`,
+            ),
+            extra: {
+              [`${assetsPath(approvedPlan)}/valid.png`]: validPngHeader,
+            },
+          }),
+      },
+      async (output, approvedPlan, evidenceRoot, publicationProfile) => {
+        const results = await runValidation(
+          validationInput(
+            output,
+            approvedPlan,
+            evidenceRoot,
+            publicationProfile,
+          ),
+          { commands: async (command) => passingResult(command) },
+        );
+        assert.equal(
+          results.find((result) => result.id === "links")?.status,
+          "passed",
+        );
+      },
+    );
+  });
+
+  await t.test("rejects a missing extension target", async () => {
+    await withStagedOutput(
+      {
+        planChanges: { selectedMode: "freeform" },
+        output: (approvedPlan) =>
+          validOutput(approvedPlan, {
+            route: freeformRoute(
+              approvedPlan,
+              '<h1>Generada</h1><a href="/definitely-missing.html?x=1#fragment">No existe</a>',
+            ),
+          }),
+      },
+      async (output, approvedPlan, evidenceRoot, publicationProfile) => {
+        const results = await runValidation(
+          validationInput(
+            output,
+            approvedPlan,
+            evidenceRoot,
+            publicationProfile,
+          ),
+          { commands: async (command) => passingResult(command) },
+        );
+        assert.equal(
+          results.find((result) => result.id === "links")?.status,
+          "failed",
+        );
+      },
+    );
+  });
+
+  await t.test("rejects a missing internal src asset", async () => {
+    await withStagedOutput(
+      {
+        planChanges: { selectedMode: "freeform" },
+        output: (approvedPlan) =>
+          validOutput(approvedPlan, {
+            route: freeformRoute(
+              approvedPlan,
+              '<h1>Generada</h1><img src="/definitely-missing.png" alt="No existe">',
+            ),
+          }),
+      },
+      async (output, approvedPlan, evidenceRoot, publicationProfile) => {
+        const results = await runValidation(
+          validationInput(
+            output,
+            approvedPlan,
+            evidenceRoot,
+            publicationProfile,
+          ),
+          { commands: async (command) => passingResult(command) },
+        );
+        assert.equal(
+          results.find((result) => result.id === "links")?.status,
+          "failed",
+        );
+      },
+    );
+  });
+});
+
+test("terminates a pipe-holding descendant after its npm leader exits", async (t) => {
+  if (process.platform === "win32") {
+    t.skip("la regresión de grupo de procesos usa el shell POSIX fijo");
+    return;
+  }
+  const runnerModule =
+    (await import("../../src/ingest/validation/runner.ts")) as unknown as {
+      createValidationTimeoutTestCapability?: () => unknown;
+    };
+  assert.equal(
+    typeof runnerModule.createValidationTimeoutTestCapability,
+    "function",
+    "a fixed opaque test timing capability is required for the bounded timeout regression",
+  );
+  const createTimeoutTestCapability =
+    runnerModule.createValidationTimeoutTestCapability;
+  if (createTimeoutTestCapability === undefined) return;
+  const timeoutTestController = createTimeoutTestCapability();
+
+  await withStagedOutput(
+    {
+      packageJson: `${JSON.stringify({
+        name: "fixture",
+        version: "1.0.0",
+        private: true,
+        scripts: {
+          "format:check":
+            'sh -c \'sleep 4 & printf \\"child=%s\\\\n\\" \\"$!\\" >&2\'',
+        },
+      })}\n`,
+    },
+    async (output, approvedPlan, evidenceRoot, publicationProfile) => {
+      const started = performance.now();
+      const results = await runValidation(
+        validationInput(output, approvedPlan, evidenceRoot, publicationProfile),
+        {
+          testController: timeoutTestController,
+        } as unknown as Parameters<typeof runValidation>[1],
+      );
+      const format = results.find((result) => result.id === "format");
+      assert.equal(format?.status, "failed");
+      assert.ok(performance.now() - started < 3_000);
+      const evidence = JSON.parse(
+        await readFile(format!.evidence!, "utf8"),
+      ) as {
+        details: { result: { stderr: string; timedOut: boolean } };
+      };
+      assert.equal(evidence.details.result.timedOut, true);
+      const pid = Number(
+        /child="?(\d+)/u.exec(evidence.details.result.stderr)?.[1],
+      );
+      assert.ok(Number.isSafeInteger(pid) && pid > 0);
+      await new Promise<void>((done) => setTimeout(done, 100));
+      assert.throws(() => process.kill(pid, 0), /ESRCH/u);
+    },
+  );
 });
