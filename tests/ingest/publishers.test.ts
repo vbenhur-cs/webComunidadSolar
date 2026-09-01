@@ -1,0 +1,1240 @@
+import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
+import {
+  chmod,
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  writeFile,
+} from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import test from "node:test";
+import { promisify } from "node:util";
+
+import {
+  canonicalJson,
+  sha256Canonical,
+} from "../../src/ingest/canonical-json.ts";
+import {
+  createCandidate,
+  candidateTestInspection,
+  createCandidateTestInspectionCapability,
+  createControllerCandidateStoreTestInitialization,
+  openControllerCandidateStore,
+  releaseControllerCandidateStore,
+  type CandidateTestInspectionCapability,
+  type ControllerCandidateStore,
+  type FixedPreviewInvocation,
+} from "../../src/ingest/candidate/manifest.ts";
+import { createCandidateBuildTestCapability } from "../../src/ingest/candidate/evidence.ts";
+import { createCandidatePreviewTestCapability } from "../../src/ingest/candidate/preview.ts";
+import {
+  createCloudflarePublisherTestCapability,
+  CloudflarePublisher,
+} from "../../src/ingest/publishers/cloudflare.ts";
+import {
+  createLocalPublisherTestCapability,
+  LocalPublisher,
+} from "../../src/ingest/publishers/local.ts";
+import {
+  approveGate1,
+  approveGate2,
+} from "../../src/ingest/approvals/service.ts";
+import { createFixtureApprovalRun } from "../../src/ingest/approvals/prompt.ts";
+import type {
+  AttemptRecord,
+  CandidateManifest,
+  ChangePlan,
+  ValidationResult,
+} from "../../src/ingest/domain.ts";
+import { ingestPaths } from "../../src/ingest/paths.ts";
+import { preparePlanningPublication } from "../../src/ingest/planning/plan.ts";
+import { createStateStore } from "../../src/ingest/state-store.ts";
+import {
+  createControllerPublicationProfile,
+  createValidationEvidenceRoot,
+  runValidation,
+  type CommandInvocation,
+  type CommandResult,
+  type ValidationEvidenceRoot,
+} from "../../src/ingest/validation/runner.ts";
+import {
+  removeStagedAgentOutput,
+  validateAgentWorkspaceOutput,
+  type StagedAgentOutput,
+} from "../../src/ingest/workspaces/policy.ts";
+import {
+  createAgentWorkspace,
+  removeAgentWorkspace,
+} from "../../src/ingest/workspaces/service.ts";
+import { promoteCandidate } from "../../src/ingest/promotion.ts";
+
+process.env.INGEST_TEST_MODE ??= "true";
+
+const execFileAsync = promisify((await import("node:child_process")).execFile);
+const changeId = "publisher-candidate";
+const attemptId = "attempt-000001";
+
+const sha256 = (value: string | Uint8Array): string =>
+  createHash("sha256").update(value).digest("hex");
+
+type OutputFiles = Readonly<Record<string, string>>;
+type CloudflareDryRunInvocation = Parameters<
+  Parameters<typeof createCloudflarePublisherTestCapability>[0]
+>[0];
+
+async function git(root: string, args: readonly string[]): Promise<string> {
+  const result = await execFileAsync("git", ["-C", root, ...args], {
+    encoding: "utf8",
+  });
+  return result.stdout.trim();
+}
+
+async function writeFiles(root: string, files: OutputFiles): Promise<void> {
+  for (const [relativePath, contents] of Object.entries(files)) {
+    const path = join(root, ...relativePath.split("/"));
+    await mkdir(dirname(path), { recursive: true });
+    await writeFile(path, contents);
+  }
+}
+
+function fixtureRequest() {
+  const unsigned = {
+    schemaVersion: 1 as const,
+    changeId,
+    inputKind: "request" as const,
+    intent: "Publish a verified candidate fixture",
+    audience: null,
+    targetPath: "/publisher" as const,
+    mode: "blocks" as const,
+    content: "Local publication fixture.",
+    claims: [],
+    references: [],
+    assets: [],
+    seo: { title: "Publisher", description: "Fixture", index: false },
+    privacy: { private: false, area: null },
+    allowedExternalLinks: [],
+    acceptanceCriteria: ["Candidate serves the copied artifact"],
+  };
+  return { ...unsigned, inputSha256: sha256Canonical(unsigned) };
+}
+
+function fixturePlan(
+  baselineCommit: string,
+  publication: ChangePlan["publication"],
+): ChangePlan {
+  const unsigned = {
+    schemaVersion: 1 as const,
+    changeId,
+    baselineCommit,
+    requestSha256: fixtureRequest().inputSha256,
+    selectedMode: "blocks" as const,
+    targetPath: "/publisher" as const,
+    overwritesExistingRoute: false,
+    files: [
+      { path: "src/pages/publisher.astro", operation: "create" as const },
+      {
+        path: `src/components/generated/${changeId}`,
+        operation: "create" as const,
+      },
+      {
+        path: `src/content/generated/${changeId}.json`,
+        operation: "create" as const,
+      },
+      {
+        path: `src/styles/generated/${changeId}.css`,
+        operation: "create" as const,
+      },
+      { path: `public/generated/${changeId}`, operation: "create" as const },
+    ],
+    components: ["SiteLayout"],
+    islands: [],
+    dependencies: [],
+    validations: ["output-policy", "build"],
+    publication,
+  };
+  return { ...unsigned, planSha256: sha256Canonical(unsigned) };
+}
+
+function fixtureOutput(plan: ChangePlan): OutputFiles {
+  const route = `---
+import GeneratedBlockPage from "../components/blocks/GeneratedBlockPage.astro";
+import page from "../content/generated/${plan.changeId}.json";
+---
+<GeneratedBlockPage {page} />
+`;
+  return {
+    "src/pages/publisher.astro": route,
+    [`src/content/generated/${plan.changeId}.json`]: JSON.stringify({
+      schemaVersion: 1,
+      changeId: plan.changeId,
+      mode: plan.selectedMode,
+      route: plan.targetPath,
+      metadata: {
+        title: "Publisher fixture",
+        description: "A verified copied artifact.",
+        index: false,
+      },
+      privacy: { private: false, area: null },
+      contentSha256: sha256(route),
+      blocks: [
+        {
+          type: "hero",
+          eyebrow: "Fixture",
+          title: "Published candidate",
+          lead: "Only a sealed copied bundle is served.",
+          primary: { label: "Contacto", href: "/contacto" },
+        },
+      ],
+    }),
+  };
+}
+
+function candidateBuildFixture(plan: ChangePlan) {
+  const config = JSON.stringify({
+    targetEnvironment: plan.publication.environment,
+    main: "_worker.js/index.js",
+    assets: { binding: "ASSETS", directory: ".", run_worker_first: true },
+    vars: { SITE_INDEXABLE: plan.publication.siteIndexable ? "true" : "false" },
+    bindings: ["ASSETS", "DB"],
+  });
+  const nestedConfig = JSON.stringify({
+    targetEnvironment: plan.publication.environment,
+    main: "../_worker.js/index.js",
+    assets: { binding: "ASSETS", directory: "..", run_worker_first: true },
+    vars: { SITE_INDEXABLE: plan.publication.siteIndexable ? "true" : "false" },
+    bindings: ["ASSETS", "DB"],
+  });
+  return {
+    files: {
+      "dist/_worker.js/index.js":
+        "export default { fetch() { return new Response('ok'); } };\n",
+      "dist/index.html": "<main>exact candidate bundle</main>\n",
+      "dist/wrangler.json": config,
+      "dist/.prerender/wrangler.json": nestedConfig,
+      "dist/auxiliary/wrangler.json": nestedConfig,
+      ".wrangler/deploy/config.json": JSON.stringify({
+        configPath: "../../dist/wrangler.json",
+        auxiliaryWorkers: ["../../dist/auxiliary/wrangler.json"],
+        prerenderWorkerConfigPath: "../../dist/.prerender/wrangler.json",
+      }),
+    },
+    validations: [
+      { id: "candidate-build", status: "passed" as const, evidence: "fixture" },
+    ],
+  };
+}
+
+function passedCommand(command: CommandInvocation): CommandResult {
+  return {
+    exitCode: 0,
+    stdout: "fixture command passed",
+    stderr: "",
+    timedOut: false,
+    aborted: false,
+    unsupported: false,
+    ...(command.browser === undefined
+      ? {}
+      : {
+          browserProof: {
+            ...command.browser,
+            evidenceSha256: "e".repeat(64),
+          },
+        }),
+  };
+}
+
+async function fixtureWrangler(
+  repositoryRoot: string,
+  exitCode = 0,
+): Promise<void> {
+  const executable = join(repositoryRoot, "node_modules", ".bin", "wrangler");
+  await mkdir(dirname(executable), { recursive: true });
+  await writeFile(executable, `#!/bin/sh\nexit ${exitCode.toString()}\n`);
+  await chmod(executable, 0o700);
+}
+
+async function waitForPort(child: ReturnType<typeof spawn>): Promise<string> {
+  return await new Promise<string>((resolvePort, rejectPort) => {
+    let output = "";
+    child.stdout?.on("data", (chunk: Buffer) => {
+      output += chunk.toString("utf8");
+      const match = output.match(/^(\d+)\n/u);
+      if (match?.[1] !== undefined) resolvePort(match[1]);
+    });
+    child.once("error", rejectPort);
+    child.once("exit", (code) => {
+      if (code !== 0) rejectPort(new Error(`fixture preview exited ${code}`));
+    });
+  });
+}
+
+interface PublisherFixture {
+  readonly repositoryRoot: string;
+  readonly candidate: CandidateManifest;
+  readonly plan: ChangePlan;
+  readonly inspection: CandidateTestInspectionCapability;
+  readonly previewInvocations: FixedPreviewInvocation[];
+  readonly previewPids: number[];
+}
+
+interface PublisherFixtureOptions {
+  readonly adapter?: "local" | "cloudflare";
+  readonly environment?: string;
+  readonly approvalEnvironment?: "test" | "production";
+  readonly wranglerExitCode?: 0 | 1;
+}
+
+async function persistPublisherState(
+  repositoryRoot: string,
+  plan: ChangePlan,
+  candidate: CandidateManifest,
+): Promise<void> {
+  const stateRoot = join(repositoryRoot, ".change-state");
+  const paths = await ingestPaths(changeId, { stateRoot });
+  const attempt: AttemptRecord = {
+    schemaVersion: 1,
+    changeId,
+    attemptId,
+    status: "validated",
+    resumeState: null,
+    adapter: plan.publication.adapter,
+    startedAt: "2026-09-01T00:00:00.000Z",
+    finishedAt: "2026-09-01T00:01:00.000Z",
+    requestSha256: plan.requestSha256,
+    planSha256: plan.planSha256,
+    baselineCommit: plan.baselineCommit,
+    generatedFiles: [...candidate.files],
+    logs: { stdout: null, stderr: null, finalMessage: null },
+    validations: [
+      {
+        id: "candidate-build",
+        status: "passed",
+        evidence: "evidence/candidate-build.json",
+        evidenceSha256: sha256("candidate-build"),
+      },
+    ],
+    failure: null,
+  };
+  await Promise.all([
+    writeFile(paths.request, canonicalJson(fixtureRequest())),
+    writeFile(paths.plan, canonicalJson(plan)),
+    writeFile(paths.candidate, canonicalJson(candidate)),
+    writeFile(
+      join(paths.attemptsDir, `${attemptId}.json`),
+      canonicalJson(attempt),
+    ),
+  ]);
+
+  const state = createStateStore({ stateRoot });
+  await state.transition(changeId, {
+    type: "received",
+    to: "received",
+    payload: {},
+  });
+  await state.transition(changeId, {
+    type: "normalized",
+    to: "normalized",
+    payload: {},
+  });
+  await state.transition(changeId, {
+    type: "planned",
+    to: "planned",
+    payload: {},
+  });
+  await state.transition(changeId, {
+    type: "gate1-approved",
+    to: "gate1_approved",
+    payload: {},
+  });
+  await state.transition(changeId, {
+    type: "generated",
+    to: "generated",
+    payload: {},
+  });
+  await state.transition(changeId, {
+    type: "validated",
+    to: "validated",
+    payload: {},
+  });
+}
+
+async function setFixtureApprovalEnvironment(
+  repositoryRoot: string,
+  environment: "test" | "production",
+): Promise<void> {
+  if (environment === "test") return;
+  const paths = await ingestPaths(changeId, {
+    stateRoot: join(repositoryRoot, ".change-state"),
+  });
+  for (const gate of [1, 2] as const) {
+    const path = join(paths.approvalsDir, `gate-${gate}.json`);
+    const record = JSON.parse(await readFile(path, "utf8")) as object;
+    await writeFile(path, canonicalJson({ ...record, environment }));
+  }
+}
+
+async function withPublisherFixture(
+  options: PublisherFixtureOptions,
+  run: (fixture: PublisherFixture) => Promise<void>,
+): Promise<void> {
+  const root = await mkdtemp(join(tmpdir(), "publisher-fixture-"));
+  const origin = join(root, "origin.git");
+  const seed = join(root, "seed");
+  const workspaceRoot = await mkdtemp(join(tmpdir(), "publisher-workspace-"));
+  const authorityRoot = await mkdtemp(join(tmpdir(), "publisher-authority-"));
+  let fixture: Awaited<ReturnType<typeof createFixtureApprovalRun>> | undefined;
+  let workspace: Awaited<ReturnType<typeof createAgentWorkspace>> | undefined;
+  let output: StagedAgentOutput | undefined;
+  let evidenceRoot: ValidationEvidenceRoot | undefined;
+  let store: ControllerCandidateStore | undefined;
+  try {
+    await execFileAsync("git", [
+      "init",
+      "--bare",
+      "--quiet",
+      "--object-format=sha256",
+      "--initial-branch=main",
+      origin,
+    ]);
+    await execFileAsync("git", [
+      "init",
+      "--quiet",
+      "--object-format=sha256",
+      "--initial-branch=main",
+      seed,
+    ]);
+    await git(seed, ["config", "user.email", "fixture@example.test"]);
+    await git(seed, ["config", "user.name", "Fixture Human"]);
+    await writeFiles(seed, {
+      "README.md": "publisher fixture\n",
+      ".gitignore":
+        ".artifacts/\n.change-state/\n.wrangler/\ndist/\nnode_modules/\n",
+      "package.json":
+        '{"name":"publisher-fixture","version":"1.0.0","private":true}\n',
+      "package-lock.json":
+        '{"name":"publisher-fixture","version":"1.0.0","lockfileVersion":3,"requires":true,"packages":{"":{"name":"publisher-fixture","version":"1.0.0"}}}\n',
+      "src/pages/index.astro": "<main>Inicio</main>\n",
+      "src/pages/contacto.astro": "<main>Contacto</main>\n",
+      "src/components/blocks/GeneratedBlockPage.astro": "<main>Blocks</main>\n",
+      "src/worker.ts": "export default {};\n",
+      "drizzle/0000_fixture.sql": "SELECT 1;\n",
+      "wrangler.jsonc": JSON.stringify({
+        name: "publisher-fixture",
+        main: "./src/worker.ts",
+        compatibility_date: "2026-08-21",
+        compatibility_flags: ["nodejs_compat"],
+        assets: {
+          binding: "ASSETS",
+          directory: "./dist",
+          run_worker_first: true,
+        },
+        d1_databases: [
+          {
+            binding: "DB",
+            database_name: "publisher-fixture",
+            database_id: "22222222-2222-4222-8222-222222222222",
+            migrations_dir: "./drizzle",
+          },
+        ],
+        vars: { SITE_INDEXABLE: "false" },
+        env: {
+          preview: {
+            d1_databases: [
+              {
+                binding: "DB",
+                database_name: "publisher-fixture-preview",
+                database_id: "11111111-1111-4111-8111-111111111111",
+                migrations_dir: "./drizzle",
+              },
+            ],
+            vars: { SITE_INDEXABLE: "false" },
+          },
+        },
+      }),
+    });
+    await git(seed, ["add", "."]);
+    await git(seed, ["commit", "--quiet", "-m", "fixture baseline"]);
+    await git(seed, ["remote", "add", "origin", origin]);
+    await git(seed, ["push", "--quiet", "origin", "main"]);
+
+    fixture = await createFixtureApprovalRun({ fixtureSourceRoot: origin });
+    const repositoryRoot = fixture.repositoryRoot;
+    const stateRoot = fixture.stateRoot;
+    const baselineCommit = await git(repositoryRoot, ["rev-parse", "HEAD"]);
+    const adapter = options.adapter ?? "local";
+    const publication = await preparePlanningPublication({
+      adapter,
+      projectRoot: repositoryRoot,
+      stateArtifactRoot: join(stateRoot, "profile"),
+      ...(adapter === "cloudflare"
+        ? { environment: options.environment ?? "preview" }
+        : {}),
+    });
+    const plan = fixturePlan(baselineCommit, publication);
+    const requestPath = join(authorityRoot, "request.json");
+    const planPath = join(authorityRoot, "plan.json");
+    const policyPath = join(authorityRoot, "policy.json");
+    const resultSchemaPath = join(authorityRoot, "agent-result.schema.json");
+    await Promise.all([
+      writeFile(requestPath, JSON.stringify(fixtureRequest())),
+      writeFile(planPath, JSON.stringify(plan)),
+      writeFile(policyPath, '{"allow":"planned-only"}'),
+      writeFile(resultSchemaPath, '{"type":"object"}'),
+    ]);
+    workspace = await createAgentWorkspace({
+      repositoryRoot,
+      workspaceRoot,
+      approvedPlan: plan,
+      changeId,
+      attemptId,
+      baselineCommit,
+      requestPath,
+      planPath,
+      policyPath,
+      resultSchemaPath,
+    });
+    await writeFiles(workspace.path, fixtureOutput(plan));
+    output = await validateAgentWorkspaceOutput(workspace, plan);
+    evidenceRoot = await createValidationEvidenceRoot(output, plan, attemptId);
+    const publicationProfile = await createControllerPublicationProfile(
+      output,
+      plan,
+      attemptId,
+      publication,
+    );
+    const validations: ValidationResult[] = await runValidation(
+      { output, plan, attemptId, evidenceRoot, publicationProfile },
+      { commands: async (command) => passedCommand(command) },
+    );
+    const initialization =
+      await createControllerCandidateStoreTestInitialization(repositoryRoot);
+    store = await openControllerCandidateStore(initialization);
+    await fixtureWrangler(repositoryRoot, options.wranglerExitCode ?? 0);
+    const inspection = createCandidateTestInspectionCapability();
+    const previewInvocations: FixedPreviewInvocation[] = [];
+    const previewPids: number[] = [];
+    const preview = createCandidatePreviewTestCapability(async (invocation) => {
+      previewInvocations.push(invocation);
+      const page = await readFile(
+        join(invocation.cwd, "dist", "index.html"),
+        "utf8",
+      );
+      const child = spawn(
+        process.execPath,
+        [
+          "-e",
+          `const http=require('node:http');const page=${JSON.stringify(page)};const server=http.createServer((_,res)=>res.end(page));server.listen(0,'127.0.0.1',()=>console.log(server.address().port));`,
+        ],
+        { detached: true, stdio: ["ignore", "pipe", "ignore"] },
+      );
+      const port = await waitForPort(child);
+      if (child.pid !== undefined) previewPids.push(child.pid);
+      return { child, url: `http://127.0.0.1:${port}` };
+    });
+    const candidate = await createCandidate({
+      output,
+      plan,
+      attemptId,
+      preliminaryValidations: validations,
+      store,
+      buildCapability: createCandidateBuildTestCapability(
+        candidateBuildFixture(plan),
+      ),
+      previewCapability: preview,
+    });
+    await persistPublisherState(repositoryRoot, plan, candidate);
+    await approveGate1(
+      { plan, actor: "fixture-human", stateRoot, repositoryRoot },
+      await fixture.createPrompt({
+        isTTY: true,
+        answer: plan.planSha256.slice(0, 12),
+      }),
+    );
+    await approveGate2(
+      { plan, candidate, actor: "fixture-human", stateRoot, repositoryRoot },
+      await fixture.createPrompt({
+        isTTY: true,
+        answer: sha256Canonical(candidate).slice(0, 12),
+      }),
+    );
+    await setFixtureApprovalEnvironment(
+      repositoryRoot,
+      options.approvalEnvironment ?? "test",
+    );
+    const state = createStateStore({ stateRoot });
+    await state.transition(changeId, {
+      type: "gate2-approved",
+      to: "gate2_approved",
+      payload: {},
+    });
+    await run({
+      repositoryRoot,
+      candidate,
+      plan,
+      inspection,
+      previewInvocations,
+      previewPids,
+    });
+  } finally {
+    if (store !== undefined) {
+      await releaseControllerCandidateStore(store).catch(() => undefined);
+    }
+    if (output !== undefined) {
+      await removeStagedAgentOutput(output).catch(() => undefined);
+    }
+    if (workspace !== undefined) {
+      await removeAgentWorkspace(workspace).catch(() => undefined);
+    }
+    await fixture?.dispose().catch(() => undefined);
+    await Promise.all([
+      rm(root, { recursive: true, force: true }),
+      rm(workspaceRoot, { recursive: true, force: true }),
+      rm(authorityRoot, { recursive: true, force: true }),
+      ...(evidenceRoot === undefined
+        ? []
+        : [rm(evidenceRoot.path, { recursive: true, force: true })]),
+    ]);
+  }
+}
+
+test("exposes the gated local and Cloudflare publishers", () => {
+  assert.equal(typeof LocalPublisher, "function");
+  assert.equal(typeof CloudflarePublisher, "function");
+});
+
+test("test-only publisher capabilities cannot be minted or used outside test mode", async () => {
+  const prior = process.env.INGEST_TEST_MODE;
+  const capability = createCloudflarePublisherTestCapability(
+    async () => undefined,
+  );
+  try {
+    delete process.env.INGEST_TEST_MODE;
+    assert.throws(
+      () => createLocalPublisherTestCapability(),
+      /modo de pruebas/i,
+    );
+    assert.throws(
+      () => createCloudflarePublisherTestCapability(async () => undefined),
+      /modo de pruebas/i,
+    );
+    await assert.rejects(
+      new CloudflarePublisher().inspectDryRun(
+        {
+          candidate: {
+            buildProfile: {
+              adapter: "cloudflare",
+              configSha256: "a".repeat(64),
+              environment: "preview",
+              siteIndexable: false,
+            },
+          } as CandidateManifest,
+          operator: {
+            adapter: "cloudflare",
+            configSha256: "a".repeat(64),
+            environment: "preview",
+            siteIndexable: false,
+          },
+        },
+        capability,
+      ),
+      /modo de pruebas/i,
+    );
+  } finally {
+    if (prior === undefined) delete process.env.INGEST_TEST_MODE;
+    else process.env.INGEST_TEST_MODE = prior;
+  }
+});
+
+test("refuses an unsealed candidate before it can start a local preview", async () => {
+  const candidate = {
+    schemaVersion: 1,
+    changeId: "publisher-candidate",
+    attemptId: "attempt-000001",
+    requestSha256: "a".repeat(64),
+    planSha256: "b".repeat(64),
+    baselineCommit: "c".repeat(64),
+    candidateCommit: "d".repeat(64),
+    artifactSha256: "e".repeat(64),
+    buildProfile: {
+      adapter: "local",
+      configSha256: "f".repeat(64),
+      environment: null,
+      siteIndexable: false,
+    },
+    routes: ["/publisher"],
+    files: ["src/pages/publisher.astro"],
+    validations: [{ id: "build", status: "passed", evidence: "build" }],
+    artifacts: [],
+    preview: { command: "wrangler dev", url: "http://127.0.0.1:8788" },
+    knownDifferences: [],
+  } as CandidateManifest;
+
+  await assert.rejects(
+    new LocalPublisher().publish({
+      candidate,
+      operator: {
+        adapter: "local",
+        configSha256: candidate.buildProfile.configSha256,
+        environment: null,
+        siteIndexable: false,
+      },
+    }),
+    /candidato|controlador|store/i,
+  );
+});
+
+test("publishes the exact verified local bundle and stops its preview group", async () => {
+  await withPublisherFixture({}, async (fixture) => {
+    const result = await new LocalPublisher().publish({
+      candidate: fixture.candidate,
+      operator: fixture.candidate.buildProfile,
+      testCapability: createLocalPublisherTestCapability(),
+    });
+
+    assert.deepEqual(result, {
+      status: "published",
+      publisher: "local",
+      changeId,
+      candidateCommit: fixture.candidate.candidateCommit,
+      artifactSha256: fixture.candidate.artifactSha256,
+      dryRun: false,
+    });
+    assert.equal(fixture.previewInvocations.length, 1);
+    assert.match(
+      fixture.previewInvocations[0]!.cwd,
+      /\.artifacts\/candidates\/publisher-candidate\/attempt-000001\/bundle$/u,
+    );
+    for (const pid of fixture.previewPids) {
+      assert.throws(() => process.kill(pid, 0), /ESRCH|no such process/i);
+    }
+  });
+});
+
+test("refuses a missing Gate 2 before starting the local preview", async () => {
+  await withPublisherFixture({}, async (fixture) => {
+    await rm(
+      join(
+        fixture.repositoryRoot,
+        ".change-state",
+        changeId,
+        "approvals",
+        "gate-2.json",
+      ),
+    );
+    await git(fixture.repositoryRoot, [
+      "update-ref",
+      "-d",
+      `refs/comunidadsolar/candidates/${changeId}/${attemptId}`,
+    ]);
+    await assert.rejects(
+      new LocalPublisher().publish({
+        candidate: fixture.candidate,
+        operator: fixture.candidate.buildProfile,
+        testCapability: createLocalPublisherTestCapability(),
+      }),
+      /Gate 2|aprobaci[oó]n/i,
+    );
+    assert.equal(fixture.previewInvocations.length, 0);
+  });
+});
+
+test("refuses a changed candidate artifact before starting the local preview", async () => {
+  await withPublisherFixture({}, async (fixture) => {
+    const inspection = candidateTestInspection(
+      fixture.inspection,
+      fixture.candidate,
+    );
+    await writeFile(
+      join(inspection.bundlePath, "dist", "index.html"),
+      "changed after approval\n",
+    );
+    await assert.rejects(
+      new LocalPublisher().publish({
+        candidate: fixture.candidate,
+        operator: fixture.candidate.buildProfile,
+        testCapability: createLocalPublisherTestCapability(),
+      }),
+      /digest|artefacto/i,
+    );
+    assert.equal(fixture.previewInvocations.length, 0);
+  });
+});
+
+test("refuses a forged durable candidate before starting the local preview", async () => {
+  await withPublisherFixture({}, async (fixture) => {
+    const stateCandidate = join(
+      fixture.repositoryRoot,
+      ".change-state",
+      changeId,
+      "candidate.json",
+    );
+    const persisted = JSON.parse(
+      await readFile(stateCandidate, "utf8"),
+    ) as object;
+    await writeFile(
+      stateCandidate,
+      canonicalJson({ ...persisted, artifactSha256: "f".repeat(64) }),
+    );
+
+    await assert.rejects(
+      new LocalPublisher().publish({
+        candidate: fixture.candidate,
+        operator: fixture.candidate.buildProfile,
+        testCapability: createLocalPublisherTestCapability(),
+      }),
+      /schema attempt|validations|solicitud|plan|intento|evidencia|candidato/i,
+    );
+    assert.equal(fixture.previewInvocations.length, 0);
+  });
+});
+
+test("refuses a mismatched Gate 2 before starting the local preview", async () => {
+  await withPublisherFixture({}, async (fixture) => {
+    const gate2Path = join(
+      fixture.repositoryRoot,
+      ".change-state",
+      changeId,
+      "approvals",
+      "gate-2.json",
+    );
+    const gate2 = JSON.parse(await readFile(gate2Path, "utf8")) as object;
+    await writeFile(
+      gate2Path,
+      canonicalJson({ ...gate2, artifactSha256: "f".repeat(64) }),
+    );
+
+    await assert.rejects(
+      new LocalPublisher().publish({
+        candidate: fixture.candidate,
+        operator: fixture.candidate.buildProfile,
+        testCapability: createLocalPublisherTestCapability(),
+      }),
+      /hash aprobado|candidato actual/i,
+    );
+    assert.equal(fixture.previewInvocations.length, 0);
+  });
+});
+
+test("refuses a failed durable validation before starting the local preview", async () => {
+  await withPublisherFixture({}, async (fixture) => {
+    const attemptPath = join(
+      fixture.repositoryRoot,
+      ".change-state",
+      changeId,
+      "attempts",
+      `${attemptId}.json`,
+    );
+    const attempt = JSON.parse(await readFile(attemptPath, "utf8")) as {
+      validations: Array<Record<string, unknown>>;
+    };
+    await writeFile(
+      attemptPath,
+      canonicalJson({
+        ...attempt,
+        validations: attempt.validations.map((validation) => ({
+          ...validation,
+          status: "failed",
+        })),
+      }),
+    );
+
+    await assert.rejects(
+      new LocalPublisher().publish({
+        candidate: fixture.candidate,
+        operator: fixture.candidate.buildProfile,
+        testCapability: createLocalPublisherTestCapability(),
+      }),
+      /schema attempt|validations|solicitud|plan|intento|evidencia|candidato/i,
+    );
+    assert.equal(fixture.previewInvocations.length, 0);
+  });
+});
+
+test("test approvals can never start a Cloudflare dry run", async () => {
+  await withPublisherFixture({ adapter: "cloudflare" }, async (fixture) => {
+    let observerCalls = 0;
+    await assert.rejects(
+      new CloudflarePublisher(
+        createCloudflarePublisherTestCapability(async () => {
+          observerCalls += 1;
+        }),
+      ).publish({
+        candidate: fixture.candidate,
+        operator: fixture.candidate.buildProfile,
+      }),
+      /aprobaciones.*prueba|test approval/i,
+    );
+    assert.equal(observerCalls, 0);
+  });
+});
+
+test("Cloudflare dry-run inspection fixes the verified bundle invocation", async () => {
+  await withPublisherFixture({ adapter: "cloudflare" }, async (fixture) => {
+    let invocation: CloudflareDryRunInvocation | undefined;
+    const description = await new CloudflarePublisher().inspectDryRun(
+      {
+        candidate: fixture.candidate,
+        operator: fixture.candidate.buildProfile,
+      },
+      createCloudflarePublisherTestCapability(async (current) => {
+        invocation = current;
+      }),
+    );
+
+    assert.deepEqual(description, {
+      publisher: "cloudflare",
+      dryRun: true,
+      changeId,
+      artifactSha256: fixture.candidate.artifactSha256,
+    });
+    assert.ok(invocation !== undefined);
+    assert.equal(invocation?.argv[1], "deploy");
+    assert.ok(invocation?.argv.includes("--no-bundle"));
+    assert.ok(invocation?.argv.includes("--strict"));
+    assert.ok(invocation?.argv.includes("--dry-run"));
+    assert.ok(
+      invocation?.argv.includes(
+        `candidate:${changeId}:${fixture.candidate.artifactSha256}`,
+      ),
+    );
+    assert.equal(invocation?.argv.includes("--config"), false);
+    assert.equal(invocation?.argv.includes("--env"), false);
+    assert.equal(
+      invocation?.argv.some((arg) => arg.includes("assets")),
+      false,
+    );
+    assert.equal(invocation?.env.CLOUDFLARE_ENV, "preview");
+    assert.match(
+      invocation?.cwd ?? "",
+      /\.artifacts\/candidates\/publisher-candidate\/attempt-000001\/bundle$/u,
+    );
+  });
+});
+
+test("Cloudflare rejects a different operator profile before its dry-run observer", async () => {
+  await withPublisherFixture(
+    { adapter: "cloudflare", approvalEnvironment: "production" },
+    async (fixture) => {
+      let observerCalls = 0;
+      const publisher = new CloudflarePublisher(
+        createCloudflarePublisherTestCapability(async () => {
+          observerCalls += 1;
+        }),
+      );
+      await assert.rejects(
+        publisher.publish({
+          candidate: fixture.candidate,
+          operator: {
+            ...fixture.candidate.buildProfile,
+            configSha256: "f".repeat(64),
+          },
+        }),
+        /operador.*perfil/i,
+      );
+      await assert.rejects(
+        publisher.publish({
+          candidate: fixture.candidate,
+          operator: {
+            ...fixture.candidate.buildProfile,
+            environment: "other-environment",
+          },
+        }),
+        /operador.*perfil/i,
+      );
+      assert.equal(observerCalls, 0);
+    },
+  );
+});
+
+test("LocalPublisher rejects a Cloudflare profile before its preview", async () => {
+  await withPublisherFixture(
+    { adapter: "cloudflare", approvalEnvironment: "production" },
+    async (fixture) => {
+      await assert.rejects(
+        new LocalPublisher().publish({
+          candidate: fixture.candidate,
+          operator: fixture.candidate.buildProfile,
+        }),
+        /operador local.*perfil/i,
+      );
+      assert.equal(fixture.previewInvocations.length, 0);
+    },
+  );
+});
+
+test("Cloudflare rejects a changed deploy redirect before its dry-run observer", async () => {
+  await withPublisherFixture(
+    { adapter: "cloudflare", approvalEnvironment: "production" },
+    async (fixture) => {
+      const inspection = candidateTestInspection(
+        fixture.inspection,
+        fixture.candidate,
+      );
+      await writeFile(
+        join(inspection.bundlePath, ".wrangler", "deploy", "config.json"),
+        JSON.stringify({ configPath: "../../outside.json" }),
+      );
+      let observerCalls = 0;
+      const publisher = new CloudflarePublisher(
+        createCloudflarePublisherTestCapability(async () => {
+          observerCalls += 1;
+        }),
+      );
+
+      await assert.rejects(
+        publisher.publish({
+          candidate: fixture.candidate,
+          operator: fixture.candidate.buildProfile,
+        }),
+        /digest|artefacto/i,
+      );
+      assert.equal(observerCalls, 0);
+    },
+  );
+});
+
+test("Cloudflare refuses execute input without a future trusted CLI capability", async () => {
+  await withPublisherFixture(
+    { adapter: "cloudflare", approvalEnvironment: "production" },
+    async (fixture) => {
+      await assert.rejects(
+        new CloudflarePublisher().publish({
+          candidate: fixture.candidate,
+          operator: fixture.candidate.buildProfile,
+        }),
+        /capability Cloudflare confiable/i,
+      );
+      await assert.rejects(
+        new CloudflarePublisher().publish({
+          candidate: fixture.candidate,
+          operator: fixture.candidate.buildProfile,
+          execute: true,
+        } as unknown as Parameters<CloudflarePublisher["publish"]>[0]),
+        /execute/i,
+      );
+    },
+  );
+});
+
+test("Cloudflare runs only a fixed local dry-run through an opaque test capability", async () => {
+  await withPublisherFixture(
+    { adapter: "cloudflare", approvalEnvironment: "production" },
+    async (fixture) => {
+      let invocation: CloudflareDryRunInvocation | undefined;
+      const publisher = new CloudflarePublisher(
+        createCloudflarePublisherTestCapability(async (current) => {
+          invocation = current;
+        }),
+      );
+      const result = await publisher.publish({
+        candidate: fixture.candidate,
+        operator: fixture.candidate.buildProfile,
+      });
+
+      assert.deepEqual(result, {
+        status: "published",
+        publisher: "cloudflare",
+        changeId,
+        candidateCommit: fixture.candidate.candidateCommit,
+        artifactSha256: fixture.candidate.artifactSha256,
+        dryRun: true,
+      });
+      assert.equal(invocation?.argv.includes("--dry-run"), true);
+      assert.equal(invocation?.argv.includes("--config"), false);
+      assert.equal(invocation?.argv.includes("--env"), false);
+    },
+  );
+});
+
+test("a failed fixed Cloudflare dry-run records a recoverable event", async () => {
+  await withPublisherFixture(
+    {
+      adapter: "cloudflare",
+      approvalEnvironment: "production",
+      wranglerExitCode: 1,
+    },
+    async (fixture) => {
+      await assert.rejects(
+        new CloudflarePublisher(
+          createCloudflarePublisherTestCapability(async () => undefined),
+        ).publish({
+          candidate: fixture.candidate,
+          operator: fixture.candidate.buildProfile,
+        }),
+        /dry-run/i,
+      );
+      const event = await readFile(
+        join(
+          fixture.repositoryRoot,
+          ".change-state",
+          changeId,
+          "candidates",
+          attemptId,
+          "publication-events.ndjson",
+        ),
+        "utf8",
+      );
+      assert.match(event, /cloudflare/u);
+      assert.match(event, /recoverable-failure/u);
+      assert.equal(event.includes("published"), false);
+    },
+  );
+});
+
+test("test approvals can never fast-forward protected main", async () => {
+  await withPublisherFixture({}, async (fixture) => {
+    await assert.rejects(
+      promoteCandidate({ candidate: fixture.candidate }),
+      /aprobaciones.*prueba|test approval/i,
+    );
+    assert.equal(
+      await git(fixture.repositoryRoot, ["rev-parse", "HEAD"]),
+      fixture.candidate.baselineCommit,
+    );
+  });
+});
+
+test("promotion fast-forwards candidate A then commits only a sanitized dossier B", async () => {
+  await withPublisherFixture(
+    { approvalEnvironment: "production" },
+    async (fixture) => {
+      const result = await promoteCandidate({ candidate: fixture.candidate });
+      assert.equal(result.candidateCommit, fixture.candidate.candidateCommit);
+      assert.equal(
+        await git(fixture.repositoryRoot, [
+          "rev-parse",
+          `${result.dossierCommit}^`,
+        ]),
+        fixture.candidate.candidateCommit,
+      );
+      assert.equal(
+        await git(fixture.repositoryRoot, ["rev-parse", "HEAD"]),
+        result.dossierCommit,
+      );
+      assert.deepEqual(
+        (
+          await git(fixture.repositoryRoot, [
+            "diff",
+            "--name-only",
+            `${fixture.candidate.candidateCommit}..${result.dossierCommit}`,
+          ])
+        )
+          .split("\n")
+          .filter(Boolean),
+        [
+          `changes/${changeId}/approvals/gate-1.json`,
+          `changes/${changeId}/approvals/gate-2.json`,
+          `changes/${changeId}/attempts/${attemptId}.json`,
+          `changes/${changeId}/candidate.json`,
+          `changes/${changeId}/plan.json`,
+          `changes/${changeId}/request.json`,
+        ],
+      );
+      const dossier = await readFile(
+        join(fixture.repositoryRoot, "changes", changeId, "candidate.json"),
+        "utf8",
+      );
+      const dossierRequest = await readFile(
+        join(fixture.repositoryRoot, "changes", changeId, "request.json"),
+        "utf8",
+      );
+      assert.equal(dossier.includes(fixture.repositoryRoot), false);
+      assert.equal(dossier.includes(".artifacts/"), false);
+      assert.equal(dossier.includes('"url"'), false);
+      assert.equal(dossierRequest.includes('"seo"'), false);
+      assert.equal(dossierRequest.includes("Publisher"), false);
+    },
+  );
+});
+
+test("promotion rejects an advanced main without rebasing the candidate", async () => {
+  await withPublisherFixture(
+    { approvalEnvironment: "production" },
+    async (fixture) => {
+      await git(fixture.repositoryRoot, [
+        "config",
+        "user.email",
+        "fixture@example.test",
+      ]);
+      await git(fixture.repositoryRoot, [
+        "config",
+        "user.name",
+        "Fixture Human",
+      ]);
+      await writeFile(
+        join(fixture.repositoryRoot, "advanced.txt"),
+        "advanced\n",
+      );
+      await git(fixture.repositoryRoot, ["add", "advanced.txt"]);
+      await git(fixture.repositoryRoot, [
+        "commit",
+        "--quiet",
+        "-m",
+        "advance main",
+      ]);
+      const advanced = await git(fixture.repositoryRoot, ["rev-parse", "HEAD"]);
+
+      await assert.rejects(
+        promoteCandidate({ candidate: fixture.candidate }),
+        /baseline|limpio|main/i,
+      );
+      assert.equal(
+        await git(fixture.repositoryRoot, ["rev-parse", "HEAD"]),
+        advanced,
+      );
+      const event = await readFile(
+        join(
+          fixture.repositoryRoot,
+          ".change-state",
+          changeId,
+          "candidates",
+          attemptId,
+          "publication-events.ndjson",
+        ),
+        "utf8",
+      );
+      assert.match(event, /recoverable-failure/u);
+      assert.equal(event.includes("published"), false);
+    },
+  );
+});
+
+test("promotion records a failed candidate Git verification", async () => {
+  await withPublisherFixture(
+    { approvalEnvironment: "production" },
+    async (fixture) => {
+      await git(fixture.repositoryRoot, [
+        "update-ref",
+        "-d",
+        `refs/comunidadsolar/candidates/${changeId}/${attemptId}`,
+      ]);
+
+      await assert.rejects(
+        promoteCandidate({ candidate: fixture.candidate }),
+        /ref|commit|durable/i,
+      );
+      assert.equal(
+        await git(fixture.repositoryRoot, ["rev-parse", "HEAD"]),
+        fixture.candidate.baselineCommit,
+      );
+      const event = await readFile(
+        join(
+          fixture.repositoryRoot,
+          ".change-state",
+          changeId,
+          "candidates",
+          attemptId,
+          "publication-events.ndjson",
+        ),
+        "utf8",
+      );
+      assert.match(event, /promotion/u);
+      assert.match(event, /recoverable-failure/u);
+      assert.equal(event.includes("published"), false);
+    },
+  );
+});

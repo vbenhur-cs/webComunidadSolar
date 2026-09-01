@@ -13,12 +13,20 @@ import {
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 
 import { canonicalJson } from "../canonical-json.ts";
+import { createSanitizedCandidateDossier } from "../dossier.ts";
 import type {
+  ApprovalRecord,
+  AttemptRecord,
   CandidateManifest,
   ChangePlan,
+  NormalizedRequest,
   ValidationResult,
 } from "../domain.ts";
+import { verifyApproval } from "../approvals/service.ts";
+import { assertNormalizedRequest } from "../importers/common.ts";
+import { ingestPaths } from "../paths.ts";
 import { validateSchema } from "../schema-validator.ts";
+import { createStateStore, writeAtomic } from "../state-store.ts";
 import { assertCandidateEligiblePreliminaryValidation } from "../validation/runner.ts";
 import type { StagedAgentOutput } from "../workspaces/policy.ts";
 
@@ -63,6 +71,13 @@ const fixedGitEnvironment = Object.freeze({
   GIT_CONFIG_SYSTEM: "/dev/null",
   GIT_OPTIONAL_LOCKS: "0",
   GIT_TERMINAL_PROMPT: "0",
+});
+const promotionGitEnvironment = Object.freeze({
+  ...fixedGitEnvironment,
+  GIT_AUTHOR_NAME: "Comunidad Solar Publication",
+  GIT_AUTHOR_EMAIL: "publication@comunidadsolar.invalid",
+  GIT_COMMITTER_NAME: "Comunidad Solar Publication",
+  GIT_COMMITTER_EMAIL: "publication@comunidadsolar.invalid",
 });
 
 declare const controllerCandidateStoreBrand: unique symbol;
@@ -120,6 +135,16 @@ export interface FixedPreviewInvocation {
   readonly env: Readonly<Record<string, string>>;
 }
 
+/** Internal shape delivered only through the opaque test-only observer. */
+interface FixedCloudflareInvocation {
+  /** The sealed controller-local Wrangler executable; never caller supplied. */
+  readonly executable: string;
+  /** Includes argv[0]; deploy arguments are fixed by this module. */
+  readonly argv: readonly string[];
+  readonly cwd: string;
+  readonly env: Readonly<Record<string, string>>;
+}
+
 export interface PreviewHandle {
   readonly url: string;
   stop(): Promise<void>;
@@ -138,6 +163,18 @@ type CandidatePreviewAdapter = (
 declare const candidatePreviewTestCapabilityBrand: unique symbol;
 export interface CandidatePreviewTestCapability {
   readonly [candidatePreviewTestCapabilityBrand]: true;
+}
+
+declare const candidateCloudflareDryRunTestCapabilityBrand: unique symbol;
+/** A fixture-only observer for a fixed dry-run; it never receives process control. */
+export interface CandidateCloudflareDryRunTestCapability {
+  readonly [candidateCloudflareDryRunTestCapabilityBrand]: true;
+}
+
+declare const candidateLocalPublicationTestCapabilityBrand: unique symbol;
+/** A fixture-only capability which can authorize a contained local preview. */
+export interface CandidateLocalPublicationTestCapability {
+  readonly [candidateLocalPublicationTestCapabilityBrand]: true;
 }
 
 export interface CandidateCreationInput {
@@ -193,6 +230,12 @@ const candidatePreviewCapabilities = new WeakMap<
   CandidatePreviewTestCapability,
   CandidatePreviewAdapter
 >();
+const candidateCloudflareDryRunTestCapabilities = new WeakMap<
+  CandidateCloudflareDryRunTestCapability,
+  (invocation: FixedCloudflareInvocation) => Promise<void>
+>();
+const candidateLocalPublicationTestCapabilities =
+  new WeakSet<CandidateLocalPublicationTestCapability>();
 
 function lexicalCompare(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
@@ -322,6 +365,29 @@ async function runStoreGit(
     [...fixedGitArguments, "-C", root, ...arguments_],
     {
       env: fixedGitEnvironment,
+      shell: false,
+      stdio: ["ignore", "pipe", "pipe"],
+    },
+  );
+  const output = collectGit(child, "stdout");
+  const errors = collectGit(child, "stderr");
+  if ((await gitExitCode(child)) !== 0) {
+    const detail = Buffer.concat(errors).toString("utf8").trim();
+    throw new TypeError(detail === "" ? failure : `${failure}: ${detail}`);
+  }
+  return Buffer.concat(output).toString("utf8").trim();
+}
+
+async function runStorePromotionGit(
+  root: string,
+  arguments_: readonly string[],
+  failure: string,
+): Promise<string> {
+  const child = spawn(
+    gitExecutable,
+    [...fixedGitArguments, "-C", root, ...arguments_],
+    {
+      env: promotionGitEnvironment,
       shell: false,
       stdio: ["ignore", "pipe", "pipe"],
     },
@@ -1647,6 +1713,463 @@ export async function verifyCandidateArtifact(
   await verifyPersistedArtifactEntries(candidate, record.bundlePath);
 }
 
+interface CandidatePublicationState {
+  readonly request: NormalizedRequest;
+  readonly plan: ChangePlan;
+  readonly gate1: ApprovalRecord;
+  readonly gate2: ApprovalRecord;
+  readonly attempt: AttemptRecord;
+}
+
+async function readCandidateControllerJson(
+  path: string,
+  label: string,
+): Promise<Record<string, unknown>> {
+  try {
+    return strictJsonRecord((await readStableRegularFile(path)).bytes, label);
+  } catch (error: unknown) {
+    if (missingPath(error)) {
+      throw new TypeError(`Falta ${label}`);
+    }
+    throw error;
+  }
+}
+
+async function candidatePublicationState(
+  candidate: CandidateManifest,
+): Promise<CandidatePublicationState> {
+  const record = candidateRecord(candidate);
+  const store = await assertControllerCandidateStore(record.store);
+  const paths = await ingestPaths(candidate.changeId, {
+    stateRoot: store.stateRoot.path,
+  });
+  const [
+    requestValue,
+    planValue,
+    persistedCandidate,
+    attemptValue,
+    gate1Value,
+    gate2Value,
+  ] = await Promise.all([
+    readCandidateControllerJson(paths.request, "La solicitud durable"),
+    readCandidateControllerJson(paths.plan, "El plan durable"),
+    readCandidateControllerJson(paths.candidate, "El candidato durable"),
+    readCandidateControllerJson(
+      join(paths.attemptsDir, `${candidate.attemptId}.json`),
+      "El intento durable",
+    ),
+    readCandidateControllerJson(
+      join(paths.approvalsDir, "gate-1.json"),
+      "La aprobación Gate 1",
+    ),
+    readCandidateControllerJson(
+      join(paths.approvalsDir, "gate-2.json"),
+      "La aprobación Gate 2",
+    ),
+  ]);
+  const request = assertNormalizedRequest(requestValue) as NormalizedRequest;
+  const plan = validateSchema<ChangePlan>("change-plan", planValue);
+  const persisted = validateSchema<CandidateManifest>(
+    "candidate",
+    persistedCandidate,
+  );
+  const attempt = validateSchema<AttemptRecord>("attempt", attemptValue);
+  const gate1 = validateSchema<ApprovalRecord>("approval", gate1Value);
+  const gate2 = validateSchema<ApprovalRecord>("approval", gate2Value);
+  if (
+    request.changeId !== candidate.changeId ||
+    request.inputSha256 !== candidate.requestSha256 ||
+    plan.changeId !== candidate.changeId ||
+    plan.requestSha256 !== candidate.requestSha256 ||
+    plan.planSha256 !== candidate.planSha256 ||
+    plan.baselineCommit !== candidate.baselineCommit ||
+    canonicalJson(plan.publication) !== canonicalJson(candidate.buildProfile) ||
+    canonicalJson(persisted) !== canonicalJson(candidate) ||
+    attempt.changeId !== candidate.changeId ||
+    attempt.attemptId !== candidate.attemptId ||
+    attempt.status !== "validated" ||
+    attempt.requestSha256 !== candidate.requestSha256 ||
+    attempt.planSha256 !== candidate.planSha256 ||
+    attempt.baselineCommit !== candidate.baselineCommit ||
+    attempt.validations.length === 0 ||
+    attempt.validations.some((validation) => validation.status !== "passed") ||
+    candidate.validations.length === 0 ||
+    candidate.validations.some((validation) => validation.status !== "passed")
+  ) {
+    throw new TypeError(
+      "El journal candidato no conserva solicitud, plan, intento y evidencia aprobados",
+    );
+  }
+  const state = createStateStore({ stateRoot: store.stateRoot.path });
+  const [change, journal] = await Promise.all([
+    state.readChange(candidate.changeId),
+    state.verifyJournal(candidate.changeId),
+  ]);
+  if (
+    change.state !== "gate2_approved" ||
+    change.currentAttemptId !== candidate.attemptId ||
+    journal.length === 0 ||
+    journal.at(-1)?.to !== "gate2_approved"
+  ) {
+    throw new TypeError("El journal candidato no llegó a Gate 2 aprobado");
+  }
+  verifyApproval(gate1, plan, candidate.baselineCommit);
+  verifyApproval(gate2, candidate, candidate.baselineCommit);
+  if (gate1.environment !== gate2.environment) {
+    throw new TypeError("Los Gates candidato no comparten procedencia");
+  }
+  return Object.freeze({ request, plan, gate1, gate2, attempt });
+}
+
+async function assertCandidateMainBaseline(
+  candidate: CandidateManifest,
+): Promise<void> {
+  const record = candidateRecord(candidate);
+  const store = await assertControllerCandidateStore(record.store);
+  const [headRef, main, head, status] = await Promise.all([
+    runStoreGit(
+      store.root.path,
+      ["symbolic-ref", "--quiet", "HEAD"],
+      "El checkout controlador no está en main",
+    ),
+    runStoreGit(
+      store.root.path,
+      ["rev-parse", "--verify", "refs/heads/main^{commit}"],
+      "No se pudo verificar main del controlador",
+    ),
+    runStoreGit(
+      store.root.path,
+      ["rev-parse", "--verify", "HEAD^{commit}"],
+      "No se pudo verificar HEAD del controlador",
+    ),
+    runStoreGit(
+      store.root.path,
+      ["status", "--porcelain=v1", "--untracked-files=all"],
+      "No se pudo verificar la limpieza del controlador",
+    ),
+  ]);
+  if (
+    headRef !== "refs/heads/main" ||
+    main !== candidate.baselineCommit ||
+    head !== candidate.baselineCommit ||
+    status !== ""
+  ) {
+    throw new TypeError(
+      "El checkout controlador no está limpio en el baseline del candidato",
+    );
+  }
+}
+
+function localTestApprovalAllowed(
+  capability: CandidateLocalPublicationTestCapability | undefined,
+): boolean {
+  return (
+    process.env.INGEST_TEST_MODE === "true" &&
+    capability !== undefined &&
+    candidateLocalPublicationTestCapabilities.has(capability)
+  );
+}
+
+async function assertCandidatePublication(
+  candidate: CandidateManifest,
+  operation: "local" | "cloudflare" | "promotion",
+  testCapability?: CandidateLocalPublicationTestCapability,
+): Promise<void> {
+  const publication = await candidatePublicationState(candidate);
+  if (
+    publication.gate1.environment !== "production" ||
+    publication.gate2.environment !== "production"
+  ) {
+    if (operation !== "local" || !localTestApprovalAllowed(testCapability)) {
+      throw new TypeError(
+        "Las aprobaciones de prueba no autorizan Cloudflare, promoción ni main",
+      );
+    }
+  }
+  await verifyCandidateArtifact(candidate);
+  await assertCandidateMainBaseline(candidate);
+}
+
+/**
+ * Revalidates all durable gates before a contained local fixture preview.
+ * Test approvals can pass only through the opaque test capability below.
+ */
+export async function assertCandidateLocalPublication(
+  candidate: CandidateManifest,
+  testCapability?: CandidateLocalPublicationTestCapability,
+): Promise<void> {
+  await assertCandidatePublication(candidate, "local", testCapability);
+}
+
+/** Revalidates all durable gates before a Cloudflare operation. */
+export async function assertCandidateCloudflarePublication(
+  candidate: CandidateManifest,
+): Promise<void> {
+  await assertCandidatePublication(candidate, "cloudflare");
+}
+
+/** Revalidates all durable gates before a protected main fast-forward. */
+export async function assertCandidatePromotion(
+  candidate: CandidateManifest,
+): Promise<void> {
+  await assertCandidatePublication(candidate, "promotion");
+}
+
+/** Mints a fixture-only capability; production can never authorize test Gates. */
+export function createCandidateLocalPublicationTestCapability(): CandidateLocalPublicationTestCapability {
+  if (process.env.INGEST_TEST_MODE !== "true") {
+    throw new TypeError(
+      "La capability de publicación local sólo existe en modo de pruebas",
+    );
+  }
+  const capability = Object.freeze(
+    {},
+  ) as CandidateLocalPublicationTestCapability;
+  candidateLocalPublicationTestCapabilities.add(capability);
+  return capability;
+}
+
+function missingPath(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    error.code === "ENOENT"
+  );
+}
+
+async function candidatePublicationEventsPath(
+  candidate: CandidateManifest,
+): Promise<string> {
+  const record = candidateRecord(candidate);
+  const store = await assertControllerCandidateStore(record.store);
+  const directory = dirname(record.manifestPath);
+  const path = join(directory, "publication-events.ndjson");
+  if (
+    !isStrictlyWithin(store.stateRoot.path, directory) ||
+    !isStrictlyWithin(directory, path)
+  ) {
+    throw new TypeError("El evento de publicación escapa el estado candidato");
+  }
+  const entry = await lstat(directory);
+  if (
+    entry.isSymbolicLink() ||
+    !entry.isDirectory() ||
+    (await realpath(directory)) !== directory
+  ) {
+    throw new TypeError("El estado de publicación candidato no es seguro");
+  }
+  return path;
+}
+
+async function verifiedPublicationEvents(path: string): Promise<string> {
+  try {
+    const source = (await readStableRegularFile(path)).bytes.toString("utf8");
+    if (source.length === 0 || !source.endsWith("\n")) {
+      throw new TypeError("El registro de publicación está truncado");
+    }
+    for (const line of source.slice(0, -1).split("\n")) {
+      const event = strictJsonRecord(
+        Buffer.from(line, "utf8"),
+        "El evento de publicación",
+      );
+      exactKeys(
+        event,
+        ["at", "schemaVersion", "stage", "status"],
+        "El evento de publicación",
+      );
+      if (
+        event.schemaVersion !== 1 ||
+        event.status !== "recoverable-failure" ||
+        typeof event.at !== "string" ||
+        !Number.isFinite(Date.parse(event.at)) ||
+        (event.stage !== "local" &&
+          event.stage !== "cloudflare" &&
+          event.stage !== "promotion")
+      ) {
+        throw new TypeError("El evento de publicación no es canónico");
+      }
+    }
+    return source;
+  } catch (error: unknown) {
+    if (missingPath(error)) return "";
+    throw error;
+  }
+}
+
+/** Records a recoverable, path-free failure; it never marks a candidate published. */
+export async function recordCandidatePublicationFailure(
+  candidate: CandidateManifest,
+  stage: "local" | "cloudflare" | "promotion",
+): Promise<void> {
+  const path = await candidatePublicationEventsPath(candidate);
+  const previous = await verifiedPublicationEvents(path);
+  const event = canonicalJson({
+    schemaVersion: 1,
+    at: new Date().toISOString(),
+    stage,
+    status: "recoverable-failure",
+  });
+  await writeAtomic(path, Buffer.from(`${previous}${event}\n`, "utf8"));
+}
+
+export interface CandidatePromotionResult {
+  readonly candidateCommit: string;
+  readonly dossierCommit: string;
+}
+
+function expectedDossierPaths(candidate: CandidateManifest): readonly string[] {
+  return Object.freeze([
+    "approvals/gate-1.json",
+    "approvals/gate-2.json",
+    `attempts/${candidate.attemptId}.json`,
+    "candidate.json",
+    "plan.json",
+    "request.json",
+  ]);
+}
+
+async function writeCandidateDossier(
+  candidate: CandidateManifest,
+): Promise<readonly string[]> {
+  const record = candidateRecord(candidate);
+  const store = await assertControllerCandidateStore(record.store);
+  const publication = await candidatePublicationState(candidate);
+  const dossier = createSanitizedCandidateDossier({
+    request: publication.request,
+    plan: publication.plan,
+    gate1: publication.gate1,
+    gate2: publication.gate2,
+    attempt: publication.attempt,
+    candidate,
+  });
+  const expected = [...expectedDossierPaths(candidate)].sort(lexicalCompare);
+  const supplied = dossier.files.map((file) => file.path).sort(lexicalCompare);
+  if (
+    supplied.length !== expected.length ||
+    supplied.some((path, index) => path !== expected[index])
+  ) {
+    throw new TypeError("El expediente candidato no tiene una forma permitida");
+  }
+  const changes = await createChildDirectory(store.root.path, "changes", true);
+  const destination = await createChildDirectory(
+    changes,
+    candidate.changeId,
+    false,
+  );
+  const approvals = await createChildDirectory(destination, "approvals", false);
+  const attempts = await createChildDirectory(destination, "attempts", false);
+  const targets = new Map<string, string>([
+    ["request.json", join(destination, "request.json")],
+    ["plan.json", join(destination, "plan.json")],
+    ["candidate.json", join(destination, "candidate.json")],
+    ["approvals/gate-1.json", join(approvals, "gate-1.json")],
+    ["approvals/gate-2.json", join(approvals, "gate-2.json")],
+    [
+      `attempts/${candidate.attemptId}.json`,
+      join(attempts, `${candidate.attemptId}.json`),
+    ],
+  ]);
+  const written: string[] = [];
+  for (const file of dossier.files) {
+    const target = targets.get(file.path);
+    if (
+      target === undefined ||
+      !isStrictlyWithin(destination, target) ||
+      !safeRelativePath(file.path)
+    ) {
+      throw new TypeError(
+        "El expediente candidato intenta escribir una ruta insegura",
+      );
+    }
+    await writeControllerFile(target, Buffer.from(file.contents, "utf8"));
+    written.push(`changes/${candidate.changeId}/${file.path}`);
+  }
+  return Object.freeze(written.sort(lexicalCompare));
+}
+
+async function assertCachedDossier(
+  root: string,
+  expected: readonly string[],
+): Promise<void> {
+  const cached = (
+    await runStoreGit(
+      root,
+      ["diff", "--cached", "--name-only", "--diff-filter=ACMR"],
+      "No se pudo verificar el expediente preparado",
+    )
+  )
+    .split("\n")
+    .filter(Boolean)
+    .sort(lexicalCompare);
+  if (
+    cached.length !== expected.length ||
+    cached.some((path, index) => path !== expected[index])
+  ) {
+    throw new TypeError(
+      "El commit de expediente contiene archivos no permitidos",
+    );
+  }
+}
+
+/**
+ * Fast-forwards only sealed candidate A, then commits the fixed sanitized
+ * dossier as B. No caller receives a checkout, root, or dossier destination.
+ */
+export async function promoteCandidateWithDossier(
+  candidate: CandidateManifest,
+): Promise<CandidatePromotionResult> {
+  await assertCandidatePromotion(candidate);
+  const record = candidateRecord(candidate);
+  const store = await assertControllerCandidateStore(record.store);
+  await verifyCandidateArtifact(candidate);
+  await assertCandidateMainBaseline(candidate);
+  await runStorePromotionGit(
+    store.root.path,
+    ["merge", "--ff-only", candidate.candidateCommit],
+    "No se pudo avanzar main al candidato aprobado",
+  );
+  const merged = await runStoreGit(
+    store.root.path,
+    ["rev-parse", "--verify", "HEAD^{commit}"],
+    "No se pudo verificar el candidato promovido",
+  );
+  if (merged !== candidate.candidateCommit) {
+    throw new TypeError("El fast-forward no dejó main en el commit candidato");
+  }
+  const files = await writeCandidateDossier(candidate);
+  await runStorePromotionGit(
+    store.root.path,
+    ["add", "--", `changes/${candidate.changeId}`],
+    "No se pudo preparar el expediente candidato",
+  );
+  await assertCachedDossier(store.root.path, files);
+  await runStorePromotionGit(
+    store.root.path,
+    ["commit", "--no-verify", "-m", `docs: dossier ${candidate.changeId}`],
+    "No se pudo confirmar el expediente candidato",
+  );
+  const [dossierCommit, parent] = await Promise.all([
+    runStoreGit(
+      store.root.path,
+      ["rev-parse", "--verify", "HEAD^{commit}"],
+      "No se pudo verificar el commit de expediente",
+    ),
+    runStoreGit(
+      store.root.path,
+      ["rev-parse", "--verify", "HEAD^"],
+      "No se pudo verificar el padre del expediente",
+    ),
+  ]);
+  if (parent !== candidate.candidateCommit) {
+    throw new TypeError("El expediente no tiene como padre al candidato A");
+  }
+  return Object.freeze({
+    candidateCommit: candidate.candidateCommit,
+    dossierCommit,
+  });
+}
+
 /**
  * Mints a test controller seam. Production has no preview adapter until the
  * separately reviewed Task 12 integration supplies one, so it fails closed.
@@ -1755,6 +2278,138 @@ async function fixedPreviewInvocation(
     cwd: record.bundlePath,
     env: fixedPreviewEnvironment(),
   });
+}
+
+function fixedCloudflareEnvironment(
+  environment: string,
+): Readonly<Record<string, string>> {
+  return Object.freeze({
+    ...fixedPreviewEnvironment(),
+    CLOUDFLARE_ENV: environment,
+  });
+}
+
+async function fixedCloudflareDryRunInvocation(
+  candidate: CandidateManifest,
+): Promise<FixedCloudflareInvocation> {
+  await verifyCandidateArtifact(candidate);
+  if (
+    candidate.buildProfile.adapter !== "cloudflare" ||
+    typeof candidate.buildProfile.environment !== "string" ||
+    candidate.buildProfile.environment.length === 0
+  ) {
+    throw new TypeError(
+      "El candidato no tiene un perfil Cloudflare publicable",
+    );
+  }
+  const record = candidateRecord(candidate);
+  const executable = await localWranglerPath(record.store);
+  return Object.freeze({
+    executable,
+    argv: Object.freeze([
+      executable,
+      "deploy",
+      "--no-bundle",
+      "--strict",
+      "--message",
+      `candidate:${candidate.changeId}:${candidate.artifactSha256}`,
+      "--dry-run",
+    ]),
+    cwd: record.bundlePath,
+    env: fixedCloudflareEnvironment(candidate.buildProfile.environment),
+  });
+}
+
+/** Mints a test-only observer for the already fixed, non-executing dry-run. */
+export function createCandidateCloudflareDryRunTestCapability(
+  observer: (invocation: FixedCloudflareInvocation) => Promise<void>,
+): CandidateCloudflareDryRunTestCapability {
+  if (
+    process.env.INGEST_TEST_MODE !== "true" ||
+    typeof observer !== "function"
+  ) {
+    throw new TypeError(
+      "La inspección Cloudflare sólo existe en modo de pruebas",
+    );
+  }
+  const capability = Object.freeze(
+    {},
+  ) as CandidateCloudflareDryRunTestCapability;
+  candidateCloudflareDryRunTestCapabilities.set(capability, observer);
+  return capability;
+}
+
+/**
+ * Inspects only a reverified fixed dry-run. It never starts Wrangler and the
+ * raw invocation reaches only an opaque test observer.
+ */
+export async function inspectCandidateCloudflareDryRun(
+  candidate: CandidateManifest,
+  capability: CandidateCloudflareDryRunTestCapability,
+): Promise<void> {
+  if (process.env.INGEST_TEST_MODE !== "true") {
+    throw new TypeError(
+      "La inspección Cloudflare sólo existe en modo de pruebas",
+    );
+  }
+  const observer = candidateCloudflareDryRunTestCapabilities.get(capability);
+  if (observer === undefined) {
+    throw new TypeError("La capability Cloudflare no pertenece al controlador");
+  }
+  await observer(await fixedCloudflareDryRunInvocation(candidate));
+}
+
+async function runFixedCloudflareDryRun(
+  invocation: FixedCloudflareInvocation,
+): Promise<void> {
+  const child = spawn(invocation.executable, invocation.argv.slice(1), {
+    cwd: invocation.cwd,
+    env: invocation.env,
+    shell: false,
+    stdio: "ignore",
+  });
+  let timedOut = false;
+  let killTimer: ReturnType<typeof setTimeout> | undefined;
+  const terminateTimer = setTimeout(() => {
+    timedOut = true;
+    child.kill("SIGTERM");
+    killTimer = setTimeout(() => {
+      child.kill("SIGKILL");
+    }, 1_000);
+  }, 5_000);
+  const exitCode = await gitExitCode(child).finally(() => {
+    clearTimeout(terminateTimer);
+    if (killTimer !== undefined) clearTimeout(killTimer);
+  });
+  if (timedOut || exitCode !== 0) {
+    throw new TypeError(
+      "El dry-run Cloudflare fijado no terminó correctamente",
+    );
+  }
+}
+
+/**
+ * Runs only the exact local dry-run invocation after a second sealed
+ * verification. This path is test-only until Task 12 supplies a trusted CLI
+ * capability for real operations.
+ */
+export async function runCandidateCloudflareDryRun(
+  candidate: CandidateManifest,
+  capability: CandidateCloudflareDryRunTestCapability,
+): Promise<void> {
+  if (process.env.INGEST_TEST_MODE !== "true") {
+    throw new TypeError("El dry-run Cloudflare sólo existe en modo de pruebas");
+  }
+  const observer = candidateCloudflareDryRunTestCapabilities.get(capability);
+  if (observer === undefined) {
+    throw new TypeError("La capability Cloudflare no pertenece al controlador");
+  }
+  await assertCandidateCloudflarePublication(candidate);
+  await observer(await fixedCloudflareDryRunInvocation(candidate));
+  await assertCandidateCloudflarePublication(candidate);
+  await runFixedCloudflareDryRun(
+    await fixedCloudflareDryRunInvocation(candidate),
+  );
 }
 
 function localPreviewUrl(value: string): string {
