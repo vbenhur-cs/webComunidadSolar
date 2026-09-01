@@ -1,6 +1,14 @@
 import { execFile } from "node:child_process";
 import { constants } from "node:fs";
-import { chmod, lstat, mkdtemp, open, realpath, rm } from "node:fs/promises";
+import {
+  chmod,
+  lstat,
+  mkdtemp,
+  open,
+  readdir,
+  realpath,
+  rm,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { isAbsolute, join, relative, resolve } from "node:path";
 import { promisify } from "node:util";
@@ -24,19 +32,20 @@ import {
   approveGate2,
   verifyApproval,
 } from "./approvals/service.ts";
-import type { ApprovalPromptCapability } from "./approvals/prompt.ts";
 import {
   createCandidate,
   loadCandidate,
   openControllerCandidateStore,
   releaseControllerCandidateStore,
   verifyCandidateArtifact,
+  verifyCandidateEvidence,
   type CandidateLocalPublicationTestCapability,
   type CandidatePreviewTestCapability,
   type ControllerCandidateStore,
 } from "./candidate/manifest.ts";
 import type { CandidateBuildTestCapability } from "./candidate/evidence.ts";
 import { canonicalJson } from "./canonical-json.ts";
+import { createSanitizedCandidateDossier } from "./dossier.ts";
 import type {
   ApprovalRecord,
   AttemptRecord,
@@ -60,9 +69,11 @@ import {
   type PreparedPlanningPublication,
 } from "./planning/plan.ts";
 import { validateSchema } from "./schema-validator.ts";
+import { safeError } from "./safe-output.ts";
 import {
   createStateStore,
   writeAtomic,
+  type LockedChange,
   type StateStore,
 } from "./state-store.ts";
 import {
@@ -118,8 +129,6 @@ export interface IngestionController {
     readonly changeId: string;
     readonly gate: 1 | 2;
     readonly actor: string;
-    /** Existing opaque prompt authority; production CLI never supplies it. */
-    readonly approvalPrompt?: ApprovalPromptCapability;
   }): Promise<ControllerResult>;
   generate(input: {
     readonly changeId: string;
@@ -146,7 +155,6 @@ export interface IngestionController {
  * environment, or callback selected by the caller.
  */
 export interface IngestionControllerTestRuntime {
-  readonly approvalPrompt?: ApprovalPromptCapability;
   readonly candidateBuildCapability?: CandidateBuildTestCapability;
   readonly candidatePreviewCapability?: CandidatePreviewTestCapability;
   readonly localPublicationCapability?: CandidateLocalPublicationTestCapability;
@@ -157,6 +165,11 @@ export interface IngestionControllerTestRuntime {
 interface ControllerRuntime extends IngestionControllerTestRuntime {
   readonly commandConfig: CommandAgentConfig | null;
   readonly codexCapability: CodexExecutableCapability | null;
+}
+
+interface ControllerOpenOptions {
+  /** Audit reads durable facts only and must not initialize an agent. */
+  readonly initializeAgents?: boolean;
 }
 
 interface SessionCandidate {
@@ -188,17 +201,6 @@ function rememberSessionCandidate(
     candidate,
   });
   sessionCandidates.set(store, candidates);
-}
-
-function safeError(error: unknown): string {
-  const message = error instanceof Error ? error.message : "fallo operativo";
-  return message
-    .replace(/(?:[A-Za-z]:)?\/(?:[^\s:]+\/)*[^\s:]*/gu, "[ruta]")
-    .replace(
-      /(?:PRIVATE\s+KEY|token|secret|password)\s*[:=]\s*[^\s,;]+/giu,
-      "[redactado]",
-    )
-    .slice(0, 240);
 }
 
 function assertChangeId(changeId: string): void {
@@ -243,6 +245,176 @@ async function trustedRegularFile(
   } finally {
     await handle.close();
   }
+}
+
+function missingPath(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    error.code === "ENOENT"
+  );
+}
+
+/** Returns false only when the complete optional directory is absent. */
+async function trustedDirectoryIfPresent(
+  path: string,
+  label: string,
+): Promise<boolean> {
+  try {
+    const entry = await lstat(path);
+    if (
+      entry.isSymbolicLink() ||
+      !entry.isDirectory() ||
+      (await realpath(path)) !== resolve(path)
+    ) {
+      throw new TypeError(`${label} no es un directorio seguro`);
+    }
+    return true;
+  } catch (error: unknown) {
+    if (missingPath(error)) return false;
+    throw error;
+  }
+}
+
+async function collectTrustedRelativeFiles(
+  root: string,
+  directory = root,
+): Promise<string[]> {
+  const entries = await readdir(directory, { withFileTypes: true });
+  const files: string[] = [];
+  for (const entry of entries) {
+    const path = resolve(directory, entry.name);
+    if (!isWithin(root, path)) {
+      throw new TypeError("El dossier fixture escapa su directorio sellado");
+    }
+    if (entry.isDirectory()) {
+      if (!(await trustedDirectoryIfPresent(path, "El dossier fixture"))) {
+        throw new TypeError("Falta un directorio del dossier fixture");
+      }
+      files.push(...(await collectTrustedRelativeFiles(root, path)));
+      continue;
+    }
+    if (!entry.isFile() || entry.isSymbolicLink()) {
+      throw new TypeError("El dossier fixture contiene una ruta no permitida");
+    }
+    await trustedRegularFile(path, "El archivo del dossier fixture");
+    files.push(relative(root, path));
+  }
+  return files.sort();
+}
+
+async function fixtureTagCommit(
+  projectRoot: string,
+  changeId: string,
+): Promise<string | null> {
+  const ref = `refs/tags/ingestion-fixture/${changeId}`;
+  const found = await execFileAsync(
+    "git",
+    ["-C", projectRoot, "for-each-ref", "--format=%(objectname)", ref],
+    { encoding: "utf8", env: sanitizedGitEnv() },
+  );
+  const objects = found.stdout
+    .split("\n")
+    .map((value) => value.trim())
+    .filter((value) => value !== "");
+  if (objects.length === 0) return null;
+  if (
+    objects.length !== 1 ||
+    objects[0] === undefined ||
+    !/^[a-f0-9]{40,64}$/u.test(objects[0])
+  ) {
+    throw new TypeError("La etiqueta fixture no tiene una identidad válida");
+  }
+  const resolved = await execFileAsync(
+    "git",
+    ["-C", projectRoot, "rev-parse", "--verify", `${ref}^{commit}`],
+    { encoding: "utf8", env: sanitizedGitEnv() },
+  ).catch(() => {
+    throw new TypeError("La etiqueta fixture no resuelve un commit candidato");
+  });
+  const commit = resolved.stdout.trim();
+  if (!/^[a-f0-9]{40,64}$/u.test(commit)) {
+    throw new TypeError("La etiqueta fixture no resuelve un commit válido");
+  }
+  return commit;
+}
+
+async function verifyFixtureDossier(input: {
+  readonly projectRoot: string;
+  readonly paths: IngestPaths;
+  readonly record: ChangeRecord;
+  readonly request: NormalizedRequest;
+  readonly plan: ChangePlan;
+  readonly attempt: AttemptRecord;
+  readonly candidate: CandidateManifest;
+}): Promise<boolean> {
+  const artifactRoot = join(input.projectRoot, ".artifacts");
+  if (
+    !(await trustedDirectoryIfPresent(artifactRoot, "La raíz de artefactos"))
+  ) {
+    return false;
+  }
+  const fixtureRoot = join(artifactRoot, "ingestion-fixtures");
+  if (
+    !(await trustedDirectoryIfPresent(
+      fixtureRoot,
+      "La raíz de expedientes fixture",
+    ))
+  ) {
+    return false;
+  }
+  const root = join(fixtureRoot, input.candidate.changeId);
+  if (!(await trustedDirectoryIfPresent(root, "El dossier fixture"))) {
+    return false;
+  }
+  if (
+    input.record.state !== "gate2_approved" &&
+    input.record.state !== "published"
+  ) {
+    throw new TypeError("Un dossier fixture exige Gate 2 durable");
+  }
+  const gate1 = await readApproval(input.paths, 1);
+  const gate2 = await readApproval(input.paths, 2);
+  verifyApproval(gate1, input.plan, input.plan.baselineCommit);
+  verifyApproval(gate2, input.candidate, input.candidate.baselineCommit);
+  const dossier = createSanitizedCandidateDossier({
+    request: input.request,
+    plan: input.plan,
+    gate1,
+    gate2,
+    attempt: input.attempt,
+    candidate: input.candidate,
+  });
+  const expected = new Map(
+    dossier.files.map((file) => [
+      file.path,
+      Buffer.from(file.contents, "utf8"),
+    ]),
+  );
+  const actual = await collectTrustedRelativeFiles(root);
+  if (
+    actual.length !== expected.size ||
+    actual.some((path) => !expected.has(path))
+  ) {
+    throw new TypeError(
+      "El dossier fixture no conserva sus hechos sanitizados",
+    );
+  }
+  for (const [path, contents] of expected) {
+    const target = resolve(root, ...path.split("/"));
+    if (!isWithin(root, target)) {
+      throw new TypeError("El dossier fixture tiene una ruta no permitida");
+    }
+    const actualContents = await trustedRegularFile(
+      target,
+      "El archivo del dossier fixture",
+    );
+    if (!actualContents.equals(contents)) {
+      throw new TypeError("El dossier fixture no coincide con el candidato");
+    }
+  }
+  return true;
 }
 
 async function readCanonicalJson(
@@ -627,15 +799,24 @@ class DefaultIngestionController implements IngestionController {
     return record;
   }
 
-  private async requireState(
-    changeId: string,
+  private async requireLockedState(
+    locked: LockedChange,
     expected: ChangeState,
   ): Promise<ChangeRecord> {
-    const record = await this.state(changeId);
+    const record = await locked.read();
     if (record.state !== expected) {
       throw new TypeError(`El cambio no está en el estado ${expected}`);
     }
     return record;
+  }
+
+  private async withChangeOperation<T>(
+    changeId: string,
+    operation: (locked: LockedChange) => Promise<T>,
+  ): Promise<T> {
+    this.assertOpen();
+    assertChangeId(changeId);
+    return await this.stateStore.withChangeLock(changeId, operation);
   }
 
   /**
@@ -703,139 +884,142 @@ class DefaultIngestionController implements IngestionController {
       input.kind === "request"
         ? await importRequest(input.source, { artifactRoot })
         : await importPage(input.source, input.metadata, { artifactRoot });
-    const paths = await this.paths(request.changeId);
-    try {
-      await this.stateStore.readChange(request.changeId);
-      throw new TypeError("El cambio ya tiene estado durable");
-    } catch (error: unknown) {
-      if (
-        !(error instanceof Error) ||
-        error.message !== "El estado del cambio no existe"
-      ) {
-        throw error;
+    return await this.withChangeOperation(request.changeId, async (locked) => {
+      const paths = await this.paths(request.changeId);
+      try {
+        await locked.read();
+        throw new TypeError("El cambio ya tiene estado durable");
+      } catch (error: unknown) {
+        if (
+          !(error instanceof Error) ||
+          error.message !== "El estado del cambio no existe"
+        ) {
+          throw error;
+        }
       }
-    }
-    await writeAtomic(
-      paths.request,
-      Buffer.from(canonicalJson(request), "utf8"),
-    );
-    await this.stateStore.transition(request.changeId, {
-      type: "received",
-      to: "received",
-      payload: {
-        inputKind: request.inputKind,
-        inputSha256: request.inputSha256,
-      },
+      await writeAtomic(
+        paths.request,
+        Buffer.from(canonicalJson(request), "utf8"),
+      );
+      await locked.transition({
+        type: "received",
+        to: "received",
+        payload: {
+          inputKind: request.inputKind,
+          inputSha256: request.inputSha256,
+        },
+      });
+      await locked.transition({
+        type: "normalized",
+        to: "normalized",
+        payload: { inputSha256: request.inputSha256 },
+      });
+      return {
+        kind: "success",
+        value: {
+          changeId: request.changeId,
+          inputKind: request.inputKind,
+          state: "normalized",
+        },
+      };
     });
-    await this.stateStore.transition(request.changeId, {
-      type: "normalized",
-      to: "normalized",
-      payload: { inputSha256: request.inputSha256 },
-    });
-    return {
-      kind: "success",
-      value: {
-        changeId: request.changeId,
-        inputKind: request.inputKind,
-        state: "normalized",
-      },
-    };
   }
 
   async plan(changeId: string): Promise<ControllerResult> {
     this.assertOpen();
-    const record = await this.requireState(changeId, "normalized");
-    const paths = await this.paths(changeId);
-    const request = await readRequest(paths);
-    const baselineCommit = await protectedMain(this.projectRoot);
-    const publication = await preparePlanningPublication({
-      projectRoot: this.projectRoot,
-      stateArtifactRoot: join(paths.changeDir, "publication"),
+    return await this.withChangeOperation(changeId, async (locked) => {
+      const record = await this.requireLockedState(locked, "normalized");
+      const paths = await this.paths(changeId);
+      const request = await readRequest(paths);
+      const baselineCommit = await protectedMain(this.projectRoot);
+      const publication = await preparePlanningPublication({
+        projectRoot: this.projectRoot,
+        stateArtifactRoot: join(paths.changeDir, "publication"),
+      });
+      const plan = createChangePlan(request, {
+        baselineCommit,
+        sourceManifestPath: join(
+          this.projectRoot,
+          "parity",
+          "source-manifest.json",
+        ),
+        projectRoot: this.projectRoot,
+        publication,
+      });
+      if (record.changeId !== plan.changeId) {
+        throw new TypeError("El plan no coincide con el cambio bloqueado");
+      }
+      await writeAtomic(paths.plan, Buffer.from(canonicalJson(plan), "utf8"));
+      await locked.transition({
+        type: "planned",
+        to: "planned",
+        payload: {
+          planSha256: plan.planSha256,
+          baselineCommit: plan.baselineCommit,
+        },
+      });
+      return {
+        kind: "success",
+        value: {
+          changeId,
+          state: "planned",
+          planSha256: plan.planSha256,
+          selectedMode: plan.selectedMode,
+        },
+      };
     });
-    const plan = createChangePlan(request, {
-      baselineCommit,
-      sourceManifestPath: join(
-        this.projectRoot,
-        "parity",
-        "source-manifest.json",
-      ),
-      projectRoot: this.projectRoot,
-      publication,
-    });
-    if (record.changeId !== plan.changeId) {
-      throw new TypeError("El plan no coincide con el cambio bloqueado");
-    }
-    await writeAtomic(paths.plan, Buffer.from(canonicalJson(plan), "utf8"));
-    await this.stateStore.transition(changeId, {
-      type: "planned",
-      to: "planned",
-      payload: {
-        planSha256: plan.planSha256,
-        baselineCommit: plan.baselineCommit,
-      },
-    });
-    return {
-      kind: "success",
-      value: {
-        changeId,
-        state: "planned",
-        planSha256: plan.planSha256,
-        selectedMode: plan.selectedMode,
-      },
-    };
   }
 
   async approve(input: {
     readonly changeId: string;
     readonly gate: 1 | 2;
     readonly actor: string;
-    readonly approvalPrompt?: ApprovalPromptCapability;
   }): Promise<ControllerResult> {
     this.assertOpen();
-    const expected = input.gate === 1 ? "planned" : "validated";
-    const current = await this.requireState(input.changeId, expected);
-    const paths = await this.paths(input.changeId);
-    const plan = await readPlan(paths);
-    const approvalPrompt = input.approvalPrompt ?? this.runtime.approvalPrompt;
-    const approval =
-      input.gate === 1
-        ? await approveGate1(
-            {
-              ...paths,
-              plan,
-              actor: input.actor,
-              repositoryRoot: this.projectRoot,
-              now: this.runtime.now,
-            },
-            approvalPrompt,
-          )
-        : await approveGate2(
-            {
-              ...paths,
-              plan,
-              candidate: await this.candidateFor(
-                input.changeId,
-                current.currentAttemptId,
-              ),
-              actor: input.actor,
-              repositoryRoot: this.projectRoot,
-              now: this.runtime.now,
-            },
-            approvalPrompt,
-          );
-    await this.stateStore.transition(input.changeId, {
-      type: input.gate === 1 ? "gate1-approved" : "gate2-approved",
-      to: input.gate === 1 ? "gate1_approved" : "gate2_approved",
-      payload: { gate: approval.gate, subjectSha256: approval.subjectSha256 },
+    return await this.withChangeOperation(input.changeId, async (locked) => {
+      const expected = input.gate === 1 ? "planned" : "validated";
+      const current = await this.requireLockedState(locked, expected);
+      const paths = await this.paths(input.changeId);
+      const plan = await readPlan(paths);
+      let approval: ApprovalRecord;
+      if (input.gate === 1) {
+        approval = await approveGate1({
+          ...paths,
+          plan,
+          actor: input.actor,
+          repositoryRoot: this.projectRoot,
+          now: this.runtime.now,
+        });
+      } else {
+        const [candidate, attempt] = await Promise.all([
+          this.candidateFor(input.changeId, current.currentAttemptId),
+          readAttempt(paths, current.currentAttemptId),
+        ]);
+        await verifyCandidateArtifact(candidate);
+        await verifyCandidateEvidence(candidate, attempt);
+        approval = await approveGate2({
+          ...paths,
+          plan,
+          candidate,
+          actor: input.actor,
+          repositoryRoot: this.projectRoot,
+          now: this.runtime.now,
+        });
+      }
+      await locked.transition({
+        type: input.gate === 1 ? "gate1-approved" : "gate2-approved",
+        to: input.gate === 1 ? "gate1_approved" : "gate2_approved",
+        payload: { gate: approval.gate, subjectSha256: approval.subjectSha256 },
+      });
+      return {
+        kind: "success",
+        value: {
+          changeId: input.changeId,
+          gate: input.gate,
+          state: input.gate === 1 ? "gate1_approved" : "gate2_approved",
+        },
+      };
     });
-    return {
-      kind: "success",
-      value: {
-        changeId: input.changeId,
-        gate: input.gate,
-        state: input.gate === 1 ? "gate1_approved" : "gate2_approved",
-      },
-    };
   }
 
   async generate(input: {
@@ -843,161 +1027,168 @@ class DefaultIngestionController implements IngestionController {
     readonly adapter: "codex" | "command";
   }): Promise<ControllerResult> {
     this.assertOpen();
-    const current = await this.state(input.changeId);
-    if (current.state === "planned") return { kind: "gate-pending", gate: 1 };
-    if (current.state !== "gate1_approved") {
-      throw new TypeError("El cambio no está listo para generar");
-    }
-    const paths = await this.paths(input.changeId);
-    const [request, plan, gate1, baseline] = await Promise.all([
-      readRequest(paths),
-      readPlan(paths),
-      readApproval(paths, 1),
-      protectedMain(this.projectRoot),
-    ]);
-    if (
-      request.changeId !== input.changeId ||
-      plan.changeId !== input.changeId
-    ) {
-      throw new TypeError("Las autoridades del cambio no comparten identidad");
-    }
-    verifyApproval(gate1, plan, baseline);
-    const running = attemptRecord(current, plan, input.adapter);
-    await writeAttempt(paths, running);
-    let workspaceRoot: string | undefined;
-    let workspace: AgentWorkspace | undefined;
-    let output:
-      Awaited<ReturnType<typeof validateAgentWorkspaceOutput>> | undefined;
-    try {
-      const [authorities, publication] = await Promise.all([
-        writeAgentAuthorities(
-          paths,
-          plan,
-          this.projectRoot,
-          current.currentAttemptId,
-        ),
-        currentPreparedPublication(this.projectRoot, paths, plan),
-      ]);
-      workspaceRoot = await makeWorkspaceRoot();
-      workspace = await createAgentWorkspace({
-        repositoryRoot: this.projectRoot,
-        workspaceRoot,
-        approvedPlan: plan,
-        changeId: input.changeId,
-        attemptId: current.currentAttemptId,
-        baselineCommit: plan.baselineCommit,
-        requestPath: paths.request,
-        planPath: paths.plan,
-        policyPath: authorities.policyPath,
-        resultSchemaPath: authorities.resultSchemaPath,
-      });
-      const agent = await this.adapter(input.adapter, workspace);
-      const result = await agent.run(workspaceInputs(workspace));
-      output = await validateAgentWorkspaceOutput(workspace, plan);
-      const [evidenceRoot, profile] = await Promise.all([
-        createValidationEvidenceRoot(output, plan, current.currentAttemptId),
-        createControllerPublicationProfile(
-          output,
-          plan,
-          current.currentAttemptId,
-          publication,
-        ),
-      ]);
-      const validations = await runValidation(
-        {
-          output,
-          plan,
-          attemptId: current.currentAttemptId,
-          evidenceRoot,
-          publicationProfile: profile,
-        },
-        this.runtime.validationOptions,
-      );
-      if (validations.some((validation) => validation.status !== "passed")) {
-        throw preliminaryValidationFailure(validations);
+    return await this.withChangeOperation(input.changeId, async (locked) => {
+      const current = await locked.read();
+      if (current.state === "planned") return { kind: "gate-pending", gate: 1 };
+      if (current.state !== "gate1_approved") {
+        throw new TypeError("El cambio no está listo para generar");
       }
-      const candidate = await createCandidate({
-        output,
-        plan,
-        attemptId: current.currentAttemptId,
-        preliminaryValidations: validations,
-        store: this.candidateStore,
-        buildCapability: this.runtime.candidateBuildCapability,
-        previewCapability: this.runtime.candidatePreviewCapability,
-      });
-      await writeAtomic(
-        paths.candidate,
-        Buffer.from(canonicalJson(candidate), "utf8"),
-      );
-      await writeAttempt(paths, completedAttempt(running, result, candidate));
-      await this.stateStore.transition(input.changeId, {
-        type: "generated",
-        to: "generated",
-        payload: {
-          attemptId: current.currentAttemptId,
-          candidateCommit: candidate.candidateCommit,
-          artifactSha256: candidate.artifactSha256,
-        },
-      });
-      rememberSessionCandidate(this.candidateStore, candidate);
-      return {
-        kind: "success",
-        value: {
+      const paths = await this.paths(input.changeId);
+      const [request, plan, gate1, baseline] = await Promise.all([
+        readRequest(paths),
+        readPlan(paths),
+        readApproval(paths, 1),
+        protectedMain(this.projectRoot),
+      ]);
+      if (
+        request.changeId !== input.changeId ||
+        plan.changeId !== input.changeId
+      ) {
+        throw new TypeError(
+          "Las autoridades del cambio no comparten identidad",
+        );
+      }
+      verifyApproval(gate1, plan, baseline);
+      const running = attemptRecord(current, plan, input.adapter);
+      await writeAttempt(paths, running);
+      let workspaceRoot: string | undefined;
+      let workspace: AgentWorkspace | undefined;
+      let output:
+        Awaited<ReturnType<typeof validateAgentWorkspaceOutput>> | undefined;
+      try {
+        const [authorities, publication] = await Promise.all([
+          writeAgentAuthorities(
+            paths,
+            plan,
+            this.projectRoot,
+            current.currentAttemptId,
+          ),
+          currentPreparedPublication(this.projectRoot, paths, plan),
+        ]);
+        workspaceRoot = await makeWorkspaceRoot();
+        workspace = await createAgentWorkspace({
+          repositoryRoot: this.projectRoot,
+          workspaceRoot,
+          approvedPlan: plan,
           changeId: input.changeId,
-          state: "generated",
           attemptId: current.currentAttemptId,
-          candidateCommit: candidate.candidateCommit,
-          artifactSha256: candidate.artifactSha256,
-        },
-      };
-    } catch (error: unknown) {
-      await writeAttempt(paths, failedAttempt(running, error)).catch(
-        () => undefined,
-      );
-      throw error;
-    } finally {
-      if (output !== undefined)
-        await removeStagedAgentOutput(output).catch(() => undefined);
-      if (workspace !== undefined)
-        await removeAgentWorkspace(workspace).catch(() => undefined);
-      if (workspaceRoot !== undefined)
-        await rm(workspaceRoot, { recursive: true, force: true }).catch(
+          baselineCommit: plan.baselineCommit,
+          requestPath: paths.request,
+          planPath: paths.plan,
+          policyPath: authorities.policyPath,
+          resultSchemaPath: authorities.resultSchemaPath,
+        });
+        const agent = await this.adapter(input.adapter, workspace);
+        const result = await agent.run(workspaceInputs(workspace));
+        output = await validateAgentWorkspaceOutput(workspace, plan);
+        const [evidenceRoot, profile] = await Promise.all([
+          createValidationEvidenceRoot(output, plan, current.currentAttemptId),
+          createControllerPublicationProfile(
+            output,
+            plan,
+            current.currentAttemptId,
+            publication,
+          ),
+        ]);
+        const validations = await runValidation(
+          {
+            output,
+            plan,
+            attemptId: current.currentAttemptId,
+            evidenceRoot,
+            publicationProfile: profile,
+          },
+          this.runtime.validationOptions,
+        );
+        if (validations.some((validation) => validation.status !== "passed")) {
+          throw preliminaryValidationFailure(validations);
+        }
+        const candidate = await createCandidate({
+          output,
+          plan,
+          attemptId: current.currentAttemptId,
+          preliminaryValidations: validations,
+          store: this.candidateStore,
+          buildCapability: this.runtime.candidateBuildCapability,
+          previewCapability: this.runtime.candidatePreviewCapability,
+        });
+        await writeAtomic(
+          paths.candidate,
+          Buffer.from(canonicalJson(candidate), "utf8"),
+        );
+        await writeAttempt(paths, completedAttempt(running, result, candidate));
+        await locked.transition({
+          type: "generated",
+          to: "generated",
+          payload: {
+            attemptId: current.currentAttemptId,
+            candidateCommit: candidate.candidateCommit,
+            artifactSha256: candidate.artifactSha256,
+          },
+        });
+        rememberSessionCandidate(this.candidateStore, candidate);
+        return {
+          kind: "success",
+          value: {
+            changeId: input.changeId,
+            state: "generated",
+            attemptId: current.currentAttemptId,
+            candidateCommit: candidate.candidateCommit,
+            artifactSha256: candidate.artifactSha256,
+          },
+        };
+      } catch (error: unknown) {
+        await writeAttempt(paths, failedAttempt(running, error)).catch(
           () => undefined,
         );
-    }
+        throw error;
+      } finally {
+        if (output !== undefined)
+          await removeStagedAgentOutput(output).catch(() => undefined);
+        if (workspace !== undefined)
+          await removeAgentWorkspace(workspace).catch(() => undefined);
+        if (workspaceRoot !== undefined)
+          await rm(workspaceRoot, { recursive: true, force: true }).catch(
+            () => undefined,
+          );
+      }
+    });
   }
 
   async validate(changeId: string): Promise<ControllerResult> {
     this.assertOpen();
-    const current = await this.requireState(changeId, "generated");
-    const paths = await this.paths(changeId);
-    const [plan, attempt, candidate] = await Promise.all([
-      readPlan(paths),
-      readAttempt(paths, current.currentAttemptId),
-      this.candidateFor(changeId, current.currentAttemptId),
-    ]);
-    if (
-      attempt.changeId !== changeId ||
-      attempt.planSha256 !== plan.planSha256 ||
-      candidate.planSha256 !== plan.planSha256
-    ) {
-      throw new TypeError("El intento o candidato no coincide con el plan");
-    }
-    await verifyCandidateArtifact(candidate);
-    await writeAttempt(paths, validatedAttempt(attempt));
-    await this.stateStore.transition(changeId, {
-      type: "validated",
-      to: "validated",
-      payload: { artifactSha256: candidate.artifactSha256 },
+    return await this.withChangeOperation(changeId, async (locked) => {
+      const current = await this.requireLockedState(locked, "generated");
+      const paths = await this.paths(changeId);
+      const [plan, attempt, candidate] = await Promise.all([
+        readPlan(paths),
+        readAttempt(paths, current.currentAttemptId),
+        this.candidateFor(changeId, current.currentAttemptId),
+      ]);
+      if (
+        attempt.changeId !== changeId ||
+        attempt.planSha256 !== plan.planSha256 ||
+        candidate.planSha256 !== plan.planSha256
+      ) {
+        throw new TypeError("El intento o candidato no coincide con el plan");
+      }
+      await verifyCandidateArtifact(candidate);
+      await verifyCandidateEvidence(candidate, attempt);
+      await writeAttempt(paths, validatedAttempt(attempt));
+      await locked.transition({
+        type: "validated",
+        to: "validated",
+        payload: { artifactSha256: candidate.artifactSha256 },
+      });
+      return {
+        kind: "success",
+        value: {
+          changeId,
+          state: "validated",
+          artifactSha256: candidate.artifactSha256,
+        },
+      };
     });
-    return {
-      kind: "success",
-      value: {
-        changeId,
-        state: "validated",
-        artifactSha256: candidate.artifactSha256,
-      },
-    };
   }
 
   async preview(input: {
@@ -1005,25 +1196,30 @@ class DefaultIngestionController implements IngestionController {
     readonly checkOnly: true;
   }): Promise<ControllerResult> {
     this.assertOpen();
-    const current = await this.state(input.changeId);
-    if (current.state === "generated") return { kind: "gate-pending", gate: 2 };
-    if (current.state !== "validated" && current.state !== "gate2_approved") {
-      throw new TypeError("El cambio no está listo para preview");
-    }
-    const candidate = await this.candidateFor(
-      input.changeId,
-      current.currentAttemptId,
-    );
-    await verifyCandidateArtifact(candidate);
-    return {
-      kind: "success",
-      value: {
-        changeId: input.changeId,
-        checkOnly: true,
-        artifactSha256: candidate.artifactSha256,
-        routes: candidate.routes,
-      },
-    };
+    return await this.withChangeOperation(input.changeId, async (locked) => {
+      const current = await locked.read();
+      if (current.state === "generated")
+        return { kind: "gate-pending", gate: 2 };
+      if (current.state !== "validated" && current.state !== "gate2_approved") {
+        throw new TypeError("El cambio no está listo para preview");
+      }
+      const paths = await this.paths(input.changeId);
+      const [candidate, attempt] = await Promise.all([
+        this.candidateFor(input.changeId, current.currentAttemptId),
+        readAttempt(paths, current.currentAttemptId),
+      ]);
+      await verifyCandidateArtifact(candidate);
+      await verifyCandidateEvidence(candidate, attempt);
+      return {
+        kind: "success",
+        value: {
+          changeId: input.changeId,
+          checkOnly: true,
+          artifactSha256: candidate.artifactSha256,
+          routes: candidate.routes,
+        },
+      };
+    });
   }
 
   async publishLocal(input: {
@@ -1031,37 +1227,42 @@ class DefaultIngestionController implements IngestionController {
     readonly operator: OperatorProfile;
   }): Promise<ControllerResult> {
     this.assertOpen();
-    const before = await this.requireState(input.changeId, "gate2_approved");
-    const candidate = await this.candidateFor(
-      input.changeId,
-      before.currentAttemptId,
-    );
-    const result = await new LocalPublisher().publish({
-      candidate,
-      operator: input.operator,
-      ...(this.runtime.localPublicationCapability === undefined
-        ? {}
-        : { testCapability: this.runtime.localPublicationCapability }),
+    return await this.withChangeOperation(input.changeId, async (locked) => {
+      const before = await this.requireLockedState(locked, "gate2_approved");
+      const paths = await this.paths(input.changeId);
+      const [candidate, attempt] = await Promise.all([
+        this.candidateFor(input.changeId, before.currentAttemptId),
+        readAttempt(paths, before.currentAttemptId),
+      ]);
+      await verifyCandidateArtifact(candidate);
+      await verifyCandidateEvidence(candidate, attempt);
+      const result = await new LocalPublisher().publish({
+        candidate,
+        operator: input.operator,
+        ...(this.runtime.localPublicationCapability === undefined
+          ? {}
+          : { testCapability: this.runtime.localPublicationCapability }),
+      });
+      const after = await this.requireLockedState(locked, "gate2_approved");
+      if (
+        after.currentAttemptId !== before.currentAttemptId ||
+        after.revision !== before.revision ||
+        result.artifactSha256 !== candidate.artifactSha256
+      ) {
+        throw new TypeError(
+          "La comprobación local no puede alterar el estado durable del cambio",
+        );
+      }
+      return {
+        kind: "success",
+        value: {
+          changeId: input.changeId,
+          state: "gate2_approved",
+          local: "success",
+          artifactSha256: candidate.artifactSha256,
+        },
+      };
     });
-    const after = await this.requireState(input.changeId, "gate2_approved");
-    if (
-      after.currentAttemptId !== before.currentAttemptId ||
-      after.revision !== before.revision ||
-      result.artifactSha256 !== candidate.artifactSha256
-    ) {
-      throw new TypeError(
-        "La comprobación local no puede alterar el estado durable del cambio",
-      );
-    }
-    return {
-      kind: "success",
-      value: {
-        changeId: input.changeId,
-        state: "gate2_approved",
-        local: "success",
-        artifactSha256: candidate.artifactSha256,
-      },
-    };
   }
 
   async status(changeId: string): Promise<ControllerResult> {
@@ -1136,42 +1337,123 @@ class DefaultIngestionController implements IngestionController {
     const missing: string[] = [];
     for (const changeId of entries) {
       try {
-        const record = await this.state(changeId);
-        const paths = await this.paths(changeId);
-        const requiresPlan =
-          record.state !== "received" &&
-          record.state !== "failed" &&
-          record.state !== "rejected";
-        if (requiresPlan) await readPlan(paths);
-        await readRequest(paths);
-        let candidate: {
-          artifactSha256: string;
-          candidateCommit: string;
-        } | null = null;
-        if (
-          ["generated", "validated", "gate2_approved", "published"].includes(
-            record.state,
-          )
-        ) {
-          const loaded = await loadCandidate({
-            store: this.candidateStore,
-            changeId,
-            attemptId: record.currentAttemptId,
-          });
-          await verifyCandidateArtifact(loaded);
-          candidate = {
-            artifactSha256: loaded.artifactSha256,
-            candidateCommit: loaded.candidateCommit,
-          };
-        }
-        changes.push(
-          Object.freeze({
-            changeId,
-            state: record.state,
-            revision: record.revision,
-            candidate,
-          }),
+        const change = await this.stateStore.withChangeLock(
+          changeId,
+          async (locked) => {
+            const record = await locked.read();
+            await this.stateStore.verifyJournal(changeId);
+            const paths = await this.paths(changeId);
+            const requiresPlan =
+              record.state !== "received" &&
+              record.state !== "failed" &&
+              record.state !== "rejected";
+            const request = await readRequest(paths);
+            if (!requiresPlan) {
+              return Object.freeze({
+                changeId,
+                state: record.state,
+                revision: record.revision,
+                candidate: null,
+              });
+            }
+            const plan = await readPlan(paths);
+            let candidate: {
+              artifactSha256: string;
+              candidateCommit: string;
+            } | null = null;
+            if (
+              [
+                "generated",
+                "validated",
+                "gate2_approved",
+                "published",
+              ].includes(record.state)
+            ) {
+              const [loaded, persisted, attempt, gate1] = await Promise.all([
+                loadCandidate({
+                  store: this.candidateStore,
+                  changeId,
+                  attemptId: record.currentAttemptId,
+                }),
+                readCanonicalJson(paths.candidate, "El candidato durable"),
+                readAttempt(paths, record.currentAttemptId),
+                readApproval(paths, 1),
+              ]);
+              const durable = validateSchema<CandidateManifest>(
+                "candidate",
+                persisted,
+              );
+              if (
+                canonicalJson(durable) !== canonicalJson(loaded) ||
+                request.changeId !== changeId ||
+                request.inputSha256 !== loaded.requestSha256 ||
+                plan.changeId !== changeId ||
+                plan.requestSha256 !== loaded.requestSha256 ||
+                plan.planSha256 !== loaded.planSha256 ||
+                plan.baselineCommit !== loaded.baselineCommit ||
+                canonicalJson(plan.publication) !==
+                  canonicalJson(loaded.buildProfile) ||
+                attempt.changeId !== changeId ||
+                attempt.attemptId !== record.currentAttemptId ||
+                attempt.requestSha256 !== loaded.requestSha256 ||
+                attempt.planSha256 !== loaded.planSha256 ||
+                attempt.baselineCommit !== loaded.baselineCommit ||
+                (record.state === "generated" &&
+                  attempt.status !== "generated") ||
+                (record.state !== "generated" && attempt.status !== "validated")
+              ) {
+                throw new TypeError(
+                  "El candidato durable no conserva sus bindings de auditoría",
+                );
+              }
+              verifyApproval(gate1, plan, plan.baselineCommit);
+              if (
+                record.state === "gate2_approved" ||
+                record.state === "published"
+              ) {
+                verifyApproval(
+                  await readApproval(paths, 2),
+                  loaded,
+                  loaded.baselineCommit,
+                );
+              }
+              await verifyCandidateArtifact(loaded);
+              await verifyCandidateEvidence(loaded, attempt);
+              const dossierPresent = await verifyFixtureDossier({
+                projectRoot: this.projectRoot,
+                paths,
+                record,
+                request,
+                plan,
+                attempt,
+                candidate: loaded,
+              });
+              const tagCommit = await fixtureTagCommit(
+                this.projectRoot,
+                changeId,
+              );
+              if (
+                tagCommit !== null &&
+                (!dossierPresent || tagCommit !== loaded.candidateCommit)
+              ) {
+                throw new TypeError(
+                  "La etiqueta fixture no coincide con su dossier candidato",
+                );
+              }
+              candidate = {
+                artifactSha256: loaded.artifactSha256,
+                candidateCommit: loaded.candidateCommit,
+              };
+            }
+            return Object.freeze({
+              changeId,
+              state: record.state,
+              revision: record.revision,
+              candidate,
+            });
+          },
         );
+        changes.push(change);
       } catch {
         missing.push(`change:${changeId}`);
       }
@@ -1193,14 +1475,18 @@ class DefaultIngestionController implements IngestionController {
 
 async function openWithRuntime(
   runtime: IngestionControllerTestRuntime = {},
+  options: ControllerOpenOptions = {},
 ): Promise<IngestionController> {
   const projectRoot = await assertControllerRoot(process.cwd());
   const candidateStore = await openControllerCandidateStore();
   try {
-    const [commandConfig, codexCapability] = await Promise.all([
-      Promise.resolve(parseCommandConfig()),
-      defaultCodexCapability(),
-    ]);
+    const initializeAgents = options.initializeAgents !== false;
+    const [commandConfig, codexCapability] = initializeAgents
+      ? await Promise.all([
+          Promise.resolve(parseCommandConfig()),
+          defaultCodexCapability(),
+        ])
+      : [null, null];
     return new DefaultIngestionController(
       projectRoot,
       createStateStore({ projectRoot }),
@@ -1222,6 +1508,22 @@ async function openWithRuntime(
 /** Opens the production composition root from the trusted startup directory. */
 export async function openIngestionController(): Promise<IngestionController> {
   return await openWithRuntime();
+}
+
+/**
+ * Opens only the durable audit graph. Agent configuration is deliberately
+ * rejected as an invocation error instead of being inspected or initialized.
+ */
+export async function openIngestionAuditController(): Promise<IngestionController> {
+  if (
+    (process.env.CODEX_EXECUTABLE !== undefined &&
+      process.env.CODEX_EXECUTABLE !== "") ||
+    (process.env.INGEST_COMMAND_AGENT_CONFIG !== undefined &&
+      process.env.INGEST_COMMAND_AGENT_CONFIG !== "")
+  ) {
+    throw new TypeError("La auditoría no admite configuración de agentes");
+  }
+  return await openWithRuntime({}, { initializeAgents: false });
 }
 
 /** Test-only composition with opaque capabilities; production calls the opener above. */

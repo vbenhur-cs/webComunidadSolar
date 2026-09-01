@@ -2,9 +2,10 @@ import { fileURLToPath } from "node:url";
 import { resolve } from "node:path";
 
 import {
-  openIngestionController,
+  openIngestionAuditController,
   type IngestionAudit,
 } from "../src/ingest/controller.ts";
+import { safeError, safeJson } from "../src/ingest/safe-output.ts";
 
 interface AuditPort {
   audit(): Promise<IngestionAudit>;
@@ -24,7 +25,7 @@ export async function verifyIngestion(
   options: VerifyIngestionOptions = {},
 ): Promise<IngestionAudit> {
   if (options.controller !== undefined) return await options.controller.audit();
-  const controller = await openIngestionController();
+  const controller = await openIngestionAuditController();
   try {
     return await controller.audit();
   } finally {
@@ -33,9 +34,14 @@ export async function verifyIngestion(
 }
 
 async function main(): Promise<void> {
-  const audit = await verifyIngestion();
-  process.stdout.write(`${JSON.stringify(audit)}\n`);
-  process.exitCode = audit.ok ? 0 : 1;
+  try {
+    const audit = await verifyIngestion();
+    process.stdout.write(`${JSON.stringify(safeJson(audit))}\n`);
+    process.exitCode = audit.ok ? 0 : 1;
+  } catch (error: unknown) {
+    process.stderr.write(`${safeError(error)}\n`);
+    process.exitCode = 1;
+  }
 }
 
 if (

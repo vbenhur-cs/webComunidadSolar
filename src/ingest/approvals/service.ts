@@ -20,7 +20,7 @@ import {
   approvalPrompt,
   assertPromptStateRoot,
   beforeApprovalPersist,
-  type ApprovalPromptCapability,
+  type FixtureApprovalPrompt,
 } from "./prompt.ts";
 
 export type ApprovalStorageOptions = IngestPathOptions;
@@ -391,7 +391,7 @@ async function persistApproval(
 
 export async function approveGate1(
   input: Gate1ApprovalInput,
-  fixturePrompt?: ApprovalPromptCapability,
+  fixturePrompt?: FixtureApprovalPrompt,
 ): Promise<ApprovalRecord> {
   assertActor(input.actor);
   const subjectSha256 = planSubject(input.plan);
@@ -426,7 +426,7 @@ export async function approveGate1(
 
 export async function approveGate2(
   input: Gate2ApprovalInput,
-  fixturePrompt?: ApprovalPromptCapability,
+  fixturePrompt?: FixtureApprovalPrompt,
 ): Promise<ApprovalRecord> {
   assertActor(input.actor);
   const approvedPlanSha256 = planSubject(input.plan);

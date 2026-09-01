@@ -2177,7 +2177,12 @@ function verifyCandidateBuildEvidenceBinding(
   }
 }
 
-async function verifyCandidatePublicationEvidence(
+/**
+ * Verifies the immutable candidate-evidence set without opening an agent,
+ * preview, or publisher.  Audit callers use this before treating a durable
+ * candidate as trustworthy.
+ */
+export async function verifyCandidateEvidence(
   candidate: CandidateManifest,
   attempt: AttemptRecord,
 ): Promise<void> {
@@ -2324,7 +2329,7 @@ async function candidatePublicationState(
       "El journal candidato no conserva solicitud, plan, intento y evidencia aprobados",
     );
   }
-  await verifyCandidatePublicationEvidence(candidate, attempt);
+  await verifyCandidateEvidence(candidate, attempt);
   const state = createStateStore({ stateRoot: store.stateRoot.path });
   const [change, journal] = await Promise.all([
     state.readChange(candidate.changeId),

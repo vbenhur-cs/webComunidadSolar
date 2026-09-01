@@ -36,6 +36,7 @@ import {
 
 const staleLockMs = 30 * 60 * 1000;
 const eventTypePattern = /^[a-z][a-z0-9-]{0,63}$/;
+const lockedChangeBrand: unique symbol = Symbol("ingestion-locked-change");
 const recordKeys = [
   "attemptNumber",
   "changeId",
@@ -100,11 +101,21 @@ export interface StateStoreOptions extends IngestPathOptions {
 }
 
 export interface StateStore {
-  withChangeLock<T>(changeId: string, fn: () => Promise<T>): Promise<T>;
+  withChangeLock<T>(
+    changeId: string,
+    fn: (locked: LockedChange) => Promise<T>,
+  ): Promise<T>;
   readChange(changeId: string): Promise<ChangeRecord>;
   transition(changeId: string, event: TransitionEvent): Promise<ChangeRecord>;
   retryChange(changeId: string): Promise<ChangeRecord>;
   verifyJournal(changeId: string): Promise<JournalEvent[]>;
+}
+
+/** A lock-scoped state view with no filesystem or process authority. */
+export interface LockedChange {
+  readonly [lockedChangeBrand]: true;
+  read(): Promise<ChangeRecord>;
+  transition(event: TransitionEvent): Promise<ChangeRecord>;
 }
 
 export interface AtomicWriteOptions {
@@ -841,7 +852,7 @@ export function createStateStore(options: StateStoreOptions = {}): StateStore {
 
   async function withChangeLock<T>(
     changeId: string,
-    fn: () => Promise<T>,
+    fn: (locked: LockedChange) => Promise<T>,
     afterPendingRecovery?: () => Promise<T>,
   ): Promise<T> {
     const paths = await pathsFor(changeId);
@@ -850,7 +861,7 @@ export function createStateStore(options: StateStoreOptions = {}): StateStore {
     let failed = false;
     let primary: unknown;
     try {
-      result = await fn();
+      result = await fn(lockedChange(paths));
       if (acquired.recoveryPending && (await readState(paths)) !== null) {
         await recordLockRecovery(paths);
         if (afterPendingRecovery !== undefined) {
@@ -877,6 +888,10 @@ export function createStateStore(options: StateStoreOptions = {}): StateStore {
 
   async function readChange(changeId: string): Promise<ChangeRecord> {
     const paths = await pathsFor(changeId);
+    return await readChangeAtPaths(paths);
+  }
+
+  async function readChangeAtPaths(paths: IngestPaths): Promise<ChangeRecord> {
     const record = await readState(paths);
     if (record === null) {
       throw new Error("El estado del cambio no existe");
@@ -885,17 +900,25 @@ export function createStateStore(options: StateStoreOptions = {}): StateStore {
     return record;
   }
 
+  function lockedChange(paths: IngestPaths): LockedChange {
+    return Object.freeze({
+      [lockedChangeBrand]: true as const,
+      async read() {
+        return await readChangeAtPaths(paths);
+      },
+      async transition(event: TransitionEvent) {
+        return await persistTransition(paths, await readState(paths), event);
+      },
+    });
+  }
+
   async function transition(
     changeId: string,
     event: TransitionEvent,
   ): Promise<ChangeRecord> {
     return withChangeLock(
       changeId,
-      async () => {
-        const paths = await pathsFor(changeId);
-        const previous = await readState(paths);
-        return persistTransition(paths, previous, event);
-      },
+      async (locked) => await locked.transition(event),
       async () => readChange(changeId),
     );
   }

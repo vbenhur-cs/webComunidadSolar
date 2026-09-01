@@ -94,6 +94,61 @@ test("status JSON redacts intake paths, secrets and capability-shaped fields", a
   assert.doesNotMatch(result.stdout, /PRIVATE KEY|\/Users\/|never-print/);
 });
 
+test("CLI output and operational errors remove environment, argv and runtime internals", async () => {
+  const result = await runCli(["status", "safe-change", "--json"], {
+    controller: controller({
+      async status() {
+        return {
+          kind: "success",
+          value: {
+            changeId: "safe-change",
+            environment: { API_KEY: "api-key-never-print" },
+            argv: ["--token", "argv-never-print"],
+            pid: 4242,
+            bundle: "/tmp/private-bundle",
+            repository: "/Users/operator/private-repository",
+            internal: { capability: "never-print" },
+            renderedLocation: "file:///tmp/private-artifact",
+            hostLocation: "C:\\private\\artifact",
+            safeFact: "planned",
+          },
+        };
+      },
+    }),
+  });
+  assert.equal(result.exitCode, 0);
+  assert.match(result.stdout, /"safeFact":"planned"/u);
+  assert.doesNotMatch(
+    result.stdout,
+    /api-key-never-print|argv-never-print|4242|private-bundle|private-repository|private-artifact|C:\\private|never-print|environment|argv|pid|bundle|repository|internal|capability/iu,
+  );
+
+  const failed = await runCli(["status", "safe-change"], {
+    controller: controller({
+      async status() {
+        throw new Error(
+          "API_KEY=api-key-never-print argv=argv-never-print pid=4242 bundle=/tmp/private-bundle",
+        );
+      },
+    }),
+  });
+  assert.equal(failed.exitCode, 1);
+  assert.doesNotMatch(
+    failed.stderr,
+    /api-key-never-print|argv-never-print|4242|private-bundle|API_KEY|argv|pid|bundle|Error:|\bat\s/iu,
+  );
+
+  const failedPath = await runCli(["status", "safe-change"], {
+    controller: controller({
+      async status() {
+        throw new Error("fallo al leer file:///tmp/private-artifact");
+      },
+    }),
+  });
+  assert.equal(failedPath.exitCode, 1);
+  assert.doesNotMatch(failedPath.stderr, /private-artifact|file:\/\//iu);
+});
+
 test("unknown and malformed options fail before a transition", async () => {
   let calls = 0;
   const result = await runCli(["status", "safe-change", "--unexpected"], {
@@ -141,4 +196,22 @@ test("production CLI and controller source graphs do not import fixture or test 
     );
     assert.doesNotMatch(source, /FixtureAgent|TestApprovalPrompt|--record/iu);
   }
+});
+
+test("the production controller exposes no injectable approval prompt authority", async () => {
+  const root = process.cwd();
+  const [controllerSource, promptModule] = await Promise.all([
+    readFile(join(root, "src/ingest/controller.ts"), "utf8"),
+    import("../../src/ingest/approvals/prompt.ts"),
+  ]);
+
+  assert.doesNotMatch(
+    controllerSource,
+    /approvalPrompt|ApprovalPromptCapability|ControllerApprovalTestPrompt/iu,
+  );
+  assert.equal(
+    "createControllerApprovalTestPrompt" in promptModule,
+    false,
+    "a production-reachable module must not mint controller/production approvals",
+  );
 });

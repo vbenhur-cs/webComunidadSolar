@@ -33,17 +33,6 @@ export interface FixtureApprovalPrompt {
   readonly [fixturePromptBrand]: true;
 }
 
-declare const controllerApprovalTestPromptBrand: unique symbol;
-
-/**
- * Test-only stand-in for the trusted controller prompt. It is deliberately
- * separate from FixtureApprovalRun: a fixture prompt can only ever mint test
- * provenance, whereas this opaque capability exercises the controller path.
- */
-export interface ControllerApprovalTestPrompt {
-  readonly [controllerApprovalTestPromptBrand]: true;
-}
-
 export interface FixtureApprovalRun {
   readonly repositoryRoot: string;
   readonly stateRoot: string;
@@ -60,10 +49,6 @@ export interface FixtureApprovalRunOptions {
 }
 
 const fixturePrompts = new WeakMap<FixtureApprovalPrompt, ApprovalPrompt>();
-const controllerApprovalTestPrompts = new WeakMap<
-  ControllerApprovalTestPrompt,
-  ApprovalPrompt
->();
 
 interface FilesystemIdentity {
   readonly device: number;
@@ -363,54 +348,11 @@ function createProductionApprovalPrompt(): ApprovalPrompt {
   };
 }
 
-/**
- * Mints an opaque test controller prompt without accepting a repository path,
- * state path, environment, or issuer from the caller. Production issuance
- * keeps using the real interactive controller prompt above.
- */
-export function createControllerApprovalTestPrompt(options: {
-  answer: string;
-  beforePersist?: () => Promise<void>;
-}): ControllerApprovalTestPrompt {
-  if (process.env.INGEST_TEST_MODE !== "true") {
-    throw new TypeError(
-      "La autoridad de aprobación controladora sólo existe en modo de pruebas",
-    );
-  }
-  if (typeof options.answer !== "string") {
-    throw new TypeError("La confirmación controladora de prueba no es válida");
-  }
-  const capability = Object.freeze({}) as ControllerApprovalTestPrompt;
-  controllerApprovalTestPrompts.set(
-    capability,
-    Object.freeze({
-      isTTY: true,
-      environment: "production",
-      issuer: "controller",
-      fixtureProjectRoot: null,
-      confirm: async () => options.answer,
-      beforePersist: options.beforePersist,
-      async acquireLease() {
-        return () => {};
-      },
-      async revalidate() {},
-    }),
-  );
-  return capability;
-}
-
-export type ApprovalPromptCapability =
-  FixtureApprovalPrompt | ControllerApprovalTestPrompt;
-
 export function approvalPrompt(
-  capability?: ApprovalPromptCapability,
+  capability?: FixtureApprovalPrompt,
 ): ApprovalPrompt {
   if (capability === undefined) return createProductionApprovalPrompt();
-  const prompt =
-    fixturePrompts.get(capability as FixtureApprovalPrompt) ??
-    controllerApprovalTestPrompts.get(
-      capability as ControllerApprovalTestPrompt,
-    );
+  const prompt = fixturePrompts.get(capability);
   if (prompt === undefined)
     throw new TypeError(
       "El prompt de aprobación debe ser una capacidad controladora autorizada",

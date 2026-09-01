@@ -57,6 +57,11 @@ El resultado contiene sólo identidad, estado, revisión y digests. Si falta
 journal, candidato, evidencia o expediente obligatorio, devuelve `ok: false`
 y el proceso termina con error.
 
+El verificador abre únicamente la composición de auditoría durable; no inicia
+Codex ni `CommandAgent`. Si detecta configuración de agente o un error de
+entrada, termina con código 1 y un mensaje saneado, sin argv, PID, rutas,
+variables de entorno, bundles ni stack.
+
 ## Códigos de salida
 
 | Código | Significado |
@@ -99,6 +104,11 @@ Durante esta fase se ejecutan fixtures sin `--record`. El modo `--record` está
 reservado a un procedimiento revisado: debe revalidar `main`, crear sólo el tag
 de candidato documentado y copiar únicamente el expediente saneado. Nunca debe
 fusionar `main` ni convertirse en una publicación externa.
+
+Antes de crear ese tag, el runner valida de nuevo la identidad del ref
+candidato, rechaza artefactos ignorados o enlaces simbólicos y escribe el
+expediente en staging no enlazable. Sólo publica el staging verificado de forma
+atómica y después crea el tag; un fallo deja sin tag ni expediente parcial.
 
 **`--execute` no es una autorización implícita de deploy.** La CLI actual ni lo
 acepta; una publicación Cloudflare real sigue cerrada hasta que exista una

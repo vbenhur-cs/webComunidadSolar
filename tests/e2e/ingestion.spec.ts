@@ -43,7 +43,10 @@ async function withTemporaryMainClone<T>(
 }
 
 test("@ingestion runs the three non-recorded fixture pipelines in owned clones", async () => {
-  test.setTimeout(90_000);
+  // Each matrix entry deliberately creates an isolated no-hardlink source and
+  // candidate checkout. Slow local APFS/Git hosts can take several minutes;
+  // retain a bounded timeout rather than racing fixture cleanup.
+  test.setTimeout(10 * 60_000);
   const previousCwd = process.cwd();
   const previousMode = process.env.INGEST_TEST_MODE;
   process.env.INGEST_TEST_MODE = "true";

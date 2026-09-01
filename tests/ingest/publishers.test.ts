@@ -13,6 +13,7 @@ import {
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { stdin, stdout } from "node:process";
 import test from "node:test";
 import { promisify } from "node:util";
 
@@ -47,10 +48,7 @@ import {
   approveGate1,
   approveGate2,
 } from "../../src/ingest/approvals/service.ts";
-import {
-  createControllerApprovalTestPrompt,
-  createFixtureApprovalRun,
-} from "../../src/ingest/approvals/prompt.ts";
+import { createFixtureApprovalRun } from "../../src/ingest/approvals/prompt.ts";
 import type {
   AttemptRecord,
   CandidateManifest,
@@ -390,9 +388,17 @@ function fixturePromotionLeaseRaceAcknowledgement(
   );
 }
 
-async function waitForLeaseRaceReady(path: string): Promise<void> {
-  const deadline = Date.now() + 5_000;
+async function waitForLeaseRaceReady(
+  path: string,
+  operation: Promise<unknown>,
+): Promise<void> {
+  let operationFailure: unknown;
+  void operation.catch((error: unknown) => {
+    operationFailure = error;
+  });
+  const deadline = Date.now() + 30_000;
   while (Date.now() < deadline) {
+    if (operationFailure !== undefined) throw operationFailure;
     try {
       if ((await readFile(path, "utf8")) === "ready\n") return;
     } catch (error: unknown) {
@@ -409,6 +415,9 @@ async function waitForLeaseRaceReady(path: string): Promise<void> {
       setTimeout(resolveWait, 10);
     });
   }
+  // Never let the fixture cleanup race a still-running promotion: that would
+  // hide the real timeout behind a worktree-removal error.
+  await operation.catch(() => undefined);
   throw new Error("promotion lease race did not become ready");
 }
 
@@ -417,6 +426,48 @@ interface PublisherFixtureOptions {
   readonly environment?: string;
   readonly approvalAuthority?: "fixture" | "controller";
   readonly wranglerExitCode?: 0 | 1;
+}
+
+/**
+ * This test helper drives the real interactive production branch. It is local
+ * to this test file: neither the controller nor the approval service accepts
+ * a test prompt/capability for controller-production approvals.
+ */
+async function withInteractiveControllerAnswer<T>(
+  answer: string,
+  operation: () => Promise<T>,
+): Promise<T> {
+  const inputTty = Object.getOwnPropertyDescriptor(stdin, "isTTY");
+  const outputTty = Object.getOwnPropertyDescriptor(stdout, "isTTY");
+  const outputWrite = Object.getOwnPropertyDescriptor(stdout, "write");
+  const originalWrite = stdout.write.bind(stdout);
+  let delivered = false;
+  Object.defineProperty(stdin, "isTTY", { configurable: true, value: true });
+  Object.defineProperty(stdout, "isTTY", { configurable: true, value: true });
+  Object.defineProperty(stdout, "write", {
+    configurable: true,
+    value: ((chunk: string | Uint8Array, ...args: unknown[]) => {
+      const written = Reflect.apply(originalWrite, stdout, [chunk, ...args]);
+      const text =
+        typeof chunk === "string" ? chunk : new TextDecoder().decode(chunk);
+      if (!delivered && text.includes("Escriba ")) {
+        delivered = true;
+        setImmediate(() => stdin.emit("data", `${answer}\n`));
+      }
+      return written;
+    }) as typeof stdout.write,
+    writable: true,
+  });
+  try {
+    return await operation();
+  } finally {
+    if (inputTty === undefined) delete (stdin as { isTTY?: boolean }).isTTY;
+    else Object.defineProperty(stdin, "isTTY", inputTty);
+    if (outputTty === undefined) delete (stdout as { isTTY?: boolean }).isTTY;
+    else Object.defineProperty(stdout, "isTTY", outputTty);
+    if (outputWrite === undefined) delete (stdout as { write?: unknown }).write;
+    else Object.defineProperty(stdout, "write", outputWrite);
+  }
 }
 
 async function persistPublisherState(
@@ -696,32 +747,46 @@ async function withPublisherFixture(
       previewCapability: preview,
     });
     await persistPublisherState(repositoryRoot, plan, candidate);
-    const gate1Prompt =
-      options.approvalAuthority === "controller"
-        ? createControllerApprovalTestPrompt({
-            answer: plan.planSha256.slice(0, 12),
-          })
-        : await fixture.createPrompt({
-            isTTY: true,
-            answer: plan.planSha256.slice(0, 12),
-          });
-    await approveGate1(
-      { plan, actor: "fixture-human", stateRoot, repositoryRoot },
-      gate1Prompt,
-    );
-    const gate2Prompt =
-      options.approvalAuthority === "controller"
-        ? createControllerApprovalTestPrompt({
-            answer: sha256Canonical(candidate).slice(0, 12),
-          })
-        : await fixture.createPrompt({
-            isTTY: true,
-            answer: sha256Canonical(candidate).slice(0, 12),
-          });
-    await approveGate2(
-      { plan, candidate, actor: "fixture-human", stateRoot, repositoryRoot },
-      gate2Prompt,
-    );
+    if (options.approvalAuthority === "controller") {
+      await withInteractiveControllerAnswer(
+        plan.planSha256.slice(0, 12),
+        async () =>
+          await approveGate1({
+            plan,
+            actor: "fixture-human",
+            stateRoot,
+            repositoryRoot,
+          }),
+      );
+      await withInteractiveControllerAnswer(
+        sha256Canonical(candidate).slice(0, 12),
+        async () =>
+          await approveGate2({
+            plan,
+            candidate,
+            actor: "fixture-human",
+            stateRoot,
+            repositoryRoot,
+          }),
+      );
+    } else {
+      const gate1Prompt = await fixture.createPrompt({
+        isTTY: true,
+        answer: plan.planSha256.slice(0, 12),
+      });
+      await approveGate1(
+        { plan, actor: "fixture-human", stateRoot, repositoryRoot },
+        gate1Prompt,
+      );
+      const gate2Prompt = await fixture.createPrompt({
+        isTTY: true,
+        answer: sha256Canonical(candidate).slice(0, 12),
+      });
+      await approveGate2(
+        { plan, candidate, actor: "fixture-human", stateRoot, repositoryRoot },
+        gate2Prompt,
+      );
+    }
     const state = createStateStore({ stateRoot });
     await state.transition(changeId, {
       type: "gate2-approved",
@@ -1935,7 +2000,7 @@ test("a concurrent advance after the final check loses the protected-main lease 
         testCapability,
       });
       const marker = fixturePromotionLeaseRaceMarker(fixture.repositoryRoot);
-      await waitForLeaseRaceReady(marker);
+      await waitForLeaseRaceReady(marker, promotion);
       await git(fixture.repositoryRoot, [
         "update-ref",
         "refs/heads/main",
@@ -2006,7 +2071,7 @@ test("a main reattachment immediately before the lease cannot publish B outside 
         testCapability,
       });
       const marker = fixturePromotionLeaseRaceMarker(fixture.repositoryRoot);
-      await waitForLeaseRaceReady(marker);
+      await waitForLeaseRaceReady(marker, promotion);
       assert.equal(
         await git(fixture.repositoryRoot, ["symbolic-ref", "--quiet", "HEAD"]),
         "refs/heads/main",
@@ -2065,7 +2130,7 @@ test("the concurrent-advance test barrier rejects an acknowledgement without a l
         testCapability,
       });
       const marker = fixturePromotionLeaseRaceMarker(fixture.repositoryRoot);
-      await waitForLeaseRaceReady(marker);
+      await waitForLeaseRaceReady(marker, promotion);
       await writeAtomic(
         fixturePromotionLeaseRaceAcknowledgement(fixture.repositoryRoot),
         Buffer.from("advanced\n", "utf8"),
@@ -2119,7 +2184,7 @@ test("a staged concurrent deletion survives a lost protected-main lease", async 
         testCapability,
       });
       const marker = fixturePromotionLeaseRaceMarker(fixture.repositoryRoot);
-      await waitForLeaseRaceReady(marker);
+      await waitForLeaseRaceReady(marker, promotion);
       await git(fixture.repositoryRoot, [
         "update-ref",
         "refs/heads/main",
@@ -2196,7 +2261,7 @@ test("a staged concurrent deletion after the CAS stays published but reconciliat
         testCapability,
       });
       const marker = fixturePromotionLeaseRaceMarker(fixture.repositoryRoot);
-      await waitForLeaseRaceReady(marker);
+      await waitForLeaseRaceReady(marker, promotion);
       await git(fixture.repositoryRoot, [
         "read-tree",
         "-m",

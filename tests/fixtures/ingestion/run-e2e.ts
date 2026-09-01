@@ -1,27 +1,42 @@
 import { execFile, spawn } from "node:child_process";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import { constants } from "node:fs";
 import {
   chmod,
   cp,
+  lstat,
   mkdir,
   mkdtemp,
+  open,
   readFile,
+  readdir,
+  realpath,
+  rename,
   rm,
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { promisify } from "node:util";
 
-import { createFixtureApprovalRun } from "../../../src/ingest/approvals/prompt.ts";
+import {
+  createFixtureApprovalRun,
+  type FixtureApprovalPrompt,
+} from "../../../src/ingest/approvals/prompt.ts";
+import {
+  approveGate1,
+  approveGate2,
+} from "../../../src/ingest/approvals/service.ts";
 import { createCandidateBuildTestCapability } from "../../../src/ingest/candidate/evidence.ts";
 import {
   createCandidatePreviewTestCapability,
   loadCandidate,
   openControllerCandidateStore,
   releaseControllerCandidateStore,
+  verifyCandidateArtifact,
+  verifyCandidateEvidence,
 } from "../../../src/ingest/candidate/manifest.ts";
 import {
   canonicalJson,
@@ -32,6 +47,7 @@ import {
   type IngestionController,
 } from "../../../src/ingest/controller.ts";
 import { createSanitizedCandidateDossier } from "../../../src/ingest/dossier.ts";
+import { sanitizedGitEnv } from "../../../src/ingest/git-env.ts";
 import type {
   ApprovalRecord,
   AttemptRecord,
@@ -87,6 +103,48 @@ export interface FixtureE2eResult {
   readonly local: "success";
   readonly cloudflareDryRun: "not-applicable-local-profile";
   readonly published: false;
+}
+
+/**
+ * Rechecks the same closed matrix used by the CLI parser. This is intentionally
+ * separate from argument parsing because callers can invoke runFixtureE2e()
+ * directly; validation must happen before touching the environment, Git, a
+ * clone, or the optional recording path.
+ */
+function assertFixtureInvocation(
+  invocation: FixtureInvocation,
+): FixtureInvocation {
+  if (
+    invocation === null ||
+    typeof invocation !== "object" ||
+    Array.isArray(invocation) ||
+    Object.getPrototypeOf(invocation) !== Object.prototype
+  ) {
+    throw new TypeError(
+      "La invocación fixture no pertenece a la matriz cerrada",
+    );
+  }
+  const keys = Object.keys(invocation).sort();
+  const expectedKeys = ["changeId", "fixture", "mode", "record"];
+  if (
+    keys.length !== expectedKeys.length ||
+    keys.some((key, index) => key !== expectedKeys[index]) ||
+    typeof invocation.record !== "boolean"
+  ) {
+    throw new TypeError("La invocación fixture debe tener una forma exacta");
+  }
+  const matched = matrix.find(
+    (entry) =>
+      entry.fixture === invocation.fixture &&
+      entry.mode === invocation.mode &&
+      entry.changeId === invocation.changeId,
+  );
+  if (matched === undefined) {
+    throw new TypeError(
+      "La combinación fixture no pertenece a la matriz cerrada",
+    );
+  }
+  return Object.freeze({ ...matched, record: invocation.record });
 }
 
 function parsed(argv: readonly string[]) {
@@ -269,6 +327,19 @@ function passingCommand(command: CommandInvocation): CommandResult {
   };
 }
 
+/** Fixture-only generation dependencies with no repository/process authority. */
+export function createFixtureControllerRuntime(plan: ChangePlan) {
+  return Object.freeze({
+    candidateBuildCapability: createCandidateBuildTestCapability(
+      buildFixture(plan),
+    ),
+    validationOptions: {
+      commands: async (command: CommandInvocation) => passingCommand(command),
+    },
+    now: fixedNow,
+  });
+}
+
 async function installFixtureWrangler(repositoryRoot: string): Promise<void> {
   const executable = join(repositoryRoot, "node_modules", ".bin", "wrangler");
   await mkdir(dirname(executable), { recursive: true });
@@ -359,25 +430,360 @@ async function readPlan(
   return JSON.parse(source) as ChangePlan;
 }
 
+/**
+ * Fixture approvals are issued only by the fixture service.  The production
+ * controller never receives a test prompt or a programmatic approval route.
+ */
+async function approveFixtureGate1(input: {
+  readonly repositoryRoot: string;
+  readonly plan: ChangePlan;
+  readonly prompt: FixtureApprovalPrompt;
+}): Promise<void> {
+  const paths = await ingestPaths(input.plan.changeId, {
+    projectRoot: input.repositoryRoot,
+  });
+  const approval = await approveGate1(
+    {
+      ...paths,
+      plan: input.plan,
+      actor: "test-human",
+      repositoryRoot: input.repositoryRoot,
+      now: fixedNow,
+    },
+    input.prompt,
+  );
+  await createStateStore({ projectRoot: input.repositoryRoot }).transition(
+    input.plan.changeId,
+    {
+      type: "gate1-approved",
+      to: "gate1_approved",
+      payload: { gate: approval.gate, subjectSha256: approval.subjectSha256 },
+    },
+  );
+}
+
+async function approveFixtureGate2(input: {
+  readonly repositoryRoot: string;
+  readonly plan: ChangePlan;
+  readonly candidate: CandidateManifest;
+  readonly prompt: FixtureApprovalPrompt;
+}): Promise<void> {
+  const paths = await ingestPaths(input.candidate.changeId, {
+    projectRoot: input.repositoryRoot,
+  });
+  const attempt = validateSchema<AttemptRecord>(
+    "attempt",
+    JSON.parse(
+      await trustedText(
+        join(paths.attemptsDir, `${input.candidate.attemptId}.json`),
+        "El intento fixture",
+      ),
+    ),
+  );
+  await verifyCandidateArtifact(input.candidate);
+  await verifyCandidateEvidence(input.candidate, attempt);
+  const approval = await approveGate2(
+    {
+      ...paths,
+      plan: input.plan,
+      candidate: input.candidate,
+      actor: "test-human",
+      repositoryRoot: input.repositoryRoot,
+      now: fixedNow,
+    },
+    input.prompt,
+  );
+  await createStateStore({ projectRoot: input.repositoryRoot }).transition(
+    input.candidate.changeId,
+    {
+      type: "gate2-approved",
+      to: "gate2_approved",
+      payload: { gate: approval.gate, subjectSha256: approval.subjectSha256 },
+    },
+  );
+}
+
+function isMissingPath(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    error.code === "ENOENT"
+  );
+}
+
+function isWithin(parent: string, child: string): boolean {
+  const value = relative(parent, child);
+  return (
+    value === "" ||
+    (!isAbsolute(value) && value !== ".." && !value.startsWith("../"))
+  );
+}
+
+async function runFixtureGit(
+  root: string,
+  args: readonly string[],
+): Promise<{ readonly stdout: string; readonly stderr: string }> {
+  return await execFileAsync("git", ["-C", root, ...args], {
+    encoding: "utf8",
+    env: sanitizedGitEnv(),
+  });
+}
+
+async function trustedDirectory(path: string, label: string): Promise<string> {
+  const entry = await lstat(path);
+  if (entry.isSymbolicLink() || !entry.isDirectory()) {
+    throw new TypeError(`${label} no es un directorio seguro`);
+  }
+  const physical = await realpath(path);
+  if (physical !== resolve(path)) {
+    throw new TypeError(`${label} no resuelve su directorio exacto`);
+  }
+  return physical;
+}
+
+async function trustedChildDirectory(
+  parent: string,
+  name: string,
+  label: string,
+): Promise<string> {
+  if (!/^(?!\.{1,2}$)[A-Za-z0-9.][A-Za-z0-9._-]*$/u.test(name)) {
+    throw new TypeError(`${label} tiene un segmento no permitido`);
+  }
+  const target = resolve(parent, name);
+  if (!isWithin(parent, target)) {
+    throw new TypeError(`${label} escapa su directorio padre`);
+  }
+  try {
+    await trustedDirectory(target, label);
+  } catch (error: unknown) {
+    if (!isMissingPath(error)) throw error;
+    await mkdir(target, { mode: 0o700 });
+    await trustedDirectory(target, label);
+  }
+  return target;
+}
+
+async function trustedText(path: string, label: string): Promise<string> {
+  const handle = await open(
+    path,
+    constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0),
+  );
+  try {
+    const before = await handle.stat();
+    if (!before.isFile() || before.nlink !== 1) {
+      throw new TypeError(`${label} no es un archivo regular seguro`);
+    }
+    const bytes = await handle.readFile();
+    const after = await handle.stat();
+    if (
+      before.dev !== after.dev ||
+      before.ino !== after.ino ||
+      before.size !== after.size ||
+      before.mtimeMs !== after.mtimeMs ||
+      before.ctimeMs !== after.ctimeMs
+    ) {
+      throw new TypeError(`${label} cambió durante la lectura`);
+    }
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } finally {
+    await handle.close();
+  }
+}
+
+function safeDossierPath(path: string): boolean {
+  return /^(?!\/)(?!.*(?:^|\/)\.\.(?:\/|$))[A-Za-z0-9][A-Za-z0-9._/-]*$/u.test(
+    path,
+  );
+}
+
+async function writeStagedDossierFile(
+  root: string,
+  file: { readonly path: string; readonly contents: string },
+): Promise<void> {
+  if (!safeDossierPath(file.path)) {
+    throw new TypeError("El dossier fixture tiene una ruta no permitida");
+  }
+  const segments = file.path.split("/");
+  const basename = segments.pop();
+  if (basename === undefined) {
+    throw new TypeError("El dossier fixture no tiene nombre de archivo");
+  }
+  let parent = root;
+  for (const segment of segments) {
+    parent = await trustedChildDirectory(parent, segment, "El dossier fixture");
+  }
+  const target = resolve(parent, basename);
+  if (!isWithin(root, target)) {
+    throw new TypeError("El dossier fixture escapa su staging");
+  }
+  const handle = await open(
+    target,
+    constants.O_WRONLY |
+      constants.O_CREAT |
+      constants.O_EXCL |
+      (constants.O_NOFOLLOW ?? 0),
+    0o600,
+  );
+  try {
+    await handle.writeFile(file.contents, "utf8");
+    await handle.sync();
+  } finally {
+    await handle.close();
+  }
+}
+
+async function collectStagedDossierFiles(
+  root: string,
+  directory = root,
+): Promise<string[]> {
+  const entries = await readdir(directory, { withFileTypes: true });
+  const files: string[] = [];
+  for (const entry of entries) {
+    const target = resolve(directory, entry.name);
+    if (!isWithin(root, target)) {
+      throw new TypeError("El staging del dossier escapa su raíz");
+    }
+    if (entry.isDirectory()) {
+      await trustedDirectory(target, "El staging del dossier");
+      files.push(...(await collectStagedDossierFiles(root, target)));
+      continue;
+    }
+    if (!entry.isFile() || entry.isSymbolicLink()) {
+      throw new TypeError(
+        "El staging del dossier contiene una ruta no permitida",
+      );
+    }
+    await trustedText(target, "El archivo del dossier fixture");
+    files.push(relative(root, target));
+  }
+  return files.sort();
+}
+
+async function verifyStagedDossier(
+  root: string,
+  dossier: ReturnType<typeof createSanitizedCandidateDossier>,
+): Promise<void> {
+  const expected = new Map(
+    dossier.files.map((file) => [file.path, file.contents]),
+  );
+  const actual = await collectStagedDossierFiles(root);
+  if (
+    actual.length !== expected.size ||
+    actual.some((path) => !expected.has(path))
+  ) {
+    throw new TypeError(
+      "El dossier fixture no contiene exactamente sus hechos",
+    );
+  }
+  for (const [path, contents] of expected) {
+    const target = resolve(root, ...path.split("/"));
+    if (
+      !isWithin(root, target) ||
+      (await trustedText(target, "El dossier fixture")) !== contents
+    ) {
+      throw new TypeError("El dossier fixture no coincide con sus hechos");
+    }
+  }
+}
+
+async function resolvedCommit(root: string, ref: string): Promise<string> {
+  const result = await runFixtureGit(root, [
+    "rev-parse",
+    "--verify",
+    `${ref}^{commit}`,
+  ]).catch(() => {
+    throw new TypeError("La referencia fixture no resuelve un commit");
+  });
+  const commit = result.stdout.trim();
+  if (!/^[a-f0-9]{40,64}$/u.test(commit)) {
+    throw new TypeError(
+      "La referencia fixture no resuelve una identidad válida",
+    );
+  }
+  return commit;
+}
+
+async function assertTagAbsent(root: string, tag: string): Promise<void> {
+  const result = await runFixtureGit(root, [
+    "for-each-ref",
+    "--format=%(refname)",
+    tag,
+  ]);
+  if (result.stdout.trim() !== "") {
+    throw new TypeError("La etiqueta fixture ya existe");
+  }
+}
+
+async function assertArtifactsUsable(root: string): Promise<string> {
+  const ignored = await runFixtureGit(root, [
+    "check-ignore",
+    "--quiet",
+    "--",
+    ".artifacts",
+  ]).then(
+    () => true,
+    (error: unknown) => {
+      if (
+        typeof error === "object" &&
+        error !== null &&
+        "code" in error &&
+        error.code === 1
+      ) {
+        return false;
+      }
+      throw error;
+    },
+  );
+  if (ignored) {
+    throw new TypeError("El directorio .artifacts ignora evidencia fixture");
+  }
+  return await trustedChildDirectory(
+    root,
+    ".artifacts",
+    "La raíz de artefactos",
+  );
+}
+
+async function removeTrustedDirectory(
+  parent: string,
+  target: string,
+): Promise<void> {
+  if (!isWithin(parent, target)) {
+    throw new TypeError("La limpieza fixture escapa su raíz");
+  }
+  try {
+    await trustedDirectory(target, "La limpieza fixture");
+  } catch (error: unknown) {
+    if (isMissingPath(error)) return;
+    throw error;
+  }
+  await rm(target, { recursive: true, force: false });
+}
+
+async function assertMainUnchanged(
+  root: string,
+  before: { readonly main: string; readonly head: string },
+): Promise<void> {
+  const [main, head] = await Promise.all([
+    runFixtureGit(root, ["rev-parse", "--verify", "refs/heads/main^{commit}"]),
+    runFixtureGit(root, ["rev-parse", "--verify", "HEAD^{commit}"]),
+  ]);
+  if (
+    main.stdout.trim() !== before.main ||
+    head.stdout.trim() !== before.head
+  ) {
+    throw new TypeError("El registro fixture no puede modificar main");
+  }
+}
+
 async function cleanMain(
   root: string,
 ): Promise<{ readonly main: string; readonly head: string }> {
   const [main, head, status] = await Promise.all([
-    execFileAsync(
-      "git",
-      ["-C", root, "rev-parse", "--verify", "refs/heads/main^{commit}"],
-      { encoding: "utf8" },
-    ),
-    execFileAsync(
-      "git",
-      ["-C", root, "rev-parse", "--verify", "HEAD^{commit}"],
-      { encoding: "utf8" },
-    ),
-    execFileAsync(
-      "git",
-      ["-C", root, "status", "--porcelain=v1", "--untracked-files=all"],
-      { encoding: "utf8" },
-    ),
+    runFixtureGit(root, ["rev-parse", "--verify", "refs/heads/main^{commit}"]),
+    runFixtureGit(root, ["rev-parse", "--verify", "HEAD^{commit}"]),
+    runFixtureGit(root, ["status", "--porcelain=v1", "--untracked-files=all"]),
   ]);
   if (status.stdout !== "" || main.stdout.trim() !== head.stdout.trim()) {
     throw new TypeError("El clon fixture debe iniciar limpio en main");
@@ -405,6 +811,7 @@ async function withController<T>(
 export async function runFixtureE2e(
   invocation: FixtureInvocation,
 ): Promise<FixtureE2eResult> {
+  const checkedInvocation = assertFixtureInvocation(invocation);
   if (process.env.INGEST_TEST_MODE !== "true") {
     throw new TypeError("El runner fixture exige INGEST_TEST_MODE=true");
   }
@@ -423,7 +830,7 @@ export async function runFixtureE2e(
     Awaited<ReturnType<typeof openControllerCandidateStore>> | undefined;
   try {
     await cleanMain(clone);
-    const input = await fixtureInput(invocation, inputs);
+    const input = await fixtureInput(checkedInvocation, inputs);
     process.chdir(clone);
     process.env.INGEST_COMMAND_AGENT_CONFIG = JSON.stringify({
       command: process.execPath,
@@ -434,17 +841,21 @@ export async function runFixtureE2e(
 
     await withController({}, async (controller) => {
       await controller.receiveRequest(input);
-      await controller.plan(invocation.changeId);
+      await controller.plan(checkedInvocation.changeId);
     });
-    const plan = await readPlan(clone, invocation.changeId);
+    const plan = await readPlan(clone, checkedInvocation.changeId);
     const gate1Prompt = await approvalRun.createPrompt({
       isTTY: true,
       answer: plan.planSha256.slice(0, 12),
     });
+    await approveFixtureGate1({
+      repositoryRoot: clone,
+      plan,
+      prompt: gate1Prompt,
+    });
     const preview = previewCapability();
     const candidate = await withController(
       {
-        approvalPrompt: gate1Prompt,
         candidateBuildCapability: createCandidateBuildTestCapability(
           buildFixture(plan),
         ),
@@ -456,41 +867,34 @@ export async function runFixtureE2e(
         now: fixedNow,
       },
       async (controller) => {
-        await controller.approve({
-          changeId: invocation.changeId,
-          gate: 1,
-          actor: "test-human",
-        });
         const generated = await controller.generate({
-          changeId: invocation.changeId,
+          changeId: checkedInvocation.changeId,
           adapter: "command",
         });
         if (generated.kind !== "success")
           throw new TypeError("Gate 1 fixture no permitió generar");
-        const validated = await controller.validate(invocation.changeId);
+        const validated = await controller.validate(checkedInvocation.changeId);
         if (validated.kind !== "success")
           throw new TypeError("El candidato fixture no se validó");
         store = await openControllerCandidateStore();
         const candidate = await loadCandidate({
           store,
-          changeId: invocation.changeId,
+          changeId: checkedInvocation.changeId,
           attemptId: "attempt-000001",
         });
         const gate2Prompt = await approvalRun.createPrompt({
           isTTY: true,
           answer: sha256Canonical(candidate).slice(0, 12),
         });
-        const approved = await controller.approve({
-          changeId: invocation.changeId,
-          gate: 2,
-          actor: "test-human",
-          approvalPrompt: gate2Prompt,
+        await approveFixtureGate2({
+          repositoryRoot: clone,
+          plan,
+          candidate,
+          prompt: gate2Prompt,
         });
-        if (approved.kind !== "success")
-          throw new TypeError("Gate 2 fixture no se aprobó");
         await installFixtureWrangler(clone);
         const local = await controller.publishLocal({
-          changeId: invocation.changeId,
+          changeId: checkedInvocation.changeId,
           operator: operatorProfile(plan),
         });
         if (local.kind !== "success") {
@@ -498,7 +902,7 @@ export async function runFixtureE2e(
         }
         const finalState = await createStateStore({
           projectRoot: clone,
-        }).readChange(invocation.changeId);
+        }).readChange(checkedInvocation.changeId);
         if (finalState.state !== "gate2_approved") {
           throw new TypeError(
             "El fixture no puede marcar published el estado durable",
@@ -507,18 +911,18 @@ export async function runFixtureE2e(
         return candidate;
       },
     );
-    if (invocation.record) {
+    if (checkedInvocation.record) {
       await recordFixtureEvidence(
         sourceRoot,
         clone,
-        invocation,
+        checkedInvocation,
         candidate,
         sourceBefore,
       );
     }
     return Object.freeze({
-      changeId: invocation.changeId,
-      mode: invocation.mode,
+      changeId: checkedInvocation.changeId,
+      mode: checkedInvocation.mode,
       candidate: {
         artifactSha256: candidate.artifactSha256,
         candidateCommit: candidate.candidateCommit,
@@ -554,12 +958,15 @@ async function recordFixtureEvidence(
   }
   const paths = await ingestPaths(candidate.changeId, { projectRoot: clone });
   const files = await Promise.all([
-    readFile(paths.request, "utf8"),
-    readFile(paths.plan, "utf8"),
-    readFile(join(paths.approvalsDir, "gate-1.json"), "utf8"),
-    readFile(join(paths.approvalsDir, "gate-2.json"), "utf8"),
-    readFile(join(paths.attemptsDir, `${candidate.attemptId}.json`), "utf8"),
-    readFile(paths.candidate, "utf8"),
+    trustedText(paths.request, "La solicitud fixture"),
+    trustedText(paths.plan, "El plan fixture"),
+    trustedText(join(paths.approvalsDir, "gate-1.json"), "Gate 1 fixture"),
+    trustedText(join(paths.approvalsDir, "gate-2.json"), "Gate 2 fixture"),
+    trustedText(
+      join(paths.attemptsDir, `${candidate.attemptId}.json`),
+      "El intento fixture",
+    ),
+    trustedText(paths.candidate, "El candidato fixture"),
   ]);
   const persistedCandidate = validateSchema<CandidateManifest>(
     "candidate",
@@ -569,6 +976,14 @@ async function recordFixtureEvidence(
     throw new TypeError(
       "El candidato durable no coincide con el candidato que se va a registrar",
     );
+  }
+  if (
+    candidate.changeId !== invocation.changeId ||
+    persistedCandidate.changeId !== invocation.changeId ||
+    candidate.attemptId !== persistedCandidate.attemptId ||
+    candidate.candidateCommit !== persistedCandidate.candidateCommit
+  ) {
+    throw new TypeError("El candidato fixture no coincide con su invocación");
   }
   const dossier = createSanitizedCandidateDossier({
     request: validateSchema<NormalizedRequest>(
@@ -581,36 +996,113 @@ async function recordFixtureEvidence(
     attempt: validateSchema<AttemptRecord>("attempt", JSON.parse(files[4])),
     candidate: persistedCandidate,
   });
-  const ready = await cleanMain(sourceRoot);
-  if (ready.main !== sourceBefore.main || ready.head !== sourceBefore.head) {
-    throw new TypeError(
-      "La fuente principal cambió antes de etiquetar la evidencia",
-    );
-  }
   const ref = `refs/comunidadsolar/candidates/${candidate.changeId}/${candidate.attemptId}`;
   const tag = `refs/tags/ingestion-fixture/${invocation.changeId}`;
-  await execFileAsync(
-    "git",
-    ["-C", sourceRoot, "fetch", "--no-tags", clone, `${ref}:${tag}`],
-    { encoding: "utf8" },
-  );
-  const destination = join(
-    sourceRoot,
-    ".artifacts",
+  const transferRef = `refs/comunidadsolar/fixture-record/${candidate.changeId}/${candidate.attemptId}`;
+  const candidateCommit = await resolvedCommit(clone, ref);
+  if (candidateCommit !== candidate.candidateCommit) {
+    throw new TypeError("La referencia fixture no coincide con el candidato");
+  }
+  await assertTagAbsent(sourceRoot, tag);
+  const artifacts = await assertArtifactsUsable(sourceRoot);
+  const destinationParent = await trustedChildDirectory(
+    artifacts,
     "ingestion-fixtures",
-    invocation.changeId,
+    "La raíz de dossiers fixture",
   );
-  await mkdir(destination, { recursive: true });
-  await Promise.all(
-    dossier.files.map(async (file) => {
-      const target = join(destination, ...file.path.split("/"));
-      await mkdir(dirname(target), { recursive: true });
-      await writeFile(target, file.contents, "utf8");
-    }),
+  const destination = resolve(destinationParent, invocation.changeId);
+  if (!isWithin(destinationParent, destination)) {
+    throw new TypeError("El destino del dossier fixture no es seguro");
+  }
+  try {
+    await lstat(destination);
+    throw new TypeError("El dossier fixture ya existe");
+  } catch (error: unknown) {
+    if (!isMissingPath(error)) throw error;
+  }
+  const stagingParent = await trustedChildDirectory(
+    artifacts,
+    ".ingestion-fixture-staging",
+    "El staging de dossier fixture",
   );
-  const after = await cleanMain(sourceRoot);
-  if (after.main !== sourceBefore.main || after.head !== sourceBefore.head) {
-    throw new TypeError("El registro fixture no puede modificar main");
+  const staging = await trustedChildDirectory(
+    stagingParent,
+    `dossier-${randomUUID()}`,
+    "El staging de dossier fixture",
+  );
+  let stagingPresent = true;
+  let dossierPublished = false;
+  let tagCreated = false;
+  let transferFetched = false;
+  try {
+    await runFixtureGit(sourceRoot, [
+      "fetch",
+      "--no-tags",
+      clone,
+      `${ref}:${transferRef}`,
+    ]);
+    transferFetched = true;
+    if ((await resolvedCommit(sourceRoot, transferRef)) !== candidateCommit) {
+      throw new TypeError(
+        "La transferencia fixture no conserva el commit candidato",
+      );
+    }
+    for (const file of dossier.files) {
+      await writeStagedDossierFile(staging, file);
+    }
+    await verifyStagedDossier(staging, dossier);
+    await rename(staging, destination);
+    stagingPresent = false;
+    dossierPublished = true;
+    await verifyStagedDossier(destination, dossier);
+    await assertMainUnchanged(sourceRoot, sourceBefore);
+    await runFixtureGit(sourceRoot, [
+      "update-ref",
+      tag,
+      candidateCommit,
+      "0".repeat(candidateCommit.length),
+    ]);
+    tagCreated = true;
+    if ((await resolvedCommit(sourceRoot, tag)) !== candidateCommit) {
+      throw new TypeError("La etiqueta fixture no coincide con el candidato");
+    }
+    await assertMainUnchanged(sourceRoot, sourceBefore);
+  } catch (error: unknown) {
+    const cleanup: unknown[] = [];
+    if (tagCreated) {
+      await runFixtureGit(sourceRoot, [
+        "update-ref",
+        "-d",
+        tag,
+        candidateCommit,
+      ]).catch((cleanupError: unknown) => cleanup.push(cleanupError));
+    }
+    if (dossierPublished) {
+      await removeTrustedDirectory(destinationParent, destination).catch(
+        (cleanupError: unknown) => cleanup.push(cleanupError),
+      );
+    }
+    if (stagingPresent) {
+      await removeTrustedDirectory(stagingParent, staging).catch(
+        (cleanupError: unknown) => cleanup.push(cleanupError),
+      );
+    }
+    if (cleanup.length > 0) {
+      throw new AggregateError(
+        [error, ...cleanup],
+        "El registro fixture no pudo limpiar su fallo",
+      );
+    }
+    throw error;
+  } finally {
+    if (transferFetched) {
+      await runFixtureGit(sourceRoot, [
+        "update-ref",
+        "-d",
+        transferRef,
+        candidateCommit,
+      ]).catch(() => undefined);
+    }
   }
 }
 

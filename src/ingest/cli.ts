@@ -4,6 +4,7 @@ import { createInterface } from "node:readline/promises";
 import { parseArgs } from "node:util";
 
 import { openIngestionController } from "./controller.ts";
+import { safeError, safeJson } from "./safe-output.ts";
 
 export type CliCommandResult =
   | { readonly kind: "success"; readonly value: Record<string, unknown> }
@@ -56,44 +57,6 @@ const usage = [
   "  ingest preview <change-id> --check-only",
   "  ingest status <change-id> [--json]",
 ].join("\n");
-
-function safeError(error: unknown): string {
-  const message = error instanceof Error ? error.message : "fallo operativo";
-  return message
-    .replace(/(?:[A-Za-z]:)?\/(?:[^\s:]+\/)*[^\s:]*/gu, "[ruta]")
-    .replace(
-      /(?:PRIVATE\s+KEY|token|secret|password)\s*[:=]\s*[^\s,;]+/giu,
-      "[redactado]",
-    )
-    .slice(0, 240);
-}
-
-function isAbsoluteLike(value: string): boolean {
-  return value.startsWith("/") || /^[A-Za-z]:[\\/]/u.test(value);
-}
-
-function safeJson(value: unknown): unknown {
-  if (typeof value === "string") {
-    return isAbsoluteLike(value) ||
-      /PRIVATE\s+KEY|secret|token|password/iu.test(value)
-      ? "[redactado]"
-      : value;
-  }
-  if (Array.isArray(value)) return value.map(safeJson);
-  if (value === null || typeof value !== "object") return value;
-  const result: Record<string, unknown> = {};
-  for (const [key, entry] of Object.entries(value)) {
-    if (
-      /path|secret|token|password|capability|credential|intake|stdout|stderr/iu.test(
-        key,
-      )
-    ) {
-      continue;
-    }
-    result[key] = safeJson(entry);
-  }
-  return result;
-}
 
 function serialized(value: unknown): string {
   return `${JSON.stringify(safeJson(value))}\n`;

@@ -72,3 +72,7 @@ de la CLI de producción. `--execute` no autoriza un deploy y Cloudflare real
 sigue cerrada. Consulte [la guía operativa de ingestión](docs/operations/ingestion.md)
 para estados, evidencia, configuración de `CommandAgent` y recuperación de una
 reconciliación pendiente.
+
+`npm run verify:ingestion` abre sólo el grafo de auditoría durable: no inicia
+agentes ni acepta su configuración. Sus errores y JSON se sanean antes de
+imprimirse, incluso si la configuración local contiene rutas o secretos.
