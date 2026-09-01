@@ -59,7 +59,7 @@ import type {
 } from "../../src/ingest/domain.ts";
 import { ingestPaths } from "../../src/ingest/paths.ts";
 import { preparePlanningPublication } from "../../src/ingest/planning/plan.ts";
-import { createStateStore } from "../../src/ingest/state-store.ts";
+import { createStateStore, writeAtomic } from "../../src/ingest/state-store.ts";
 import {
   createControllerPublicationProfile,
   createValidationEvidenceRoot,
@@ -364,6 +364,39 @@ function fixtureCandidateBundlePath(repositoryRoot: string): string {
     attemptId,
     "bundle",
   );
+}
+
+function fixturePromotionLeaseRaceMarker(repositoryRoot: string): string {
+  return join(
+    repositoryRoot,
+    ".change-state",
+    changeId,
+    "candidates",
+    attemptId,
+    "promotion-lease-race.test",
+  );
+}
+
+async function waitForLeaseRaceReady(path: string): Promise<void> {
+  const deadline = Date.now() + 5_000;
+  while (Date.now() < deadline) {
+    try {
+      if ((await readFile(path, "utf8")) === "ready\n") return;
+    } catch (error: unknown) {
+      if (
+        typeof error !== "object" ||
+        error === null ||
+        !("code" in error) ||
+        error.code !== "ENOENT"
+      ) {
+        throw error;
+      }
+    }
+    await new Promise<void>((resolveWait) => {
+      setTimeout(resolveWait, 10);
+    });
+  }
+  throw new Error("promotion lease race did not become ready");
 }
 
 interface PublisherFixtureOptions {
@@ -1608,6 +1641,20 @@ test("promotion fast-forwards candidate A then commits only a sanitized dossier 
         await git(fixture.repositoryRoot, ["rev-parse", "HEAD"]),
         result.dossierCommit,
       );
+      assert.equal(
+        await git(fixture.repositoryRoot, ["status", "--porcelain=v1"]),
+        "",
+      );
+      assert.deepEqual(
+        (await git(fixture.repositoryRoot, ["log", "--format=%H", "-3"])).split(
+          "\n",
+        ),
+        [
+          result.dossierCommit,
+          fixture.candidate.candidateCommit,
+          fixture.candidate.baselineCommit,
+        ],
+      );
       assert.deepEqual(
         (
           await git(fixture.repositoryRoot, [
@@ -1841,6 +1888,199 @@ test("a failed final protected-main fast-forward leaves main at its baseline", a
       } finally {
         await rm(indexLock, { force: true });
       }
+    },
+  );
+});
+
+test("a concurrent advance after the final check loses the protected-main lease without dirtying the controller checkout", async () => {
+  await withPublisherFixture(
+    { approvalAuthority: "controller" },
+    async (fixture) => {
+      const testCapability = createCandidatePromotionTestCapability(
+        "protected-main-concurrent-advance",
+      );
+      const promotion = promoteCandidate({
+        candidate: fixture.candidate,
+        testCapability,
+      });
+      const marker = fixturePromotionLeaseRaceMarker(fixture.repositoryRoot);
+      await waitForLeaseRaceReady(marker);
+      await git(fixture.repositoryRoot, [
+        "update-ref",
+        "refs/heads/main",
+        fixture.candidate.candidateCommit,
+        fixture.candidate.baselineCommit,
+      ]);
+      await writeAtomic(marker, Buffer.from("advanced\n", "utf8"));
+      const outcome = await promotion.then(
+        () => "published" as const,
+        (error: unknown) => {
+          assert.ok(error instanceof Error);
+          assert.match(error.message, /lease|baseline|main|ref/i);
+          return "rejected" as const;
+        },
+      );
+
+      assert.equal(outcome, "rejected");
+      assert.equal(
+        await git(fixture.repositoryRoot, ["rev-parse", "HEAD"]),
+        fixture.candidate.candidateCommit,
+      );
+      assert.equal(
+        await git(fixture.repositoryRoot, ["symbolic-ref", "--quiet", "HEAD"]),
+        "refs/heads/main",
+      );
+      assert.equal(
+        await git(fixture.repositoryRoot, ["status", "--porcelain=v1"]),
+        "",
+      );
+      assert.equal(
+        await git(fixture.repositoryRoot, [
+          "diff",
+          "--cached",
+          "--name-status",
+        ]),
+        "",
+      );
+      const event = await readFile(
+        join(
+          fixture.repositoryRoot,
+          ".change-state",
+          changeId,
+          "candidates",
+          attemptId,
+          "publication-events.ndjson",
+        ),
+        "utf8",
+      );
+      assert.match(event, /promotion/u);
+      assert.match(event, /recoverable-failure/u);
+      assert.equal(event.includes("published"), false);
+    },
+  );
+});
+
+test("the concurrent-advance test barrier rejects an acknowledgement without a lease change", async () => {
+  await withPublisherFixture(
+    { approvalAuthority: "controller" },
+    async (fixture) => {
+      const testCapability = createCandidatePromotionTestCapability(
+        "protected-main-concurrent-advance",
+      );
+      const promotion = promoteCandidate({
+        candidate: fixture.candidate,
+        testCapability,
+      });
+      const marker = fixturePromotionLeaseRaceMarker(fixture.repositoryRoot);
+      await waitForLeaseRaceReady(marker);
+      await writeAtomic(marker, Buffer.from("advanced\n", "utf8"));
+
+      const outcome = await promotion.then(
+        () => "published" as const,
+        () => "rejected" as const,
+      );
+
+      assert.equal(outcome, "rejected");
+      assert.equal(
+        await git(fixture.repositoryRoot, ["rev-parse", "HEAD"]),
+        fixture.candidate.baselineCommit,
+      );
+      assert.equal(
+        await git(fixture.repositoryRoot, ["symbolic-ref", "--quiet", "HEAD"]),
+        "refs/heads/main",
+      );
+      assert.equal(
+        await git(fixture.repositoryRoot, ["status", "--porcelain=v1"]),
+        "",
+      );
+      const event = await readFile(
+        join(
+          fixture.repositoryRoot,
+          ".change-state",
+          changeId,
+          "candidates",
+          attemptId,
+          "publication-events.ndjson",
+        ),
+        "utf8",
+      );
+      assert.match(event, /promotion/u);
+      assert.match(event, /recoverable-failure/u);
+      assert.equal(event.includes("published"), false);
+    },
+  );
+});
+
+test("a staged concurrent deletion survives a lost protected-main lease", async () => {
+  await withPublisherFixture(
+    { approvalAuthority: "controller" },
+    async (fixture) => {
+      const testCapability = createCandidatePromotionTestCapability(
+        "protected-main-concurrent-advance",
+      );
+      const promotion = promoteCandidate({
+        candidate: fixture.candidate,
+        testCapability,
+      });
+      const marker = fixturePromotionLeaseRaceMarker(fixture.repositoryRoot);
+      await waitForLeaseRaceReady(marker);
+      await git(fixture.repositoryRoot, [
+        "update-ref",
+        "refs/heads/main",
+        fixture.candidate.candidateCommit,
+        fixture.candidate.baselineCommit,
+      ]);
+      await git(fixture.repositoryRoot, [
+        "read-tree",
+        "-m",
+        "-u",
+        fixture.candidate.baselineCommit,
+        fixture.candidate.candidateCommit,
+      ]);
+      await rm(join(fixture.repositoryRoot, "README.md"));
+      await git(fixture.repositoryRoot, ["add", "README.md"]);
+      await writeAtomic(marker, Buffer.from("advanced\n", "utf8"));
+
+      const outcome = await promotion.then(
+        () => "published" as const,
+        () => "rejected" as const,
+      );
+
+      assert.equal(outcome, "rejected");
+      assert.equal(
+        await git(fixture.repositoryRoot, ["rev-parse", "HEAD"]),
+        fixture.candidate.candidateCommit,
+      );
+      assert.equal(
+        await git(fixture.repositoryRoot, ["symbolic-ref", "--quiet", "HEAD"]),
+        "refs/heads/main",
+      );
+      assert.match(
+        await git(fixture.repositoryRoot, ["status", "--porcelain=v1"]),
+        /D\s+README\.md/u,
+      );
+      assert.match(
+        await git(fixture.repositoryRoot, [
+          "diff",
+          "--cached",
+          "--name-status",
+        ]),
+        /D\s+README\.md/u,
+      );
+      const event = await readFile(
+        join(
+          fixture.repositoryRoot,
+          ".change-state",
+          changeId,
+          "candidates",
+          attemptId,
+          "publication-events.ndjson",
+        ),
+        "utf8",
+      );
+      assert.match(event, /promotion/u);
+      assert.match(event, /recoverable-failure/u);
+      assert.equal(event.includes("published"), false);
     },
   );
 });

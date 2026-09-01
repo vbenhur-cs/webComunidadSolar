@@ -203,12 +203,14 @@ export interface PreviewHandle {
   stop(): Promise<void>;
 }
 
-/** Predefined failure stages for contained transaction fixture coverage. */
+/** Predefined failure/race stages for contained transaction fixture coverage. */
 export type CandidatePromotionFailureStage =
   | "dossier-write"
   | "dossier-add"
   | "dossier-commit"
-  | "protected-main-fast-forward";
+  | "protected-main-fast-forward"
+  /** A test-only pause after the final lease check; it cannot mutate Git. */
+  | "protected-main-concurrent-advance";
 
 interface PreviewLaunch {
   readonly child: ChildProcess;
@@ -2506,7 +2508,8 @@ export function createCandidatePromotionTestCapability(
     (stage !== "dossier-write" &&
       stage !== "dossier-add" &&
       stage !== "dossier-commit" &&
-      stage !== "protected-main-fast-forward")
+      stage !== "protected-main-fast-forward" &&
+      stage !== "protected-main-concurrent-advance")
   ) {
     throw new TypeError(
       "La inspección de promoción sólo existe en modo de pruebas",
@@ -2517,11 +2520,10 @@ export function createCandidatePromotionTestCapability(
   return capability;
 }
 
-function induceCandidatePromotionTestFailure(
+function candidatePromotionTestStage(
   capability: CandidatePromotionTestCapability | undefined,
-  stage: CandidatePromotionFailureStage,
-): void {
-  if (capability === undefined) return;
+): CandidatePromotionFailureStage | undefined {
+  if (capability === undefined) return undefined;
   if (process.env.INGEST_TEST_MODE !== "true") {
     throw new TypeError(
       "La inspección de promoción sólo existe en modo de pruebas",
@@ -2533,6 +2535,14 @@ function induceCandidatePromotionTestFailure(
       "La capability de promoción no pertenece al controlador",
     );
   }
+  return configuredStage;
+}
+
+function induceCandidatePromotionTestFailure(
+  capability: CandidatePromotionTestCapability | undefined,
+  stage: CandidatePromotionFailureStage,
+): void {
+  const configuredStage = candidatePromotionTestStage(capability);
   if (configuredStage === stage) {
     throw new TypeError(`La fixture solicitó fallo de promoción: ${stage}`);
   }
@@ -2545,6 +2555,103 @@ function missingPath(error: unknown): boolean {
     "code" in error &&
     error.code === "ENOENT"
   );
+}
+
+const promotionLeaseRaceMarkerName = "promotion-lease-race.test";
+const promotionLeaseRaceReady = Buffer.from("ready\n", "utf8");
+const promotionLeaseRaceAdvanced = Buffer.from("advanced\n", "utf8");
+
+async function candidatePromotionLeaseRaceMarker(
+  candidate: CandidateManifest,
+): Promise<string> {
+  const record = candidateRecord(candidate);
+  const store = await assertControllerCandidateStore(record.store);
+  const directory = dirname(record.manifestPath);
+  const marker = join(directory, promotionLeaseRaceMarkerName);
+  if (
+    !isStrictlyWithin(store.stateRoot.path, directory) ||
+    !isStrictlyWithin(directory, marker)
+  ) {
+    throw new TypeError("La barrera de lease escapa el estado candidato");
+  }
+  const entry = await lstat(directory);
+  if (
+    entry.isSymbolicLink() ||
+    !entry.isDirectory() ||
+    (await realpath(directory)) !== directory
+  ) {
+    throw new TypeError("El estado de lease candidato no es seguro");
+  }
+  return marker;
+}
+
+async function assertCandidatePromotionLeaseRaceAdvanced(
+  candidate: CandidateManifest,
+): Promise<void> {
+  const record = candidateRecord(candidate);
+  const store = await assertControllerCandidateStore(record.store);
+  const main = await runStoreGit(
+    store.root.path,
+    ["rev-parse", "--verify", "refs/heads/main^{commit}"],
+    "No se pudo verificar main tras la carrera de lease",
+  );
+  if (main !== candidate.candidateCommit) {
+    throw new TypeError(
+      "La barrera de lease no observó el avance externo exacto a A",
+    );
+  }
+}
+
+/**
+ * A private test barrier only. The opaque token can pause for an independently
+ * acting fixture to advance main; it never receives or executes Git input.
+ */
+async function awaitCandidatePromotionLeaseRace(
+  capability: CandidatePromotionTestCapability | undefined,
+  candidate: CandidateManifest,
+): Promise<void> {
+  if (
+    candidatePromotionTestStage(capability) !==
+    "protected-main-concurrent-advance"
+  ) {
+    return;
+  }
+  const marker = await candidatePromotionLeaseRaceMarker(candidate);
+  try {
+    await rm(marker, { force: true });
+    await writeAtomic(marker, promotionLeaseRaceReady);
+    const deadline = Date.now() + 5_000;
+    while (Date.now() < deadline) {
+      let bytes: Buffer;
+      try {
+        bytes = (await readStableRegularFile(marker, 64)).bytes;
+      } catch (error: unknown) {
+        if (missingPath(error)) {
+          throw new TypeError(
+            "La barrera de lease desapareció durante la prueba",
+          );
+        }
+        throw error;
+      }
+      if (bytes.equals(promotionLeaseRaceAdvanced)) {
+        await assertCandidatePromotionLeaseRaceAdvanced(candidate);
+        return;
+      }
+      if (!bytes.equals(promotionLeaseRaceReady)) {
+        throw new TypeError(
+          "La barrera de lease recibió una señal no permitida",
+        );
+      }
+      await new Promise<void>((resolveWait) => {
+        setTimeout(resolveWait, 10);
+      });
+    }
+    throw new TypeError(
+      "La carrera de lease candidato excedió el tiempo límite",
+    );
+  } finally {
+    await rm(marker, { force: true }).catch(() => undefined);
+  }
 }
 
 async function candidatePublicationEventsPath(
@@ -2936,6 +3043,167 @@ async function removePrivateDossierWorktree(
   );
 }
 
+/** Detaches a clean controller checkout without changing refs/heads/main. */
+async function detachControllerCheckoutAtBaseline(
+  store: ArtifactStoreRecord,
+  candidate: CandidateManifest,
+): Promise<void> {
+  await runStorePromotionGit(
+    store.root.path,
+    ["checkout", "--detach", "--quiet", candidate.baselineCommit],
+    "No se pudo aislar el checkout controlador en el baseline",
+  );
+  const [head, status] = await Promise.all([
+    runStoreGit(
+      store.root.path,
+      ["rev-parse", "--verify", "HEAD^{commit}"],
+      "No se pudo verificar el checkout controlador aislado",
+    ),
+    runStoreGit(
+      store.root.path,
+      ["status", "--porcelain=v1", "--untracked-files=all"],
+      "No se pudo verificar la limpieza del checkout aislado",
+    ),
+  ]);
+  if (head !== candidate.baselineCommit || status !== "") {
+    throw new TypeError("El checkout aislado no conserva el baseline limpio");
+  }
+}
+
+/** Advances only detached HEAD/index/worktree to B; main remains untouched. */
+async function advanceDetachedCheckoutToDossier(
+  store: ArtifactStoreRecord,
+  candidate: CandidateManifest,
+  dossierCommit: string,
+): Promise<void> {
+  await runStorePromotionGit(
+    store.root.path,
+    ["merge", "--ff-only", dossierCommit],
+    "No se pudo preparar el checkout aislado para el expediente",
+  );
+  const [head, main, status] = await Promise.all([
+    runStoreGit(
+      store.root.path,
+      ["rev-parse", "--verify", "HEAD^{commit}"],
+      "No se pudo verificar el checkout aislado del expediente",
+    ),
+    runStoreGit(
+      store.root.path,
+      ["rev-parse", "--verify", "refs/heads/main^{commit}"],
+      "No se pudo verificar main antes del lease protegido",
+    ),
+    runStoreGit(
+      store.root.path,
+      ["status", "--porcelain=v1", "--untracked-files=all"],
+      "No se pudo verificar la limpieza del checkout aislado",
+    ),
+  ]);
+  if (
+    head !== dossierCommit ||
+    main !== candidate.baselineCommit ||
+    status !== ""
+  ) {
+    throw new TypeError(
+      "El checkout aislado no conserva B ni el baseline previo al lease",
+    );
+  }
+}
+
+/** The only production mutation of refs/heads/main: an explicit CAS lease. */
+async function advanceProtectedMainWithLease(
+  store: ArtifactStoreRecord,
+  candidate: CandidateManifest,
+  dossierCommit: string,
+): Promise<void> {
+  await runStorePromotionGit(
+    store.root.path,
+    ["update-ref", "refs/heads/main", dossierCommit, candidate.baselineCommit],
+    "No se pudo adquirir el lease baseline de main para el expediente",
+  );
+}
+
+/** Reattaches without touching files after a successful CAS to already-clean B. */
+async function attachControllerMainAtDossier(
+  store: ArtifactStoreRecord,
+  candidate: CandidateManifest,
+  dossierCommit: string,
+): Promise<void> {
+  await runStorePromotionGit(
+    store.root.path,
+    ["symbolic-ref", "HEAD", "refs/heads/main"],
+    "No se pudo reenganchar el checkout controlador a main",
+  );
+  const [headRef, main, head, parent, status] = await Promise.all([
+    runStoreGit(
+      store.root.path,
+      ["symbolic-ref", "--quiet", "HEAD"],
+      "No se pudo verificar HEAD tras adquirir el lease",
+    ),
+    runStoreGit(
+      store.root.path,
+      ["rev-parse", "--verify", "refs/heads/main^{commit}"],
+      "No se pudo verificar main tras adquirir el lease",
+    ),
+    runStoreGit(
+      store.root.path,
+      ["rev-parse", "--verify", "HEAD^{commit}"],
+      "No se pudo verificar HEAD tras adquirir el lease",
+    ),
+    runStoreGit(
+      store.root.path,
+      ["rev-parse", "--verify", "HEAD^"],
+      "No se pudo verificar el padre de main tras adquirir el lease",
+    ),
+    runStoreGit(
+      store.root.path,
+      ["status", "--porcelain=v1", "--untracked-files=all"],
+      "No se pudo verificar la limpieza de main tras adquirir el lease",
+    ),
+  ]);
+  if (
+    headRef !== "refs/heads/main" ||
+    main !== dossierCommit ||
+    head !== dossierCommit ||
+    parent !== candidate.candidateCommit ||
+    status !== ""
+  ) {
+    throw new TypeError(
+      "El lease protegido no dejó main limpio en la cadena A a B",
+    );
+  }
+}
+
+/** A non-forced recovery preserves any work introduced by the concurrent actor. */
+async function restoreControllerMainCheckout(
+  store: ArtifactStoreRecord,
+): Promise<void> {
+  await runStorePromotionGit(
+    store.root.path,
+    ["checkout", "--quiet", "--no-guess", "main"],
+    "No se pudo restaurar el checkout controlador sin descartar cambios",
+  );
+  const [headRef, main, head] = await Promise.all([
+    runStoreGit(
+      store.root.path,
+      ["symbolic-ref", "--quiet", "HEAD"],
+      "No se pudo verificar HEAD tras restaurar main",
+    ),
+    runStoreGit(
+      store.root.path,
+      ["rev-parse", "--verify", "refs/heads/main^{commit}"],
+      "No se pudo verificar main tras restaurar el checkout",
+    ),
+    runStoreGit(
+      store.root.path,
+      ["rev-parse", "--verify", "HEAD^{commit}"],
+      "No se pudo verificar HEAD tras restaurar el checkout",
+    ),
+  ]);
+  if (headRef !== "refs/heads/main" || main !== head) {
+    throw new TypeError("El checkout controlador no volvió a seguir main");
+  }
+}
+
 /**
  * Commits fixed sanitized dossier B in an isolated worktree based on candidate
  * A, verifies the complete B, then fast-forwards protected main once from the
@@ -2952,6 +3220,7 @@ export async function promoteCandidateWithDossier(
   await assertCandidateMainBaseline(candidate);
   const dossier = await prepareCandidateDossier(candidate);
   const worktree = await createPrivateDossierWorktree(store, candidate);
+  let controllerCheckoutDetached = false;
   try {
     induceCandidatePromotionTestFailure(testCapability, "dossier-write");
     const files = await writeCandidateDossier(
@@ -2979,38 +3248,32 @@ export async function promoteCandidateWithDossier(
     );
     await assertDossierCommit(worktree.root, candidate, dossierCommit, dossier);
 
-    // Recheck immediately before the sole protected-main mutation. Any
-    // concurrent dirty/advanced state leaves main untouched and recoverable.
+    // The protected checkout must begin clean at baseline. From here B is
+    // prepared privately, then only a compare-and-swap can mutate main.
     await assertCandidateMainBaseline(candidate);
     induceCandidatePromotionTestFailure(
       testCapability,
       "protected-main-fast-forward",
     );
-    await runStorePromotionGit(
-      store.root.path,
-      ["merge", "--ff-only", dossierCommit],
-      "No se pudo avanzar main a la cadena candidato-expediente",
-    );
-    const [head, parent] = await Promise.all([
-      runStoreGit(
-        store.root.path,
-        ["rev-parse", "--verify", "HEAD^{commit}"],
-        "No se pudo verificar main tras la promoción",
-      ),
-      runStoreGit(
-        store.root.path,
-        ["rev-parse", "--verify", "HEAD^"],
-        "No se pudo verificar el padre de main tras la promoción",
-      ),
-    ]);
-    if (head !== dossierCommit || parent !== candidate.candidateCommit) {
-      throw new TypeError("El fast-forward no conservó la cadena A a B");
-    }
+    await detachControllerCheckoutAtBaseline(store, candidate);
+    controllerCheckoutDetached = true;
+    await advanceDetachedCheckoutToDossier(store, candidate, dossierCommit);
+
+    // This barrier is private test plumbing. A fixture may now advance the
+    // protected ref independently; the CAS below remains the only production
+    // ref mutation and must reject that changed baseline.
+    await awaitCandidatePromotionLeaseRace(testCapability, candidate);
+    await advanceProtectedMainWithLease(store, candidate, dossierCommit);
+    await attachControllerMainAtDossier(store, candidate, dossierCommit);
+    controllerCheckoutDetached = false;
     return Object.freeze({
       candidateCommit: candidate.candidateCommit,
       dossierCommit,
     });
   } finally {
+    if (controllerCheckoutDetached) {
+      await restoreControllerMainCheckout(store);
+    }
     await removePrivateDossierWorktree(store, worktree).catch(() => undefined);
   }
 }
