@@ -61,6 +61,9 @@ const fixedGitArguments = Object.freeze([
   "-c",
   "core.untrackedCache=false",
 ]);
+const candidateCommitPattern = /^[a-f0-9]{40,64}$/u;
+const candidateChangeIdPattern = /^[a-z0-9](?:[a-z0-9-]{1,62}[a-z0-9])$/u;
+const candidateAttemptIdPattern = /^[a-z0-9](?:[a-z0-9-]{0,63})$/u;
 
 export interface StagedAgentOutput {
   readonly path: string;
@@ -124,6 +127,7 @@ export interface ControllerCandidateCheckout {
 interface CandidateCheckoutRecord {
   readonly root: string;
   readonly path: string;
+  readonly repositoryRoot: string;
   readonly output: StagedAgentOutput;
   readonly attemptId: string;
   readonly planCanonical: string;
@@ -1210,6 +1214,177 @@ function sameOutputHashMaps(
   return outputHashesDigest(left) === outputHashesDigest(right);
 }
 
+function controllerCandidateRef(plan: ChangePlan, attemptId: string): string {
+  if (
+    !candidateChangeIdPattern.test(plan.changeId) ||
+    !candidateAttemptIdPattern.test(attemptId)
+  ) {
+    throw new TypeError("El cambio o intento candidato no es seguro");
+  }
+  return `refs/comunidadsolar/candidates/${plan.changeId}/${attemptId}`;
+}
+
+/**
+ * Resolves only the repository already bound to a controller-minted staged
+ * output. Callers provide no repository or artifact path of their own.
+ *
+ * @internal Candidate persistence uses this to create controller-owned state.
+ */
+export async function controllerCandidateRepositoryRoot(
+  output: StagedAgentOutput,
+  plan: ChangePlan,
+  attemptId: string,
+): Promise<string> {
+  const record = stagedOutputRecord(output);
+  if (
+    record.attemptId !== attemptId ||
+    record.planCanonical !== canonicalJson(plan) ||
+    record.baselineCommit !== plan.baselineCommit
+  ) {
+    throw new TypeError(
+      "El estado candidato no coincide con el output, plan o intento",
+    );
+  }
+  await verifiedStagedOutputHashes(output, plan, attemptId);
+  const [repository, entry] = await Promise.all([
+    realpath(record.repositoryRoot),
+    lstat(record.repositoryRoot),
+  ]);
+  if (
+    repository !== record.repositoryRoot ||
+    entry.isSymbolicLink() ||
+    !entry.isDirectory()
+  ) {
+    throw new TypeError("El repositorio controlador candidato no es seguro");
+  }
+  const baseline = await runFixedGit(
+    ["-C", repository, "rev-parse", `${plan.baselineCommit}^{commit}`],
+    "No se pudo comprobar el baseline controlador",
+  );
+  if (baseline !== plan.baselineCommit) {
+    throw new TypeError("El baseline controlador candidato no coincide");
+  }
+  return repository;
+}
+
+/**
+ * Transfers commit A into the trusted controller object database and anchors
+ * it at a deterministic private ref. It never changes a branch such as main.
+ */
+export async function persistControllerCandidateRef(
+  checkout: ControllerCandidateCheckout,
+  output: StagedAgentOutput,
+  plan: ChangePlan,
+  attemptId: string,
+  candidateCommit: string,
+): Promise<string> {
+  if (!candidateCommitPattern.test(candidateCommit)) {
+    throw new TypeError("El commit candidato no es válido");
+  }
+  await assertControllerCandidateCheckout(checkout, output, plan, attemptId);
+  const record = candidateCheckoutRecord(checkout);
+  const repositoryRoot = await controllerCandidateRepositoryRoot(
+    output,
+    plan,
+    attemptId,
+  );
+  if (repositoryRoot !== record.repositoryRoot) {
+    throw new TypeError("El checkout candidato no pertenece al repositorio");
+  }
+  const ref = controllerCandidateRef(plan, attemptId);
+  let existing: string | undefined;
+  try {
+    existing = await runFixedGit(
+      ["-C", repositoryRoot, "rev-parse", "--verify", "--quiet", ref],
+      "No se pudo leer la ref candidata",
+    );
+  } catch {
+    existing = undefined;
+  }
+  if (existing !== undefined && existing !== candidateCommit) {
+    throw new TypeError("La ref candidata ya pertenece a otro commit");
+  }
+  if (existing === undefined) {
+    await runFixedGit(
+      [
+        "-C",
+        repositoryRoot,
+        "fetch",
+        "--no-tags",
+        "--no-write-fetch-head",
+        "--quiet",
+        "--",
+        record.path,
+        `${candidateCommit}:${ref}`,
+      ],
+      "No se pudo transferir el commit candidato al controlador",
+    );
+  }
+  const [resolved, object, parent] = await Promise.all([
+    runFixedGit(
+      ["-C", repositoryRoot, "rev-parse", "--verify", "--quiet", ref],
+      "No se pudo resolver la ref candidata",
+    ),
+    runFixedGit(
+      ["-C", repositoryRoot, "cat-file", "-e", `${candidateCommit}^{commit}`],
+      "El commit candidato no quedó durable",
+    ),
+    runFixedGit(
+      ["-C", repositoryRoot, "rev-parse", `${candidateCommit}^`],
+      "No se pudo leer el padre durable del candidato",
+    ),
+  ]);
+  if (
+    resolved !== candidateCommit ||
+    object !== "" ||
+    parent !== plan.baselineCommit
+  ) {
+    throw new TypeError("La ref candidata durable no conserva su procedencia");
+  }
+  return ref;
+}
+
+/** Verifies a durable candidate ref through the staged controller authority. */
+export async function assertControllerCandidateRef(
+  output: StagedAgentOutput,
+  plan: ChangePlan,
+  attemptId: string,
+  candidateCommit: string,
+): Promise<void> {
+  if (!candidateCommitPattern.test(candidateCommit)) {
+    throw new TypeError("El commit candidato no es válido");
+  }
+  const repositoryRoot = await controllerCandidateRepositoryRoot(
+    output,
+    plan,
+    attemptId,
+  );
+  const ref = controllerCandidateRef(plan, attemptId);
+  const [resolved, parent, object] = await Promise.all([
+    runFixedGit(
+      ["-C", repositoryRoot, "rev-parse", "--verify", "--quiet", ref],
+      "No se pudo resolver la ref candidata durable",
+    ),
+    runFixedGit(
+      ["-C", repositoryRoot, "rev-parse", `${candidateCommit}^`],
+      "No se pudo leer el padre durable del candidato",
+    ),
+    runFixedGit(
+      ["-C", repositoryRoot, "cat-file", "-e", `${candidateCommit}^{commit}`],
+      "El commit candidato durable no existe",
+    ),
+  ]);
+  if (
+    resolved !== candidateCommit ||
+    parent !== plan.baselineCommit ||
+    object !== ""
+  ) {
+    throw new TypeError(
+      "El commit candidato durable no conserva su procedencia",
+    );
+  }
+}
+
 /**
  * Materializes a Git checkout from the private trusted baseline record and
  * copies only the rechecked staged bytes. The returned object intentionally
@@ -1325,6 +1500,7 @@ export async function createControllerCandidateCheckout(
       Object.freeze({
         root,
         path: canonicalCheckout,
+        repositoryRoot: staging.repositoryRoot,
         output,
         attemptId,
         planCanonical: canonicalJson(plan),

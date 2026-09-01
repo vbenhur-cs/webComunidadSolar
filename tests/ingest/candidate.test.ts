@@ -20,14 +20,17 @@ import {
   candidateTestInspection,
   createCandidate,
   createCandidateArtifactStore,
+  createCandidateTestInspectionCapability,
+  loadCandidate,
   removeCandidateArtifactStore,
   verifyCandidateArtifact,
   type CandidateArtifactStore,
   type CandidateCreationInput,
+  type CandidateTestInspectionCapability,
 } from "../../src/ingest/candidate/manifest.ts";
 import {
   createCandidateBuildTestCapability,
-  type CandidateBuildInvocation,
+  type CandidateBuildFixture,
   type CandidateBuildTestCapability,
 } from "../../src/ingest/candidate/evidence.ts";
 import {
@@ -222,14 +225,14 @@ interface BuildFixtureOptions {
   readonly bindings?: readonly string[];
 }
 
-async function writeCandidateBuild(
-  invocation: CandidateBuildInvocation,
+function candidateBuildFixture(
+  plan: ChangePlan,
   options: BuildFixtureOptions = {},
-): Promise<void> {
+  additionalFiles: OutputFiles = {},
+): CandidateBuildFixture {
   const targetEnvironment =
-    options.targetEnvironment ?? invocation.plan.publication.environment;
-  const siteIndexable =
-    options.siteIndexable ?? invocation.plan.publication.siteIndexable;
+    options.targetEnvironment ?? plan.publication.environment;
+  const siteIndexable = options.siteIndexable ?? plan.publication.siteIndexable;
   const bindings = options.bindings ?? ["ASSETS", "DB"];
   const config = JSON.stringify({
     targetEnvironment,
@@ -245,29 +248,37 @@ async function writeCandidateBuild(
     vars: { SITE_INDEXABLE: siteIndexable ? "true" : "false" },
     bindings,
   });
-  await writeFiles(invocation.checkoutPath, {
-    "dist/_worker.js/index.js":
-      "export default { fetch() { return new Response('ok'); } };\n",
-    "dist/index.html": "<main>immutable candidate</main>\n",
-    "dist/wrangler.json": config,
-    "dist/.prerender/wrangler.json": nestedConfig,
-    "dist/auxiliary/wrangler.json": nestedConfig,
-    ".wrangler/deploy/config.json":
-      options.redirect ??
-      JSON.stringify({
-        configPath: "../../dist/wrangler.json",
-        auxiliaryWorkers: ["../../dist/auxiliary/wrangler.json"],
-        prerenderWorkerConfigPath: "../../dist/.prerender/wrangler.json",
-      }),
-  });
+  return {
+    files: {
+      "dist/_worker.js/index.js":
+        "export default { fetch() { return new Response('ok'); } };\n",
+      "dist/index.html": "<main>immutable candidate</main>\n",
+      "dist/wrangler.json": config,
+      "dist/.prerender/wrangler.json": nestedConfig,
+      "dist/auxiliary/wrangler.json": nestedConfig,
+      ".wrangler/deploy/config.json":
+        options.redirect ??
+        JSON.stringify({
+          configPath: "../../dist/wrangler.json",
+          auxiliaryWorkers: ["../../dist/auxiliary/wrangler.json"],
+          prerenderWorkerConfigPath: "../../dist/.prerender/wrangler.json",
+        }),
+      ...additionalFiles,
+    },
+    validations: [
+      { id: "candidate-build", status: "passed", evidence: "fixture" },
+    ],
+  };
 }
 
 interface CandidateFixture {
+  readonly repositoryRoot: string;
   readonly output: StagedAgentOutput;
   readonly plan: ChangePlan;
   readonly validations: ValidationResult[];
   readonly artifactStore: CandidateArtifactStore;
   readonly build: CandidateBuildTestCapability;
+  readonly inspection: CandidateTestInspectionCapability;
 }
 
 async function withCandidateFixture(
@@ -296,6 +307,7 @@ async function withCandidateFixture(
     await git(repositoryRoot, ["config", "user.name", "Fixture Human"]);
     await writeFiles(repositoryRoot, {
       "README.md": "candidate fixture\n",
+      ".gitignore": ".artifacts/\n.change-state/\n.wrangler/\ndist/\n",
       "package.json":
         '{"name":"candidate-fixture","version":"1.0.0","private":true}\n',
       "package-lock.json":
@@ -377,16 +389,19 @@ async function withCandidateFixture(
       },
       { commands: async (command) => await commandResult(command) },
     );
-    artifactStore = await createCandidateArtifactStore();
-    const build = createCandidateBuildTestCapability(async (invocation) => {
-      await writeCandidateBuild(invocation, buildOptions);
-      return {
-        validations: [
-          { id: "candidate-build", status: "passed", evidence: "fixture" },
-        ],
-      };
+    artifactStore = await createCandidateArtifactStore(output, plan, attemptId);
+    const build = createCandidateBuildTestCapability(
+      candidateBuildFixture(plan, buildOptions),
+    );
+    await run({
+      repositoryRoot,
+      output,
+      plan,
+      validations,
+      artifactStore,
+      build,
+      inspection: createCandidateTestInspectionCapability(),
     });
-    await run({ output, plan, validations, artifactStore, build });
   } finally {
     if (artifactStore !== undefined) {
       await removeCandidateArtifactStore(artifactStore).catch(() => undefined);
@@ -453,46 +468,33 @@ test("hashTree is stable across mtimes and rejects link-based trees", async (t) 
 
 test("creates a clean direct-child candidate with only approved output and immutable evidence", async () => {
   await withCandidateFixture({}, async (fixture) => {
-    let observedCommit = "";
-    let observedParent = "";
-    let observedStatus = "";
-    let observedDiff = "";
-    const build = createCandidateBuildTestCapability(async (invocation) => {
-      observedCommit = await git(invocation.checkoutPath, [
-        "rev-parse",
-        "HEAD",
-      ]);
-      observedParent = await git(invocation.checkoutPath, [
-        "rev-parse",
-        "HEAD^",
-      ]);
-      observedStatus = await git(invocation.checkoutPath, [
-        "status",
-        "--porcelain",
-      ]);
-      observedDiff = await git(invocation.checkoutPath, [
-        "diff",
-        "--name-only",
-        `${invocation.plan.baselineCommit}..HEAD`,
-      ]);
-      await writeCandidateBuild(invocation);
-      return {
-        validations: [
-          { id: "candidate-build", status: "passed", evidence: "fixture" },
-        ],
-      };
-    });
-    const candidate = await createCandidate({
-      ...candidateInput(fixture),
-      buildCapability: build,
-    });
+    const candidate = await createCandidate(candidateInput(fixture));
 
     assert.match(candidate.candidateCommit, /^[a-f0-9]{64}$/u);
-    assert.equal(observedCommit, candidate.candidateCommit);
-    assert.equal(observedParent, fixture.plan.baselineCommit);
-    assert.equal(observedStatus, "");
+    assert.equal(
+      await git(fixture.repositoryRoot, [
+        "rev-parse",
+        `refs/comunidadsolar/candidates/${changeId}/${attemptId}`,
+      ]),
+      candidate.candidateCommit,
+    );
+    assert.equal(
+      await git(fixture.repositoryRoot, [
+        "rev-parse",
+        `${candidate.candidateCommit}^`,
+      ]),
+      fixture.plan.baselineCommit,
+    );
     assert.deepEqual(
-      observedDiff.split("\n").filter(Boolean),
+      (
+        await git(fixture.repositoryRoot, [
+          "diff",
+          "--name-only",
+          `${fixture.plan.baselineCommit}..${candidate.candidateCommit}`,
+        ])
+      )
+        .split("\n")
+        .filter(Boolean),
       fixture.output.files,
     );
     assert.deepEqual(candidate.files, fixture.output.files);
@@ -524,22 +526,72 @@ test("creates a clean direct-child candidate with only approved output and immut
   });
 });
 
+test("keeps candidate A reachable from the controller repository after its private checkout is removed", async () => {
+  await withCandidateFixture({}, async (fixture) => {
+    const candidate = await createCandidate(candidateInput(fixture));
+
+    await assert.doesNotReject(
+      git(fixture.repositoryRoot, [
+        "cat-file",
+        "-e",
+        `${candidate.candidateCommit}^{commit}`,
+      ]),
+    );
+    assert.equal(
+      await git(fixture.repositoryRoot, [
+        "rev-parse",
+        `refs/comunidadsolar/candidates/${changeId}/${attemptId}`,
+      ]),
+      candidate.candidateCommit,
+    );
+  });
+});
+
+test("reloads and rehashes the durable controller bundle without a checkout path", async () => {
+  await withCandidateFixture({}, async (fixture) => {
+    const candidate = await createCandidate(candidateInput(fixture));
+    await removeCandidateArtifactStore(fixture.artifactStore);
+    const reloaded = await loadCandidate({
+      output: fixture.output,
+      plan: fixture.plan,
+      attemptId,
+    });
+    assert.deepEqual(reloaded, candidate);
+    await assert.doesNotReject(verifyCandidateArtifact(reloaded));
+
+    await writeFile(
+      join(
+        fixture.repositoryRoot,
+        ".artifacts",
+        "candidates",
+        changeId,
+        attemptId,
+        "bundle",
+        "dist",
+        "index.html",
+      ),
+      "durable bundle changed\n",
+    );
+    await assert.rejects(
+      loadCandidate({
+        output: fixture.output,
+        plan: fixture.plan,
+        attemptId,
+      }),
+      /digest|artefacto/i,
+    );
+  });
+});
+
 test("rejects forged, failed, mismatched and mutated preliminary inputs before Git or build", async () => {
   await withCandidateFixture({}, async (fixture) => {
-    let builds = 0;
-    const build = createCandidateBuildTestCapability(async (invocation) => {
-      builds += 1;
-      await writeCandidateBuild(invocation);
-      return {
-        validations: [
-          { id: "candidate-build", status: "passed", evidence: "fixture" },
-        ],
-      };
-    });
+    const build = createCandidateBuildTestCapability(
+      candidateBuildFixture(fixture.plan),
+    );
     const input = { ...candidateInput(fixture), buildCapability: build };
     await assert.rejects(
       createCandidate({ ...input, output: { ...fixture.output } }),
-      /staging|controlador/i,
+      /staging|controlador|store/i,
     );
     await assert.rejects(
       createCandidate({
@@ -553,21 +605,20 @@ test("rejects forged, failed, mismatched and mutated preliminary inputs before G
     );
     await assert.rejects(
       createCandidate({ ...input, attemptId: "attempt-000002" }),
-      /intento|staging/i,
+      /intento|staging|store/i,
     );
     await assert.rejects(
       createCandidate({
         ...input,
         plan: { ...fixture.plan, planSha256: "0".repeat(64) },
       }),
-      /plan|staging|preliminar/i,
+      /plan|staging|preliminar|store/i,
     );
     await writeFile(
       join(fixture.output.path, ...fixture.output.files[0]!.split("/")),
       "mutated after validation\n",
     );
     await assert.rejects(createCandidate(input), /hash|staging|aprobada/i);
-    assert.equal(builds, 0);
   });
 });
 
@@ -575,16 +626,9 @@ test("rejects controller-minted preliminary failed and skipped results before bu
   await withCandidateFixture(
     {},
     async (fixture) => {
-      let builds = 0;
-      const build = createCandidateBuildTestCapability(async (invocation) => {
-        builds += 1;
-        await writeCandidateBuild(invocation);
-        return {
-          validations: [
-            { id: "candidate-build", status: "passed", evidence: "fixture" },
-          ],
-        };
-      });
+      const build = createCandidateBuildTestCapability(
+        candidateBuildFixture(fixture.plan),
+      );
       assert.ok(
         fixture.validations.some(
           (validation) => validation.status === "failed",
@@ -599,7 +643,6 @@ test("rejects controller-minted preliminary failed and skipped results before bu
         createCandidate({ ...candidateInput(fixture), buildCapability: build }),
         /únicamente aprobadas|preliminar/i,
       );
-      assert.equal(builds, 0);
     },
     (command) =>
       command.id === "format"
@@ -640,18 +683,48 @@ test("rejects a mismatched build profile or escaping deploy redirect before copy
 
 test("refuses a build that mutates tracked candidate A bytes", async () => {
   await withCandidateFixture({}, async (fixture) => {
-    const build = createCandidateBuildTestCapability(async (invocation) => {
-      await writeCandidateBuild(invocation);
-      await writeFile(join(invocation.checkoutPath, "README.md"), "mutated\n");
-      return {
-        validations: [
-          { id: "candidate-build", status: "passed", evidence: "fixture" },
-        ],
-      };
-    });
+    const build = createCandidateBuildTestCapability(
+      candidateBuildFixture(fixture.plan, {}, { "README.md": "mutated\n" }),
+    );
     await assert.rejects(
       createCandidate({ ...candidateInput(fixture), buildCapability: build }),
-      /inmutable|worktree|checkout/i,
+      /inmutable|worktree|checkout|cambios no aprobados/i,
+    );
+  });
+});
+
+test("refuses an unexpected untracked build file before artifact copy or preview", async () => {
+  await withCandidateFixture({}, async (fixture) => {
+    const build = createCandidateBuildTestCapability(
+      candidateBuildFixture(
+        fixture.plan,
+        {},
+        {
+          "unexpected.txt": "must never be accepted\n",
+        },
+      ),
+    );
+    await assert.rejects(
+      createCandidate({ ...candidateInput(fixture), buildCapability: build }),
+      /no aprobado|untracked|checkout|inmutable/i,
+    );
+  });
+});
+
+test("refuses ignored .wrangler output other than the fixed deploy config", async () => {
+  await withCandidateFixture({}, async (fixture) => {
+    const build = createCandidateBuildTestCapability(
+      candidateBuildFixture(
+        fixture.plan,
+        {},
+        {
+          ".wrangler/deploy/unexpected.txt": "must never be accepted\n",
+        },
+      ),
+    );
+    await assert.rejects(
+      createCandidate({ ...candidateInput(fixture), buildCapability: build }),
+      /output.*no aprobado|deploy/i,
     );
   });
 });
@@ -676,7 +749,7 @@ test("fails closed when the controller has no build or preview capability", asyn
 test("rehashes the copied bundle and refuses a changed output byte", async () => {
   await withCandidateFixture({}, async (fixture) => {
     const candidate = await createCandidate(candidateInput(fixture));
-    const inspection = candidateTestInspection(candidate);
+    const inspection = candidateTestInspection(fixture.inspection, candidate);
     await writeFile(
       join(inspection.bundlePath, "dist", "index.html"),
       "changed\n",
@@ -730,7 +803,10 @@ test("previews only the verified copied bundle with fixed local Wrangler argv an
     );
     const response = await fetch(handle.url);
     assert.equal(response.status, 200);
-    const previewPid = candidateTestInspection(candidate).previewPid;
+    const previewPid = candidateTestInspection(
+      fixture.inspection,
+      candidate,
+    ).previewPid;
     await handle.stop();
     if (previewPid !== undefined) {
       await assert.rejects(
@@ -741,7 +817,7 @@ test("previews only the verified copied bundle with fixed local Wrangler argv an
   });
 });
 
-test("rejects a mutated deploy redirect before preview spawn", async () => {
+test("rechecks an escaped deploy redirect changed after verification before preview spawn", async () => {
   await withCandidateFixture({}, async (fixture) => {
     let spawns = 0;
     const preview = createCandidatePreviewTestCapability(async () => {
@@ -749,7 +825,8 @@ test("rejects a mutated deploy redirect before preview spawn", async () => {
       throw new Error("the preview adapter must not be reached");
     });
     const candidate = await createCandidate(candidateInput(fixture, preview));
-    const inspection = candidateTestInspection(candidate);
+    await verifyCandidateArtifact(candidate);
+    const inspection = candidateTestInspection(fixture.inspection, candidate);
     await writeFile(
       join(inspection.bundlePath, ".wrangler", "deploy", "config.json"),
       '{"configPath":"../../../../escape/wrangler.json","auxiliaryWorkers":[]}',

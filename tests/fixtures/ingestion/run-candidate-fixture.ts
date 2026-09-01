@@ -220,6 +220,7 @@ async function runFixture(): Promise<void> {
     await git(repositoryRoot, ["config", "user.name", "Fixture Human"]);
     await writeFiles(repositoryRoot, {
       "README.md": "candidate fixture\n",
+      ".gitignore": ".artifacts/\n.change-state/\n.wrangler/\ndist/\n",
       "package.json":
         '{"name":"candidate-fixture","version":"1.0.0","private":true}\n',
       "package-lock.json":
@@ -299,30 +300,27 @@ async function runFixture(): Promise<void> {
       { output, plan, attemptId, evidenceRoot, publicationProfile },
       { commands: async (command) => passedCommand(command) },
     );
-    artifactStore = await createCandidateArtifactStore();
-    const build = createCandidateBuildTestCapability(async (invocation) => {
-      const primaryConfig = JSON.stringify({
-        targetEnvironment: invocation.plan.publication.environment,
-        main: "_worker.js/index.js",
-        assets: { binding: "ASSETS", directory: ".", run_worker_first: true },
-        vars: { SITE_INDEXABLE: "false" },
-        bindings: ["ASSETS", "DB"],
-      });
-      await writeFiles(invocation.checkoutPath, {
+    artifactStore = await createCandidateArtifactStore(output, plan, attemptId);
+    const build = createCandidateBuildTestCapability({
+      files: {
         "dist/_worker.js/index.js":
           "export default { fetch() { return new Response('candidate'); } };\n",
         "dist/index.html": "<main>immutable fixture</main>\n",
-        "dist/wrangler.json": primaryConfig,
+        "dist/wrangler.json": JSON.stringify({
+          targetEnvironment: plan.publication.environment,
+          main: "_worker.js/index.js",
+          assets: { binding: "ASSETS", directory: ".", run_worker_first: true },
+          vars: { SITE_INDEXABLE: "false" },
+          bindings: ["ASSETS", "DB"],
+        }),
         ".wrangler/deploy/config.json": JSON.stringify({
           configPath: "../../dist/wrangler.json",
           auxiliaryWorkers: [],
         }),
-      });
-      return {
-        validations: [
-          { id: "candidate-build", status: "passed", evidence: "fixture" },
-        ],
-      };
+      },
+      validations: [
+        { id: "candidate-build", status: "passed", evidence: "fixture" },
+      ],
     });
     const previewCapability = createCandidatePreviewTestCapability(async () => {
       const child = spawn(

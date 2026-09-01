@@ -1,15 +1,31 @@
 import { spawn, type ChildProcess } from "node:child_process";
+import { lstat, mkdir, readdir, realpath, writeFile } from "node:fs/promises";
+import { dirname, isAbsolute, join, relative, sep } from "node:path";
 
 import { canonicalJson } from "../canonical-json.ts";
 import type { ChangePlan } from "../domain.ts";
 import {
+  assertControllerCandidateRef,
   assertControllerCandidateCheckout,
   createControllerCandidateCheckout,
+  persistControllerCandidateRef,
   removeControllerCandidateCheckout,
   withControllerCandidateCheckout,
   type ControllerCandidateCheckout,
   type StagedAgentOutput,
 } from "../workspaces/policy.ts";
+import {
+  candidateBuildFixture,
+  validatedCandidateBuildValidations,
+  type CandidateBoundBuildEvidence,
+  type CandidateBuildTestCapability,
+} from "./evidence.ts";
+import {
+  copyCandidateBundle,
+  readCandidateBundleConfiguration,
+  type CandidateArtifactEntry,
+  type CandidateBundleConfiguration,
+} from "./manifest.ts";
 
 const gitExecutable = "/usr/bin/git";
 const fixedGitArguments = Object.freeze([
@@ -99,6 +115,71 @@ function sortedPaths(paths: readonly string[]): string[] {
   return result;
 }
 
+function isWithin(root: string, candidate: string): boolean {
+  const remainder = relative(root, candidate);
+  return (
+    remainder === "" ||
+    (!isAbsolute(remainder) &&
+      remainder !== ".." &&
+      !remainder.startsWith(`..${sep}`))
+  );
+}
+
+function safeBuildRelativePath(path: string): boolean {
+  return (
+    path.length > 0 &&
+    !isAbsolute(path) &&
+    !path.includes("\\") &&
+    !path.includes("\0") &&
+    path
+      .split("/")
+      .every((segment) => segment !== "" && segment !== "." && segment !== "..")
+  );
+}
+
+async function writeCandidateFixtureFile(
+  checkoutPath: string,
+  relativePath: string,
+  contents: string | Uint8Array,
+): Promise<void> {
+  if (!safeBuildRelativePath(relativePath)) {
+    throw new TypeError("La fixture de build contiene una ruta insegura");
+  }
+  const path = join(checkoutPath, ...relativePath.split("/"));
+  const parent = dirname(path);
+  if (!isWithin(checkoutPath, path) || !isWithin(checkoutPath, parent)) {
+    throw new TypeError("La fixture de build escapa el checkout candidato");
+  }
+  await mkdir(parent, { recursive: true, mode: 0o700 });
+  if ((await realpath(parent)) !== parent) {
+    throw new TypeError("La fixture de build atraviesa un directorio inseguro");
+  }
+  try {
+    const existing = await lstat(path);
+    if (
+      existing.isSymbolicLink() ||
+      (!existing.isFile() && !existing.isDirectory())
+    ) {
+      throw new TypeError("La fixture de build contiene un destino inseguro");
+    }
+    if (existing.isDirectory()) {
+      throw new TypeError(
+        "La fixture de build no puede reemplazar un directorio",
+      );
+    }
+  } catch (error: unknown) {
+    if (!(
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      error.code === "ENOENT"
+    )) {
+      throw error;
+    }
+  }
+  await writeFile(path, contents, { mode: 0o600 });
+}
+
 function samePaths(left: readonly string[], right: readonly string[]): boolean {
   return (
     left.length === right.length &&
@@ -163,33 +244,116 @@ function candidateCommitRecord(
   return record;
 }
 
+function permittedGeneratedPath(path: string): boolean {
+  return (
+    path === "dist" ||
+    path.startsWith("dist/") ||
+    path === ".wrangler/deploy/config.json" ||
+    path === ".wrangler/"
+  );
+}
+
+async function assertGeneratedWranglerTree(
+  checkoutPath: string,
+): Promise<void> {
+  const wranglerPath = join(checkoutPath, ".wrangler");
+  let wrangler: Awaited<ReturnType<typeof lstat>>;
+  try {
+    wrangler = await lstat(wranglerPath);
+  } catch (error: unknown) {
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      error.code === "ENOENT"
+    ) {
+      return;
+    }
+    throw error;
+  }
+  if (wrangler.isSymbolicLink() || !wrangler.isDirectory()) {
+    throw new TypeError("El output de build contiene .wrangler inseguro");
+  }
+  const wranglerEntries = await readdir(wranglerPath);
+  if (wranglerEntries.length !== 1 || wranglerEntries[0] !== "deploy") {
+    throw new TypeError(
+      "El build candidato contiene output .wrangler no aprobado",
+    );
+  }
+  const deployPath = join(wranglerPath, "deploy");
+  const deploy = await lstat(deployPath);
+  if (deploy.isSymbolicLink() || !deploy.isDirectory()) {
+    throw new TypeError("El output de build contiene deploy inseguro");
+  }
+  const deployEntries = await readdir(deployPath);
+  if (deployEntries.length !== 1 || deployEntries[0] !== "config.json") {
+    throw new TypeError(
+      "El build candidato contiene output deploy no aprobado",
+    );
+  }
+  const config = await lstat(join(deployPath, "config.json"));
+  if (config.isSymbolicLink() || !config.isFile() || config.nlink !== 1) {
+    throw new TypeError("El config de deploy candidato no es seguro");
+  }
+}
+
+async function assertPermittedBuildStatus(
+  checkoutPath: string,
+  status: string,
+): Promise<void> {
+  for (const line of status === "" ? [] : status.split("\n")) {
+    if (
+      line.length < 4 ||
+      (line.slice(0, 2) !== "??" && line.slice(0, 2) !== "!!") ||
+      line[2] !== " " ||
+      !permittedGeneratedPath(line.slice(3))
+    ) {
+      throw new TypeError("El build candidato contiene cambios no aprobados");
+    }
+  }
+  await assertGeneratedWranglerTree(checkoutPath);
+}
+
 async function assertCandidateCommitIdentity(
   checkoutPath: string,
   candidate: CandidateCommit,
   baselineCommit: string,
 ): Promise<void> {
-  const [head, parent, tree, worktreeDiff, indexDiff] = await Promise.all([
-    runGit(
-      ["-C", checkoutPath, "rev-parse", "HEAD"],
-      "No se pudo leer el commit candidato",
-    ),
-    runGit(
-      ["-C", checkoutPath, "rev-parse", "HEAD^"],
-      "No se pudo leer el padre candidato",
-    ),
-    runGit(
-      ["-C", checkoutPath, "rev-parse", "HEAD^{tree}"],
-      "No se pudo leer el árbol candidato",
-    ),
-    runGit(
-      ["-C", checkoutPath, "diff", "--name-only", "--no-renames", "HEAD"],
-      "No se pudo comprobar el worktree candidato",
-    ),
-    runGit(
-      ["-C", checkoutPath, "diff", "--cached", "--name-only", "--no-renames"],
-      "No se pudo comprobar el índice candidato",
-    ),
-  ]);
+  const [head, parent, tree, worktreeDiff, indexDiff, status] =
+    await Promise.all([
+      runGit(
+        ["-C", checkoutPath, "rev-parse", "HEAD"],
+        "No se pudo leer el commit candidato",
+      ),
+      runGit(
+        ["-C", checkoutPath, "rev-parse", "HEAD^"],
+        "No se pudo leer el padre candidato",
+      ),
+      runGit(
+        ["-C", checkoutPath, "rev-parse", "HEAD^{tree}"],
+        "No se pudo leer el árbol candidato",
+      ),
+      runGit(
+        ["-C", checkoutPath, "diff", "--name-only", "--no-renames", "HEAD"],
+        "No se pudo comprobar el worktree candidato",
+      ),
+      runGit(
+        ["-C", checkoutPath, "diff", "--cached", "--name-only", "--no-renames"],
+        "No se pudo comprobar el índice candidato",
+      ),
+      runGit(
+        [
+          "-C",
+          checkoutPath,
+          "status",
+          "--porcelain=v1",
+          "--untracked-files=all",
+          "--ignored=matching",
+        ],
+        "No se pudo comprobar el estado post-build candidato",
+      ),
+    ]);
+  await assertPermittedBuildStatus(checkoutPath, status);
   if (
     head !== candidate.candidateCommit ||
     parent !== baselineCommit ||
@@ -344,8 +508,94 @@ export async function createCandidateCommit(
   }
 }
 
+/**
+ * Applies only an immutable controller-minted fixture inside commit A. No
+ * caller receives the checkout path, command authority, or a build callback.
+ */
+export async function runCandidateBoundBuild(
+  candidate: CandidateCommit,
+  plan: ChangePlan,
+  attemptId: string,
+  capability: CandidateBuildTestCapability | undefined,
+): Promise<CandidateBoundBuildEvidence> {
+  const fixture = candidateBuildFixture(capability);
+  await withCandidateCommitCheckout(
+    candidate,
+    plan,
+    attemptId,
+    async (checkoutPath) => {
+      for (const path of Object.keys(fixture.files).sort()) {
+        await writeCandidateFixtureFile(
+          checkoutPath,
+          path,
+          fixture.files[path]!,
+        );
+      }
+    },
+  );
+  await assertCandidateCommitOutput(candidate, plan, attemptId);
+  return Object.freeze({
+    candidateCommit: candidate.candidateCommit,
+    candidateTree: candidate.candidateTree,
+    planSha256: plan.planSha256,
+    attemptId,
+    validations: validatedCandidateBuildValidations(fixture),
+  });
+}
+
+export interface CandidateCapturedBuild {
+  readonly sourceConfiguration: CandidateBundleConfiguration;
+  readonly copiedConfiguration: CandidateBundleConfiguration;
+  readonly copiedArtifacts: readonly CandidateArtifactEntry[];
+}
+
+/**
+ * Reads and copies the fixed generated output as one controller-owned
+ * operation. The caller receives only verified metadata, never a checkout.
+ */
+export async function captureCandidateBuildArtifacts(
+  candidate: CandidateCommit,
+  plan: ChangePlan,
+  attemptId: string,
+  bundlePath: string,
+): Promise<CandidateCapturedBuild> {
+  let sourceConfiguration: CandidateBundleConfiguration | undefined;
+  let copiedArtifacts: readonly CandidateArtifactEntry[] | undefined;
+  await withCandidateCommitCheckout(
+    candidate,
+    plan,
+    attemptId,
+    async (checkoutPath) => {
+      sourceConfiguration = await readCandidateBundleConfiguration(
+        checkoutPath,
+        plan,
+      );
+      copiedArtifacts = await copyCandidateBundle(checkoutPath, bundlePath);
+    },
+  );
+  if (sourceConfiguration === undefined || copiedArtifacts === undefined) {
+    throw new TypeError("No se pudo capturar el bundle candidato");
+  }
+  const copiedConfiguration = await readCandidateBundleConfiguration(
+    bundlePath,
+    plan,
+  );
+  if (
+    canonicalJson(copiedConfiguration) !== canonicalJson(sourceConfiguration)
+  ) {
+    throw new TypeError(
+      "La configuración copiada no coincide con el build candidato",
+    );
+  }
+  return Object.freeze({
+    sourceConfiguration,
+    copiedConfiguration,
+    copiedArtifacts,
+  });
+}
+
 /** Executes one controller-owned build operation inside the private checkout. */
-export async function withCandidateCommitCheckout<T>(
+async function withCandidateCommitCheckout<T>(
   candidate: CandidateCommit,
   plan: ChangePlan,
   attemptId: string,
@@ -419,10 +669,46 @@ export async function assertCandidateCommitOutput(
   );
 }
 
+/** Anchors an already verified candidate commit only when creation can finish. */
+export async function persistCandidateCommit(
+  candidate: CandidateCommit,
+  plan: ChangePlan,
+  attemptId: string,
+): Promise<void> {
+  const record = candidateCommitRecord(candidate);
+  if (
+    record.planCanonical !== canonicalJson(plan) ||
+    record.attemptId !== attemptId ||
+    record.baselineCommit !== plan.baselineCommit
+  ) {
+    throw new TypeError(
+      "El commit candidato no coincide con el plan o intento",
+    );
+  }
+  await assertCandidateCommitOutput(candidate, plan, attemptId);
+  await persistControllerCandidateRef(
+    record.checkout,
+    record.output,
+    plan,
+    attemptId,
+    candidate.candidateCommit,
+  );
+}
+
 export async function removeCandidateCommit(
   candidate: CandidateCommit,
 ): Promise<void> {
   const record = candidateCommitRecord(candidate);
   await removeControllerCandidateCheckout(record.checkout);
   candidateCommitRecords.delete(candidate);
+}
+
+/** Verifies only the durable private candidate ref bound to controller input. */
+export async function assertDurableCandidateCommit(
+  output: StagedAgentOutput,
+  plan: ChangePlan,
+  attemptId: string,
+  candidateCommit: string,
+): Promise<void> {
+  await assertControllerCandidateRef(output, plan, attemptId, candidateCommit);
 }

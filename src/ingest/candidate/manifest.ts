@@ -1,17 +1,16 @@
 import { createHash } from "node:crypto";
+import type { ChildProcess } from "node:child_process";
 import { constants } from "node:fs";
 import {
   chmod,
   lstat,
   mkdir,
-  mkdtemp,
   open,
   opendir,
   realpath,
   rm,
   writeFile,
 } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 
 import { canonicalJson } from "../canonical-json.ts";
@@ -22,22 +21,26 @@ import type {
 } from "../domain.ts";
 import { validateSchema } from "../schema-validator.ts";
 import { assertCandidateEligiblePreliminaryValidation } from "../validation/runner.ts";
-import type { StagedAgentOutput } from "../workspaces/policy.ts";
+import {
+  controllerCandidateRepositoryRoot,
+  type StagedAgentOutput,
+} from "../workspaces/policy.ts";
 
 import {
+  assertDurableCandidateCommit,
+  captureCandidateBuildArtifacts,
   createCandidateCommit,
+  persistCandidateCommit,
   removeCandidateCommit,
-  withCandidateCommitCheckout,
+  runCandidateBoundBuild,
   type CandidateCommit,
 } from "./commit.ts";
 import {
   canonicalCandidateBuildEvidence,
-  runCandidateBoundBuild,
   type CandidateBuildTestCapability,
   type CandidateBoundBuildEvidence,
 } from "./evidence.ts";
 import { hashTree } from "./tree-digest.ts";
-import type { CandidatePreviewTestCapability } from "./preview.ts";
 
 const changeIdPattern = /^[a-z0-9](?:[a-z0-9-]{1,62}[a-z0-9])$/u;
 const attemptIdPattern = /^[a-z0-9](?:[a-z0-9-]{0,63})$/u;
@@ -62,15 +65,18 @@ interface ArtifactStoreRecord {
   readonly root: DirectoryIdentity;
   readonly artifactRoot: DirectoryIdentity;
   readonly stateRoot: DirectoryIdentity;
+  readonly output: StagedAgentOutput;
+  readonly attemptId: string;
+  readonly planCanonical: string;
 }
 
-interface ArtifactEntry {
+export interface CandidateArtifactEntry {
   readonly path: string;
   readonly sha256: string;
   readonly bytes: number;
 }
 
-interface BundleConfiguration {
+export interface CandidateBundleConfiguration {
   readonly redirectRelativePath: string;
   readonly primaryConfigRelativePath: string;
   readonly workerRelativePath: string;
@@ -78,14 +84,45 @@ interface BundleConfiguration {
   readonly configRelativePaths: readonly string[];
 }
 
-/** @internal Private record consumed only by the Task 10 preview controller. */
-export interface CandidatePreviewRecord {
+/** Private preview state; it never crosses the candidate module boundary. */
+interface CandidatePreviewRecord {
   readonly store: CandidateArtifactStore;
+  readonly output: StagedAgentOutput;
+  readonly plan: ChangePlan;
+  readonly attemptId: string;
   readonly bundlePath: string;
   readonly manifestPath: string;
-  readonly configuration: BundleConfiguration;
+  readonly configuration: CandidateBundleConfiguration;
   readonly previewCapability: CandidatePreviewTestCapability | undefined;
-  previewPid: number | undefined;
+}
+
+export interface FixedPreviewInvocation {
+  /** The fixed controller-local Wrangler executable; never caller supplied. */
+  readonly executable: string;
+  /** Includes the executable as argv[0] so fixture assertions see exact argv. */
+  readonly argv: readonly string[];
+  readonly cwd: string;
+  readonly env: Readonly<Record<string, string>>;
+}
+
+export interface PreviewHandle {
+  readonly url: string;
+  stop(): Promise<void>;
+}
+
+interface PreviewLaunch {
+  readonly child: ChildProcess;
+  readonly url: string;
+}
+
+type CandidatePreviewAdapter = (
+  invocation: FixedPreviewInvocation,
+) => Promise<PreviewLaunch>;
+
+/** A fixture-only capability; callers can never provide process arguments. */
+declare const candidatePreviewTestCapabilityBrand: unique symbol;
+export interface CandidatePreviewTestCapability {
+  readonly [candidatePreviewTestCapabilityBrand]: true;
 }
 
 export interface CandidateCreationInput {
@@ -102,6 +139,28 @@ export interface CandidateCreationInput {
   readonly previewCapability?: CandidatePreviewTestCapability;
 }
 
+/**
+ * Reopens only a candidate bound to controller-minted staged authority. It
+ * deliberately accepts neither a repository path nor an artifact path.
+ */
+export interface CandidateLoadInput {
+  readonly output: StagedAgentOutput;
+  readonly plan: ChangePlan;
+  readonly attemptId: string;
+  readonly previewCapability?: CandidatePreviewTestCapability;
+}
+
+interface DurableCandidateProvenance {
+  readonly schemaVersion: 1;
+  readonly changeId: string;
+  readonly attemptId: string;
+  readonly candidateCommit: string;
+  readonly artifactSha256: string;
+  readonly candidateRef: string;
+  readonly bundle: string;
+  readonly manifest: string;
+}
+
 const artifactStores = new WeakMap<
   CandidateArtifactStore,
   ArtifactStoreRecord
@@ -109,6 +168,11 @@ const artifactStores = new WeakMap<
 const candidateRecords = new WeakMap<
   CandidateManifest,
   CandidatePreviewRecord
+>();
+const candidatePreviewPids = new WeakMap<CandidateManifest, number>();
+const candidatePreviewCapabilities = new WeakMap<
+  CandidatePreviewTestCapability,
+  CandidatePreviewAdapter
 >();
 
 function lexicalCompare(left: string, right: string): number {
@@ -197,8 +261,18 @@ function artifactStoreRecord(
 
 async function assertArtifactStore(
   store: CandidateArtifactStore,
+  output?: StagedAgentOutput,
+  plan?: ChangePlan,
+  attemptId?: string,
 ): Promise<ArtifactStoreRecord> {
   const record = artifactStoreRecord(store);
+  if (
+    (output !== undefined && record.output !== output) ||
+    (plan !== undefined && record.planCanonical !== canonicalJson(plan)) ||
+    (attemptId !== undefined && record.attemptId !== attemptId)
+  ) {
+    throw new TypeError("El store de artefactos no coincide con el candidato");
+  }
   await Promise.all([
     assertDirectory(record.root),
     assertDirectory(record.artifactRoot),
@@ -213,63 +287,69 @@ async function assertArtifactStore(
   return record;
 }
 
-/** Creates a private controller state root; no caller supplies a filesystem path. */
-export async function createCandidateArtifactStore(): Promise<CandidateArtifactStore> {
-  let rootPath: string | undefined;
-  try {
-    rootPath = await realpath(
-      await mkdtemp(join(tmpdir(), "comunidadsolar-candidate-state-")),
-    );
-    const artifactPath = join(rootPath, ".artifacts");
-    const statePath = join(rootPath, ".change-state");
-    await Promise.all([
-      mkdir(artifactPath, { mode: 0o700 }),
-      mkdir(statePath, { mode: 0o700 }),
-    ]);
-    const [rootEntry, artifactEntry, stateEntry] = await Promise.all([
-      lstat(rootPath),
-      lstat(artifactPath),
-      lstat(statePath),
-    ]);
-    const canonicalArtifactPath = await realpath(artifactPath);
-    const canonicalStatePath = await realpath(statePath);
-    if (
-      canonicalArtifactPath !== artifactPath ||
-      canonicalStatePath !== statePath ||
-      rootEntry.isSymbolicLink() ||
-      !rootEntry.isDirectory() ||
-      artifactEntry.isSymbolicLink() ||
-      !artifactEntry.isDirectory() ||
-      stateEntry.isSymbolicLink() ||
-      !stateEntry.isDirectory()
-    ) {
-      throw new TypeError("No se pudo crear un estado candidato privado");
-    }
-    const store = Object.freeze({}) as CandidateArtifactStore;
-    artifactStores.set(
-      store,
-      Object.freeze({
-        root: directoryIdentity(rootPath, rootEntry),
-        artifactRoot: directoryIdentity(artifactPath, artifactEntry),
-        stateRoot: directoryIdentity(statePath, stateEntry),
-      }),
-    );
-    return store;
-  } catch (error: unknown) {
-    if (rootPath !== undefined) {
-      await rm(rootPath, { recursive: true, force: true }).catch(
-        () => undefined,
-      );
-    }
-    throw error;
+/**
+ * Mints durable controller state under the trusted repository already bound to
+ * the staged output. No caller can select a repository, temporary root, or
+ * artifact path.
+ */
+export async function createCandidateArtifactStore(
+  output: StagedAgentOutput,
+  plan: ChangePlan,
+  attemptId: string,
+): Promise<CandidateArtifactStore> {
+  const rootPath = await controllerCandidateRepositoryRoot(
+    output,
+    plan,
+    attemptId,
+  );
+  const artifactPath = join(rootPath, ".artifacts");
+  const statePath = join(rootPath, ".change-state");
+  await Promise.all([
+    mkdir(artifactPath, { mode: 0o700, recursive: true }),
+    mkdir(statePath, { mode: 0o700, recursive: true }),
+  ]);
+  const [rootEntry, artifactEntry, stateEntry] = await Promise.all([
+    lstat(rootPath),
+    lstat(artifactPath),
+    lstat(statePath),
+  ]);
+  const [canonicalArtifactPath, canonicalStatePath] = await Promise.all([
+    realpath(artifactPath),
+    realpath(statePath),
+  ]);
+  if (
+    canonicalArtifactPath !== artifactPath ||
+    canonicalStatePath !== statePath ||
+    rootEntry.isSymbolicLink() ||
+    !rootEntry.isDirectory() ||
+    artifactEntry.isSymbolicLink() ||
+    !artifactEntry.isDirectory() ||
+    stateEntry.isSymbolicLink() ||
+    !stateEntry.isDirectory() ||
+    !isStrictlyWithin(rootPath, artifactPath) ||
+    !isStrictlyWithin(rootPath, statePath)
+  ) {
+    throw new TypeError("No se pudo crear un estado candidato durable");
   }
+  const store = Object.freeze({}) as CandidateArtifactStore;
+  artifactStores.set(
+    store,
+    Object.freeze({
+      root: directoryIdentity(rootPath, rootEntry),
+      artifactRoot: directoryIdentity(artifactPath, artifactEntry),
+      stateRoot: directoryIdentity(statePath, stateEntry),
+      output,
+      attemptId,
+      planCanonical: canonicalJson(plan),
+    }),
+  );
+  return store;
 }
 
 export async function removeCandidateArtifactStore(
   store: CandidateArtifactStore,
 ): Promise<void> {
-  const record = await assertArtifactStore(store);
-  await rm(record.root.path, { recursive: true, force: false });
+  await assertArtifactStore(store);
   artifactStores.delete(store);
 }
 
@@ -374,6 +454,111 @@ async function candidateDirectories(
   });
 }
 
+function durableCandidateLocations(
+  plan: Pick<ChangePlan, "changeId">,
+  attemptId: string,
+): DurableCandidateProvenance {
+  if (
+    !changeIdPattern.test(plan.changeId) ||
+    !attemptIdPattern.test(attemptId)
+  ) {
+    throw new TypeError("El cambio o intento candidato no es seguro");
+  }
+  return Object.freeze({
+    schemaVersion: 1,
+    changeId: plan.changeId,
+    attemptId,
+    candidateCommit: "",
+    artifactSha256: "",
+    candidateRef: `refs/comunidadsolar/candidates/${plan.changeId}/${attemptId}`,
+    bundle: `.artifacts/candidates/${plan.changeId}/${attemptId}/bundle`,
+    manifest: `.change-state/${plan.changeId}/candidates/${attemptId}/candidate.json`,
+  });
+}
+
+function durableCandidateProvenance(
+  candidate: CandidateManifest,
+): DurableCandidateProvenance {
+  const locations = durableCandidateLocations(
+    { changeId: candidate.changeId },
+    candidate.attemptId,
+  );
+  return Object.freeze({
+    ...locations,
+    candidateCommit: candidate.candidateCommit,
+    artifactSha256: candidate.artifactSha256,
+  });
+}
+
+async function existingChildDirectory(
+  parent: string,
+  segment: string,
+): Promise<string> {
+  if (!safeName(segment)) {
+    throw new TypeError("El estado candidato recibió un segmento no seguro");
+  }
+  const path = join(parent, segment);
+  if (!isStrictlyWithin(parent, path)) {
+    throw new TypeError("El estado candidato escapa de su raíz");
+  }
+  const entry = await lstat(path);
+  if (
+    entry.isSymbolicLink() ||
+    !entry.isDirectory() ||
+    (await realpath(path)) !== path
+  ) {
+    throw new TypeError("El estado candidato contiene un directorio inseguro");
+  }
+  return path;
+}
+
+async function durableCandidatePaths(
+  store: CandidateArtifactStore,
+  plan: ChangePlan,
+  attemptId: string,
+): Promise<{
+  readonly bundlePath: string;
+  readonly manifestPath: string;
+  readonly provenancePath: string;
+}> {
+  const record = await assertArtifactStore(store);
+  durableCandidateLocations(plan, attemptId);
+  const artifactCandidates = await existingChildDirectory(
+    record.artifactRoot.path,
+    "candidates",
+  );
+  const artifactChange = await existingChildDirectory(
+    artifactCandidates,
+    plan.changeId,
+  );
+  const artifactAttempt = await existingChildDirectory(
+    artifactChange,
+    attemptId,
+  );
+  const bundlePath = await existingChildDirectory(artifactAttempt, "bundle");
+  const stateChange = await existingChildDirectory(
+    record.stateRoot.path,
+    plan.changeId,
+  );
+  const stateCandidates = await existingChildDirectory(
+    stateChange,
+    "candidates",
+  );
+  const stateAttempt = await existingChildDirectory(stateCandidates, attemptId);
+  const manifestPath = join(stateAttempt, "candidate.json");
+  const provenancePath = join(stateAttempt, "candidate-provenance.json");
+  for (const path of [manifestPath, provenancePath]) {
+    if (!isStrictlyWithin(stateAttempt, path)) {
+      throw new TypeError("El manifiesto candidato escapa su estado");
+    }
+    const entry = await lstat(path);
+    if (entry.isSymbolicLink() || !entry.isFile() || entry.nlink !== 1) {
+      throw new TypeError("El manifiesto candidato no es seguro");
+    }
+  }
+  return Object.freeze({ bundlePath, manifestPath, provenancePath });
+}
+
 interface StableFile {
   readonly bytes: Buffer;
   readonly sha256: string;
@@ -421,7 +606,7 @@ async function copyRegularFile(
   source: string,
   destination: string,
   remainingBytes: number,
-): Promise<ArtifactEntry> {
+): Promise<CandidateArtifactEntry> {
   const sourceFile = await readStableRegularFile(source, remainingBytes);
   const destinationHandle = await open(
     destination,
@@ -468,7 +653,7 @@ async function copyArtifactTree(
   destinationRoot: string,
   relativePath = "",
   state: { bytes: number; files: number } = { bytes: 0, files: 0 },
-): Promise<ArtifactEntry[]> {
+): Promise<CandidateArtifactEntry[]> {
   const sourceDirectory =
     relativePath === ""
       ? sourceRoot
@@ -493,7 +678,7 @@ async function copyArtifactTree(
     names.push(child.name);
   }
   names.sort(lexicalCompare);
-  const files: ArtifactEntry[] = [];
+  const files: CandidateArtifactEntry[] = [];
   for (const name of names) {
     const childRelative =
       relativePath === "" ? name : `${relativePath}/${name}`;
@@ -902,10 +1087,10 @@ async function validateFlattenedConfig(
   });
 }
 
-async function readBundleConfiguration(
+export async function readCandidateBundleConfiguration(
   rootInput: string,
   plan: Pick<ChangePlan, "publication">,
-): Promise<BundleConfiguration> {
+): Promise<CandidateBundleConfiguration> {
   const root = await realpath(rootInput);
   const rootEntry = await lstat(root);
   if (rootEntry.isSymbolicLink() || !rootEntry.isDirectory()) {
@@ -1073,10 +1258,10 @@ async function persistCandidateBuildEvidence(
   return Object.freeze(validations);
 }
 
-async function copyCandidateArtifacts(
+export async function copyCandidateBundle(
   checkoutPath: string,
   bundlePath: string,
-): Promise<readonly ArtifactEntry[]> {
+): Promise<readonly CandidateArtifactEntry[]> {
   const sourceDist = join(checkoutPath, "dist");
   const destinationDist = join(bundlePath, "dist");
   const sourceDeploy = join(
@@ -1120,7 +1305,7 @@ async function copyCandidateArtifacts(
 function artifactManifestPaths(
   plan: ChangePlan,
   attemptId: string,
-  files: readonly ArtifactEntry[],
+  files: readonly CandidateArtifactEntry[],
 ): CandidateManifest["artifacts"] {
   return Object.freeze(
     files.map((file) =>
@@ -1154,6 +1339,18 @@ function frozenCandidateManifest(value: CandidateManifest): CandidateManifest {
   }) as CandidateManifest;
 }
 
+function frozenCandidatePlan(plan: ChangePlan): ChangePlan {
+  return Object.freeze({
+    ...plan,
+    files: Object.freeze(plan.files.map((file) => Object.freeze({ ...file }))),
+    components: Object.freeze([...plan.components]),
+    islands: Object.freeze([...plan.islands]),
+    dependencies: Object.freeze([...plan.dependencies]),
+    validations: Object.freeze([...plan.validations]),
+    publication: Object.freeze({ ...plan.publication }),
+  }) as ChangePlan;
+}
+
 function candidateRecord(candidate: CandidateManifest): CandidatePreviewRecord {
   const record = candidateRecords.get(candidate);
   if (record === undefined) {
@@ -1176,7 +1373,12 @@ export async function createCandidate(
   if (!changeIdPattern.test(input.plan.changeId)) {
     throw new TypeError("El plan candidato no es seguro");
   }
-  await assertArtifactStore(input.artifactStore);
+  await assertArtifactStore(
+    input.artifactStore,
+    input.output,
+    input.plan,
+    input.attemptId,
+  );
   const preliminary = await assertCandidateEligiblePreliminaryValidation(
     input.preliminaryValidations,
     input.output,
@@ -1208,23 +1410,6 @@ export async function createCandidate(
         "La evidencia de build no está ligada al commit candidato",
       );
     }
-    let sourceConfiguration: BundleConfiguration | undefined;
-    await withCandidateCommitCheckout(
-      candidateCommit,
-      input.plan,
-      input.attemptId,
-      async (checkoutPath) => {
-        sourceConfiguration = await readBundleConfiguration(
-          checkoutPath,
-          input.plan,
-        );
-      },
-    );
-    if (sourceConfiguration === undefined) {
-      throw new TypeError(
-        "El build candidato no produjo una configuración de deploy",
-      );
-    }
     const directories = await candidateDirectories(
       input.artifactStore,
       input.plan,
@@ -1232,32 +1417,14 @@ export async function createCandidate(
     );
     artifactCandidatePath = directories.artifactCandidatePath;
     stateCandidatePath = directories.stateCandidatePath;
-    let copiedArtifacts: readonly ArtifactEntry[] | undefined;
-    await withCandidateCommitCheckout(
+    const capturedBuild = await captureCandidateBuildArtifacts(
       candidateCommit,
       input.plan,
       input.attemptId,
-      async (checkoutPath) => {
-        copiedArtifacts = await copyCandidateArtifacts(
-          checkoutPath,
-          directories.bundlePath,
-        );
-      },
-    );
-    if (copiedArtifacts === undefined) {
-      throw new TypeError("No se pudo copiar el bundle candidato");
-    }
-    const copiedConfiguration = await readBundleConfiguration(
       directories.bundlePath,
-      input.plan,
     );
-    if (
-      canonicalJson(copiedConfiguration) !== canonicalJson(sourceConfiguration)
-    ) {
-      throw new TypeError(
-        "La configuración copiada no coincide con el build candidato",
-      );
-    }
+    const copiedArtifacts = capturedBuild.copiedArtifacts;
+    const copiedConfiguration = capturedBuild.copiedConfiguration;
     const artifactSha256 = await hashTree(directories.bundlePath);
     const preliminaryValidations = await persistPreliminaryEvidence(
       preliminary,
@@ -1315,14 +1482,27 @@ export async function createCandidate(
       manifestPath,
       Buffer.from(`${canonicalJson(manifest)}\n`, "utf8"),
     );
-    candidateRecords.set(manifest, {
-      store: input.artifactStore,
-      bundlePath: directories.bundlePath,
-      manifestPath,
-      configuration: copiedConfiguration,
-      previewCapability: input.previewCapability,
-      previewPid: undefined,
-    });
+    await writeControllerFile(
+      join(directories.stateCandidatePath, "candidate-provenance.json"),
+      Buffer.from(
+        `${canonicalJson(durableCandidateProvenance(manifest))}\n`,
+        "utf8",
+      ),
+    );
+    await persistCandidateCommit(candidateCommit, input.plan, input.attemptId);
+    candidateRecords.set(
+      manifest,
+      Object.freeze({
+        store: input.artifactStore,
+        output: input.output,
+        plan: frozenCandidatePlan(input.plan),
+        attemptId: input.attemptId,
+        bundlePath: directories.bundlePath,
+        manifestPath,
+        configuration: copiedConfiguration,
+        previewCapability: input.previewCapability,
+      }),
+    );
     return manifest;
   } catch (error: unknown) {
     if (artifactCandidatePath !== undefined) {
@@ -1343,49 +1523,438 @@ export async function createCandidate(
   }
 }
 
+function verifiedDurableProvenance(
+  value: Record<string, unknown>,
+  candidate: CandidateManifest,
+  plan: ChangePlan,
+  attemptId: string,
+): void {
+  exactKeys(
+    value,
+    [
+      "artifactSha256",
+      "attemptId",
+      "bundle",
+      "candidateCommit",
+      "candidateRef",
+      "changeId",
+      "manifest",
+      "schemaVersion",
+    ],
+    "La procedencia durable candidata",
+  );
+  const expected = durableCandidateProvenance(candidate);
+  if (
+    value.schemaVersion !== 1 ||
+    value.changeId !== plan.changeId ||
+    value.attemptId !== attemptId ||
+    value.candidateCommit !== candidate.candidateCommit ||
+    value.artifactSha256 !== candidate.artifactSha256 ||
+    value.candidateRef !== expected.candidateRef ||
+    value.bundle !== expected.bundle ||
+    value.manifest !== expected.manifest
+  ) {
+    throw new TypeError("La procedencia durable no coincide con el candidato");
+  }
+}
+
+async function verifyPersistedArtifactEntries(
+  candidate: CandidateManifest,
+  bundlePath: string,
+): Promise<void> {
+  const prefix = `.artifacts/candidates/${candidate.changeId}/${candidate.attemptId}/bundle/`;
+  const entries = new Set<string>();
+  if (candidate.artifacts.length === 0) {
+    throw new TypeError("El manifiesto candidato no contiene artefactos");
+  }
+  for (const artifact of candidate.artifacts) {
+    if (
+      !artifact.path.startsWith(prefix) ||
+      !safeRelativePath(artifact.path.slice(prefix.length)) ||
+      !sha256Pattern.test(artifact.sha256) ||
+      !Number.isSafeInteger(artifact.bytes) ||
+      artifact.bytes < 0 ||
+      entries.has(artifact.path)
+    ) {
+      throw new TypeError(
+        "El manifiesto candidato contiene artefactos inseguros",
+      );
+    }
+    entries.add(artifact.path);
+    const path = join(
+      bundlePath,
+      ...artifact.path.slice(prefix.length).split("/"),
+    );
+    if (!isStrictlyWithin(bundlePath, path)) {
+      throw new TypeError("El artefacto durable escapa su bundle");
+    }
+    const file = await readStableRegularFile(path, artifactMaximumBytes);
+    if (
+      file.sha256 !== artifact.sha256 ||
+      file.bytes.byteLength !== artifact.bytes
+    ) {
+      throw new TypeError("El artefacto durable no coincide con su manifiesto");
+    }
+  }
+}
+
+/**
+ * Reopens a persisted candidate through its controller-minted output and
+ * deterministic locations. It fails closed for a missing private ref, state,
+ * bundle, digest, manifest, or provenance binding.
+ */
+export async function loadCandidate(
+  input: CandidateLoadInput,
+): Promise<CandidateManifest> {
+  if (
+    !changeIdPattern.test(input.plan.changeId) ||
+    !attemptIdPattern.test(input.attemptId)
+  ) {
+    throw new TypeError("El cambio o intento candidato no es seguro");
+  }
+  const store = await createCandidateArtifactStore(
+    input.output,
+    input.plan,
+    input.attemptId,
+  );
+  const paths = await durableCandidatePaths(store, input.plan, input.attemptId);
+  const [manifestFile, provenanceFile] = await Promise.all([
+    readStableRegularFile(paths.manifestPath),
+    readStableRegularFile(paths.provenancePath),
+  ]);
+  const manifest = frozenCandidateManifest(
+    validateSchema<CandidateManifest>(
+      "candidate",
+      strictJsonRecord(manifestFile.bytes, "El manifiesto candidato"),
+    ),
+  );
+  if (
+    manifest.changeId !== input.plan.changeId ||
+    manifest.attemptId !== input.attemptId ||
+    manifest.requestSha256 !== input.plan.requestSha256 ||
+    manifest.planSha256 !== input.plan.planSha256 ||
+    manifest.baselineCommit !== input.plan.baselineCommit ||
+    canonicalJson(manifest.buildProfile) !==
+      canonicalJson(input.plan.publication)
+  ) {
+    throw new TypeError(
+      "El manifiesto durable no coincide con el plan candidato",
+    );
+  }
+  verifiedDurableProvenance(
+    strictJsonRecord(provenanceFile.bytes, "La procedencia durable candidata"),
+    manifest,
+    input.plan,
+    input.attemptId,
+  );
+  await assertDurableCandidateCommit(
+    input.output,
+    input.plan,
+    input.attemptId,
+    manifest.candidateCommit,
+  );
+  const configuration = await readCandidateBundleConfiguration(
+    paths.bundlePath,
+    input.plan,
+  );
+  await verifyPersistedArtifactEntries(manifest, paths.bundlePath);
+  if ((await hashTree(paths.bundlePath)) !== manifest.artifactSha256) {
+    throw new TypeError("El digest no coincide con el artefacto candidato");
+  }
+  candidateRecords.set(
+    manifest,
+    Object.freeze({
+      store,
+      output: input.output,
+      plan: frozenCandidatePlan(input.plan),
+      attemptId: input.attemptId,
+      bundlePath: paths.bundlePath,
+      manifestPath: paths.manifestPath,
+      configuration,
+      previewCapability: input.previewCapability,
+    }),
+  );
+  return manifest;
+}
+
 /** Rehashes the exact private bundle before any Gate 2 or preview consumer. */
 export async function verifyCandidateArtifact(
   candidate: CandidateManifest,
 ): Promise<void> {
   const record = candidateRecord(candidate);
   await assertArtifactStore(record.store);
+  await assertDurableCandidateCommit(
+    record.output,
+    record.plan,
+    record.attemptId,
+    candidate.candidateCommit,
+  );
   const digest = await hashTree(record.bundlePath);
   if (digest !== candidate.artifactSha256) {
     throw new TypeError("El digest no coincide con el artefacto candidato");
   }
-  await readBundleConfiguration(record.bundlePath, {
-    publication: candidate.buildProfile,
+  const configuration = await readCandidateBundleConfiguration(
+    record.bundlePath,
+    {
+      publication: candidate.buildProfile,
+    },
+  );
+  if (canonicalJson(configuration) !== canonicalJson(record.configuration)) {
+    throw new TypeError(
+      "La configuración candidata no coincide con su registro",
+    );
+  }
+  await verifyPersistedArtifactEntries(candidate, record.bundlePath);
+}
+
+/**
+ * Mints a test controller seam. Production has no preview adapter until the
+ * separately reviewed Task 12 integration supplies one, so it fails closed.
+ */
+export function createCandidatePreviewTestCapability(
+  adapter: CandidatePreviewAdapter,
+): CandidatePreviewTestCapability {
+  if (process.env.INGEST_TEST_MODE !== "true") {
+    throw new TypeError(
+      "La capability de preview candidato sólo existe en modo de pruebas",
+    );
+  }
+  if (typeof adapter !== "function") {
+    throw new TypeError("El adaptador de preview candidato no es válido");
+  }
+  const capability = Object.freeze({}) as CandidatePreviewTestCapability;
+  candidatePreviewCapabilities.set(capability, adapter);
+  return capability;
+}
+
+function localWranglerPath(): string {
+  return resolve(process.cwd(), "node_modules", ".bin", "wrangler");
+}
+
+function fixedPreviewEnvironment(): Readonly<Record<string, string>> {
+  return Object.freeze({
+    PATH: `${dirname(process.execPath)}:/usr/bin:/bin`,
+    HOME: "/tmp",
+    LANG: "C",
+    LC_ALL: "C",
+    CI: "true",
+    NO_COLOR: "1",
   });
 }
 
-/** @internal Preview consumes the private record without exposing a bundle path. */
-export function candidateRecordForPreview(
+async function fixedPreviewInvocation(
   candidate: CandidateManifest,
-): CandidatePreviewRecord {
-  return candidateRecord(candidate);
+): Promise<FixedPreviewInvocation> {
+  await verifyCandidateArtifact(candidate);
+  const record = candidateRecord(candidate);
+  const worker = join(record.bundlePath, "dist", "_worker.js", "index.js");
+  const assets = join(
+    record.bundlePath,
+    ...record.configuration.assetsRelativePath.split("/"),
+  );
+  const config = join(
+    record.bundlePath,
+    ...record.configuration.primaryConfigRelativePath.split("/"),
+  );
+  for (const path of [worker, assets, config]) {
+    if (!isStrictlyWithin(record.bundlePath, path)) {
+      throw new TypeError("El preview candidato escapa el bundle verificado");
+    }
+  }
+  const executable = localWranglerPath();
+  return Object.freeze({
+    executable,
+    argv: Object.freeze([
+      executable,
+      "dev",
+      worker,
+      "--no-bundle",
+      "--assets",
+      assets,
+      "--config",
+      config,
+      "--local",
+    ]),
+    cwd: record.bundlePath,
+    env: fixedPreviewEnvironment(),
+  });
 }
 
-/** @internal Records the child pid only for controller cleanup and test inspection. */
-export function setCandidatePreviewPid(
-  candidate: CandidateManifest,
-  pid: number | undefined,
-): void {
-  candidateRecord(candidate).previewPid = pid;
+function localPreviewUrl(value: string): string {
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new TypeError("El preview candidato no devolvió una URL válida");
+  }
+  if (
+    parsed.protocol !== "http:" ||
+    (parsed.hostname !== "127.0.0.1" && parsed.hostname !== "localhost") ||
+    parsed.port === "" ||
+    parsed.username !== "" ||
+    parsed.password !== ""
+  ) {
+    throw new TypeError("El preview candidato debe escuchar sólo en local");
+  }
+  return parsed.toString();
 }
 
-/** Test-only inspection; production callers never receive artifact paths. */
-export function candidateTestInspection(candidate: CandidateManifest): {
-  readonly bundlePath: string;
-  readonly previewPid: number | undefined;
-} {
+function isMissingProcess(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    error.code === "ESRCH"
+  );
+}
+
+function processGroupExists(pid: number): boolean {
+  try {
+    process.kill(-pid, 0);
+    return true;
+  } catch (error: unknown) {
+    if (isMissingProcess(error)) return false;
+    throw error;
+  }
+}
+
+function signalProcessGroup(pid: number, signal: NodeJS.Signals): void {
+  try {
+    process.kill(-pid, signal);
+  } catch (error: unknown) {
+    if (!isMissingProcess(error)) throw error;
+  }
+}
+
+async function waitForProcessGroupExit(
+  pid: number,
+  timeoutMilliseconds: number,
+): Promise<boolean> {
+  const deadline = Date.now() + timeoutMilliseconds;
+  while (processGroupExists(pid)) {
+    if (Date.now() >= deadline) return false;
+    await new Promise<void>((resolveWait) => {
+      setTimeout(resolveWait, 25);
+    });
+  }
+  return true;
+}
+
+async function stopProcessGroup(pid: number): Promise<void> {
+  if (!processGroupExists(pid)) return;
+  signalProcessGroup(pid, "SIGTERM");
+  if (await waitForProcessGroupExit(pid, 1_500)) return;
+  signalProcessGroup(pid, "SIGKILL");
+  if (!(await waitForProcessGroupExit(pid, 1_500))) {
+    throw new TypeError("No se pudo detener el grupo de preview candidato");
+  }
+}
+
+/**
+ * Starts only a reverified copied bundle. The private candidate record is
+ * frozen and no exported callback can substitute its cwd/configuration.
+ */
+export async function startCandidatePreview(
+  candidate: CandidateManifest,
+): Promise<PreviewHandle> {
+  await verifyCandidateArtifact(candidate);
+  const record = candidateRecord(candidate);
+  if (candidatePreviewPids.has(candidate)) {
+    throw new TypeError("El candidato ya tiene un preview en ejecución");
+  }
+  if (record.previewCapability === undefined) {
+    throw new TypeError(
+      "No existe una capability de preview candidato confiable",
+    );
+  }
+  const adapter = candidatePreviewCapabilities.get(record.previewCapability);
+  if (adapter === undefined) {
+    throw new TypeError("La capability de preview no pertenece al controlador");
+  }
+  const invocation = await fixedPreviewInvocation(candidate);
+  const launch = await adapter(invocation);
+  const launchPid = launch.child.pid;
+  if (
+    typeof launchPid !== "number" ||
+    !Number.isSafeInteger(launchPid) ||
+    launchPid <= 0 ||
+    launch.child.exitCode !== null
+  ) {
+    if (
+      typeof launchPid === "number" &&
+      Number.isSafeInteger(launchPid) &&
+      launchPid > 0
+    ) {
+      await stopProcessGroup(launchPid).catch(() => undefined);
+    }
+    throw new TypeError("El preview candidato no creó un proceso válido");
+  }
+  const pid = launchPid;
+  let url: string;
+  try {
+    url = localPreviewUrl(launch.url);
+  } catch (error: unknown) {
+    await stopProcessGroup(pid).catch(() => undefined);
+    throw error;
+  }
+  candidatePreviewPids.set(candidate, pid);
+
+  let stopped = false;
+  return Object.freeze({
+    url,
+    stop: async (): Promise<void> => {
+      if (stopped) return;
+      stopped = true;
+      try {
+        await stopProcessGroup(pid);
+      } finally {
+        candidatePreviewPids.delete(candidate);
+      }
+    },
+  });
+}
+
+declare const candidateTestInspectionCapabilityBrand: unique symbol;
+export interface CandidateTestInspectionCapability {
+  readonly [candidateTestInspectionCapabilityBrand]: true;
+}
+
+const candidateTestInspectionCapabilities =
+  new WeakSet<CandidateTestInspectionCapability>();
+
+/** Mints the sole test-only inspection authority; production cannot mint it. */
+export function createCandidateTestInspectionCapability(): CandidateTestInspectionCapability {
   if (process.env.INGEST_TEST_MODE !== "true") {
     throw new TypeError(
       "La inspección candidata sólo existe en modo de pruebas",
     );
   }
+  const capability = Object.freeze({}) as CandidateTestInspectionCapability;
+  candidateTestInspectionCapabilities.add(capability);
+  return capability;
+}
+
+/** Test-only snapshot; it is a copy and cannot mutate preview state. */
+export function candidateTestInspection(
+  capability: CandidateTestInspectionCapability,
+  candidate: CandidateManifest,
+): {
+  readonly bundlePath: string;
+  readonly manifestPath: string;
+  readonly previewPid: number | undefined;
+} {
+  if (
+    process.env.INGEST_TEST_MODE !== "true" ||
+    !candidateTestInspectionCapabilities.has(capability)
+  ) {
+    throw new TypeError(
+      "La inspección candidata no pertenece al controlador de pruebas",
+    );
+  }
   const record = candidateRecord(candidate);
   return Object.freeze({
     bundlePath: record.bundlePath,
-    previewPid: record.previewPid,
+    manifestPath: record.manifestPath,
+    previewPid: candidatePreviewPids.get(candidate),
   });
 }
