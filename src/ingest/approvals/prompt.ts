@@ -6,7 +6,11 @@ import { stdin, stdout } from "node:process";
 import { createInterface } from "node:readline/promises";
 import { promisify } from "node:util";
 
-import { sanitizedGitEnv } from "../git-env.ts";
+import {
+  fixedGitArgs,
+  fixedGitExecutable,
+  sanitizedGitEnv,
+} from "../git-env.ts";
 
 const execFileAsync = promisify(execFile);
 const fixturePromptBrand: unique symbol = Symbol("fixtureApprovalPrompt");
@@ -88,10 +92,14 @@ async function assertSafeStateRoot(root: string): Promise<void> {
 
 async function gitOutput(root: string, args: string[]): Promise<string> {
   try {
-    const result = await execFileAsync("git", ["-C", root, ...args], {
-      encoding: "utf8",
-      env: sanitizedGitEnv(),
-    });
+    const result = await execFileAsync(
+      fixedGitExecutable,
+      fixedGitArgs(["-C", root, ...args]),
+      {
+        encoding: "utf8",
+        env: sanitizedGitEnv(),
+      },
+    );
     return result.stdout.trim();
   } catch {
     throw new TypeError("El clon temporal fixture no tiene Git válido");
@@ -222,8 +230,8 @@ export async function createFixtureApprovalRun(
   let identity: FixtureRootIdentity;
   try {
     await execFileAsync(
-      "git",
-      [
+      fixedGitExecutable,
+      fixedGitArgs([
         "clone",
         "--no-hardlinks",
         "--quiet",
@@ -231,7 +239,7 @@ export async function createFixtureApprovalRun(
         "main",
         source,
         repositoryRoot,
-      ],
+      ]),
       {
         env: sanitizedGitEnv(),
       },

@@ -14,6 +14,7 @@ import test from "node:test";
 import { promisify } from "node:util";
 
 import { sha256Canonical } from "../../src/ingest/canonical-json.ts";
+import { candidateApprovalSubject } from "../../src/ingest/dossier-integrity.ts";
 import type { CandidateManifest, ChangePlan } from "../../src/ingest/domain.ts";
 import { sanitizedGitEnv } from "../../src/ingest/git-env.ts";
 import { ingestPaths } from "../../src/ingest/paths.ts";
@@ -451,11 +452,14 @@ test("Gate 2 binds canonical candidate, commit, and artifact digest", async () =
       },
       await fixturePrompt(projectRoot, {
         isTTY: true,
-        answer: sha256Canonical(approvedCandidate).slice(0, 12),
+        answer: candidateApprovalSubject(approvedCandidate).slice(0, 12),
       }),
     );
 
-    assert.equal(gate2.subjectSha256, sha256Canonical(approvedCandidate));
+    assert.equal(
+      gate2.subjectSha256,
+      candidateApprovalSubject(approvedCandidate),
+    );
     assert.equal(gate2.candidateCommit, approvedCandidate.candidateCommit);
     assert.equal(gate2.artifactSha256, approvedCandidate.artifactSha256);
     assert.doesNotThrow(() =>
@@ -913,7 +917,7 @@ test("Gate 2 requires a persisted, valid Gate 1 approval", async () => {
         },
         await fixturePrompt(projectRoot, {
           isTTY: true,
-          answer: sha256Canonical(approvedCandidate).slice(0, 12),
+          answer: candidateApprovalSubject(approvedCandidate).slice(0, 12),
         }),
       ),
       /Gate 1|aprobaci[oó]n/i,
@@ -939,7 +943,7 @@ test("Gate 2 reads advanced main instead of a caller-supplied old baseline", asy
     );
     const gate2Prompt = await fixturePrompt(projectRoot, {
       isTTY: true,
-      answer: sha256Canonical(approvedCandidate).slice(0, 12),
+      answer: candidateApprovalSubject(approvedCandidate).slice(0, 12),
     });
     await writeFile(join(projectRoot, "advanced.txt"), "advanced\n", "utf8");
     await execFileAsync("git", ["-C", projectRoot, "add", "advanced.txt"]);

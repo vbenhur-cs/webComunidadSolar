@@ -38,16 +38,22 @@ import {
   verifyCandidateArtifact,
   verifyCandidateEvidence,
 } from "../../../src/ingest/candidate/manifest.ts";
+import { canonicalJson } from "../../../src/ingest/canonical-json.ts";
 import {
-  canonicalJson,
-  sha256Canonical,
-} from "../../../src/ingest/canonical-json.ts";
+  candidateApprovalSubject,
+  candidateDossierCommitment,
+  sanitizedDossierSha256,
+} from "../../../src/ingest/dossier-integrity.ts";
 import {
   openIngestionControllerForTest,
   type IngestionController,
 } from "../../../src/ingest/controller.ts";
 import { createSanitizedCandidateDossier } from "../../../src/ingest/dossier.ts";
-import { sanitizedGitEnv } from "../../../src/ingest/git-env.ts";
+import {
+  fixedGitArgs,
+  fixedGitExecutable,
+  sanitizedGitEnv,
+} from "../../../src/ingest/git-env.ts";
 import type {
   ApprovalRecord,
   AttemptRecord,
@@ -555,10 +561,70 @@ async function runFixtureGit(
   root: string,
   args: readonly string[],
 ): Promise<{ readonly stdout: string; readonly stderr: string }> {
-  return await execFileAsync("git", ["-C", root, ...args], {
-    encoding: "utf8",
+  return await execFileAsync(
+    fixedGitExecutable,
+    fixedGitArgs(["-C", root, ...args]),
+    {
+      encoding: "utf8",
+      env: sanitizedGitEnv(),
+    },
+  );
+}
+
+async function runFixtureGitInput(
+  root: string,
+  args: readonly string[],
+  input: string,
+): Promise<{ readonly stdout: string; readonly stderr: string }> {
+  const child = spawn(fixedGitExecutable, fixedGitArgs(["-C", root, ...args]), {
     env: sanitizedGitEnv(),
+    shell: false,
+    stdio: ["pipe", "pipe", "pipe"],
   });
+  const stdout: Buffer[] = [];
+  const stderr: Buffer[] = [];
+  child.stdout?.on("data", (chunk: Buffer) => stdout.push(chunk));
+  child.stderr?.on("data", (chunk: Buffer) => stderr.push(chunk));
+  const completed = new Promise<number>((resolveExit, rejectExit) => {
+    child.once("error", rejectExit);
+    child.once("close", (code) => resolveExit(code ?? 1));
+  });
+  child.stdin?.end(input, "utf8");
+  if ((await completed) !== 0) {
+    throw new TypeError("El sello anotado fixture no pudo crearse");
+  }
+  return Object.freeze({
+    stdout: Buffer.concat(stdout).toString("utf8"),
+    stderr: Buffer.concat(stderr).toString("utf8"),
+  });
+}
+
+function fixtureTagObject(input: {
+  readonly changeId: string;
+  readonly candidateCommit: string;
+  readonly sealedCandidateSha256: string;
+  readonly sanitizedProjectionSha256: string;
+  readonly gate2SubjectSha256: string;
+  readonly dossierSha256: string;
+}): string {
+  const seal = {
+    schemaVersion: 1,
+    changeId: input.changeId,
+    candidateCommit: input.candidateCommit,
+    sealedCandidateSha256: input.sealedCandidateSha256,
+    sanitizedProjectionSha256: input.sanitizedProjectionSha256,
+    gate2SubjectSha256: input.gate2SubjectSha256,
+    dossierSha256: input.dossierSha256,
+  };
+  return [
+    `object ${input.candidateCommit}`,
+    "type commit",
+    `tag ingestion-fixture/${input.changeId}`,
+    "tagger Comunidad Solar Fixture <fixture@comunidadsolar.invalid> 1788220800 +0000",
+    "",
+    canonicalJson(seal),
+    "",
+  ].join("\n");
 }
 
 async function trustedDirectory(path: string, label: string): Promise<string> {
@@ -1024,7 +1090,7 @@ export async function runFixtureE2e(
         });
         const gate2Prompt = await approvalRun.createPrompt({
           isTTY: true,
-          answer: sha256Canonical(candidate).slice(0, 12),
+          answer: candidateApprovalSubject(candidate).slice(0, 12),
         });
         await approveFixtureGate2({
           repositoryRoot: clone,
@@ -1134,15 +1200,39 @@ async function recordFixtureEvidence(
   ) {
     throw new TypeError("El candidato fixture no coincide con su invocación");
   }
+  const request = validateSchema<NormalizedRequest>(
+    "normalized-request",
+    JSON.parse(files[0]),
+  );
+  const plan = validateSchema<ChangePlan>("change-plan", JSON.parse(files[1]));
+  const gate1 = validateSchema<ApprovalRecord>(
+    "approval",
+    JSON.parse(files[2]),
+  );
+  const gate2 = validateSchema<ApprovalRecord>(
+    "approval",
+    JSON.parse(files[3]),
+  );
+  const attempt = validateSchema<AttemptRecord>(
+    "attempt",
+    JSON.parse(files[4]),
+  );
+  const candidateCommitment = candidateDossierCommitment(persistedCandidate);
+  if (
+    gate2.gate !== 2 ||
+    gate2.changeId !== persistedCandidate.changeId ||
+    gate2.candidateCommit !== persistedCandidate.candidateCommit ||
+    gate2.artifactSha256 !== persistedCandidate.artifactSha256 ||
+    gate2.subjectSha256 !== candidateCommitment.approvalSubjectSha256
+  ) {
+    throw new TypeError("Gate 2 no sella el candidato fixture completo");
+  }
   const dossier = createSanitizedCandidateDossier({
-    request: validateSchema<NormalizedRequest>(
-      "normalized-request",
-      JSON.parse(files[0]),
-    ),
-    plan: validateSchema<ChangePlan>("change-plan", JSON.parse(files[1])),
-    gate1: validateSchema<ApprovalRecord>("approval", JSON.parse(files[2])),
-    gate2: validateSchema<ApprovalRecord>("approval", JSON.parse(files[3])),
-    attempt: validateSchema<AttemptRecord>("attempt", JSON.parse(files[4])),
+    request,
+    plan,
+    gate1,
+    gate2,
+    attempt,
     candidate: persistedCandidate,
   });
   const ref = `refs/comunidadsolar/candidates/${candidate.changeId}/${candidate.attemptId}`;
@@ -1152,6 +1242,14 @@ async function recordFixtureEvidence(
   if (candidateCommit !== candidate.candidateCommit) {
     throw new TypeError("La referencia fixture no coincide con el candidato");
   }
+  const tagSeal = Object.freeze({
+    changeId: invocation.changeId,
+    candidateCommit,
+    sealedCandidateSha256: candidateCommitment.sealedCandidateSha256,
+    sanitizedProjectionSha256: candidateCommitment.sanitizedProjectionSha256,
+    gate2SubjectSha256: gate2.subjectSha256,
+    dossierSha256: sanitizedDossierSha256(dossier.files),
+  });
   await assertTagAbsent(sourceRoot, tag);
   const destinationParent = await assertChangesUsable(sourceRoot);
   const destination = resolve(destinationParent, invocation.changeId);
@@ -1178,6 +1276,7 @@ async function recordFixtureEvidence(
   let stagingParentPresent = true;
   let dossierPublished = false;
   let tagCreated = false;
+  let tagObject: string | undefined;
   let transferFetched = false;
   try {
     await runFixtureGit(sourceRoot, [
@@ -1203,11 +1302,20 @@ async function recordFixtureEvidence(
     await removeTrustedDirectory(destinationParent, stagingParent);
     stagingParentPresent = false;
     await assertMainUnchanged(sourceRoot, sourceBefore);
+    const createdTag = await runFixtureGitInput(
+      sourceRoot,
+      ["mktag"],
+      fixtureTagObject(tagSeal),
+    );
+    tagObject = createdTag.stdout.trim();
+    if (!/^[a-f0-9]{40,64}$/u.test(tagObject)) {
+      throw new TypeError("El sello anotado fixture no tiene identidad válida");
+    }
     await runFixtureGit(sourceRoot, [
       "update-ref",
       tag,
-      candidateCommit,
-      "0".repeat(candidateCommit.length),
+      tagObject,
+      "0".repeat(tagObject.length),
     ]);
     tagCreated = true;
     if ((await resolvedCommit(sourceRoot, tag)) !== candidateCommit) {
@@ -1232,12 +1340,12 @@ async function recordFixtureEvidence(
     }
   } catch (error: unknown) {
     const cleanup: unknown[] = [];
-    if (tagCreated) {
+    if (tagCreated && tagObject !== undefined) {
       await runFixtureGit(sourceRoot, [
         "update-ref",
         "-d",
         tag,
-        candidateCommit,
+        tagObject,
       ]).catch((cleanupError: unknown) => cleanup.push(cleanupError));
     }
     if (dossierPublished) {

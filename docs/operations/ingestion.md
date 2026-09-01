@@ -120,11 +120,15 @@ Antes de crear ese tag, el runner valida de nuevo la identidad del ref
 candidato, rechaza artefactos ignorados o enlaces simbólicos y escribe el
 expediente en staging no enlazable. Sólo publica el staging verificado de forma
 atómica y después crea el tag; un fallo deja sin tag ni expediente parcial. El
-tag `refs/tags/ingestion-fixture/<change-id>` y su dossier deben formar una
-pareja: `npm run verify:ingestion` descubre ambos desde el repositorio fuente,
-comprueba la identidad de commit, los bindings de request/plan/Gates/intento y
-los hashes de evidencia del candidato. La ausencia o modificación de cualquiera
-de los dos hace que la auditoría falle cerradamente sin inicializar un agente.
+tag anotado `refs/tags/ingestion-fixture/<change-id>` y su dossier deben formar
+una pareja: su sello canónico incluye el commit candidato, el sujeto compuesto
+de Gate 2, el hash del candidato sellado, el hash de toda su proyección saneada
+y el hash de los bytes canónicos de los seis archivos del expediente. `npm run
+verify:ingestion` descubre ambos desde el repositorio fuente y recalcula esos
+bindings, además de request/plan/Gates/intento y la evidencia del candidato. La
+ausencia o modificación de cualquiera de los dos hace que la auditoría falle
+cerradamente sin inicializar un agente. El gate `main == HEAD` se conserva para
+cada grabación: este flujo nunca adelanta, fusiona ni relaja `main`.
 
 **`--execute` no es una autorización implícita de deploy.** La CLI actual ni lo
 acepta; una publicación Cloudflare real sigue cerrada hasta que exista una

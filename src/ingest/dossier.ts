@@ -1,4 +1,5 @@
-import { canonicalJson, sha256Canonical } from "./canonical-json.ts";
+import { canonicalJson } from "./canonical-json.ts";
+import { sanitizedCandidateDossierRecord } from "./dossier-integrity.ts";
 import type {
   ApprovalRecord,
   AttemptRecord,
@@ -63,49 +64,6 @@ function sanitizedAttempt(attempt: AttemptRecord): object {
   };
 }
 
-function sanitizedCandidate(candidate: CandidateManifest): object {
-  const prefix = `.artifacts/candidates/${candidate.changeId}/${candidate.attemptId}/bundle/`;
-  return {
-    schemaVersion: candidate.schemaVersion,
-    changeId: candidate.changeId,
-    attemptId: candidate.attemptId,
-    requestSha256: candidate.requestSha256,
-    planSha256: candidate.planSha256,
-    baselineCommit: candidate.baselineCommit,
-    candidateCommit: candidate.candidateCommit,
-    artifactSha256: candidate.artifactSha256,
-    // Binds Gate 2 to the complete sealed manifest without copying its local
-    // preview endpoint or other non-durable operational details.
-    approvalSubjectSha256: sha256Canonical(candidate),
-    buildProfile: candidate.buildProfile,
-    routes: candidate.routes,
-    files: candidate.files,
-    artifacts: candidate.artifacts.map((artifact) => {
-      if (!artifact.path.startsWith(prefix)) {
-        throw new TypeError(
-          "El expediente recibió un artefacto candidato inseguro",
-        );
-      }
-      return {
-        path: `bundle/${artifact.path.slice(prefix.length)}`,
-        sha256: artifact.sha256,
-        bytes: artifact.bytes,
-      };
-    }),
-    validations: candidate.validations.map((validation) => ({
-      id: validation.id,
-      status: validation.status,
-      evidence: `evidence/${validation.id}.json`,
-    })),
-    preview: {
-      command: "sealed verified candidate preview",
-    },
-    knownDifferences: candidate.knownDifferences.map(() => ({
-      approvalRequired: true,
-    })),
-  };
-}
-
 /** Creates a fixed, path-free dossier payload; destination selection stays sealed. */
 export function createSanitizedCandidateDossier(
   source: CandidateDossierSource,
@@ -131,7 +89,7 @@ export function createSanitizedCandidateDossier(
     },
     {
       path: "candidate.json",
-      contents: `${canonicalJson(sanitizedCandidate(source.candidate))}\n`,
+      contents: `${canonicalJson(sanitizedCandidateDossierRecord(source.candidate))}\n`,
     },
   ].sort((left, right) =>
     left.path < right.path ? -1 : left.path > right.path ? 1 : 0,

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import {
   chmod,
+  lstat,
   mkdir,
   mkdtemp,
   readFile,
@@ -23,15 +24,20 @@ import {
   approveGate1,
   approveGate2,
 } from "../../src/ingest/approvals/service.ts";
+import { canonicalJson } from "../../src/ingest/canonical-json.ts";
+import { candidateApprovalSubject } from "../../src/ingest/dossier-integrity.ts";
 import {
-  canonicalJson,
-  sha256Canonical,
-} from "../../src/ingest/canonical-json.ts";
-import {
+  createIngestionAuditTestSeal,
   openIngestionAuditController,
+  openIngestionAuditControllerForTest,
   openIngestionControllerForTest,
   type IngestionAudit,
+  type IngestionAuditTestTag,
 } from "../../src/ingest/controller.ts";
+import {
+  candidateDossierCommitmentFromProjection,
+  sanitizedDossierSha256,
+} from "../../src/ingest/dossier-integrity.ts";
 import { createSanitizedCandidateDossier } from "../../src/ingest/dossier.ts";
 import type {
   ApprovalRecord,
@@ -134,7 +140,7 @@ async function approveFixtureGate2(
   const approvedCandidate = JSON.parse(candidate) as CandidateManifest;
   const prompt = await fixture.createPrompt({
     isTTY: true,
-    answer: sha256Canonical(approvedCandidate).slice(0, 12),
+    answer: candidateApprovalSubject(approvedCandidate).slice(0, 12),
   });
   const paths = await ingestPaths(changeId, { projectRoot: repositoryRoot });
   const approval = await approveGate2(
@@ -377,18 +383,6 @@ function fixtureRecordFiles(
     candidateCommit: null,
     artifactSha256: null,
   };
-  const gate2 = {
-    schemaVersion: 1,
-    environment: "test",
-    gate: 2,
-    changeId,
-    actor: "test-human",
-    approvedAt: "2026-09-01T00:00:00.000Z",
-    subjectSha256: fixtureRecordHash,
-    baselineCommit: fixtureRecordCommit,
-    candidateCommit: fixtureRecordCommit,
-    artifactSha256: fixtureRecordArtifactHash,
-  };
   const attempt = {
     schemaVersion: 1,
     changeId,
@@ -413,7 +407,7 @@ function fixtureRecordFiles(
     ],
     failure: null,
   };
-  const candidate = {
+  const projection = {
     schemaVersion: 1,
     changeId,
     attemptId: "attempt-000001",
@@ -422,7 +416,6 @@ function fixtureRecordFiles(
     baselineCommit: fixtureRecordCommit,
     candidateCommit: fixtureRecordCommit,
     artifactSha256: fixtureRecordArtifactHash,
-    approvalSubjectSha256: fixtureRecordHash,
     buildProfile: plan.publication,
     routes: ["/fixture-record"],
     files: ["src/pages/fixture-record.astro"],
@@ -438,6 +431,23 @@ function fixtureRecordFiles(
     ],
     preview: { command: "sealed verified candidate preview" },
     knownDifferences: [],
+  };
+  const commitment = candidateDossierCommitmentFromProjection(
+    fixtureRecordHash,
+    projection,
+  );
+  const candidate = { ...projection, ...commitment };
+  const gate2 = {
+    schemaVersion: 1,
+    environment: "test",
+    gate: 2,
+    changeId,
+    actor: "test-human",
+    approvedAt: "2026-09-01T00:00:00.000Z",
+    subjectSha256: commitment.approvalSubjectSha256,
+    baselineCommit: fixtureRecordCommit,
+    candidateCommit: fixtureRecordCommit,
+    artifactSha256: fixtureRecordArtifactHash,
   };
   return new Map([
     ["request.json", `${canonicalJson(request)}\n`],
@@ -466,62 +476,64 @@ async function writeFixtureRecord(
   }
 }
 
-async function withFixtureAuditGit<T>(
-  tags: Readonly<Record<string, string>>,
-  operation: () => Promise<T>,
-): Promise<T> {
-  if (process.env.INGEST_TEST_MODE !== "true") {
-    throw new TypeError("El Git fixture de auditoría exige modo de pruebas");
-  }
-  const bin = await mkdtemp(join(tmpdir(), "ingestion-audit-git-"));
-  const executable = join(bin, "git");
-  const originalPath = process.env.PATH;
-  const source = `#!/usr/bin/env node
-const args = process.argv.slice(2);
-const tags = ${JSON.stringify(tags)};
-const suffix = "^{commit}";
-const requested = args.at(-1) ?? "";
-const ref = requested.endsWith(suffix) ? requested.slice(0, -suffix.length) : requested;
-const prefix = "refs/tags/ingestion-fixture/";
-if (args.includes("for-each-ref")) {
-  if (ref === "refs/tags/ingestion-fixture" || ref === prefix) {
-    for (const id of Object.keys(tags).sort()) process.stdout.write(prefix + id + "\\n");
-  } else {
-    const id = ref.startsWith(prefix) ? ref.slice(prefix.length) : "";
-    if (id !== "" && tags[id] !== undefined) process.stdout.write(ref + "\\n");
-  }
-  process.exit(0);
-}
-if (args.includes("rev-parse")) {
-  const id = ref.startsWith(prefix) ? ref.slice(prefix.length) : "";
-  if (id !== "" && tags[id] !== undefined) {
-    process.stdout.write(tags[id] + "\\n");
-    process.exit(0);
-  }
-  process.exit(1);
-}
-process.exit(64);
-`;
-  try {
-    await writeFile(executable, source, { encoding: "utf8", mode: 0o700 });
-    await chmod(executable, 0o700);
-    process.env.PATH = `${bin}${delimiter}${originalPath ?? ""}`;
-    return await operation();
-  } finally {
-    if (originalPath === undefined) delete process.env.PATH;
-    else process.env.PATH = originalPath;
-    await rm(bin, { recursive: true, force: true });
-  }
+function fixtureRecordAuditTag(
+  changeId: string,
+  candidateCommit: string,
+): IngestionAuditTestTag {
+  const files = fixtureRecordFiles(changeId);
+  const candidate = JSON.parse(files.get("candidate.json") ?? "") as {
+    readonly sealedCandidateSha256: string;
+    readonly sanitizedProjectionSha256: string;
+    readonly approvalSubjectSha256: string;
+  };
+  return {
+    changeId,
+    candidateCommit,
+    sealedCandidateSha256: candidate.sealedCandidateSha256,
+    sanitizedProjectionSha256: candidate.sanitizedProjectionSha256,
+    gate2SubjectSha256: candidate.approvalSubjectSha256,
+    dossierSha256: sanitizedDossierSha256(
+      [...files].map(([path, contents]) => ({ path, contents })),
+    ),
+  };
 }
 
 async function auditFixtureRecords(
   tags: Readonly<Record<string, string>>,
 ): Promise<IngestionAudit> {
-  const controller = await openIngestionAuditController();
+  const seal = createIngestionAuditTestSeal(
+    Object.entries(tags).map(([changeId, candidateCommit]) =>
+      fixtureRecordAuditTag(changeId, candidateCommit),
+    ),
+  );
+  return await auditFixtureSeal(seal);
+}
+
+async function auditFixtureSeal(
+  seal: ReturnType<typeof createIngestionAuditTestSeal>,
+): Promise<IngestionAudit> {
+  const controller = await openIngestionAuditControllerForTest(seal);
   try {
-    return await withFixtureAuditGit(tags, () => controller.audit());
+    return await controller.audit();
   } finally {
     await controller.dispose();
+  }
+}
+
+async function pathExists(path: string): Promise<boolean> {
+  try {
+    await lstat(path);
+    return true;
+  } catch (error: unknown) {
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "code" in error &&
+      error.code === "ENOENT"
+    ) {
+      return false;
+    }
+    throw error;
   }
 }
 
@@ -867,6 +879,225 @@ test("audit rejects an altered durable fixture dossier", async () => {
   }
 });
 
+test("audit rejects every altered canonical candidate projection even with coherent dossier facts", async () => {
+  const previousCwd = process.cwd();
+  try {
+    await withTemporaryMainClone(async (clone) => {
+      process.chdir(clone);
+      await writeFixtureRecord(clone);
+      const tags = { [fixtureRecordChangeId]: fixtureRecordCommit };
+      assert.equal((await auditFixtureRecords(tags)).ok, true);
+      const candidatePath = join(
+        clone,
+        "changes",
+        fixtureRecordChangeId,
+        "candidate.json",
+      );
+      const attemptPath = join(
+        clone,
+        "changes",
+        fixtureRecordChangeId,
+        "attempts",
+        "attempt-000001.json",
+      );
+      const originalCandidate = await readFile(candidatePath, "utf8");
+      const originalAttempt = await readFile(attemptPath, "utf8");
+
+      const mutations: ReadonlyArray<{
+        readonly name: string;
+        readonly mutate: (
+          candidate: Record<string, unknown>,
+          attempt: Record<string, unknown>,
+        ) => void;
+      }> = [
+        {
+          name: "routes",
+          mutate(candidate) {
+            candidate.routes = ["/fixture-record", "/fixture-record-alt"];
+          },
+        },
+        {
+          name: "files",
+          mutate(candidate, attempt) {
+            candidate.files = [
+              "src/pages/fixture-record.astro",
+              "src/pages/fixture-record-alt.astro",
+            ];
+            attempt.generatedFiles = [
+              "src/pages/fixture-record.astro",
+              "src/pages/fixture-record-alt.astro",
+            ];
+          },
+        },
+        {
+          name: "artifacts",
+          mutate(candidate) {
+            candidate.artifacts = [
+              {
+                path: "bundle/dist/index.html",
+                sha256: fixtureRecordHash,
+                bytes: 17,
+              },
+              {
+                path: "bundle/dist/alternate.html",
+                sha256: "f".repeat(64),
+                bytes: 23,
+              },
+            ];
+          },
+        },
+        {
+          name: "validations",
+          mutate(candidate, attempt) {
+            candidate.validations = [
+              {
+                id: "build",
+                status: "passed",
+                evidence: "evidence/build.json",
+              },
+              {
+                id: "checks",
+                status: "passed",
+                evidence: "evidence/checks.json",
+              },
+            ];
+            attempt.validations = [
+              {
+                id: "build",
+                status: "passed",
+                evidence: "evidence/build.json",
+                evidenceSha256: fixtureRecordEvidenceHash,
+              },
+              {
+                id: "checks",
+                status: "passed",
+                evidence: "evidence/checks.json",
+                evidenceSha256: "f".repeat(64),
+              },
+            ];
+          },
+        },
+      ];
+
+      for (const { name, mutate } of mutations) {
+        const candidate = JSON.parse(originalCandidate) as Record<
+          string,
+          unknown
+        >;
+        const attempt = JSON.parse(originalAttempt) as Record<string, unknown>;
+        mutate(candidate, attempt);
+        await Promise.all([
+          writeFile(candidatePath, `${canonicalJson(candidate)}\n`, "utf8"),
+          writeFile(attemptPath, `${canonicalJson(attempt)}\n`, "utf8"),
+        ]);
+        const audit = await auditFixtureRecords(tags);
+        assert.equal(audit.ok, false, name);
+        assert.deepEqual(
+          audit.missing,
+          [`fixture:${fixtureRecordChangeId}`],
+          name,
+        );
+        await Promise.all([
+          writeFile(candidatePath, originalCandidate, "utf8"),
+          writeFile(attemptPath, originalAttempt, "utf8"),
+        ]);
+      }
+    });
+  } finally {
+    process.chdir(previousCwd);
+  }
+});
+
+test("audit rejects a candidate and Gate 2 rewritten together after durable sealing", async () => {
+  const previousCwd = process.cwd();
+  try {
+    await withTemporaryMainClone(async (clone) => {
+      process.chdir(clone);
+      await writeFixtureRecord(clone);
+      const tags = { [fixtureRecordChangeId]: fixtureRecordCommit };
+      assert.equal((await auditFixtureRecords(tags)).ok, true);
+      const candidatePath = join(
+        clone,
+        "changes",
+        fixtureRecordChangeId,
+        "candidate.json",
+      );
+      const gate2Path = join(
+        clone,
+        "changes",
+        fixtureRecordChangeId,
+        "approvals",
+        "gate-2.json",
+      );
+      const candidate = JSON.parse(
+        await readFile(candidatePath, "utf8"),
+      ) as Record<string, unknown>;
+      candidate.routes = ["/fixture-record", "/rewritten-with-gate2"];
+      const sealedCandidateSha256 = candidate.sealedCandidateSha256;
+      if (typeof sealedCandidateSha256 !== "string") {
+        throw new TypeError("the fixture candidate lost its sealed digest");
+      }
+      const projection = { ...candidate };
+      delete projection.approvalSubjectSha256;
+      delete projection.sanitizedProjectionSha256;
+      delete projection.sealedCandidateSha256;
+      const commitment = candidateDossierCommitmentFromProjection(
+        sealedCandidateSha256,
+        projection,
+      );
+      candidate.sanitizedProjectionSha256 =
+        commitment.sanitizedProjectionSha256;
+      candidate.approvalSubjectSha256 = commitment.approvalSubjectSha256;
+      const gate2 = JSON.parse(await readFile(gate2Path, "utf8")) as Record<
+        string,
+        unknown
+      >;
+      gate2.subjectSha256 = commitment.approvalSubjectSha256;
+      await Promise.all([
+        writeFile(candidatePath, `${canonicalJson(candidate)}\n`, "utf8"),
+        writeFile(gate2Path, `${canonicalJson(gate2)}\n`, "utf8"),
+      ]);
+      const audit = await auditFixtureRecords(tags);
+      assert.equal(audit.ok, false);
+      assert.deepEqual(audit.missing, [`fixture:${fixtureRecordChangeId}`]);
+    });
+  } finally {
+    process.chdir(previousCwd);
+  }
+});
+
+test("production audit does not execute a Git binary injected through PATH", async () => {
+  const previousCwd = process.cwd();
+  const originalPath = process.env.PATH;
+  const bin = await mkdtemp(join(tmpdir(), "ingestion-audit-path-injection-"));
+  const executable = join(bin, "git");
+  const marker = join(bin, "executed");
+  let controller:
+    Awaited<ReturnType<typeof openIngestionAuditController>> | undefined;
+  try {
+    await withTemporaryMainClone(async (clone) => {
+      process.chdir(clone);
+      controller = await openIngestionAuditController();
+      await writeFile(
+        executable,
+        `#!/usr/bin/env node\nrequire("node:fs").writeFileSync(${JSON.stringify(marker)}, "executed");\n`,
+        { encoding: "utf8", mode: 0o700 },
+      );
+      await chmod(executable, 0o700);
+      process.env.PATH = `${bin}${delimiter}${originalPath ?? ""}`;
+      const audit = await controller.audit();
+      assert.equal(audit.ok, true, JSON.stringify(audit));
+      assert.equal(await pathExists(marker), false);
+    });
+  } finally {
+    await controller?.dispose().catch(() => undefined);
+    if (originalPath === undefined) delete process.env.PATH;
+    else process.env.PATH = originalPath;
+    process.chdir(previousCwd);
+    await rm(bin, { recursive: true, force: true });
+  }
+});
+
 test("audit rejects a durable fixture Gate binding that no longer seals its candidate", async () => {
   const previousCwd = process.cwd();
   try {
@@ -910,6 +1141,68 @@ test("audit rejects a fixture tag bound to another candidate commit", async () =
     });
   } finally {
     process.chdir(previousCwd);
+  }
+});
+
+test("audit rejects an altered durable tag seal", async () => {
+  const previousCwd = process.cwd();
+  try {
+    await withTemporaryMainClone(async (clone) => {
+      process.chdir(clone);
+      await writeFixtureRecord(clone);
+      const tag = fixtureRecordAuditTag(
+        fixtureRecordChangeId,
+        fixtureRecordCommit,
+      );
+      const audit = await auditFixtureSeal(
+        createIngestionAuditTestSeal([
+          { ...tag, dossierSha256: "f".repeat(64) },
+        ]),
+      );
+      assert.equal(audit.ok, false);
+      assert.deepEqual(audit.missing, [`fixture:${fixtureRecordChangeId}`]);
+    });
+  } finally {
+    process.chdir(previousCwd);
+  }
+});
+
+test("production audit cannot consume test-only tag seals", async () => {
+  const previousCwd = process.cwd();
+  let production:
+    Awaited<ReturnType<typeof openIngestionAuditController>> | undefined;
+  try {
+    await withTemporaryMainClone(async (clone) => {
+      process.chdir(clone);
+      const seal = createIngestionAuditTestSeal([
+        fixtureRecordAuditTag(fixtureRecordChangeId, fixtureRecordCommit),
+      ]);
+      assert.equal((await auditFixtureSeal(seal)).ok, false);
+      production = await openIngestionAuditController();
+      const audit = await production.audit();
+      assert.equal(audit.ok, true, JSON.stringify(audit));
+    });
+  } finally {
+    await production?.dispose().catch(() => undefined);
+    process.chdir(previousCwd);
+  }
+});
+
+test("audit test-only seals reject raw values and require test mode", async () => {
+  await assert.rejects(
+    () =>
+      openIngestionAuditControllerForTest(
+        {} as ReturnType<typeof createIngestionAuditTestSeal>,
+      ),
+    /sello/i,
+  );
+  const previousTestMode = process.env.INGEST_TEST_MODE;
+  delete process.env.INGEST_TEST_MODE;
+  try {
+    assert.throws(() => createIngestionAuditTestSeal([]), /modo de pruebas/i);
+  } finally {
+    if (previousTestMode === undefined) delete process.env.INGEST_TEST_MODE;
+    else process.env.INGEST_TEST_MODE = previousTestMode;
   }
 });
 

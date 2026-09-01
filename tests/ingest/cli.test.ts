@@ -199,6 +199,23 @@ test("safe output redacts absolute paths after punctuation delimiters", () => {
   );
 });
 
+test("safe output redacts paths and credentials without relying on delimiters", () => {
+  const unsafeValues = [
+    "x-/tmp/private",
+    "x+/tmp/private",
+    "x|/tmp/private",
+    "x&/tmp/private",
+    "x./tmp/private",
+    "Bearer bearer-token-never-print",
+    "cookie=session-never-print",
+  ];
+
+  for (const value of unsafeValues) {
+    assert.deepEqual(safeJson({ note: value }), { note: "[redactado]" });
+    assert.equal(safeError(new Error(`failure ${value}`)), "fallo operativo");
+  }
+});
+
 test("unknown and malformed options fail before a transition", async () => {
   let calls = 0;
   const result = await runCli(["status", "safe-change", "--unexpected"], {

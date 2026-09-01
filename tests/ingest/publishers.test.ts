@@ -21,6 +21,7 @@ import {
   canonicalJson,
   sha256Canonical,
 } from "../../src/ingest/canonical-json.ts";
+import { candidateApprovalSubject } from "../../src/ingest/dossier-integrity.ts";
 import {
   createCandidate,
   createCandidatePromotionTestCapability,
@@ -759,7 +760,7 @@ async function withPublisherFixture(
           }),
       );
       await withInteractiveControllerAnswer(
-        sha256Canonical(candidate).slice(0, 12),
+        candidateApprovalSubject(candidate).slice(0, 12),
         async () =>
           await approveGate2({
             plan,
@@ -780,7 +781,7 @@ async function withPublisherFixture(
       );
       const gate2Prompt = await fixture.createPrompt({
         isTTY: true,
-        answer: sha256Canonical(candidate).slice(0, 12),
+        answer: candidateApprovalSubject(candidate).slice(0, 12),
       });
       await approveGate2(
         { plan, candidate, actor: "fixture-human", stateRoot, repositoryRoot },

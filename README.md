@@ -76,6 +76,10 @@ reconciliación pendiente.
 Cuando se autorice la grabación de fixtures, sus expedientes saneados viven en
 `changes/<change-id>/` y se auditan junto con el tag de candidato asociado; las
 entradas y builds bajo `.artifacts/` nunca se versionan como evidencia.
+El tag anotado sella el commit del candidato, el sujeto compuesto de Gate 2 y
+los hashes canónicos de la proyección saneada y de todos los bytes del
+expediente. La grabación conserva el gate `main == HEAD`; no adelanta, fusiona
+ni relaja `main`.
 
 `npm run verify:ingestion` abre sólo el grafo de auditoría durable: no inicia
 agentes ni acepta su configuración. Sus errores y JSON se sanean antes de

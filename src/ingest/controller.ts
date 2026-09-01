@@ -45,6 +45,10 @@ import {
 } from "./candidate/manifest.ts";
 import type { CandidateBuildTestCapability } from "./candidate/evidence.ts";
 import { canonicalJson } from "./canonical-json.ts";
+import {
+  candidateDossierCommitmentFromProjection,
+  sanitizedDossierSha256,
+} from "./dossier-integrity.ts";
 import { createSanitizedCandidateDossier } from "./dossier.ts";
 import type {
   ApprovalRecord,
@@ -56,7 +60,11 @@ import type {
   NormalizedRequest,
   ValidationResult,
 } from "./domain.ts";
-import { sanitizedGitEnv } from "./git-env.ts";
+import {
+  fixedGitArgs,
+  fixedGitExecutable,
+  sanitizedGitEnv,
+} from "./git-env.ts";
 import { importPage } from "./importers/page.ts";
 import { importRequest } from "./importers/request.ts";
 import { assertNormalizedRequest } from "./importers/common.ts";
@@ -177,7 +185,43 @@ interface ControllerRuntime extends IngestionControllerTestRuntime {
 interface ControllerOpenOptions {
   /** Audit reads durable facts only and must not initialize an agent. */
   readonly initializeAgents?: boolean;
+  /** Internal sealed reader used only by the test-only audit composition. */
+  readonly auditTagReader?: AuditTagReader;
 }
+
+interface FixtureAuditTagFact {
+  readonly changeId: string;
+  readonly candidateCommit: string;
+  readonly sealedCandidateSha256: string;
+  readonly sanitizedProjectionSha256: string;
+  readonly gate2SubjectSha256: string;
+  readonly dossierSha256: string;
+}
+
+type AuditTagReader = (
+  projectRoot: string,
+) => Promise<ReadonlyMap<string, FixtureAuditTagFact>>;
+
+const auditTestSealBrand: unique symbol = Symbol("ingestionAuditTestSeal");
+
+/** Declarative, test-only facts; never a production audit configuration. */
+export interface IngestionAuditTestSeal {
+  readonly [auditTestSealBrand]: true;
+}
+
+export interface IngestionAuditTestTag {
+  readonly changeId: string;
+  readonly candidateCommit: string;
+  readonly sealedCandidateSha256: string;
+  readonly sanitizedProjectionSha256: string;
+  readonly gate2SubjectSha256: string;
+  readonly dossierSha256: string;
+}
+
+const auditTestSeals = new WeakMap<
+  IngestionAuditTestSeal,
+  ReadonlyMap<string, FixtureAuditTagFact>
+>();
 
 interface SessionCandidate {
   readonly canonical: string;
@@ -311,26 +355,84 @@ async function collectTrustedRelativeFiles(
   return files.sort();
 }
 
+function parsedFixtureTagFact(
+  source: string,
+  changeId: string,
+  candidateCommit: string,
+): FixtureAuditTagFact {
+  const separator = source.indexOf("\n\n");
+  if (separator < 0) {
+    throw new TypeError("La etiqueta fixture no contiene un sello canónico");
+  }
+  const message = source.slice(separator + 2);
+  let value: unknown;
+  try {
+    value = JSON.parse(message) as unknown;
+  } catch {
+    throw new TypeError("La etiqueta fixture no contiene un sello JSON válido");
+  }
+  if (`${canonicalJson(value)}\n` !== message) {
+    throw new TypeError("La etiqueta fixture no contiene un sello canónico");
+  }
+  const seal = exactDurableRecord(value, "El sello fixture", [
+    "candidateCommit",
+    "changeId",
+    "dossierSha256",
+    "gate2SubjectSha256",
+    "sanitizedProjectionSha256",
+    "schemaVersion",
+    "sealedCandidateSha256",
+  ]);
+  if (
+    seal.schemaVersion !== 1 ||
+    durableChangeId(seal, "changeId", "El sello fixture") !== changeId ||
+    durableCommit(seal, "candidateCommit", "El sello fixture") !==
+      candidateCommit
+  ) {
+    throw new TypeError("La etiqueta fixture no coincide con su candidato");
+  }
+  return Object.freeze({
+    changeId,
+    candidateCommit,
+    sealedCandidateSha256: durableHash(
+      seal,
+      "sealedCandidateSha256",
+      "El sello fixture",
+    ),
+    sanitizedProjectionSha256: durableHash(
+      seal,
+      "sanitizedProjectionSha256",
+      "El sello fixture",
+    ),
+    gate2SubjectSha256: durableHash(
+      seal,
+      "gate2SubjectSha256",
+      "El sello fixture",
+    ),
+    dossierSha256: durableHash(seal, "dossierSha256", "El sello fixture"),
+  });
+}
+
 async function fixtureTagCommits(
   projectRoot: string,
-): Promise<ReadonlyMap<string, string>> {
+): Promise<ReadonlyMap<string, FixtureAuditTagFact>> {
   const prefix = "refs/tags/ingestion-fixture/";
   const found = await execFileAsync(
-    "git",
-    [
+    fixedGitExecutable,
+    fixedGitArgs([
       "-C",
       projectRoot,
       "for-each-ref",
       "--format=%(refname)",
       "refs/tags/ingestion-fixture",
-    ],
+    ]),
     { encoding: "utf8", env: sanitizedGitEnv() },
   );
   const refs = found.stdout
     .split("\n")
     .map((value) => value.trim())
     .filter((value) => value !== "");
-  const tags = new Map<string, string>();
+  const tags = new Map<string, FixtureAuditTagFact>();
   for (const ref of refs) {
     if (!ref.startsWith(prefix)) {
       throw new TypeError("La etiqueta fixture no pertenece a su namespace");
@@ -342,8 +444,14 @@ async function fixtureTagCommits(
       );
     }
     const resolved = await execFileAsync(
-      "git",
-      ["-C", projectRoot, "rev-parse", "--verify", `${ref}^{commit}`],
+      fixedGitExecutable,
+      fixedGitArgs([
+        "-C",
+        projectRoot,
+        "rev-parse",
+        "--verify",
+        `${ref}^{commit}`,
+      ]),
       { encoding: "utf8", env: sanitizedGitEnv() },
     ).catch(() => {
       throw new TypeError(
@@ -354,9 +462,82 @@ async function fixtureTagCommits(
     if (!commitPattern.test(commit)) {
       throw new TypeError("La etiqueta fixture no resuelve un commit válido");
     }
-    tags.set(changeId, commit);
+    const tag = await execFileAsync(
+      fixedGitExecutable,
+      fixedGitArgs(["-C", projectRoot, "cat-file", "tag", `${ref}^{tag}`]),
+      { encoding: "utf8", env: sanitizedGitEnv() },
+    ).catch(() => {
+      throw new TypeError("La etiqueta fixture debe ser un sello anotado");
+    });
+    tags.set(changeId, parsedFixtureTagFact(tag.stdout, changeId, commit));
   }
   return tags;
+}
+
+/**
+ * Creates opaque, declarative tag facts only for isolated test composition.
+ * The public audit opener and production CLI do not accept this capability.
+ */
+export function createIngestionAuditTestSeal(
+  tags: readonly IngestionAuditTestTag[],
+): IngestionAuditTestSeal {
+  if (process.env.INGEST_TEST_MODE !== "true") {
+    throw new TypeError("El sello de auditoría sólo existe en modo de pruebas");
+  }
+  if (!Array.isArray(tags)) {
+    throw new TypeError("El sello de auditoría no tiene una lista válida");
+  }
+  const facts = new Map<string, FixtureAuditTagFact>();
+  for (const value of tags) {
+    const tag = exactDurableRecord(value, "El sello de auditoría", [
+      "candidateCommit",
+      "changeId",
+      "dossierSha256",
+      "gate2SubjectSha256",
+      "sanitizedProjectionSha256",
+      "sealedCandidateSha256",
+    ]);
+    const changeId = durableChangeId(tag, "changeId", "El sello de auditoría");
+    if (!fixtureRecordChangeIds.has(changeId) || facts.has(changeId)) {
+      throw new TypeError("El sello de auditoría no pertenece a la matriz");
+    }
+    facts.set(
+      changeId,
+      Object.freeze({
+        changeId,
+        candidateCommit: durableCommit(
+          tag,
+          "candidateCommit",
+          "El sello de auditoría",
+        ),
+        sealedCandidateSha256: durableHash(
+          tag,
+          "sealedCandidateSha256",
+          "El sello de auditoría",
+        ),
+        sanitizedProjectionSha256: durableHash(
+          tag,
+          "sanitizedProjectionSha256",
+          "El sello de auditoría",
+        ),
+        gate2SubjectSha256: durableHash(
+          tag,
+          "gate2SubjectSha256",
+          "El sello de auditoría",
+        ),
+        dossierSha256: durableHash(
+          tag,
+          "dossierSha256",
+          "El sello de auditoría",
+        ),
+      }),
+    );
+  }
+  const seal = Object.freeze({
+    [auditTestSealBrand]: true as const,
+  }) as IngestionAuditTestSeal;
+  auditTestSeals.set(seal, facts);
+  return seal;
 }
 
 async function verifyFixtureDossier(input: {
@@ -437,6 +618,8 @@ interface DurableCandidateFacts {
   readonly baselineCommit: string;
   readonly candidateCommit: string;
   readonly artifactSha256: string;
+  readonly sealedCandidateSha256: string;
+  readonly sanitizedProjectionSha256: string;
   readonly approvalSubjectSha256: string;
   readonly buildProfile: unknown;
   readonly validations: ReadonlyMap<
@@ -560,7 +743,9 @@ function durableCandidateFacts(value: unknown): DurableCandidateFacts {
     "preview",
     "requestSha256",
     "routes",
+    "sanitizedProjectionSha256",
     "schemaVersion",
+    "sealedCandidateSha256",
     "validations",
   ]);
   if (candidate.schemaVersion !== 1) {
@@ -607,6 +792,16 @@ function durableCandidateFacts(value: unknown): DurableCandidateFacts {
   const approvalSubjectSha256 = durableHash(
     candidate,
     "approvalSubjectSha256",
+    "El candidato fixture",
+  );
+  const sealedCandidateSha256 = durableHash(
+    candidate,
+    "sealedCandidateSha256",
+    "El candidato fixture",
+  );
+  const sanitizedProjectionSha256 = durableHash(
+    candidate,
+    "sanitizedProjectionSha256",
     "El candidato fixture",
   );
   durableStringArray(candidate.routes, "Las rutas candidatas", (route) =>
@@ -689,6 +884,26 @@ function durableCandidateFacts(value: unknown): DurableCandidateFacts {
       "El candidato fixture no tiene evidencia de validación",
     );
   }
+  const projection = Object.fromEntries(
+    Object.entries(candidate).filter(
+      ([key]) =>
+        key !== "approvalSubjectSha256" &&
+        key !== "sanitizedProjectionSha256" &&
+        key !== "sealedCandidateSha256",
+    ),
+  );
+  const commitment = candidateDossierCommitmentFromProjection(
+    sealedCandidateSha256,
+    projection,
+  );
+  if (
+    commitment.sanitizedProjectionSha256 !== sanitizedProjectionSha256 ||
+    commitment.approvalSubjectSha256 !== approvalSubjectSha256
+  ) {
+    throw new TypeError(
+      "El candidato fixture no conserva su compromiso saneado",
+    );
+  }
   return Object.freeze({
     changeId,
     attemptId,
@@ -697,6 +912,8 @@ function durableCandidateFacts(value: unknown): DurableCandidateFacts {
     baselineCommit,
     candidateCommit,
     artifactSha256,
+    sealedCandidateSha256,
+    sanitizedProjectionSha256,
     approvalSubjectSha256,
     buildProfile: candidate.buildProfile,
     validations,
@@ -817,6 +1034,7 @@ async function durableFixtureDossierIds(
 async function verifyDurableFixtureDossier(
   projectRoot: string,
   changeId: string,
+  seal: FixtureAuditTagFact,
 ): Promise<{
   readonly artifactSha256: string;
   readonly candidateCommit: string;
@@ -825,12 +1043,11 @@ async function verifyDurableFixtureDossier(
   if (!(await trustedDirectoryIfPresent(root, "El dossier fixture"))) {
     throw new TypeError("Falta el dossier fixture durable");
   }
-  const candidate = durableCandidateFacts(
-    await readCanonicalDossierJson(
-      join(root, "candidate.json"),
-      "El candidato fixture durable",
-    ),
+  const candidateFile = await readCanonicalDossierFile(
+    join(root, "candidate.json"),
+    "El candidato fixture durable",
   );
+  const candidate = durableCandidateFacts(candidateFile.value);
   const expected = [
     "approvals/gate-1.json",
     "approvals/gate-2.json",
@@ -848,35 +1065,39 @@ async function verifyDurableFixtureDossier(
       "El dossier fixture no conserva exactamente sus archivos",
     );
   }
-  const [requestValue, planValue, gate1Value, gate2Value, attemptValue] =
+  const [requestFile, planFile, gate1File, gate2File, attemptFile] =
     await Promise.all([
-      readCanonicalDossierJson(
+      readCanonicalDossierFile(
         join(root, "request.json"),
         "La solicitud fixture",
       ),
-      readCanonicalDossierJson(join(root, "plan.json"), "El plan fixture"),
-      readCanonicalDossierJson(
+      readCanonicalDossierFile(join(root, "plan.json"), "El plan fixture"),
+      readCanonicalDossierFile(
         join(root, "approvals", "gate-1.json"),
         "El Gate 1 fixture",
       ),
-      readCanonicalDossierJson(
+      readCanonicalDossierFile(
         join(root, "approvals", "gate-2.json"),
         "El Gate 2 fixture",
       ),
-      readCanonicalDossierJson(
+      readCanonicalDossierFile(
         join(root, "attempts", `${candidate.attemptId}.json`),
         "El intento fixture",
       ),
     ]);
-  const request = exactDurableRecord(requestValue, "La solicitud fixture", [
-    "changeId",
-    "inputKind",
-    "inputSha256",
-    "mode",
-    "privacy",
-    "schemaVersion",
-    "targetPath",
-  ]);
+  const request = exactDurableRecord(
+    requestFile.value,
+    "La solicitud fixture",
+    [
+      "changeId",
+      "inputKind",
+      "inputSha256",
+      "mode",
+      "privacy",
+      "schemaVersion",
+      "targetPath",
+    ],
+  );
   if (
     request.schemaVersion !== 1 ||
     (request.inputKind !== "request" && request.inputKind !== "page") ||
@@ -896,9 +1117,9 @@ async function verifyDurableFixtureDossier(
   ) {
     throw new TypeError("La privacidad fixture no es válida");
   }
-  const plan = validateSchema<ChangePlan>("change-plan", planValue);
-  const gate1 = validateSchema<ApprovalRecord>("approval", gate1Value);
-  const gate2 = validateSchema<ApprovalRecord>("approval", gate2Value);
+  const plan = validateSchema<ChangePlan>("change-plan", planFile.value);
+  const gate1 = validateSchema<ApprovalRecord>("approval", gate1File.value);
+  const gate2 = validateSchema<ApprovalRecord>("approval", gate2File.value);
   if (
     durableChangeId(request, "changeId", "La solicitud fixture") !== changeId ||
     durableHash(request, "inputSha256", "La solicitud fixture") !==
@@ -925,7 +1146,30 @@ async function verifyDurableFixtureDossier(
   ) {
     throw new TypeError("El dossier fixture no conserva sus bindings sellados");
   }
-  assertDurableAttempt(attemptValue, candidate);
+  if (
+    seal.changeId !== changeId ||
+    seal.candidateCommit !== candidate.candidateCommit ||
+    seal.sealedCandidateSha256 !== candidate.sealedCandidateSha256 ||
+    seal.sanitizedProjectionSha256 !== candidate.sanitizedProjectionSha256 ||
+    seal.gate2SubjectSha256 !== gate2.subjectSha256
+  ) {
+    throw new TypeError("El sello fixture no coincide con Gate 2 ni candidato");
+  }
+  const dossierSha256 = sanitizedDossierSha256([
+    { path: "candidate.json", contents: candidateFile.contents },
+    { path: "request.json", contents: requestFile.contents },
+    { path: "plan.json", contents: planFile.contents },
+    { path: "approvals/gate-1.json", contents: gate1File.contents },
+    { path: "approvals/gate-2.json", contents: gate2File.contents },
+    {
+      path: `attempts/${candidate.attemptId}.json`,
+      contents: attemptFile.contents,
+    },
+  ]);
+  if (dossierSha256 !== seal.dossierSha256) {
+    throw new TypeError("El sello fixture no conserva el dossier completo");
+  }
+  assertDurableAttempt(attemptFile.value, candidate);
   return Object.freeze({
     artifactSha256: candidate.artifactSha256,
     candidateCommit: candidate.candidateCommit,
@@ -951,10 +1195,10 @@ async function readCanonicalJson(
 }
 
 /** Dossiers deliberately use one terminal newline, unlike mutable state JSON. */
-async function readCanonicalDossierJson(
+async function readCanonicalDossierFile(
   path: string,
   label: string,
-): Promise<unknown> {
+): Promise<{ readonly value: unknown; readonly contents: string }> {
   const bytes = await trustedRegularFile(path, label);
   const source = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
   let value: unknown;
@@ -966,7 +1210,7 @@ async function readCanonicalDossierJson(
   if (`${canonicalJson(value)}\n` !== source) {
     throw new TypeError(`${label} no es canónico`);
   }
-  return value;
+  return Object.freeze({ value, contents: source });
 }
 
 async function assertControllerRoot(input: string): Promise<string> {
@@ -976,8 +1220,8 @@ async function assertControllerRoot(input: string): Promise<string> {
     throw new TypeError("La raíz del controlador no es segura");
   }
   const result = await execFileAsync(
-    "git",
-    ["-C", root, "rev-parse", "--show-toplevel"],
+    fixedGitExecutable,
+    fixedGitArgs(["-C", root, "rev-parse", "--show-toplevel"]),
     { encoding: "utf8", env: sanitizedGitEnv() },
   ).catch(() => {
     throw new TypeError("La raíz del controlador no es un repositorio Git");
@@ -990,8 +1234,14 @@ async function assertControllerRoot(input: string): Promise<string> {
 
 async function protectedMain(root: string): Promise<string> {
   const result = await execFileAsync(
-    "git",
-    ["-C", root, "rev-parse", "--verify", "refs/heads/main^{commit}"],
+    fixedGitExecutable,
+    fixedGitArgs([
+      "-C",
+      root,
+      "rev-parse",
+      "--verify",
+      "refs/heads/main^{commit}",
+    ]),
     { encoding: "utf8", env: sanitizedGitEnv() },
   ).catch(() => {
     throw new TypeError("No se pudo leer la referencia protegida main");
@@ -1316,6 +1566,7 @@ class DefaultIngestionController implements IngestionController {
     private readonly stateStore: StateStore,
     private readonly candidateStore: ControllerCandidateStore,
     private readonly runtime: ControllerRuntime,
+    private readonly auditTagReader: AuditTagReader,
   ) {}
 
   private assertOpen(): void {
@@ -1858,7 +2109,7 @@ class DefaultIngestionController implements IngestionController {
     this.assertOpen();
     // Records outlive their execution clone.  Read their tag facts up front,
     // but never construct an agent merely to inspect those durable facts.
-    const fixtureTags = await fixtureTagCommits(this.projectRoot);
+    const fixtureTags = await this.auditTagReader(this.projectRoot);
     const stateRoot = join(this.projectRoot, ".change-state");
     let entries: string[] = [];
     try {
@@ -1979,10 +2230,11 @@ class DefaultIngestionController implements IngestionController {
                 attempt,
                 candidate: loaded,
               });
-              const tagCommit = fixtureTags.get(changeId) ?? null;
+              const tag = fixtureTags.get(changeId) ?? null;
               if (
-                tagCommit !== null &&
-                (!dossierPresent || tagCommit !== loaded.candidateCommit)
+                tag !== null &&
+                (!dossierPresent ||
+                  tag.candidateCommit !== loaded.candidateCommit)
               ) {
                 throw new TypeError(
                   "La etiqueta fixture no coincide con su dossier candidato",
@@ -2016,15 +2268,16 @@ class DefaultIngestionController implements IngestionController {
     const reported = new Set(changes.map((change) => change.changeId));
     for (const changeId of [...durableIds].sort()) {
       try {
-        const tagCommit = fixtureTags.get(changeId);
-        if (tagCommit === undefined || !dossierIds.has(changeId)) {
+        const tag = fixtureTags.get(changeId);
+        if (tag === undefined || !dossierIds.has(changeId)) {
           throw new TypeError("Falta un hecho durable del fixture");
         }
         const dossier = await verifyDurableFixtureDossier(
           this.projectRoot,
           changeId,
+          tag,
         );
-        if (dossier.candidateCommit !== tagCommit) {
+        if (dossier.candidateCommit !== tag.candidateCommit) {
           throw new TypeError(
             "La etiqueta fixture no coincide con su dossier durable",
           );
@@ -2091,6 +2344,7 @@ async function openWithRuntime(
         commandConfig,
         codexCapability,
       }),
+      options.auditTagReader ?? fixtureTagCommits,
     );
   } catch (error) {
     await releaseControllerCandidateStore(candidateStore).catch(
@@ -2122,6 +2376,29 @@ export async function openIngestionAuditController(): Promise<IngestionControlle
     throw new TypeError("La auditoría no admite configuración de agentes");
   }
   return await openWithRuntime({}, { initializeAgents: false });
+}
+
+/**
+ * Test-only audit composition for declarative, pre-existing tag seals. It
+ * accepts no executable, path, argv, callback, or environment override.
+ */
+export async function openIngestionAuditControllerForTest(
+  seal: IngestionAuditTestSeal,
+): Promise<IngestionController> {
+  if (process.env.INGEST_TEST_MODE !== "true") {
+    throw new TypeError("La auditoría fixture sólo existe en modo de pruebas");
+  }
+  const facts = auditTestSeals.get(seal);
+  if (facts === undefined) {
+    throw new TypeError("La auditoría fixture exige un sello sellado");
+  }
+  return await openWithRuntime(
+    {},
+    {
+      initializeAgents: false,
+      auditTagReader: async () => new Map(facts),
+    },
+  );
 }
 
 /** Test-only composition with opaque capabilities; production calls the opener above. */

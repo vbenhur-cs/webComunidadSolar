@@ -5,7 +5,12 @@ import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 
 import { canonicalJson, sha256Canonical } from "../canonical-json.ts";
-import { sanitizedGitEnv } from "../git-env.ts";
+import { candidateApprovalSubject } from "../dossier-integrity.ts";
+import {
+  fixedGitArgs,
+  fixedGitExecutable,
+  sanitizedGitEnv,
+} from "../git-env.ts";
 import type {
   ApprovalRecord,
   CandidateManifest,
@@ -214,18 +219,30 @@ async function protectedMainBaseline(repositoryRoot: string): Promise<string> {
       throw new TypeError("El repositorio no tiene Git seguro");
     }
     const [topLevel, absoluteGitDir, commonGitDir] = await Promise.all([
-      execFileAsync("git", ["-C", root, "rev-parse", "--show-toplevel"], {
-        encoding: "utf8",
-        env: sanitizedGitEnv(),
-      }),
-      execFileAsync("git", ["-C", root, "rev-parse", "--absolute-git-dir"], {
-        encoding: "utf8",
-        env: sanitizedGitEnv(),
-      }),
-      execFileAsync("git", ["-C", root, "rev-parse", "--git-common-dir"], {
-        encoding: "utf8",
-        env: sanitizedGitEnv(),
-      }),
+      execFileAsync(
+        fixedGitExecutable,
+        fixedGitArgs(["-C", root, "rev-parse", "--show-toplevel"]),
+        {
+          encoding: "utf8",
+          env: sanitizedGitEnv(),
+        },
+      ),
+      execFileAsync(
+        fixedGitExecutable,
+        fixedGitArgs(["-C", root, "rev-parse", "--absolute-git-dir"]),
+        {
+          encoding: "utf8",
+          env: sanitizedGitEnv(),
+        },
+      ),
+      execFileAsync(
+        fixedGitExecutable,
+        fixedGitArgs(["-C", root, "rev-parse", "--git-common-dir"]),
+        {
+          encoding: "utf8",
+          env: sanitizedGitEnv(),
+        },
+      ),
     ]);
     if (topLevel.stdout.trim() !== root) {
       throw new TypeError("El repositorio no tiene una raíz segura");
@@ -240,8 +257,14 @@ async function protectedMainBaseline(repositoryRoot: string): Promise<string> {
       throw new TypeError("El repositorio no tiene Git independiente");
     }
     const main = await execFileAsync(
-      "git",
-      ["-C", root, "rev-parse", "--verify", "refs/heads/main^{commit}"],
+      fixedGitExecutable,
+      fixedGitArgs([
+        "-C",
+        root,
+        "rev-parse",
+        "--verify",
+        "refs/heads/main^{commit}",
+      ]),
       { encoding: "utf8", env: sanitizedGitEnv() },
     );
     const baseline = main.stdout.trim();
@@ -306,7 +329,7 @@ function planSubject(plan: ChangePlan): string {
 
 function candidateSubject(candidate: CandidateManifest): string {
   validateSchema<CandidateManifest>("candidate", candidate);
-  return sha256Canonical(candidate);
+  return candidateApprovalSubject(candidate);
 }
 
 function assertCandidateBelongsToPlan(
