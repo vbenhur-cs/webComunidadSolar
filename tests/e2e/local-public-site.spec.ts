@@ -18,6 +18,8 @@ const publicPaths = [
   ]),
 ].sort();
 
+const publicSiteAuditTimeout = Math.max(300_000, publicPaths.length * 10_000);
+
 type RuntimeIssue = {
   path: string;
   kind: string;
@@ -28,7 +30,7 @@ test("every public page runs from local source without failed resources or brows
   page,
   request,
 }) => {
-  test.setTimeout(300_000);
+  test.setTimeout(publicSiteAuditTimeout);
 
   const issues: RuntimeIssue[] = [];
   const checkedImages = new Set<string>();
