@@ -1,29 +1,112 @@
-name: Verify Astro foundation
+name: Production readiness
 
 on:
   push:
+    branches: [main]
   pull_request:
+    branches: [main]
+  workflow_dispatch: {}
 
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  verify:
+  quality:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Check out the candidate
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
-          node-version: 22
+          node-version: 22.12.0
           cache: npm
-      - run: npm ci
-      - run: npx playwright install chromium
-      - run: npm run source:check -- --if-present
-      - run: npm run format:check
-      - run: npm run lint
-      - run: npm run check
-      - run: npm test
-      - run: npm run build
-      - run: npm run deploy:dry
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Check the immutable source when available
+        run: npm run source:check -- --if-present
+      - name: Check formatting
+        run: npm run format:check
+      - name: Lint source and tests
+        run: npm run lint
+      - name: Check Astro, TypeScript and Worker types
+        run: npm run check
+      - name: Run unit, contract and server tests
+        run: npm test
+
+  runtime-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the candidate
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22.12.0
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Install Chromium and its system dependencies
+        run: npx playwright install --with-deps chromium
+      - name: Verify local D1 integration
+        run: npm run test:integration
+      - name: Verify the real development server
+        run: npm run test:dev
+      - name: Verify public HTTP and browser contracts
+        run: npm run verify:public
+      - name: Verify internal link closure
+        run: npm run verify:links
+      - name: Verify private and API route closure
+        run: npm run verify:server
+      - name: Verify the Cloudflare artifact without deploying
+        run: npm run deploy:dry
+
+  independent-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the candidate
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22.12.0
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Rebuild and test from the committed Git archive
+        run: npm run verify:independent
+
+  production-readiness:
+    name: production-readiness
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    if: always()
+    needs:
+      - quality
+      - runtime-contracts
+      - independent-build
+    steps:
+      - name: Require every verification job
+        env:
+          QUALITY_RESULT: ${{ needs.quality.result }}
+          RUNTIME_RESULT: ${{ needs.runtime-contracts.result }}
+          INDEPENDENT_RESULT: ${{ needs.independent-build.result }}
+        run: |
+          test "$QUALITY_RESULT" = "success"
+          test "$RUNTIME_RESULT" = "success"
+          test "$INDEPENDENT_RESULT" = "success"

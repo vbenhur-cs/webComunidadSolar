@@ -1,4 +1,4 @@
-import { blogPosts } from "../../content/blog-data.ts";
+import { blogPosts } from "../../content/blog-runtime.ts";
 import { communityPages } from "../../content/community-data.ts";
 import { remoteProjects } from "../../content/remote-project-data.ts";
 import { siteUrl } from "../seo/metadata.ts";

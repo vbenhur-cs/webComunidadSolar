@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
 import {
   chmod,
+  cp,
   lstat,
   mkdir,
   mkdtemp,
@@ -12,8 +13,8 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { delimiter, dirname, join } from "node:path";
-import test from "node:test";
+import { delimiter, dirname, join, relative, resolve } from "node:path";
+import test, { after } from "node:test";
 import { promisify } from "node:util";
 
 import {
@@ -63,13 +64,106 @@ import {
 } from "../fixtures/ingestion/run-e2e.ts";
 
 const execFileAsync = promisify(execFile);
+const fixtureSuiteRoot = process.cwd();
+const fixtureSeedExcludedRoots = new Set([
+  ".agent-quarantine",
+  ".agent-worktrees",
+  ".artifacts",
+  ".astro",
+  ".change-state",
+  ".git",
+  ".source-work",
+  ".worktrees",
+  ".wrangler",
+  "dist",
+  "node_modules",
+  "playwright-report",
+  "test-results",
+]);
+let fixtureSourcePromise: Promise<string> | undefined;
+let fixtureSourceSession: string | undefined;
 
 process.env.INGEST_TEST_MODE ??= "true";
+
+function includeInFixtureSeed(path: string): boolean {
+  const pathFromRoot = relative(fixtureSuiteRoot, path);
+  if (pathFromRoot === "") return true;
+  const [root] = pathFromRoot.split(/[\\/]/u);
+  if (root === undefined || fixtureSeedExcludedRoots.has(root)) return false;
+  if (
+    root === ".env" ||
+    (root.startsWith(".env.") && root !== ".env.example")
+  ) {
+    return false;
+  }
+  return !root.startsWith(".dev.vars");
+}
+
+async function fixtureSourceRepository(): Promise<string> {
+  if (fixtureSourcePromise !== undefined) return fixtureSourcePromise;
+  fixtureSourcePromise = (async () => {
+    try {
+      const topLevel = await execFileAsync(
+        "git",
+        ["-C", fixtureSuiteRoot, "rev-parse", "--show-toplevel"],
+        { encoding: "utf8" },
+      );
+      if (resolve(topLevel.stdout.trim()) === resolve(fixtureSuiteRoot)) {
+        return fixtureSuiteRoot;
+      }
+    } catch (error: unknown) {
+      const stderr = String((error as { stderr?: unknown }).stderr ?? "");
+      if (!/not a git repository/iu.test(stderr)) throw error;
+    }
+
+    fixtureSourceSession = await mkdtemp(
+      join(tmpdir(), "comunidadsolar-ingestion-e2e-seed-"),
+    );
+    const repository = join(fixtureSourceSession, "source");
+    await cp(fixtureSuiteRoot, repository, {
+      recursive: true,
+      verbatimSymlinks: true,
+      filter: includeInFixtureSeed,
+    });
+    await execFileAsync(
+      "git",
+      ["-C", repository, "init", "--quiet", "--initial-branch=main"],
+      { encoding: "utf8" },
+    );
+    await execFileAsync("git", ["-C", repository, "add", "-A"], {
+      encoding: "utf8",
+    });
+    await execFileAsync(
+      "git",
+      [
+        "-C",
+        repository,
+        "-c",
+        "user.name=Comunidad Solar Tests",
+        "-c",
+        "user.email=tests@invalid.example",
+        "commit",
+        "--quiet",
+        "-m",
+        "test: seed archived fixture repository",
+      ],
+      { encoding: "utf8" },
+    );
+    return repository;
+  })();
+  return fixtureSourcePromise;
+}
+
+after(async () => {
+  if (fixtureSourceSession !== undefined) {
+    await rm(fixtureSourceSession, { recursive: true, force: true });
+  }
+});
 
 async function withTemporaryMainClone<T>(
   operation: (root: string) => Promise<T>,
 ): Promise<T> {
-  const source = process.cwd();
+  const source = await fixtureSourceRepository();
   const root = await mkdtemp(
     join(tmpdir(), "comunidadsolar-ingestion-e2e-test-"),
   );

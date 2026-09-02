@@ -39,7 +39,8 @@ function localConfig(): string {
 function generatedLocalProfile(configPath: string): Record<string, unknown> {
   return {
     configPath,
-    targetEnvironment: null,
+    // Wrangler serializes an explicitly selected base profile as an empty name.
+    targetEnvironment: "",
     name: "comunidad-solar-astro-local",
     vars: { SITE_INDEXABLE: "false" },
     d1_databases: [

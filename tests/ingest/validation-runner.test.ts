@@ -1693,6 +1693,22 @@ test("does not select canonical PageHero values from duplicate props", async () 
   assert.equal(heroes, null);
 });
 
+async function assertProcessExited(pid: number): Promise<void> {
+  const deadline = performance.now() + 3_000;
+  while (true) {
+    try {
+      process.kill(pid, 0);
+    } catch (error: unknown) {
+      if ((error as NodeJS.ErrnoException).code === "ESRCH") return;
+      throw error;
+    }
+    if (performance.now() >= deadline) {
+      assert.fail(`el proceso descendiente ${pid} sigue activo`);
+    }
+    await new Promise<void>((done) => setTimeout(done, 25));
+  }
+}
+
 test("terminates a silent detached group after its npm leader closes", async (t) => {
   if (process.platform === "win32") {
     t.skip("la regresión de grupo de procesos usa el shell POSIX fijo");
@@ -1718,12 +1734,11 @@ test("terminates a silent detached group after its npm leader closes", async (t)
           private: true,
           scripts: {
             "format:check":
-              'sh -c \'sleep 4 >/dev/null 2>&1 & printf \\"child=%s\\\\n\\" \\"$!\\" >&2\'',
+              'sh -c \'sleep 15 >/dev/null 2>&1 & printf \\"child=%s\\\\n\\" \\"$!\\" >&2\'',
           },
         })}\n`,
       },
       async (output, approvedPlan, evidenceRoot, publicationProfile) => {
-        const started = performance.now();
         const results = await runValidation(
           validationInput(
             output,
@@ -1750,9 +1765,7 @@ test("terminates a silent detached group after its npm leader closes", async (t)
         assert.equal(format?.status, "failed");
         assert.equal(evidence.details.result.timedOut, true);
         assert.equal(evidence.details.result.aborted, true);
-        assert.ok(performance.now() - started < 3_000);
-        await new Promise<void>((done) => setTimeout(done, 100));
-        assert.throws(() => process.kill(childPid!, 0), /ESRCH/u);
+        await assertProcessExited(childPid);
       },
     );
   } finally {
@@ -1784,42 +1797,55 @@ test("terminates a pipe-holding descendant after its npm leader exits", async (t
     runnerModule.createValidationTimeoutTestCapability;
   if (createTimeoutTestCapability === undefined) return;
   const timeoutTestController = createTimeoutTestCapability();
+  let childPid: number | undefined;
 
-  await withStagedOutput(
-    {
-      packageJson: `${JSON.stringify({
-        name: "fixture",
-        version: "1.0.0",
-        private: true,
-        scripts: {
-          "format:check":
-            'sh -c \'sleep 4 & printf \\"child=%s\\\\n\\" \\"$!\\" >&2\'',
-        },
-      })}\n`,
-    },
-    async (output, approvedPlan, evidenceRoot, publicationProfile) => {
-      const started = performance.now();
-      const results = await runValidation(
-        validationInput(output, approvedPlan, evidenceRoot, publicationProfile),
-        {
-          testController: timeoutTestController,
-        } as unknown as Parameters<typeof runValidation>[1],
-      );
-      const format = results.find((result) => result.id === "format");
-      assert.equal(format?.status, "failed");
-      assert.ok(performance.now() - started < 3_000);
-      const evidence = JSON.parse(
-        await readFile(format!.evidence!, "utf8"),
-      ) as {
-        details: { result: { stderr: string; timedOut: boolean } };
-      };
-      assert.equal(evidence.details.result.timedOut, true);
-      const pid = Number(
-        /child="?(\d+)/u.exec(evidence.details.result.stderr)?.[1],
-      );
-      assert.ok(Number.isSafeInteger(pid) && pid > 0);
-      await new Promise<void>((done) => setTimeout(done, 100));
-      assert.throws(() => process.kill(pid, 0), /ESRCH/u);
-    },
-  );
+  try {
+    await withStagedOutput(
+      {
+        packageJson: `${JSON.stringify({
+          name: "fixture",
+          version: "1.0.0",
+          private: true,
+          scripts: {
+            "format:check":
+              'sh -c \'sleep 15 & printf \\"child=%s\\\\n\\" \\"$!\\" >&2\'',
+          },
+        })}\n`,
+      },
+      async (output, approvedPlan, evidenceRoot, publicationProfile) => {
+        const results = await runValidation(
+          validationInput(
+            output,
+            approvedPlan,
+            evidenceRoot,
+            publicationProfile,
+          ),
+          {
+            testController: timeoutTestController,
+          } as unknown as Parameters<typeof runValidation>[1],
+        );
+        const format = results.find((result) => result.id === "format");
+        assert.equal(format?.status, "failed");
+        const evidence = JSON.parse(
+          await readFile(format!.evidence!, "utf8"),
+        ) as {
+          details: { result: { stderr: string; timedOut: boolean } };
+        };
+        assert.equal(evidence.details.result.timedOut, true);
+        childPid = Number(
+          /child="?(\d+)/u.exec(evidence.details.result.stderr)?.[1],
+        );
+        assert.ok(Number.isSafeInteger(childPid) && childPid > 0);
+        await assertProcessExited(childPid);
+      },
+    );
+  } finally {
+    if (childPid !== undefined) {
+      try {
+        process.kill(childPid, "SIGKILL");
+      } catch {
+        // The passing behavior already removed the child.
+      }
+    }
+  }
 });

@@ -5,7 +5,7 @@ import {
   blogPosts,
   type BlogCategory,
   type BlogPost,
-} from "../../content/blog-data";
+} from "../../content/blog-runtime";
 
 export interface BlogFilterProps {
   posts?: BlogPost[];

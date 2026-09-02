@@ -206,7 +206,8 @@ export function verifyPreparedCloudflareTopology(
 
   const targetEnvironment =
     generated.targetEnvironment === undefined ||
-    generated.targetEnvironment === null
+    generated.targetEnvironment === null ||
+    generated.targetEnvironment === ""
       ? null
       : generated.targetEnvironment;
   if (targetEnvironment !== prepared.environment) {

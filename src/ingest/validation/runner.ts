@@ -76,7 +76,8 @@ const capturedOutputMaximumBytes = 64 * 1024;
 const processTerminationGraceMs = 5_000;
 const processTerminationSettleMs = 1_000;
 const processGroupPollMs = 25;
-const timeoutRegressionMs = 500;
+const timeoutRegressionStartMs = 2_000;
+const timeoutRegressionPhaseMs = 500;
 const timeoutRegressionCommandId = "format";
 const controllerNpmExecutable = join(dirname(process.execPath), "npm");
 const safeEnvironment = Object.freeze({
@@ -1187,9 +1188,9 @@ function processTiming(
     throw new TypeError("La capability de timeout no pertenece al controlador");
   }
   return Object.freeze({
-    timeoutMs: timeoutRegressionMs,
-    terminateGraceMs: timeoutRegressionMs,
-    settleMs: timeoutRegressionMs,
+    timeoutMs: timeoutRegressionStartMs,
+    terminateGraceMs: timeoutRegressionPhaseMs,
+    settleMs: timeoutRegressionPhaseMs,
   });
 }
 

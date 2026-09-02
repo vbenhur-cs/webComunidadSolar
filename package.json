@@ -7,8 +7,8 @@
     "node": ">=22.12.0"
   },
   "scripts": {
-    "dev": "wrangler types && astro dev",
-    "check": "wrangler types && astro check",
+    "dev": "wrangler types --env-file ./config/wrangler-types.env && CLOUDFLARE_CONFIG_PATH=./wrangler.dev.jsonc astro dev",
+    "check": "wrangler types --env-file ./config/wrangler-types.env && astro check",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "eslint \"src/**/*.{ts,tsx,astro}\" \"scripts/**/*.ts\" \"tests/**/*.{ts,mjs}\" \"*.{js,mjs,ts}\"",
@@ -16,9 +16,10 @@
     "test:integration": "tsx scripts/run-unit-tests.ts tests/integration/d1-interest.test.ts",
     "test:http": "tsx scripts/run-http-contracts.ts",
     "test:e2e": "tsx scripts/run-e2e.ts",
+    "test:dev": "tsx scripts/run-e2e.ts --config playwright.dev.config.ts",
     "verify:public": "npm run build && npm run test:http -- --scope public && npm run test:e2e",
     "test": "npm run test:unit",
-    "build": "wrangler types && astro check && astro build",
+    "build": "wrangler types --env-file ./config/wrangler-types.env && astro check && CLOUDFLARE_ENV=\"${CLOUDFLARE_ENV-}\" CLOUDFLARE_LOAD_DEV_VARS_FROM_DOT_ENV=false astro build && tsx scripts/verify-build-output.ts",
     "preview": "astro preview",
     "deploy:dry": "tsx scripts/deploy-dry.ts",
     "source:check": "tsx scripts/source-check.ts",
@@ -35,12 +36,12 @@
     "db:generate": "drizzle-kit generate"
   },
   "dependencies": {
-    "@astrojs/cloudflare": "14.2.3",
+    "@astrojs/cloudflare": "14.2.6",
     "@astrojs/compiler": "4.0.0",
     "@astrojs/react": "6.0.4",
     "ajv": "8.20.0",
     "ajv-formats": "3.0.1",
-    "astro": "7.2.4",
+    "astro": "7.2.10",
     "drizzle-orm": "0.45.2",
     "parse5": "8.0.1",
     "react": "19.2.6",

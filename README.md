@@ -10,6 +10,12 @@ npm test
 npm run build
 ```
 
+Pull requests and pushes to `main` run
+[`production-readiness`](.github/workflows/verify.yml). The required check
+covers static quality, unit/server contracts, local D1, the real development
+server, public browser contracts, link closure, a clean Git-archive rebuild and
+a Cloudflare dry deployment. It never deploys or reads production secrets.
+
 `npm run source:check` protects the immutable reference checkout. The sibling
 is a read-only parity oracle only: production, builds, previews and the
 autonomous verifier do not depend on it. The generated Wrangler topology is
@@ -96,3 +102,6 @@ sujeto y requiere un Gate 2 nuevo.
 agentes ni acepta su configuración. Sus errores y JSON usan esquemas de salida
 allowlisted; valores no clasificados, bytes, rutas o secretos nunca se
 imprimen.
+
+Para la operación cotidiana, la habilitación inicial de Cloudflare y las
+entregas posteriores, consulte el [runbook de pruebas y producción](docs/operations/production-release-runbook.md).

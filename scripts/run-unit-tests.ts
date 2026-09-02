@@ -21,7 +21,7 @@ const files = (
 ).sort();
 if (files.length === 0) throw new Error("No unit test files found");
 const tsx = join(process.cwd(), "node_modules", ".bin", "tsx");
-const child = spawn(tsx, ["--test", ...files], {
+const child = spawn(tsx, ["--test", "--test-concurrency=2", ...files], {
   stdio: "inherit",
   shell: false,
 });

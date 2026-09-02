@@ -87,11 +87,14 @@ export interface HeaderIslandProps {
 
 export function HeaderIsland({ page }: HeaderIslandProps) {
   const [open, setOpen] = useState(false);
-  const [solutionsOpen, setSolutionsOpen] = useState(false);
+  const [solutionsMode, setSolutionsMode] = useState<
+    "closed" | "hover" | "pinned"
+  >("closed");
+  const solutionsOpen = solutionsMode !== "closed";
 
   const closeMenus = () => {
     setOpen(false);
-    setSolutionsOpen(false);
+    setSolutionsMode("closed");
   };
 
   return (
@@ -121,11 +124,15 @@ export function HeaderIsland({ page }: HeaderIslandProps) {
           <nav className="desktop-nav" aria-label="Navegación principal">
             <div
               className="solutions-menu"
-              onMouseEnter={() => setSolutionsOpen(true)}
-              onMouseLeave={() => setSolutionsOpen(false)}
+              onMouseEnter={() =>
+                setSolutionsMode((mode) => (mode === "closed" ? "hover" : mode))
+              }
+              onMouseLeave={() =>
+                setSolutionsMode((mode) => (mode === "hover" ? "closed" : mode))
+              }
               onBlur={(event) => {
                 if (!event.currentTarget.contains(event.relatedTarget)) {
-                  setSolutionsOpen(false);
+                  setSolutionsMode("closed");
                 }
               }}
             >
@@ -135,7 +142,11 @@ export function HeaderIsland({ page }: HeaderIslandProps) {
                 aria-expanded={solutionsOpen}
                 aria-controls="solutions-panel"
                 aria-haspopup="true"
-                onClick={() => setSolutionsOpen((value) => !value)}
+                onClick={() =>
+                  setSolutionsMode((mode) =>
+                    mode === "pinned" ? "closed" : "pinned",
+                  )
+                }
               >
                 Soluciones <span aria-hidden="true">⌄</span>
               </button>
@@ -156,7 +167,7 @@ export function HeaderIsland({ page }: HeaderIslandProps) {
                           href={item.href}
                           className={current ? "active" : ""}
                           aria-current={current ? "page" : undefined}
-                          onClick={() => setSolutionsOpen(false)}
+                          onClick={() => setSolutionsMode("closed")}
                         >
                           <strong>{item.label}</strong>
                           <small>{item.note}</small>
