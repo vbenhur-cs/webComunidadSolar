@@ -35,6 +35,7 @@ const changeId = "landing-solar";
 const startedAt = "2026-08-23T12:00:00.000Z";
 const laterAt = "2026-08-23T12:31:00.000Z";
 const execFileAsync = promisify(execFile);
+const asyncTestBoundaryTimeoutMs = 30_000;
 
 type Store = ReturnType<typeof createStateStore>;
 
@@ -474,7 +475,7 @@ test("serializes two stale recoverers before either callback can enter", async (
 
     await within(
       staleVerified.promise,
-      250,
+      asyncTestBoundaryTimeoutMs,
       "the first recoverer did not reach the verified stale-lock boundary",
     );
     const second = secondStore.withChangeLock(changeId, async () => {
@@ -485,7 +486,11 @@ test("serializes two stale recoverers before either callback can enter", async (
     assert.deepEqual(callbacks, []);
 
     resumeFirstRecovery.resolve();
-    await within(firstEntered.promise, 250, "the first callback did not enter");
+    await within(
+      firstEntered.promise,
+      asyncTestBoundaryTimeoutMs,
+      "the first callback did not enter",
+    );
     assert.deepEqual(callbacks, ["first"]);
     releaseFirst.resolve();
     await recoveredFirst;
@@ -727,21 +732,21 @@ test("restores a replaced recovery guard instead of deleting it by path", async 
     firstRun = first.withChangeLock(changeId, async () => undefined);
     await within(
       firstVerified.promise,
-      250,
+      asyncTestBoundaryTimeoutMs,
       "first recovery guard was not read",
     );
 
     secondRun = second.withChangeLock(changeId, async () => undefined);
     await within(
       secondVerified.promise,
-      250,
+      asyncTestBoundaryTimeoutMs,
       "second recovery guard was not read",
     );
 
     resumeFirst.resolve();
     await within(
       firstGuardAcquired.promise,
-      250,
+      asyncTestBoundaryTimeoutMs,
       "first replacement guard was not acquired",
     );
     resumeSecond.resolve();

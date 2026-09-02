@@ -68,7 +68,8 @@ test("makes production-readiness the stable provider-neutral merge gate", async 
 
   for (const job of [quality, runtime, independent]) {
     assert.equal(job["runs-on"], "ubuntu-latest");
-    assert.equal(job.steps[1].with["node-version"], "22.12.0");
+    assert.equal(job.steps[1].with["node-version-file"], ".nvmrc");
+    assert.equal(job.steps[1].with["node-version"], undefined);
     assert.equal(job.steps[1].with.cache, "npm");
     assertPinnedAction(job.steps[0].uses);
     assertPinnedAction(job.steps[1].uses);
