@@ -297,6 +297,35 @@ test("unknown and malformed options fail before a transition", async () => {
   assert.equal(calls, 0);
 });
 
+test("CLI never reflects untrusted command or parser input in rejections", async () => {
+  const sentinel = "/tmp/cli-secret-sentinel";
+  let calls = 0;
+  const guarded = controller({
+    async status() {
+      calls += 1;
+      return { kind: "success", value: { changeId: "safe-change" } };
+    },
+  });
+
+  const results = await Promise.all([
+    runCli([sentinel], { controller: guarded }),
+    runCli(["status", "safe-change", "--unknown", sentinel], {
+      controller: guarded,
+    }),
+    runCli(["status", sentinel, "extra-argument"], {
+      controller: guarded,
+    }),
+  ]);
+
+  for (const result of results) {
+    assert.equal(result.exitCode, 3);
+    assert.doesNotMatch(result.stderr, /cli-secret-sentinel|\/tmp\//iu);
+  }
+  assert.equal(results[0]?.stderr, "Comando no permitido\n");
+  assert.equal(results[1]?.stderr, "Opciones inválidas\n");
+  assert.equal(calls, 0);
+});
+
 test("an option documented for another command fails before a transition", async () => {
   let calls = 0;
   const result = await runCli(["status", "safe-change", "--adapter", "codex"], {

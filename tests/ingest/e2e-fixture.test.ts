@@ -24,7 +24,10 @@ import {
   approveGate1,
   approveGate2,
 } from "../../src/ingest/approvals/service.ts";
-import { canonicalJson } from "../../src/ingest/canonical-json.ts";
+import {
+  canonicalJson,
+  sha256Canonical,
+} from "../../src/ingest/canonical-json.ts";
 import {
   candidateApprovalSubject,
   candidateDossierCommitment,
@@ -343,8 +346,63 @@ const fixtureRecordPlanHash = "c".repeat(64);
 const fixtureRecordArtifactHash = "d".repeat(64);
 const fixtureRecordEvidenceHash = "e".repeat(64);
 
+interface FixtureRecordValidation {
+  readonly id: string;
+  readonly evidenceSha256: string;
+}
+
+const fixtureRecordValidations: readonly FixtureRecordValidation[] = [
+  { id: "build", evidenceSha256: fixtureRecordEvidenceHash },
+];
+
+function fixtureRecordCandidateManifest(
+  changeId: string,
+  validations: readonly FixtureRecordValidation[] = fixtureRecordValidations,
+  includeEvidenceSha256 = true,
+): CandidateManifest {
+  return {
+    schemaVersion: 1,
+    changeId,
+    attemptId: "attempt-000001",
+    requestSha256: fixtureRecordHash,
+    planSha256: fixtureRecordPlanHash,
+    baselineCommit: fixtureRecordCommit,
+    candidateCommit: fixtureRecordCommit,
+    artifactSha256: fixtureRecordArtifactHash,
+    buildProfile: {
+      adapter: "local",
+      configSha256: fixtureRecordHash,
+      environment: null,
+      siteIndexable: false,
+    },
+    routes: ["/fixture-record"],
+    files: ["src/pages/fixture-record.astro"],
+    artifacts: [
+      {
+        path: `.artifacts/candidates/${changeId}/attempt-000001/bundle/dist/index.html`,
+        sha256: fixtureRecordHash,
+        bytes: 17,
+      },
+    ],
+    validations: validations.map((validation) => ({
+      id: validation.id,
+      status: "passed" as const,
+      evidence: `evidence/candidate-${validation.id}.json#${validation.id}`,
+      ...(includeEvidenceSha256
+        ? { evidenceSha256: validation.evidenceSha256 }
+        : {}),
+    })),
+    preview: {
+      command: "fixture preview --check-only",
+      url: "http://127.0.0.1:4321",
+    },
+    knownDifferences: [],
+  };
+}
+
 function fixtureRecordFiles(
   changeId = fixtureRecordChangeId,
+  validations: readonly FixtureRecordValidation[] = fixtureRecordValidations,
 ): ReadonlyMap<string, string> {
   const request = {
     schemaVersion: 1,
@@ -367,7 +425,7 @@ function fixtureRecordFiles(
     components: [],
     islands: [],
     dependencies: [],
-    validations: ["build"],
+    validations: validations.map((validation) => validation.id),
     publication: {
       adapter: "local",
       configSha256: fixtureRecordHash,
@@ -402,54 +460,18 @@ function fixtureRecordFiles(
     baselineCommit: fixtureRecordCommit,
     generatedFiles: ["src/pages/fixture-record.astro"],
     logs: { stdout: null, stderr: null, finalMessage: null },
-    validations: [
-      {
-        id: "build",
-        status: "passed",
-        evidence: "evidence/build.json",
-        evidenceSha256: fixtureRecordEvidenceHash,
-      },
-    ],
+    validations: validations.map((validation) => ({
+      id: validation.id,
+      status: "passed" as const,
+      evidence: `evidence/${validation.id}.json`,
+      evidenceSha256: validation.evidenceSha256,
+    })),
     failure: null,
   };
-  const candidateManifest: CandidateManifest = {
-    schemaVersion: 1,
+  const candidateManifest = fixtureRecordCandidateManifest(
     changeId,
-    attemptId: "attempt-000001",
-    requestSha256: fixtureRecordHash,
-    planSha256: fixtureRecordPlanHash,
-    baselineCommit: fixtureRecordCommit,
-    candidateCommit: fixtureRecordCommit,
-    artifactSha256: fixtureRecordArtifactHash,
-    buildProfile: {
-      adapter: "local",
-      configSha256: fixtureRecordHash,
-      environment: null,
-      siteIndexable: false,
-    },
-    routes: ["/fixture-record"],
-    files: ["src/pages/fixture-record.astro"],
-    artifacts: [
-      {
-        path: `.artifacts/candidates/${changeId}/attempt-000001/bundle/dist/index.html`,
-        sha256: fixtureRecordHash,
-        bytes: 17,
-      },
-    ],
-    validations: [
-      {
-        id: "build",
-        status: "passed",
-        evidence: "evidence/candidate-build.json#build",
-        evidenceSha256: fixtureRecordEvidenceHash,
-      },
-    ],
-    preview: {
-      command: "fixture preview --check-only",
-      url: "http://127.0.0.1:4321",
-    },
-    knownDifferences: [],
-  };
+    validations,
+  );
   const preimage = candidateDossierPreimage(candidateManifest);
   const projection = sanitizedCandidateProjection(candidateManifest);
   const commitment = candidateDossierCommitment(candidateManifest);
@@ -475,6 +497,35 @@ function fixtureRecordFiles(
     ["candidate.json", `${canonicalJson(candidate)}\n`],
     ["candidate-manifest.json", `${canonicalJson(preimage)}\n`],
   ]);
+}
+
+/** Rebuilds only test-seam facts so audit exercises the durable bindings. */
+function resealFixtureCandidateDossier(files: Map<string, string>): void {
+  const candidate = JSON.parse(files.get("candidate.json") ?? "") as Record<
+    string,
+    unknown
+  >;
+  const preimage = JSON.parse(
+    files.get("candidate-manifest.json") ?? "",
+  ) as Record<string, unknown>;
+  const gate2 = JSON.parse(files.get("approvals/gate-2.json") ?? "") as Record<
+    string,
+    unknown
+  >;
+  const projection = { ...candidate };
+  delete projection.approvalSubjectSha256;
+  delete projection.sanitizedProjectionSha256;
+  delete projection.sealedCandidateSha256;
+  const commitment = candidateDossierCommitmentFromProjection(
+    sha256Canonical(preimage),
+    projection,
+  );
+  candidate.sealedCandidateSha256 = commitment.sealedCandidateSha256;
+  candidate.sanitizedProjectionSha256 = commitment.sanitizedProjectionSha256;
+  candidate.approvalSubjectSha256 = commitment.approvalSubjectSha256;
+  gate2.subjectSha256 = commitment.approvalSubjectSha256;
+  files.set("candidate.json", `${canonicalJson(candidate)}\n`);
+  files.set("approvals/gate-2.json", `${canonicalJson(gate2)}\n`);
 }
 
 async function writeFixtureRecord(
@@ -897,6 +948,264 @@ test("audit rejects an altered durable fixture dossier", async () => {
       candidate.artifactSha256 = "f".repeat(64);
       await writeFile(candidatePath, `${canonicalJson(candidate)}\n`, "utf8");
       const audit = await auditFixtureRecords(tags);
+      assert.equal(audit.ok, false);
+      assert.deepEqual(audit.missing, [`fixture:${fixtureRecordChangeId}`]);
+    });
+  } finally {
+    process.chdir(previousCwd);
+  }
+});
+
+test("audit binds each attempt evidence digest to the sealed candidate preimage", async () => {
+  const previousCwd = process.cwd();
+  try {
+    await withTemporaryMainClone(async (clone) => {
+      process.chdir(clone);
+      const files = new Map(fixtureRecordFiles());
+      const attempt = JSON.parse(
+        files.get("attempts/attempt-000001.json") ?? "",
+      ) as { validations: Array<Record<string, unknown>> };
+      const validation = attempt.validations[0];
+      if (validation === undefined) {
+        throw new TypeError("fixture attempt has no validation");
+      }
+      validation.evidenceSha256 = "f".repeat(64);
+      files.set("attempts/attempt-000001.json", `${canonicalJson(attempt)}\n`);
+      await writeFixtureRecord(clone, files);
+
+      const audit = await auditFixtureSeal(
+        createIngestionAuditTestSeal([
+          fixtureRecordAuditTagForFiles(
+            files,
+            fixtureRecordChangeId,
+            fixtureRecordCommit,
+          ),
+        ]),
+      );
+      assert.equal(audit.ok, false);
+      assert.deepEqual(audit.missing, [`fixture:${fixtureRecordChangeId}`]);
+    });
+  } finally {
+    process.chdir(previousCwd);
+  }
+});
+
+test("audit rejects reordered, missing, or extra attempt validation identities", async () => {
+  const previousCwd = process.cwd();
+  try {
+    await withTemporaryMainClone(async (clone) => {
+      process.chdir(clone);
+      const validations: readonly FixtureRecordValidation[] = [
+        { id: "build", evidenceSha256: fixtureRecordEvidenceHash },
+        { id: "checks", evidenceSha256: "d".repeat(64) },
+      ];
+      const mutations: ReadonlyArray<{
+        readonly name: string;
+        readonly mutate: (validations: Array<Record<string, unknown>>) => void;
+      }> = [
+        {
+          name: "reordered",
+          mutate(attemptValidations) {
+            attemptValidations.reverse();
+          },
+        },
+        {
+          name: "missing",
+          mutate(attemptValidations) {
+            attemptValidations.splice(0, 1);
+          },
+        },
+        {
+          name: "extra",
+          mutate(attemptValidations) {
+            attemptValidations.push({
+              id: "extra",
+              status: "passed",
+              evidence: "evidence/extra.json",
+              evidenceSha256: "c".repeat(64),
+            });
+          },
+        },
+      ];
+
+      for (const { name, mutate } of mutations) {
+        const files = new Map(
+          fixtureRecordFiles(fixtureRecordChangeId, validations),
+        );
+        const attempt = JSON.parse(
+          files.get("attempts/attempt-000001.json") ?? "",
+        ) as { validations: Array<Record<string, unknown>> };
+        mutate(attempt.validations);
+        files.set(
+          "attempts/attempt-000001.json",
+          `${canonicalJson(attempt)}\n`,
+        );
+        await writeFixtureRecord(clone, files);
+
+        const audit = await auditFixtureSeal(
+          createIngestionAuditTestSeal([
+            fixtureRecordAuditTagForFiles(
+              files,
+              fixtureRecordChangeId,
+              fixtureRecordCommit,
+            ),
+          ]),
+        );
+        assert.equal(audit.ok, false, name);
+        assert.deepEqual(
+          audit.missing,
+          [`fixture:${fixtureRecordChangeId}`],
+          name,
+        );
+      }
+    });
+  } finally {
+    process.chdir(previousCwd);
+  }
+});
+
+test("audit rejects coherent failed or digestless durable validation facts", async () => {
+  const previousCwd = process.cwd();
+  try {
+    await withTemporaryMainClone(async (clone) => {
+      process.chdir(clone);
+      const mutations: ReadonlyArray<{
+        readonly name: string;
+        readonly mutate: (files: Map<string, string>) => void;
+      }> = [
+        {
+          name: "failed",
+          mutate(files) {
+            const candidate = JSON.parse(files.get("candidate.json") ?? "") as {
+              validations: Array<Record<string, unknown>>;
+            };
+            const preimage = JSON.parse(
+              files.get("candidate-manifest.json") ?? "",
+            ) as { validations: Array<Record<string, unknown>> };
+            const attempt = JSON.parse(
+              files.get("attempts/attempt-000001.json") ?? "",
+            ) as { validations: Array<Record<string, unknown>> };
+            const [candidateValidation, preimageValidation, attemptValidation] =
+              [
+                candidate.validations[0],
+                preimage.validations[0],
+                attempt.validations[0],
+              ];
+            if (
+              candidateValidation === undefined ||
+              preimageValidation === undefined ||
+              attemptValidation === undefined
+            ) {
+              throw new TypeError("fixture dossier lost its validation");
+            }
+            candidateValidation.status = "failed";
+            preimageValidation.status = "failed";
+            attemptValidation.status = "failed";
+            files.set("candidate.json", `${canonicalJson(candidate)}\n`);
+            files.set(
+              "candidate-manifest.json",
+              `${canonicalJson(preimage)}\n`,
+            );
+            files.set(
+              "attempts/attempt-000001.json",
+              `${canonicalJson(attempt)}\n`,
+            );
+          },
+        },
+        {
+          name: "missing-preimage-digest",
+          mutate(files) {
+            const preimage = JSON.parse(
+              files.get("candidate-manifest.json") ?? "",
+            ) as { validations: Array<Record<string, unknown>> };
+            const validation = preimage.validations[0];
+            if (validation === undefined) {
+              throw new TypeError("fixture preimage has no validation");
+            }
+            validation.evidenceSha256 = null;
+            files.set(
+              "candidate-manifest.json",
+              `${canonicalJson(preimage)}\n`,
+            );
+          },
+        },
+      ];
+
+      for (const { name, mutate } of mutations) {
+        const files = new Map(fixtureRecordFiles());
+        mutate(files);
+        resealFixtureCandidateDossier(files);
+        await writeFixtureRecord(clone, files);
+        const audit = await auditFixtureSeal(
+          createIngestionAuditTestSeal([
+            fixtureRecordAuditTagForFiles(
+              files,
+              fixtureRecordChangeId,
+              fixtureRecordCommit,
+            ),
+          ]),
+        );
+        assert.equal(audit.ok, false, name);
+        assert.deepEqual(
+          audit.missing,
+          [`fixture:${fixtureRecordChangeId}`],
+          name,
+        );
+      }
+    });
+  } finally {
+    process.chdir(previousCwd);
+  }
+});
+
+test("a legacy Gate 2 cannot authorize a durable dossier without sealed evidence", async () => {
+  const previousCwd = process.cwd();
+  try {
+    await withTemporaryMainClone(async (clone) => {
+      process.chdir(clone);
+      const files = new Map(fixtureRecordFiles());
+      const legacyCandidate = fixtureRecordCandidateManifest(
+        fixtureRecordChangeId,
+        fixtureRecordValidations,
+        false,
+      );
+      const preimage = JSON.parse(
+        files.get("candidate-manifest.json") ?? "",
+      ) as { validations: Array<Record<string, unknown>> };
+      const preimageValidation = preimage.validations[0];
+      if (preimageValidation === undefined) {
+        throw new TypeError("fixture preimage has no validation");
+      }
+      preimageValidation.evidenceSha256 = null;
+
+      const candidate = JSON.parse(files.get("candidate.json") ?? "") as Record<
+        string,
+        unknown
+      >;
+      const gate2 = JSON.parse(
+        files.get("approvals/gate-2.json") ?? "",
+      ) as Record<string, unknown>;
+      const legacySubject = candidateApprovalSubject(legacyCandidate);
+      candidate.sealedCandidateSha256 = sha256Canonical(preimage);
+      candidate.sanitizedProjectionSha256 = sha256Canonical(
+        sanitizedCandidateProjection(legacyCandidate),
+      );
+      candidate.approvalSubjectSha256 = legacySubject;
+      gate2.subjectSha256 = legacySubject;
+      files.set("candidate.json", `${canonicalJson(candidate)}\n`);
+      files.set("candidate-manifest.json", `${canonicalJson(preimage)}\n`);
+      files.set("approvals/gate-2.json", `${canonicalJson(gate2)}\n`);
+      await writeFixtureRecord(clone, files);
+
+      const audit = await auditFixtureSeal(
+        createIngestionAuditTestSeal([
+          fixtureRecordAuditTagForFiles(
+            files,
+            fixtureRecordChangeId,
+            fixtureRecordCommit,
+          ),
+        ]),
+      );
       assert.equal(audit.ok, false);
       assert.deepEqual(audit.missing, [`fixture:${fixtureRecordChangeId}`]);
     });

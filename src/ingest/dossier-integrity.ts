@@ -2,6 +2,8 @@ import { sha256Canonical } from "./canonical-json.ts";
 import type { CandidateManifest } from "./domain.ts";
 import { validateSchema } from "./schema-validator.ts";
 
+const sha256Pattern = /^[a-f0-9]{64}$/u;
+
 export interface CandidateDossierCommitment {
   /** Hash of the durable, canonical preimage approved at Gate 2. */
   readonly sealedCandidateSha256: string;
@@ -24,11 +26,11 @@ interface IndexedHash {
 interface CandidateDossierValidationPreimage {
   readonly index: number;
   readonly id: string;
-  readonly status: "passed" | "failed";
+  readonly status: "passed";
   /** Digest of the original candidate evidence reference, never its path. */
   readonly evidencePathSha256: string;
-  /** Digest of its sealed evidence bytes, or null when absent in the manifest. */
-  readonly evidenceSha256: string | null;
+  /** Digest of its sealed evidence bytes; audited candidates never omit it. */
+  readonly evidenceSha256: string;
 }
 
 interface CandidateDossierArtifactPreimage {
@@ -139,6 +141,29 @@ function indexedHashes(values: readonly string[]): readonly IndexedHash[] {
   );
 }
 
+function sealedValidationPreimage(
+  validation: CandidateManifest["validations"][number],
+  index: number,
+): CandidateDossierValidationPreimage {
+  const evidenceSha256 = validation.evidenceSha256;
+  if (
+    validation.status !== "passed" ||
+    evidenceSha256 === undefined ||
+    !sha256Pattern.test(evidenceSha256)
+  ) {
+    throw new TypeError(
+      "La preimagen sólo admite validaciones aprobadas con evidencia sellada",
+    );
+  }
+  return Object.freeze({
+    index,
+    id: validation.id,
+    status: "passed",
+    evidencePathSha256: valueSha256(validation.evidence),
+    evidenceSha256,
+  });
+}
+
 /**
  * This is the complete allowlisted candidate projection that may leave sealed
  * controller state. Commitment fields are deliberately added only afterwards,
@@ -218,15 +243,7 @@ export function candidateDossierPreimage(
     routes: indexedHashes(candidate.routes),
     files: indexedHashes(candidate.files),
     validations: Object.freeze(
-      candidate.validations.map((validation, index) =>
-        Object.freeze({
-          index,
-          id: validation.id,
-          status: validation.status,
-          evidencePathSha256: valueSha256(validation.evidence),
-          evidenceSha256: validation.evidenceSha256 ?? null,
-        }),
-      ),
+      candidate.validations.map(sealedValidationPreimage),
     ),
     artifacts: Object.freeze(
       candidate.artifacts.map((artifact, index) => {
@@ -418,8 +435,37 @@ export function candidateDossierCommitment(
   );
 }
 
+function hasRecordableValidationEvidence(
+  candidate: CandidateManifest,
+): boolean {
+  return (
+    candidate.validations.length > 0 &&
+    candidate.validations.every(
+      (validation) =>
+        validation.status === "passed" &&
+        typeof validation.evidenceSha256 === "string" &&
+        sha256Pattern.test(validation.evidenceSha256),
+    )
+  );
+}
+
+/**
+ * Gate 2 may inspect a valid legacy candidate before its evidence is
+ * recordable. Its subject remains bound to the complete candidate, but it is
+ * deliberately distinct from the durable dossier commitment. Once every
+ * validation has sealed evidence, Gate 2 uses the stronger durable subject.
+ */
+function legacyCandidateApprovalSubject(candidate: CandidateManifest): string {
+  return candidateDossierCommitmentFromProjection(
+    sha256Canonical(candidate),
+    sanitizedCandidateProjection(candidate),
+  ).approvalSubjectSha256;
+}
+
 export function candidateApprovalSubject(candidate: CandidateManifest): string {
-  return candidateDossierCommitment(candidate).approvalSubjectSha256;
+  return hasRecordableValidationEvidence(candidate)
+    ? candidateDossierCommitment(candidate).approvalSubjectSha256
+    : legacyCandidateApprovalSubject(candidate);
 }
 
 function assertDossierArtifactPaths(candidate: CandidateManifest): void {

@@ -615,6 +615,13 @@ async function verifyFixtureDossier(input: {
 
 type DurableRecord = Record<string, unknown>;
 
+interface DurableValidationFact {
+  readonly id: string;
+  readonly evidence: string;
+  /** Candidate evidence digest from the sealed durable preimage. */
+  readonly evidenceSha256: string;
+}
+
 interface DurableCandidateFacts {
   readonly changeId: string;
   readonly attemptId: string;
@@ -627,10 +634,8 @@ interface DurableCandidateFacts {
   readonly sanitizedProjectionSha256: string;
   readonly approvalSubjectSha256: string;
   readonly buildProfile: unknown;
-  readonly validations: ReadonlyMap<
-    string,
-    { readonly status: "passed" | "failed"; readonly evidence: string }
-  >;
+  /** Ordered validation facts bound across candidate, preimage and attempt. */
+  readonly validations: readonly DurableValidationFact[];
 }
 
 function durableRecord(value: unknown, label: string): DurableRecord {
@@ -894,39 +899,54 @@ function durableCandidateFacts(
   if (!Array.isArray(candidate.validations)) {
     throw new TypeError("Las validaciones candidatas no son una lista");
   }
-  const validations = new Map<
-    string,
-    { readonly status: "passed" | "failed"; readonly evidence: string }
-  >();
+  const validations: DurableValidationFact[] = [];
+  const validationIds = new Set<string>();
   const candidateValidations: Array<
     SanitizedCandidateProjection["validations"][number]
   > = [];
-  for (const validation of candidate.validations) {
+  for (const [index, validation] of candidate.validations.entries()) {
     const record = exactDurableRecord(validation, "Una validación candidata", [
       "evidence",
       "id",
       "status",
     ]);
     const id = durableValidationId(record.id, "Una validación candidata");
-    const status = record.status;
-    if (status !== "passed" && status !== "failed") {
-      throw new TypeError("Una validación candidata tiene estado inválido");
-    }
     const evidence = durableString(
       record,
       "evidence",
       "Una validación candidata",
     );
-    if (evidence !== `evidence/${id}.json` || validations.has(id)) {
+    const preimageValidation = preimage.validations[index];
+    if (
+      record.status !== "passed" ||
+      evidence !== `evidence/${id}.json` ||
+      validationIds.has(id) ||
+      preimageValidation === undefined ||
+      preimageValidation.id !== id ||
+      preimageValidation.status !== "passed" ||
+      !sha256Pattern.test(preimageValidation.evidenceSha256)
+    ) {
       throw new TypeError("Una validación candidata no conserva su evidencia");
     }
-    validations.set(id, { status, evidence });
-    candidateValidations.push(Object.freeze({ id, status, evidence }));
+    validationIds.add(id);
+    validations.push(
+      Object.freeze({
+        id,
+        evidence,
+        evidenceSha256: preimageValidation.evidenceSha256,
+      }),
+    );
+    candidateValidations.push(
+      Object.freeze({ id, status: "passed", evidence }),
+    );
   }
-  if (validations.size === 0) {
+  if (validations.length === 0) {
     throw new TypeError(
       "El candidato fixture no tiene evidencia de validación",
     );
+  }
+  if (validations.length !== preimage.validations.length) {
+    throw new TypeError("La preimagen no coincide con sus validaciones");
   }
   const projection: SanitizedCandidateProjection = Object.freeze({
     schemaVersion: 1,
@@ -984,7 +1004,7 @@ function durableCandidateFacts(
     sanitizedProjectionSha256,
     approvalSubjectSha256,
     buildProfile: projection.buildProfile,
-    validations,
+    validations: Object.freeze(validations),
   });
 }
 
@@ -1054,8 +1074,10 @@ function assertDurableAttempt(
   if (!Array.isArray(attempt.validations)) {
     throw new TypeError("Las validaciones del intento no son una lista");
   }
-  const validations = new Map<string, string>();
-  for (const validation of attempt.validations) {
+  if (attempt.validations.length !== candidate.validations.length) {
+    throw new TypeError("Falta evidencia sellada del candidato fixture");
+  }
+  for (const [index, validation] of attempt.validations.entries()) {
     const record = exactDurableRecord(validation, "Una validación de intento", [
       "evidence",
       "evidenceSha256",
@@ -1063,24 +1085,23 @@ function assertDurableAttempt(
       "status",
     ]);
     const id = durableValidationId(record.id, "Una validación de intento");
-    const candidateValidation = candidate.validations.get(id);
+    const candidateValidation = candidate.validations[index];
+    const evidenceSha256 = durableHash(
+      record,
+      "evidenceSha256",
+      "Una validación de intento",
+    );
     if (
       candidateValidation === undefined ||
-      record.status !== candidateValidation.status ||
+      record.status !== "passed" ||
+      id !== candidateValidation.id ||
       record.evidence !== candidateValidation.evidence ||
-      validations.has(id)
+      evidenceSha256 !== candidateValidation.evidenceSha256
     ) {
       throw new TypeError(
         "La evidencia del intento no coincide con el candidato",
       );
     }
-    validations.set(
-      id,
-      durableHash(record, "evidenceSha256", "Una validación de intento"),
-    );
-  }
-  if (validations.size !== candidate.validations.size) {
-    throw new TypeError("Falta evidencia sellada del candidato fixture");
   }
 }
 

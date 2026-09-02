@@ -137,6 +137,14 @@ de cualquiera de los dos hace que la auditoría falle cerradamente sin
 inicializar un agente. El gate `main == HEAD` se conserva para cada grabación:
 este flujo nunca adelanta, fusiona ni relaja `main`.
 
+Un expediente durable exige que cada validación del candidato, su preimagen y
+el intento validado tengan el mismo ID y orden, estado `passed` y el mismo
+`evidenceSha256` sellado. Un candidato legado puede recibir Gate 2 para su
+revisión si aún no tiene evidencia grabable, pero no puede crear ni superar la
+auditoría de un expediente. Añadir después esos digests cambia el sujeto de
+Gate 2 y exige una nueva aprobación; nunca convierte una aprobación antigua en
+autoridad de grabación.
+
 **`--execute` no es una autorización implícita de deploy.** La CLI actual ni lo
 acepta; una publicación Cloudflare real sigue cerrada hasta que exista una
 capability de operador revisada por separado. Los dry-runs locales son

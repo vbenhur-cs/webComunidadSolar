@@ -14,7 +14,10 @@ import test from "node:test";
 import { promisify } from "node:util";
 
 import { sha256Canonical } from "../../src/ingest/canonical-json.ts";
-import { candidateApprovalSubject } from "../../src/ingest/dossier-integrity.ts";
+import {
+  candidateApprovalSubject,
+  candidateDossierPreimage,
+} from "../../src/ingest/dossier-integrity.ts";
 import type { CandidateManifest, ChangePlan } from "../../src/ingest/domain.ts";
 import { sanitizedGitEnv } from "../../src/ingest/git-env.ts";
 import { ingestPaths } from "../../src/ingest/paths.ts";
@@ -472,6 +475,58 @@ test("Gate 2 binds canonical candidate, commit, and artifact digest", async () =
         await readFile(join(paths.approvalsDir, "gate-2.json"), "utf8"),
       ),
       gate2,
+    );
+  });
+});
+
+test("legacy Gate 2 approval cannot authorize a durable dossier without sealed evidence", async () => {
+  await withStateRoot(async ({ projectRoot, stateRoot, mainCommit }) => {
+    const approvedPlan = fixturePlan(mainCommit);
+    const legacyCandidate = fixtureCandidate(mainCommit, approvedPlan);
+    await approveGate1(
+      {
+        plan: approvedPlan,
+        actor: "test-human",
+        stateRoot,
+        repositoryRoot: projectRoot,
+      },
+      await fixturePrompt(projectRoot, {
+        isTTY: true,
+        answer: approvedPlan.planSha256.slice(0, 12),
+      }),
+    );
+    const gate2 = await approveGate2(
+      {
+        plan: approvedPlan,
+        candidate: legacyCandidate,
+        actor: "test-human",
+        stateRoot,
+        repositoryRoot: projectRoot,
+      },
+      await fixturePrompt(projectRoot, {
+        isTTY: true,
+        answer: candidateApprovalSubject(legacyCandidate).slice(0, 12),
+      }),
+    );
+
+    assert.throws(
+      () => candidateDossierPreimage(legacyCandidate),
+      /validaciones aprobadas|evidencia sellada/i,
+    );
+
+    const recordableCandidate = fixtureCandidate(mainCommit, approvedPlan, {
+      validations: [
+        {
+          id: "typecheck",
+          status: "passed",
+          evidence: "evidence/typecheck.txt",
+          evidenceSha256: hash("e"),
+        },
+      ],
+    });
+    assert.throws(
+      () => verifyApproval(gate2, recordableCandidate, mainCommit),
+      /hash aprobado|candidato/i,
     );
   });
 });

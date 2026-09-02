@@ -5,6 +5,7 @@ import {
   canonicalJson,
   sha256Canonical,
 } from "../../src/ingest/canonical-json.ts";
+import { parseCandidateDossierPreimage } from "../../src/ingest/dossier-integrity.ts";
 import { allowedTransition } from "../../src/ingest/domain.ts";
 import { validateSchema } from "../../src/ingest/schema-validator.ts";
 
@@ -325,6 +326,28 @@ test("all schemas reject unknown properties", () => {
       () => validateSchema(name, { ...value, unexpected: true }),
       /additional|propiedad|unexpected/i,
       name,
+    );
+  }
+});
+
+test("candidate dossier preimages require passed validations with sealed evidence", () => {
+  const valid = validCandidateDossierPreimage();
+  const validation = valid.validations[0];
+  if (validation === undefined) {
+    throw new TypeError("test preimage has no validation");
+  }
+
+  for (const candidate of [
+    validCandidateDossierPreimage({
+      validations: [{ ...validation, status: "failed" }],
+    }),
+    validCandidateDossierPreimage({
+      validations: [{ ...validation, evidenceSha256: null }],
+    }),
+  ]) {
+    assert.throws(
+      () => parseCandidateDossierPreimage(candidate),
+      /schema|status|evidence/i,
     );
   }
 });

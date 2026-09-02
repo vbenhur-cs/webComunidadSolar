@@ -84,6 +84,12 @@ comandos, URL, evidencia y diferencias), nunca sus valores en claro, para que
 la auditoría pueda recalcular el sello tras destruir el clon. La grabación
 conserva el gate `main == HEAD`; no adelanta, fusiona ni relaja `main`.
 
+Para que un expediente sea durable, cada validación del candidato, la
+preimagen y el intento debe coincidir por ID, orden y `evidenceSha256`, y estar
+en estado `passed`. Un Gate 2 de un candidato legado sin evidencia grabable no
+autoriza `--record` ni la auditoría; añadir los digests después modifica su
+sujeto y requiere un Gate 2 nuevo.
+
 `npm run verify:ingestion` abre sólo el grafo de auditoría durable: no inicia
 agentes ni acepta su configuración. Sus errores y JSON usan esquemas de salida
 allowlisted; valores no clasificados, bytes, rutas o secretos nunca se

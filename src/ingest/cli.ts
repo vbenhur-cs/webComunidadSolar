@@ -140,8 +140,8 @@ async function execute(
   let args: ReturnType<typeof parsed>;
   try {
     args = parsed(argv);
-  } catch (error) {
-    return forbidden(`Opciones inválidas: ${safeError(error)}`);
+  } catch {
+    return forbidden("Opciones inválidas");
   }
   const positionals = args.positionals;
   const values = args.values;
@@ -267,7 +267,7 @@ async function execute(
         break;
       }
       default:
-        return forbidden(`Comando no permitido: ${command}`);
+        return forbidden("Comando no permitido");
     }
   } catch (error) {
     return { exitCode: 1, stdout: "", stderr: `${safeError(error)}\n` };
