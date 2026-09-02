@@ -1005,6 +1005,10 @@ test("Gate 2 reads advanced main instead of a caller-supplied old baseline", asy
     await execFileAsync("git", [
       "-C",
       projectRoot,
+      "-c",
+      "user.name=Fixture Human",
+      "-c",
+      "user.email=fixture@example.test",
       "commit",
       "--quiet",
       "-m",

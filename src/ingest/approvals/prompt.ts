@@ -1,5 +1,12 @@
 import { execFile } from "node:child_process";
-import { lstat, mkdtemp, realpath, rm } from "node:fs/promises";
+import {
+  lstat,
+  mkdtemp,
+  open,
+  realpath,
+  rm,
+  type FileHandle,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { isAbsolute, join, relative, resolve } from "node:path";
 import { stdin, stdout } from "node:process";
@@ -120,6 +127,26 @@ function sameFilesystemIdentity(
   return left.device === right.device && left.inode === right.inode;
 }
 
+async function holdFixtureRootIdentity(
+  root: string,
+  identity: FixtureRootIdentity,
+): Promise<FileHandle> {
+  const handle = await open(root, "r");
+  try {
+    const entry = await handle.stat();
+    if (
+      !entry.isDirectory() ||
+      !sameFilesystemIdentity(filesystemIdentity(entry), identity.root)
+    ) {
+      throw new TypeError("La identidad del clon fixture ha cambiado");
+    }
+    return handle;
+  } catch (error) {
+    await handle.close();
+    throw error;
+  }
+}
+
 async function assertStandaloneGitRoot(
   root: string,
   expectedIdentity?: FixtureRootIdentity,
@@ -228,6 +255,7 @@ export async function createFixtureApprovalRun(
   let disposePromise: Promise<void> | undefined;
   const capabilities = new Set<FixtureApprovalPrompt>();
   let identity: FixtureRootIdentity;
+  let rootIdentityHandle: FileHandle | undefined;
   try {
     await execFileAsync(
       fixedGitExecutable,
@@ -253,7 +281,14 @@ export async function createFixtureApprovalRun(
       );
     }
     identity = await assertOwnedFixtureClone(repositoryRoot, undefined, true);
+    // Keep the original directory inode alive so unlinking and recreating the
+    // lexical path cannot regain the capability through filesystem reuse.
+    rootIdentityHandle = await holdFixtureRootIdentity(
+      repositoryRoot,
+      identity,
+    );
   } catch (error) {
+    await rootIdentityHandle?.close().catch(() => undefined);
     await rm(parent, { force: true, recursive: true });
     throw error;
   }
@@ -320,12 +355,16 @@ export async function createFixtureApprovalRun(
             resolveIdleLeases = resolve;
           });
         }
-        await rm(parent, {
-          force: true,
-          maxRetries: 3,
-          recursive: true,
-          retryDelay: 10,
-        });
+        try {
+          await rootIdentityHandle?.close();
+        } finally {
+          await rm(parent, {
+            force: true,
+            maxRetries: 3,
+            recursive: true,
+            retryDelay: 10,
+          });
+        }
       })();
       return disposePromise;
     },
