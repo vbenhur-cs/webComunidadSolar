@@ -106,6 +106,8 @@ export interface SanitizedCandidateProjection {
     readonly id: string;
     readonly status: "passed" | "failed";
     readonly evidence: string;
+    /** Sealed validation bytes are safe to expose only as their digest. */
+    readonly evidenceSha256?: string;
   }[];
   readonly preview: { readonly command: "sealed verified candidate preview" };
   readonly knownDifferences: readonly { readonly approvalRequired: true }[];
@@ -199,6 +201,9 @@ export function sanitizedCandidateProjection(
           id: validation.id,
           status: validation.status,
           evidence: `evidence/${validation.id}.json`,
+          ...(validation.evidenceSha256 === undefined
+            ? {}
+            : { evidenceSha256: validation.evidenceSha256 }),
         }),
       ),
     ),
@@ -346,6 +351,7 @@ function projectionBinding(projection: SanitizedCandidateProjection): object {
       index,
       id: validation.id,
       status: validation.status,
+      evidenceSha256: validation.evidenceSha256 ?? null,
     })),
     artifacts: projection.artifacts.map((artifact, index) => ({
       index,
@@ -377,6 +383,7 @@ function preimageProjectionBinding(preimage: CandidateDossierPreimage): object {
       index: validation.index,
       id: validation.id,
       status: validation.status,
+      evidenceSha256: validation.evidenceSha256,
     })),
     artifacts: preimage.artifacts.map((artifact) => ({
       index: artifact.index,
@@ -458,7 +465,20 @@ function hasRecordableValidationEvidence(
 function legacyCandidateApprovalSubject(candidate: CandidateManifest): string {
   return candidateDossierCommitmentFromProjection(
     sha256Canonical(candidate),
-    sanitizedCandidateProjection(candidate),
+    Object.freeze({
+      ...sanitizedCandidateProjection(candidate),
+      // Keep already-issued legacy Gate 2 subjects stable: they predate the
+      // durable evidence-digest field and cannot authorize a dossier anyway.
+      validations: Object.freeze(
+        candidate.validations.map((validation) =>
+          Object.freeze({
+            id: validation.id,
+            status: validation.status,
+            evidence: `evidence/${validation.id}.json`,
+          }),
+        ),
+      ),
+    }),
   ).approvalSubjectSha256;
 }
 

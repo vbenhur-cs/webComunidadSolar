@@ -84,9 +84,11 @@ comandos, URL, evidencia y diferencias), nunca sus valores en claro, para que
 la auditoría pueda recalcular el sello tras destruir el clon. La grabación
 conserva el gate `main == HEAD`; no adelanta, fusiona ni relaja `main`.
 
-Para que un expediente sea durable, cada validación del candidato, la
-preimagen y el intento debe coincidir por ID, orden y `evidenceSha256`, y estar
-en estado `passed`. Un Gate 2 de un candidato legado sin evidencia grabable no
+Para que un expediente sea durable, `candidate.json`, la preimagen y el intento
+deben conservar en cada validación el mismo ID, orden y `evidenceSha256`, y
+estar en estado `passed`. El candidato y el intento conservan sólo la referencia
+lógica fija `evidence/<id>.json` y ese digest, nunca los bytes ni la ruta de
+origen de la evidencia. Un Gate 2 de un candidato legado sin evidencia grabable no
 autoriza `--record` ni la auditoría; añadir los digests después modifica su
 sujeto y requiere un Gate 2 nuevo.
 

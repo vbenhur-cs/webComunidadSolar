@@ -907,6 +907,7 @@ function durableCandidateFacts(
   for (const [index, validation] of candidate.validations.entries()) {
     const record = exactDurableRecord(validation, "Una validación candidata", [
       "evidence",
+      "evidenceSha256",
       "id",
       "status",
     ]);
@@ -914,6 +915,11 @@ function durableCandidateFacts(
     const evidence = durableString(
       record,
       "evidence",
+      "Una validación candidata",
+    );
+    const evidenceSha256 = durableHash(
+      record,
+      "evidenceSha256",
       "Una validación candidata",
     );
     const preimageValidation = preimage.validations[index];
@@ -924,7 +930,7 @@ function durableCandidateFacts(
       preimageValidation === undefined ||
       preimageValidation.id !== id ||
       preimageValidation.status !== "passed" ||
-      !sha256Pattern.test(preimageValidation.evidenceSha256)
+      evidenceSha256 !== preimageValidation.evidenceSha256
     ) {
       throw new TypeError("Una validación candidata no conserva su evidencia");
     }
@@ -933,11 +939,11 @@ function durableCandidateFacts(
       Object.freeze({
         id,
         evidence,
-        evidenceSha256: preimageValidation.evidenceSha256,
+        evidenceSha256,
       }),
     );
     candidateValidations.push(
-      Object.freeze({ id, status: "passed", evidence }),
+      Object.freeze({ id, status: "passed", evidence, evidenceSha256 }),
     );
   }
   if (validations.length === 0) {

@@ -990,6 +990,58 @@ test("audit binds each attempt evidence digest to the sealed candidate preimage"
   }
 });
 
+test("audit binds each durable candidate evidence digest to its preimage and attempt", async () => {
+  const previousCwd = process.cwd();
+  try {
+    await withTemporaryMainClone(async (clone) => {
+      process.chdir(clone);
+      const files = new Map(fixtureRecordFiles());
+      const candidate = JSON.parse(files.get("candidate.json") ?? "") as {
+        validations: Array<Record<string, unknown>>;
+      };
+      const validation = candidate.validations[0];
+      if (validation === undefined) {
+        throw new TypeError("fixture candidate has no validation");
+      }
+      validation.evidenceSha256 = fixtureRecordEvidenceHash;
+      files.set("candidate.json", `${canonicalJson(candidate)}\n`);
+      resealFixtureCandidateDossier(files);
+      await writeFixtureRecord(clone, files);
+
+      const verified = await auditFixtureSeal(
+        createIngestionAuditTestSeal([
+          fixtureRecordAuditTagForFiles(
+            files,
+            fixtureRecordChangeId,
+            fixtureRecordCommit,
+          ),
+        ]),
+      );
+      assert.equal(verified.ok, true, JSON.stringify(verified));
+
+      validation.evidenceSha256 = "f".repeat(64);
+      files.set("candidate.json", `${canonicalJson(candidate)}\n`);
+      resealFixtureCandidateDossier(files);
+      await writeFixtureRecord(clone, files);
+      const mismatched = await auditFixtureSeal(
+        createIngestionAuditTestSeal([
+          fixtureRecordAuditTagForFiles(
+            files,
+            fixtureRecordChangeId,
+            fixtureRecordCommit,
+          ),
+        ]),
+      );
+      assert.equal(mismatched.ok, false);
+      assert.deepEqual(mismatched.missing, [
+        `fixture:${fixtureRecordChangeId}`,
+      ]);
+    });
+  } finally {
+    process.chdir(previousCwd);
+  }
+});
+
 test("audit rejects reordered, missing, or extra attempt validation identities", async () => {
   const previousCwd = process.cwd();
   try {
