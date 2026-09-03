@@ -24,15 +24,15 @@ body:
     attributes:
       label: Tipo de cambio
       options:
-        - Corrección de contenido o enlace
-        - Imagen, vídeo o logo
-        - Página nueva o campaña
-        - Comunidad, proyecto o dato público
-        - Formulario o captación
-        - URL, navegación o SEO
-        - Calculadora o integración externa
-        - Error técnico
-        - Otro cambio
+        - "Corrección de contenido o enlace"
+        - "Imagen, vídeo o logo"
+        - "Página nueva o campaña"
+        - "Comunidad, proyecto o dato público"
+        - "Formulario o captación"
+        - "URL, navegación o SEO"
+        - "Calculadora o integración externa"
+        - "Error técnico"
+        - "Otro cambio"
     validations:
       required: true
 
@@ -106,9 +106,9 @@ body:
     attributes:
       label: ¿Afecta a datos, un formulario, cookies, precio o condiciones legales?
       options:
-        - No
-        - Sí
-        - No estoy seguro/a
+        - "No"
+        - "Sí"
+        - "No estoy seguro/a"
     validations:
       required: true
 
@@ -127,10 +127,10 @@ body:
       label: Prioridad solicitada
       description: La prioridad final se confirma durante la revisión inicial.
       options:
-        - Crítico — seguridad, privacidad, legal o bloqueo real
-        - Alta — campaña o impacto comercial con fecha confirmada
-        - Normal — cambio habitual
-        - Baja — mejora futura o exploración
+        - "Crítico — seguridad, privacidad, legal o bloqueo real"
+        - "Alta — campaña o impacto comercial con fecha confirmada"
+        - "Normal — cambio habitual"
+        - "Baja — mejora futura o exploración"
     validations:
       required: true
 
