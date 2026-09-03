@@ -1,41 +1,40 @@
 # Runbook de pruebas, despliegue y cambios en producción
 
-Este documento explica cómo preparar, probar y publicar Comunidad Solar Astro
-en Cloudflare Workers. Está dirigido a la persona responsable de una entrega y
-separa con claridad los procedimientos que ya se pueden ejecutar de los que
-requieren habilitar la publicación real por primera vez.
+Este documento explica cómo preparar, probar y liberar Comunidad Solar Astro
+en Cloudflare Workers. Está dirigido a autores, revisores y responsables de
+release. Separa la preview operativa de la producción deliberadamente cerrada.
 
 ## Estado y regla principal
 
 El repositorio ya dispone de:
 
 - una CLI para recibir, generar y validar páginas con dos aprobaciones humanas;
-- comprobaciones locales y un workflow de GitHub Actions con un gate estable
-  `production-readiness`;
-- una build de Astro para Cloudflare Workers y `npm run deploy:dry`.
+- comprobaciones locales y el gate `production-readiness`;
+- previews Cloudflare exactas del base y candidato de cada PR interna;
+- capturas PNG desktop/móvil y manifiestos append-only en `evidence`;
+- aprobación protegida `premerge-review` antes del merge;
+- despliegue automático del SHA integrado a la preview compartida; y
+- un workflow manual de producción que falla cerrado.
 
-Cloudflare Workers es el destino de alojamiento aprobado. La evaluación de
-Raiola queda cerrada mientras la aplicación dependa del adaptador Cloudflare,
-D1, bindings de Workers y el publicador Cloudflare. Esta decisión no habilita
-por sí misma un despliegue.
+Cloudflare Workers es el alojamiento aprobado. La preview compartida es
+`https://comunidad-solar-preview.comunidadsolar-dev.workers.dev` y mantiene
+`SITE_INDEXABLE=false`. `comunidadsolar.es`, sus DNS y Raiola quedan fuera de
+este flujo.
 
-No dispone todavía de un despliegue real automatizado. `deploy:dry` ejecuta
-`wrangler deploy --dry-run` localmente y sin credenciales para validar el bundle,
-pero **no sube ni publica** el Worker. El `wrangler.jsonc` versionado contiene
-una base D1 local y no debe emplearse para producción.
-
-Por tanto, no ejecutes una publicación real hasta haber completado la sección
-«Habilitación inicial». Una vez habilitado el pipeline, el despliegue de
-producción debe hacerse únicamente desde el job protegido de CI; no desde un
-ordenador personal salvo un incidente aprobado.
+`deploy:dry` continúa siendo una validación local y no publica. La preview sí
+usa uploads/versiones reales desde workflows confiables. Producción no está
+habilitada: `PRODUCTION_ENABLED` permanece ausente o distinto de `true` y no se
+instalan credenciales productivas durante el bootstrap. No se ejecuta un
+despliegue manual desde un ordenador personal.
 
 ## Responsabilidades mínimas
 
 | Rol | Responsabilidad |
 | --- | --- |
 | Autor del cambio | Crea la rama, ejecuta las pruebas locales y abre la PR. |
-| Revisor | Revisa código/contenido, resultados de CI y el impacto de datos. |
-| Responsable de release | Aprueba el entorno `production`, comprueba el smoke test y registra la entrega. |
+| Revisor | Revisa código/contenido, CI, ambas previews y evidencia visual. |
+| Aprobador de preview | Autoriza `premerge-review` para el SHA exacto después de comparar el antes y el después. |
+| Responsable de release | Fusiona solo con gates verdes, confirma la preview compartida y, en el futuro, aprueba `production`. |
 | Administrador Cloudflare | Gestiona D1, dominios y credenciales con mínimo privilegio. |
 
 Ningún token, contraseña, fichero `.dev.vars` ni perfil Cloudflare de
@@ -229,7 +228,18 @@ completada hasta que haya una entrega de preview validada.
    aprobación de PR para evitar un bloqueo circular. Al incorporar un segundo
    revisor, eleva el mínimo a una aprobación y exige que sea distinta del autor.
 
-El workflow actual es CI, no CD: valida cambios pero no despliega.
+   Durante el bootstrap exige solo `production-readiness`. Después de una PR
+   real validada, añade también `preview-approved`; nunca exijas un check antes
+   de demostrar que el workflow puede producirlo.
+
+Los workflows están separados por capacidad:
+
+| Workflow | Evento | Puede hacer |
+| --- | --- | --- |
+| [`.github/workflows/verify.yml`](../../.github/workflows/verify.yml) | PR y push a `main` | Ejecutar CI sin secretos y emitir `production-readiness`. |
+| [`.github/workflows/pr-preview.yml`](../../.github/workflows/pr-preview.yml) | `workflow_run` verde de una PR interna | Subir base/candidato, capturar, publicar evidencia y esperar `premerge-review`. |
+| [`.github/workflows/shared-preview.yml`](../../.github/workflows/shared-preview.yml) | `workflow_run` verde de un push a `main` | Desplegar exactamente ese SHA a la preview compartida y registrar la release. |
+| [`.github/workflows/production.yml`](../../.github/workflows/production.yml) | Manual | Fallar cerrado o, tras una habilitación futura, desplegar una versión productiva aprobada. |
 
 ### 4.2 Preparar Cloudflare y los perfiles externos
 
@@ -247,19 +257,14 @@ El workflow actual es CI, no CD: valida cambios pero no despliega.
    de tokens para el preview. Esos scopes cubren toda la cuenta, no solo los
    recursos de preview: usa un token distinto por entorno y, si se necesita
    aislamiento exigible por credencial, usa cuentas Cloudflare separadas.
-4. Crea recursos separados para `preview` y `production`; nunca apuntes la
-   producción al UUID cero de `wrangler.jsonc`.
-5. Crea una base D1 por entorno, preferiblemente con jurisdicción `eu`, y anota
-   sus nombres e IDs en el gestor seguro del equipo, no en este repositorio.
-6. Crea un perfil Wrangler por entorno fuera del checkout. Debe declarar un
+4. Crea ahora solo los recursos de `preview`. La configuración de producción
+   se prepara en una operación futura y nunca apunta al UUID cero de
+   `wrangler.jsonc`.
+5. Crea la base D1 de preview, preferiblemente con jurisdicción `eu`, y anota su
+   nombre e ID en el gestor seguro del equipo, no en este repositorio.
+6. Crea el perfil Wrangler de preview fuera del checkout. Debe declarar un
    único binding D1 llamado `DB`, el Worker, los assets, `drizzle` como
-   directorio de migraciones y el valor correcto de `SITE_INDEXABLE`:
-
-   - preview: `false`;
-   - producción: `true`, solamente cuando dominio, robots y sitemap estén
-     listos para indexarse.
-
-   El perfil de preview debe usar además el nombre
+   directorio de migraciones y `SITE_INDEXABLE=false`. Debe usar el nombre
    `comunidad-solar-preview`, `workers_dev: true` y `preview_urls: true`.
 
 7. Valida cada perfil antes de autorizar su uso. Con perfiles independientes
@@ -271,17 +276,13 @@ El workflow actual es CI, no CD: valida cambios pero no despliega.
    npm run preview:cloudflare
    ```
 
-   Repite con el perfil de producción. El comando genera una copia saneada en
-   `.artifacts/config/`; revisa su hash y target, pero nunca imprimas ni
-   compartas secretos.
+   El comando genera una copia saneada en `.artifacts/config/`; revisa su hash
+   y target, pero nunca imprimas ni compartas secretos.
 
-8. Configura los bindings y datos operativos desde el almacén de secretos de
-   Cloudflare o desde secretos del entorno de CI. Mantén deshabilitado cualquier
-   quoting que vaya a vivir en un dominio externo hasta que su integración esté
-   aprobada.
-9. Adapta las cuatro rutas privadas a Cloudflare Access. El código actual lee
-   cabeceras `oai-authenticated-user-*`; producción debe consumir una identidad
-   verificada de Access y conservar las allowlists por área.
+8. Configura solo datos anonimizados de pruebas. Las calculadoras se mantienen
+   como dominio externo y sus credenciales no entran en este repositorio.
+9. No uses el preview público para rutas privadas ni datos personales. La
+   adaptación a Cloudflare Access forma parte de la habilitación de producción.
 
 La guía operativa de Cloudflare contiene la política del token, el ejemplo del
 perfil y el procedimiento exacto para el subdominio:
@@ -311,122 +312,222 @@ seguridad al aplicar migraciones; consulta su
 [referencia D1](https://developers.cloudflare.com/workers/wrangler/commands/d1/)
 antes de cada operación sensible.
 
-### 4.4 Crear el job de despliegue protegido
+### 4.4 Activar el pipeline de preview una sola vez
 
-Este paso todavía requiere implementación y revisión; no cambies
-`verify.yml` para que publique directamente. Crea un workflow de despliegue
-independiente con esta topología:
+El código del pipeline se fusiona primero sin exigir `preview-approved`, porque
+un workflow `workflow_run` nuevo solo puede operar cuando ya está en la rama por
+defecto.
 
-```text
-PR → verify.yml → revisión humana → merge en main
-                                      │
-                                      ▼
-                               deploy preview
-                                      │
-                                      ▼
-                          aprobación del entorno production
-                                      │
-                                      ▼
-                             deploy producción + smoke test
-```
+1. Abre la PR bootstrap y espera `production-readiness`.
+2. Guarda su número exacto en la variable de repositorio
+   `PREVIEW_PIPELINE_BOOTSTRAP_PR` antes de fusionarla.
+3. Fusiona el pipeline revisado. Su primer push a `main` reconoce la excepción y
+   no intenta desplegar una solicitud web inexistente.
+4. Configura el environment `preview` con dos variables y dos secrets, y crea
+   `premerge-review` con el propietario como required reviewer. Mientras solo
+   haya una persona, `prevent self-review` permanece desactivado.
+5. Inicializa la rama huérfana `evidence` y bloquea eliminación y force-push,
+   permitiendo commits append-only de GitHub Actions.
+6. Elimina `PREVIEW_PIPELINE_BOOTSTRAP_PR`.
+7. Ejecuta una PR real antes de añadir `preview-approved` a la protección de
+   `main`.
 
-El workflow futuro debe cumplir todo lo siguiente:
-
-1. Ejecutar el mismo SHA que superó CI; no reconstruir una rama distinta.
-2. Desplegar primero a preview con el perfil externo de preview.
-3. Exigir el entorno protegido `production` y un aprobador distinto del autor
-   para el paso productivo.
-4. Guardar `CLOUDFLARE_ACCOUNT_ID` como variable y
-   `CLOUDFLARE_API_TOKEN` como secret del environment de GitHub, separados
-   entre preview y producción. El token debe estar limitado a la cuenta con
-   `Workers Scripts: Write`, `D1: Edit` y `Workers KV Storage: Edit`.
-   Los environments de GitHub controlan quién y cuándo puede usar cada token;
-   no reducen el alcance de los permisos de cuenta concedidos por Cloudflare.
-5. Materializar el perfil externo en el directorio temporal del runner, no en
-   el repositorio ni en los logs.
-6. Ejecutar, en orden: validación del perfil, pruebas, migraciones revisadas,
-   `wrangler deploy` con el perfil exacto y smoke tests.
-7. Registrar SHA, URL de ejecución, versión del Worker, hash del perfil
-   saneado, migraciones aplicadas y resultado del smoke test como evidencia de
-   release.
-
-La autenticación de Workers desde GitHub Actions requiere una cuenta y un API
-token de Cloudflare almacenados como secretos; la guía oficial describe el
-alcance mínimo y un ejemplo de workflow:
-[GitHub Actions para Workers](https://developers.cloudflare.com/workers/ci-cd/external-cicd/github-actions/).
+Los nombres exactos y comandos de carga están en
+[Configurar GitHub Actions para preview](cloudflare.md#configurar-github-actions-para-preview).
+No inspecciones ni vuelques los valores después de cargarlos.
 
 ---
 
-## 5. Procedimiento de una entrega a producción
+## 5. Procedimiento normal de un cambio web
 
-Una vez habilitada la sección anterior, sigue este orden para cada cambio.
+### 5.1 Rama, contrato y pruebas
 
-1. **Crear la rama.** Parte de `main` actualizado, usa un nombre descriptivo y
-   limita la rama a un cambio coherente.
-2. **Validar localmente.** Ejecuta la sección 2. Si el cambio afecta rutas,
-   interfaz, datos o autenticación, añade `npm run verify:public`.
-3. **Abrir PR.** Incluye impacto, estrategia de reversión, migraciones y rutas
-   que deben comprobarse después del deploy.
-4. **Esperar CI.** La PR no se aprueba mientras `production-readiness` no
-   esté en verde.
-5. **Revisión humana.** El revisor confirma el diff, la evidencia de pruebas y
-   que no hay secretos ni configuración productiva versionados.
-6. **Fusionar en `main`.** Solo después de CI y revisión. El SHA fusionado es
-   el único candidato de release.
-7. **Desplegar preview.** El workflow protegido crea/actualiza preview con ese
-   SHA. Comprueba las rutas críticas y el comportamiento de base de datos con
-   datos no sensibles.
-8. **Aprobar producción.** El responsable de release revisa preview, el hash
-   de configuración saneada y las migraciones. A continuación aprueba el
-   entorno `production` en GitHub.
-9. **Desplegar producción.** El job ejecuta el deploy del mismo SHA y publica
-   sus metadatos de versión.
-10. **Hacer smoke test.** Comprueba como mínimo:
+1. Parte de `main` actualizado y crea una rama descriptiva.
+2. Implementa un solo cambio coherente. No incluyas migraciones `drizzle/` en
+   el flujo web estándar: el resolver las rechaza.
+3. Añade exactamente un contrato nuevo o modificado
+   `evidence/requests/issue-<N>.yaml`. El número debe corresponder a una issue
+   abierta y enlazada en la PR. Usa `scope: page` o `scope: section`; el segundo
+   requiere un selector estable, preferiblemente
+   `[data-evidence-id='nombre']`.
+4. Ejecuta la matriz local de la sección 2 y corrige cualquier fallo.
+5. Abre la PR con `Relates to #N`, no `Closes #N`: la issue debe permanecer
+   abierta hasta el comentario de release.
 
-    ```bash
-    curl -fIs https://<dominio-produccion>/
-    curl -fIs https://<dominio-produccion>/robots.txt
-    curl -fIs https://<dominio-produccion>/sitemap.xml
-    ```
+### 5.2 CI, previews y evidencia
 
-    Añade las rutas funcionales y privadas afectadas por la entrega, siempre
-    con cuentas de prueba autorizadas y sin incluir datos personales en los
-    logs.
-11. **Cerrar la release.** Registra el SHA, hora, versión Cloudflare, URLs
-    comprobadas, resultado de migraciones, responsable y cualquier incidencia.
+1. `verify.yml` ejecuta el código no confiable sin secrets. Si
+   `production-readiness` falla, no se accede a Cloudflare.
+2. `pr-preview.yml`, cargado desde `main`, vuelve a resolver la PR y rechaza
+   forks, issues cerradas, SHAs cambiados, rutas privadas y contratos ambiguos.
+3. El pipeline materializa el perfil desde el environment `preview`, pero
+   compila el base y candidato en jobs separados sin credenciales.
+4. El job con el token verifica bundles sellados y sube dos versiones exactas
+   mediante `wrangler versions upload`. No mueve el deployment activo.
+5. Un job sin secrets navega las URL HTTPS devueltas por Cloudflare, comprueba
+   el status y captura desktop/móvil; `section` añade dos recortes.
+6. GitHub Actions añade manifiestos y PNG bajo:
 
-## 6. Incidente y reversión
+   ```text
+   issue-N/baseline/<base-sha>/
+   issue-N/candidates/<head-sha>/
+   ```
 
-Si falla CI, preview o el smoke test de producción:
+   La rama `evidence` nunca sobrescribe una ruta existente. Repetir los mismos
+   bytes es idempotente; una colisión distinta falla.
+7. La PR y la issue reciben las dos Preview URLs, enlaces raw a las capturas,
+   manifiestos, SHAs, versiones Cloudflare y ejecución GitHub.
 
-1. Detén la promoción. No relances el deploy a ciegas.
-2. Conserva el enlace al job, SHA, versión del Worker, mensajes saneados y el
-   estado de migraciones.
-3. Si el problema solo afecta al Worker, vuelve a la versión de Worker previa
-   mediante el procedimiento aprobado de Cloudflare. No reutilices una versión
-   sin identificarla explícitamente.
-4. Si ya se aplicó una migración D1, no la reviertas automáticamente. Evalúa
-   compatibilidad, copia de seguridad y una migración correctiva revisada.
-5. Abre un incidente para el responsable de release y el administrador
-   Cloudflare; comunica alcance, estado de usuarios y siguiente actualización.
-6. Después del incidente, añade una prueba de regresión o ajusta este runbook
-   antes de volver a promocionar.
+Una PR desde un fork termina después del CI sin secretos. Para obtener preview,
+un responsable debe trasladar el diff revisado a una rama interna.
 
-## 7. Lista de comprobación rápida
+### 5.3 Aprobación, corrección y merge
 
-Antes de liberar, el responsable confirma:
+1. Abre el deployment pendiente del environment `premerge-review`.
+2. Compara base y candidata, página completa y sección cuando aplique, en móvil
+   y escritorio. Verifica también contenido, enlaces, accesibilidad y criterios
+   de la issue.
+3. Si hay una corrección, no apruebes. Añade un commit a la PR. El SHA nuevo
+   invalida el estado anterior y debe producir previews, PNG y aprobación nueva.
+4. Si todo es correcto, aprueba el environment. El último job vuelve a consultar
+   que el head no cambió y emite `preview-approved` solo para ese SHA.
+5. Fusiona únicamente cuando `production-readiness` y `preview-approved` estén
+   verdes, las conversaciones resueltas y la protección de rama satisfecha.
 
-- [ ] El árbol de trabajo está limpio y la entrega parte de `main` actualizado.
-- [ ] La secuencia local completa terminó en verde.
-- [ ] La PR tiene CI verde y revisión humana.
-- [ ] El perfil Cloudflare externo apunta al entorno correcto y ha sido validado.
-- [ ] Las migraciones D1 están revisadas y son compatibles con rollback.
-- [ ] Preview se ha comprobado con el mismo SHA.
-- [ ] La aprobación de producción procede de un responsable autorizado.
-- [ ] El smoke test de producción, la evidencia y el plan de reversión están registrados.
+Cerrar la PR antes del merge es un rollback completo: las versiones aisladas no
+han cambiado `main` ni la preview compartida.
+
+### 5.4 Release automática a la preview compartida
+
+El push integrado a `main` inicia otro `Production readiness`. Si termina en
+verde, `shared-preview.yml`:
+
+1. fija el SHA exacto de `main` y localiza la única PR integrada;
+2. verifica su issue, contrato y aprobación;
+3. reconstruye y sella ese SHA sin secrets;
+4. vuelve a comprobar `main` justo antes del upload;
+5. sube una versión y la despliega al 100 % en
+   `comunidad-solar-preview`;
+6. hace smoke test y captura la ruta en la URL compartida; y
+7. añade evidencia inmutable bajo `issue-N/releases/<main-sha>/` y comenta PR e
+   issue.
+
+Comprueba el comentario de release y la respuesta pública:
+
+```bash
+curl -fIs https://comunidad-solar-preview.comunidadsolar-dev.workers.dev/
+```
+
+Solo entonces se cierra la issue. Esta release sigue siendo no indexable y no
+toca Raiola, DNS ni `comunidadsolar.es`.
+
+---
+
+## 6. Producción: implementada pero deshabilitada
+
+El workflow `.github/workflows/production.yml` se inicia manualmente con un SHA
+de `main`, pero antes de usar cualquier credencial exige que
+`PRODUCTION_ENABLED` sea exactamente `true`. Durante el bootstrap esa variable
+está ausente o es `false`, y el environment `production` queda sin credenciales.
+
+### 6.1 Prerrequisitos para una habilitación futura
+
+Una revisión operativa separada debe confirmar todos estos puntos:
+
+- dominio, DNS y ventana de cambio aprobados;
+- Worker fijo `comunidad-solar-production` con Preview URLs desactivadas;
+- D1 fija `comunidad-solar-production`, migraciones revisadas y datos separados;
+- perfil externo con `SITE_INDEXABLE=true` y sin rutas de preview;
+- Cloudflare Access y la identidad de rutas privadas adaptados y probados;
+- token de producción distinto al de preview y con mínimo privilegio;
+- environment `production` con required reviewers; y
+- un deployment anterior conocido, necesario para construir un descriptor de
+  rollback verificable. El primer aprovisionamiento se realiza en un cambio
+  manual revisado, no fingiendo que existe una versión anterior.
+
+Solo entonces se cargan, por canales seguros:
+
+| Tipo | Nombre |
+| --- | --- |
+| variable | `PRODUCTION_ENABLED=true` |
+| variable | `CLOUDFLARE_PRODUCTION_ACCOUNT_ID` |
+| variable | `CLOUDFLARE_PRODUCTION_URL` |
+| secret | `CLOUDFLARE_PRODUCTION_API_TOKEN` |
+| secret | `CLOUDFLARE_PRODUCTION_CONFIG_B64` |
+
+La URL debe ser el origen HTTPS exacto configurado. El workflow rechaza la URL
+de preview, `workers.dev`, `comunidadsolar.es` codificado en el código o
+cualquier origen diferente al autorizado.
+
+### 6.2 Ejecución futura
+
+Después de aprobar el release SHA y su evidencia compartida:
+
+```bash
+gh workflow run production.yml --ref main -f sha=<SHA_MAIN_APROBADO>
+```
+
+El environment pausa la autorización. El workflow exige una PR interna
+integrada, una única issue/solicitud, la evidencia de release canónica y el
+último status `preview-approved` exitoso con una URL de GitHub Actions. Rechaza
+cambios `drizzle/`. Luego construye el SHA exacto, verifica el bundle, consulta
+el deployment anterior, sube una versión sin alias preview, despliega ese UUID
+al 100 %, hace smoke test y publica un manifiesto bajo
+`issue-N/production/<sha>/manifest.json`.
+
+El job de despliegue conserva durante 90 días un artifact saneado de rollback
+con las versiones anteriores y nueva, deployments, SHA y run URL. No contiene
+tokens ni bytes del perfil original.
+
+---
+
+## 7. Incidente y reversión
+
+### Antes del merge
+
+Cierra la PR o solicita correcciones. Las Preview URLs aisladas pueden quedar
+como artefactos temporales, pero no han movido ninguna versión compartida.
+
+### Después del merge en `main`
+
+Crea una rama desde `main`, ejecuta `git revert <sha>` y abre una PR nueva con
+su propia issue/contrato cuando corresponda. Repite CI, previews, evidencia y
+aprobación. No uses force-push ni reescribas historial.
+
+### Después de desplegar un Worker
+
+Identifica el deployment anterior en el descriptor de rollback y promueve sus
+versiones exactas mediante el procedimiento Cloudflare aprobado. Registra actor,
+motivo, hora, deployment/version IDs y resultado del smoke test. Después crea
+la PR correctiva para que Git y Cloudflare vuelvan a converger.
+
+Un rollback de Worker no deshace D1 ni KV. No reviertas migraciones
+automáticamente: evalúa compatibilidad, backup y una migración correctiva.
+
+Si CI, captura o smoke falla, detén la promoción, conserva run URL, SHA y
+mensajes saneados y abre un incidente. No reintentes a ciegas ni borres la
+evidencia del fallo.
+
+## 8. Lista de comprobación rápida
+
+Para una release a preview compartida:
+
+- [ ] La issue continúa abierta y tiene aprobador, ruta y criterios.
+- [ ] La PR interna contiene un único contrato de evidencia válido.
+- [ ] La matriz local y `production-readiness` están verdes.
+- [ ] Existen previews base/candidata y PNG válidos en `evidence`.
+- [ ] `premerge-review` aprobó el SHA head actual.
+- [ ] `preview-approved` pertenece a ese SHA.
+- [ ] El merge disparó la release del SHA de `main`.
+- [ ] El comentario final contiene URL, manifest, capturas y run.
+- [ ] `comunidadsolar.es`, DNS, Raiola y producción no cambiaron.
+
+Para una futura release productiva, añade todos los prerrequisitos de 6.1,
+smoke test, descriptor de rollback y evidencia del environment protegido.
 
 ## Referencias
 
+- [Solicitar cambios en la web](web-change-requests.md)
 - [Operación Cloudflare del proyecto](cloudflare.md)
 - [Operación de ingestión de páginas](ingestion.md)
 - [Aislamiento de agentes](agent-isolation.md)

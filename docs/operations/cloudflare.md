@@ -1,10 +1,11 @@
 # Operación Cloudflare
 
-Cloudflare Workers es el destino de producción aprobado para este proyecto.
-La verificación previa está automatizada en GitHub Actions, pero el CD real
-permanece cerrado hasta completar D1, Access, dominio y credenciales. Mientras
-`comunidadsolar.es` continúa en Raiola, el entorno de pruebas se publica en el
-subdominio gratuito de la cuenta `workers.dev`, sin cambiar DNS ni nameservers.
+Cloudflare Workers es el destino aprobado para este proyecto. El CD de preview
+y su evidencia están implementados en GitHub Actions. El workflow de producción
+existe, pero falla cerrado hasta completar D1, Access, dominio, credenciales y
+una habilitación expresa. Mientras `comunidadsolar.es` continúa en Raiola, el
+entorno de pruebas se publica en el subdominio gratuito `workers.dev`, sin
+cambiar DNS ni nameservers.
 
 ## Credencial mínima para Wrangler y CI
 
@@ -68,6 +69,9 @@ env:
   CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
 ```
 
+La configuración completa de GitHub también incluye la URL y el perfil
+saneable. Se detalla en «Configurar GitHub Actions» más abajo.
+
 ## Crear el dominio gratuito de pruebas
 
 `workers.dev` no es un dominio que haya que comprar. La cuenta elige una vez
@@ -125,6 +129,112 @@ operación distinta. Hasta entonces `comunidadsolar.es` y su DNS permanecen
 
 Cloudflare documenta la creación, formato y protección de estas URL en
 [workers.dev](https://developers.cloudflare.com/workers/configuration/routing/workers-dev/).
+
+## Configurar GitHub Actions para preview
+
+### 1. Preparar el perfil fuera del repositorio
+
+Guarda el perfil real en una ruta segura ajena al checkout, por ejemplo
+`/ruta/segura/comunidad-solar-preview.jsonc`. Debe coincidir con el modelo
+anterior y contener el UUID de la D1 de pruebas; no debe contener tokens,
+secretos de runtime ni datos reales. Valídalo localmente:
+
+```bash
+CLOUDFLARE_CONFIG_PATH=/ruta/segura/comunidad-solar-preview.jsonc \
+npm run preview:cloudflare
+```
+
+### 2. Crear el environment y cargar sus cuatro valores
+
+Desde un `gh` autenticado con administración del repositorio:
+
+```bash
+gh api --method PUT \
+  repos/vbenhur-cs/webComunidadSolar/environments/preview
+
+base64 < /ruta/segura/comunidad-solar-preview.jsonc | gh secret set CLOUDFLARE_PREVIEW_CONFIG_B64 --env preview
+gh secret set CLOUDFLARE_API_TOKEN --env preview
+gh variable set CLOUDFLARE_ACCOUNT_ID --env preview --body "ACCOUNT_ID_FROM_CLOUDFLARE"
+gh variable set CLOUDFLARE_PREVIEW_URL --env preview --body "https://comunidad-solar-preview.comunidadsolar-dev.workers.dev"
+```
+
+El segundo comando pide el token de forma interactiva y no lo muestra. Reemplaza
+`ACCOUNT_ID_FROM_CLOUDFLARE` localmente por el Account ID real; es un
+placeholder y nunca se copia al repositorio. Tampoco se versionan el UUID D1,
+los bytes base64 del perfil ni el token.
+
+Comprueba solo los nombres, nunca sus valores:
+
+```bash
+gh secret list --env preview
+gh variable list --env preview
+```
+
+El contrato exacto es:
+
+| Environment | Tipo | Nombre |
+| --- | --- | --- |
+| `preview` | variable | `CLOUDFLARE_ACCOUNT_ID` |
+| `preview` | variable | `CLOUDFLARE_PREVIEW_URL` |
+| `preview` | secret | `CLOUDFLARE_API_TOKEN` |
+| `preview` | secret | `CLOUDFLARE_PREVIEW_CONFIG_B64` |
+
+El environment `preview` no lleva aprobación humana: solo limita la entrega de
+su configuración a los jobs confiables. El código candidato se compila en otro
+job sin secretos.
+
+### 3. Crear la aprobación anterior al merge
+
+En **Settings → Environments → New environment**, crea `premerge-review` y
+configura al propietario actual del repositorio como **required reviewer**.
+Mientras exista un único revisor, deja **prevent self-review** desactivado para
+que no haya un bloqueo circular. Cuando se incorpore una segunda persona,
+activa esa opción y exige también una aprobación de PR ajena al autor.
+
+El reviewer debe abrir los enlaces base/candidato y los PNG permanentes antes
+de aprobar el deployment pendiente. Aprobar el environment solo permite crear
+el status `preview-approved` para el SHA exacto que generó la evidencia.
+
+### 4. Mantener producción cerrada
+
+Crea el environment `production` para reservar su frontera de aprobación, pero
+durante el bootstrap déjalo **sin credenciales de producción**. La variable
+`PRODUCTION_ENABLED` debe estar ausente o tener un valor distinto de la cadena
+literal `true`. No cargues todavía:
+
+- `CLOUDFLARE_PRODUCTION_API_TOKEN`;
+- `CLOUDFLARE_PRODUCTION_CONFIG_B64`;
+- `CLOUDFLARE_PRODUCTION_ACCOUNT_ID`; ni
+- `CLOUDFLARE_PRODUCTION_URL`.
+
+El workflow `.github/workflows/production.yml` es manual y vuelve a comprobar
+esta condición antes de llamar a GitHub o Cloudflare. Su existencia no autoriza
+una publicación.
+
+### 5. Protección del repositorio
+
+Durante la PR que incorpora por primera vez el pipeline se usa temporalmente:
+
+```bash
+gh variable set PREVIEW_PIPELINE_BOOTSTRAP_PR --body "<NUMERO_PR_PIPELINE>"
+```
+
+El valor debe ser únicamente el número de esa PR. Elimínalo inmediatamente
+después de que su push a `main` termine:
+
+```bash
+gh variable delete PREVIEW_PIPELINE_BOOTSTRAP_PR
+```
+
+Inicializa la rama huérfana `evidence` con un `README.md` y protégela frente a
+eliminaciones y force-push. La identidad `github-actions[bot]` debe poder añadir
+commits normales; ninguna persona ni workflow debe reescribir los anteriores.
+
+La regla de `main` exige PR, historial lineal, conversaciones resueltas y los
+checks `production-readiness` y `preview-approved`, además de bloquear deletes
+y force-push. Añade `preview-approved` solo después de que una PR real lo haya
+producido correctamente; antes de esa prueba conserva únicamente
+`production-readiness` para no bloquear el bootstrap.
 
 ## Datos necesarios para habilitar CD
 

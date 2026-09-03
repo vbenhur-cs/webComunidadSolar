@@ -16,6 +16,22 @@ covers static quality, unit/server contracts, local D1, the real development
 server, public browser contracts, link closure, a clean Git-archive rebuild and
 a Cloudflare dry deployment. It never deploys or reads production secrets.
 
+Every internal web-change PR also carries one versioned evidence contract.
+After CI, the trusted [PR preview workflow](.github/workflows/pr-preview.yml)
+builds exact base/candidate Worker versions, validates both public Preview URLs
+and stores desktop/mobile PNGs plus hashed manifests on the append-only
+`evidence` branch. Human approval in `premerge-review` produces
+`preview-approved` for the current head only. After merge, the
+[shared preview workflow](.github/workflows/shared-preview.yml) releases the
+verified `main` SHA to
+`https://comunidad-solar-preview.comunidadsolar-dev.workers.dev` and records a
+second evidence set.
+
+The [production workflow](.github/workflows/production.yml) is manual and
+fail-closed. It cannot publish while `PRODUCTION_ENABLED` is absent or not
+exactly `true`; no production credentials are installed during preview
+bootstrap. This pipeline does not change Raiola, DNS or `comunidadsolar.es`.
+
 ## Solicitar cambios en la web
 
 Las personas no técnicas pueden abrir una **Solicitud de cambio web** desde
@@ -60,8 +76,9 @@ npm run verify:independent -- --staged
 
 The verifier rejects untracked or unstaged project files, creates a private Git
 archive without `.git` or a sibling checkout, and runs `npm ci`, check, test,
-and build inside it. Agents and automation do not publish directly; later
-migration and ingestion work still require their approved gates.
+and build inside it. Agents and contributors do not publish directly. GitHub
+Actions can update only the isolated/shared preview after its gates; migration,
+ingestion and production retain their own approvals.
 
 ## Ingestión de páginas verificable
 
@@ -82,8 +99,8 @@ npm run verify:ingestion
 ```
 
 Los fixtures de ingestión se ejecutan sólo en clones temporales y no son parte
-de la CLI de producción. `--execute` no autoriza un deploy y Cloudflare real
-sigue cerrada. Consulte [la guía operativa de ingestión](docs/operations/ingestion.md)
+de la CLI de producción. `--execute` no autoriza un deploy y producción sigue
+cerrada. Consulte [la guía operativa de ingestión](docs/operations/ingestion.md)
 para estados, evidencia, configuración de `CommandAgent` y recuperación de una
 reconciliación pendiente.
 

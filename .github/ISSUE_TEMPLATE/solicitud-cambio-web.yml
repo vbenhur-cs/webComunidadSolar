@@ -56,6 +56,35 @@ body:
     validations:
       required: true
 
+  - type: input
+    id: exact_route
+    attributes:
+      label: Ruta exacta que debe probarse
+      description: Escribe la ruta exacta, pública y sin dominio, query ni fragmento; debe empezar y terminar por “/”.
+      placeholder: /autoconsumo-remoto/
+    validations:
+      required: true
+
+  - type: dropdown
+    id: evidence_scope
+    attributes:
+      label: Alcance de la evidencia visual
+      description: La página completa genera capturas desktop/móvil; una sección añade además dos recortes del elemento indicado.
+      options:
+        - "Página completa"
+        - "Sección concreta"
+    validations:
+      required: true
+
+  - type: input
+    id: evidence_selector
+    attributes:
+      label: Selector estable de la sección
+      description: Para una sección, indica o solicita un atributo estable como [data-evidence-id='beneficios']. Para página completa, escribe “No aplica”.
+      placeholder: "[data-evidence-id='beneficios'] o No aplica"
+    validations:
+      required: true
+
   - type: textarea
     id: requested_change
     attributes:
@@ -153,4 +182,6 @@ body:
         - label: He indicado una fuente y una persona responsable de aprobar el resultado.
           required: true
         - label: Revisaré la URL de preview antes de que se solicite la publicación.
+          required: true
+        - label: Entiendo que la issue debe permanecer abierta hasta que aparezca el comentario de release de la preview compartida.
           required: true

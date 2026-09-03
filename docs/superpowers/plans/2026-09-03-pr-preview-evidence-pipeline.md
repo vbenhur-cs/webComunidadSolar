@@ -1046,7 +1046,7 @@ production environment (not enabled)
   no production credentials are installed during bootstrap
 ```
 
-- [ ] **Step 1: Update process docs to match pre-merge reality**
+- [x] **Step 1: Update process docs to match pre-merge reality**
 
 Replace the old sequence that merged before preview with issue -> PR -> CI ->
 two previews -> PNG evidence -> `premerge-review` -> merge -> shared preview.
@@ -1054,7 +1054,7 @@ Document page/section request examples, selector attributes, fork behavior,
 reruns, correction after a changed SHA, evidence links and the three rollback
 cases.
 
-- [ ] **Step 2: Update Cloudflare/runbook configuration**
+- [x] **Step 2: Update Cloudflare/runbook configuration**
 
 Document base64 encoding without echoing content:
 
@@ -1070,7 +1070,7 @@ and must never be
 committed; do not include any real token, UUID or profile bytes. Document
 environment protection and branch rule setup through GitHub UI/API.
 
-- [ ] **Step 3: Add request-template guidance**
+- [x] **Step 3: Add request-template guidance**
 
 The issue form must ask whether the scope is full page or section, require the
 exact URL/desired route, request a stable `data-evidence-id` for section

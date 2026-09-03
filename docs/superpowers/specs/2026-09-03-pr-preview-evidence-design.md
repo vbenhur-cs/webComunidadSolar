@@ -1,8 +1,9 @@
 # Diseño del pipeline de preview, evidencia y aprobación de cambios web
 
-Estado: las decisiones funcionales y operativas fueron aprobadas en
-conversación el 3 de septiembre de 2026; pendiente de revisión de este
-documento antes de implementar.
+Estado: diseño aprobado e implementación completada en la rama del pipeline el
+4 de septiembre de 2026. La activación externa se realiza mediante el bootstrap
+seguro descrito en la sección 17 y se considera validada solo tras la prueba
+real de la issue #4.
 
 ## 1. Resultado buscado
 

@@ -1,195 +1,249 @@
 # Solicitar cambios en la web
 
-Esta guía permite pedir un cambio en Comunidad Solar sin necesidad de conocer
-Astro, Git ni Cloudflare. Sirve para texto, imágenes, páginas nuevas,
-formularios, cambios de navegación, correcciones y mejoras funcionales.
+Esta guía permite pedir un cambio en Comunidad Solar sin conocer Astro, Git ni
+Cloudflare. Se puede escribir la petición con lenguaje natural, pero debe dejar
+claros el resultado, la ruta, el alcance y quién lo aprobará.
 
-El canal oficial es una [solicitud de cambio web en GitHub](https://github.com/vbenhur-cs/webComunidadSolar/issues/new/choose). Si la persona solicitante no tiene acceso al
-repositorio, el responsable web debe abrir la solicitud en su nombre sin alterar
-la información aprobada.
-
-Una solicitud no publica nada por sí sola. Cada cambio pasa por revisión,
-pruebas, una URL de preview y la aprobación correspondiente antes de una
-entrega.
+El canal oficial es una
+[Solicitud de cambio web en GitHub](https://github.com/vbenhur-cs/webComunidadSolar/issues/new/choose).
+Si la persona solicitante no tiene acceso, el responsable web puede abrirla en
+su nombre. Una issue no publica nada por sí sola y permanece abierta hasta que
+el cambio aceptado llegue a la preview compartida y reciba su comentario de
+release.
 
 ## Resumen del proceso
 
 ```text
-Solicitud completa → revisión inicial → rama y PR → CI + revisión humana
-→ integración en main → preview del mismo cambio → aprobación de contenido
-→ publicación controlada → confirmación
+Issue abierta
+  → Pull Request
+  → Production readiness en verde
+  → preview base
+  → preview candidata
+  → evidencia PNG permanente
+  → aprobación humana en premerge-review
+  → merge en `main`
+  → preview compartida y comentario de release
 ```
 
-No se compromete una fecha de publicación hasta completar la revisión inicial:
-la prioridad depende del impacto para clientes, requisitos legales, alcance y
-evidencias disponibles.
+El orden es deliberado: se compara y aprueba el cambio antes del merge. La
+preview compartida confirma después que el SHA integrado es el mismo que se
+revisó. Ningún paso de este flujo modifica `comunidadsolar.es`, Raiola ni
+producción.
 
-## Paso a paso para quien solicita el cambio
+## Qué libertad tiene la persona solicitante
 
-### 1. Comprueba si ya existe una solicitud
+Puedes explicar la necesidad como te resulte más cómodo y proponer texto,
+estructura, imágenes o referencias. El equipo puede ayudarte a concretarla,
+pero no inventará cifras, derechos de uso, condiciones legales ni una
+aprobación. Antes de desarrollar deben quedar definidos:
 
-Busca primero en las incidencias abiertas del repositorio y revisa la página
-actual. Si el cambio ya está solicitado, añade la información nueva a esa
-solicitud en lugar de abrir otra.
+- el objetivo y para quién se hace;
+- la URL actual y la ruta exacta deseada, siempre con `/` inicial y final;
+- si se revisará la página completa o una sección concreta;
+- el cambio exacto y su fuente autorizada;
+- criterios comprobables en móvil y escritorio; y
+- la persona responsable de aprobar contenido, negocio o legal.
 
-Los incidentes que impidan contratar, expongan información, muestren un dato
-legalmente incorrecto o rompan una página pública deben marcarse como
-**Crítico** e incluir una captura o enlace reproducible. No se corrigen
-directamente en producción desde un ordenador personal.
+Para identificar una página existente, pega su URL completa y escribe también
+su ruta, por ejemplo `/autoconsumo-remoto/`. Para una página nueva, indica la
+ruta deseada aunque todavía devuelva 404.
 
-### 2. Reúne la información antes de abrirla
+## Dos modelos de solicitud
 
-La solicitud debe explicar el resultado que se busca, no solo una solución
-propuesta. Incluye siempre:
+### A. Página completa nueva
 
-- **Objetivo y motivo:** qué debe conseguir el cambio y para quién.
-- **Página afectada:** URL actual y, si se crea una página, URL deseada.
-- **Cambio exacto:** texto actual y texto nuevo, o una descripción inequívoca
-  de lo que debe ocurrir.
-- **Fuente verificable:** enlace, documento aprobado o persona responsable que
-  confirma cada dato importante.
-- **Criterio de aceptación:** cómo se sabrá que el cambio está correcto.
-- **Persona que aprueba:** quien puede validar contenido, negocio o legal.
-- **Fecha relevante:** solo cuando haya una campaña, evento o obligación real;
-  explica qué ocurre si no se publica a tiempo.
+```text
+Título: [Web] Crear guía para comunidades de propietarios
+Objetivo: explicar los pasos y llevar a una solicitud de contacto.
+URL actual: no existe.
+Ruta exacta deseada: /pruebas/guia-comunidades-propietarios/
+Alcance de evidencia: Página completa.
+Cambio: página con introducción, pasos, preguntas frecuentes y CTA.
+Fuente: documento aprobado <enlace o responsable>.
+Materiales: No aplica / enlaces y permisos de los archivos aprobados.
+Criterios: base 404; candidata 200; contenido y CTA correctos en móvil y
+escritorio; noindex mientras esté bajo /pruebas/.
+Aprobador: <nombre y área>.
+```
 
-Para imágenes, vídeos, logos o documentos, facilita el archivo final o un
-enlace estable a la versión aprobada, su autor/origen, permiso de uso, texto
-alternativo y pie o crédito si corresponde. No sirve una captura borrosa ni un
-enlace temporal que pueda cambiar.
+La PR implementadora añadirá exactamente un contrato
+`evidence/requests/issue-<N>.yaml`, sustituyendo `<N>` por el número real:
 
-### 3. Añade la información específica del tipo de cambio
+```yaml
+schema_version: 1
+issue: 4
+scope: page
+route: /pruebas/guia-comunidades-propietarios/
+expected_status:
+  base: 404
+  candidate: 200
+viewports:
+  - desktop
+  - mobile
+```
 
-| Tipo de solicitud | Información adicional necesaria |
+### B. Sección de una página existente
+
+```text
+Título: [Web] Actualizar beneficios de autoconsumo remoto
+Objetivo: aclarar tres ventajas para una persona que compara opciones.
+URL actual: https://<sitio>/autoconsumo-remoto/
+Ruta exacta: /autoconsumo-remoto/
+Alcance de evidencia: Sección concreta.
+Selector estable: [data-evidence-id='beneficios']
+Cambio: sustituir el contenido actual por <texto aprobado>.
+Fuente: <enlace o responsable>.
+Criterios: base y candidata 200; sección y página completa legibles en móvil y
+escritorio; enlaces correctos.
+Aprobador: <nombre y área>.
+```
+
+La sección debe tener un identificador estable en el HTML. Se recomienda
+`data-evidence-id` porque expresa su finalidad sin depender del estilo:
+
+```astro
+<section data-evidence-id="beneficios">
+```
+
+Y su contrato será:
+
+```yaml
+schema_version: 1
+issue: 5
+scope: section
+route: /autoconsumo-remoto/
+selector: "[data-evidence-id='beneficios']"
+expected_status:
+  base: 200
+  candidate: 200
+viewports:
+  - desktop
+  - mobile
+```
+
+El pipeline admite selectores simples `#id`, `.clase` o
+`[data-evidence-id='nombre-en-kebab-case']`; no admite selectores ambiguos ni
+ejecutables. Aunque el alcance sea una sección, conserva también capturas de la
+página completa para detectar efectos colaterales.
+
+## Información especial según el cambio
+
+| Tipo | Información adicional necesaria |
 | --- | --- |
-| Texto, titular o CTA | Texto literal, tono esperado, fuente de cifras y página concreta. |
-| Imagen, vídeo o logo | Archivo o enlace estable, derechos de uso, autoría, texto alternativo y crédito. |
-| Página nueva o campaña | Objetivo, público, URL propuesta, estructura, contenido aprobado, CTA, SEO, fecha de retirada y responsable. |
-| Comunidad, proyecto, hito o cifra | Municipio, fecha de corte, estado (`confirmado`, `en curso` o `escenario`), fuente y responsable que lo confirma. |
-| Formulario o captación | Finalidad, campos mínimos, destinatario, conservación, consentimiento, mensajes y responsable de los datos. |
-| Cambio legal, precio, condiciones o promesa comercial | Texto aprobado por Legal/Negocio, fecha de vigencia, fuente contractual y persona que autoriza. |
-| URL, navegación o SEO | URL actual y destino, motivo, enlaces internos afectados, título, descripción y si necesita redirección. |
-| Calculadora o integración externa | URL externa, propietario, finalidad y comportamiento esperado. La calculadora se trata como dominio externo: no se solicitan ni publican sus credenciales en este repositorio. |
-| Error técnico | Pasos para reproducirlo, URL, dispositivo/navegador, resultado esperado, resultado actual y captura si aporta evidencia. |
+| Texto, titular o CTA | Texto literal, tono, fuente de cifras y ubicación concreta. |
+| Imagen, vídeo o logo | Archivo estable, autoría, permiso de uso, crédito y texto alternativo. |
+| Página o campaña | Estructura, contenido aprobado, CTA, SEO, fecha de retirada y responsable. |
+| Comunidad, proyecto o dato | Municipio, fecha de corte, estado, fuente y persona que lo confirma. |
+| Formulario o captación | Finalidad, campos mínimos, destinatario, conservación, consentimiento y mensajes. |
+| Legal, precio o promesa | Texto aprobado, fecha de vigencia, fuente contractual y autorización expresa. |
+| URL, navegación o SEO | Origen, destino, enlaces internos, metadatos y redirección necesaria. |
+| Calculadora externa | URL y propietario externos, finalidad y comportamiento; nunca sus credenciales. |
+| Error técnico | Pasos, URL, navegador/dispositivo, resultado actual, esperado y captura útil. |
 
-Si falta una fuente, una aprobación o el contenido definitivo, indícalo como
-pendiente. El equipo no inventará cifras, condiciones, imágenes ni texto legal
-para desbloquear una entrega.
+Para cualquier asset, adjunta el original o un enlace estable. Una imagen
+borrosa, un enlace temporal o un archivo sin permiso de uso no constituyen un
+material aprobado.
 
-### 4. Abre la solicitud con el formulario
+## Datos que nunca deben incluirse
 
-En GitHub, selecciona **New issue** y elige **Solicitud de cambio web**. El
-formulario pide la información mínima y deja constancia del responsable de
-aprobación.
+No publiques en la issue, PR, comentarios, capturas ni adjuntos:
 
-No incluyas nunca en una incidencia, comentario, captura o adjunto:
+- contraseñas, tokens, claves API o perfiles Cloudflare;
+- datos personales, CUPS, teléfonos, correos, facturas o contratos de clientes;
+- cookies, cabeceras de autenticación o enlaces que concedan acceso; ni
+- información confidencial no autorizada para una web pública.
 
-- contraseñas, tokens, claves API o credenciales de Cloudflare, Raiola, Zoho o
-  cualquier proveedor;
-- datos personales de clientes, facturas, CUPS, teléfonos, correos o contratos;
-- enlaces internos que den acceso no autorizado;
-- información confidencial que no esté autorizada para ser pública.
+Usa ejemplos anonimizados. Las rutas privadas y los endpoints API no son
+admisibles como objetivo de captura en esta primera versión.
 
-Entrega ejemplos anonimizados cuando sean necesarios para explicar un caso. Si
-hay datos personales o una incidencia de seguridad, contacta primero con el
-responsable correspondiente por el canal interno aprobado.
+## Qué ocurre después de abrir la issue
 
-### 5. Responde a la revisión inicial
+1. El responsable comprueba objetivo, alcance, fuente, aprobador y aceptación.
+2. El cambio se desarrolla en una rama interna y se abre una Pull Request que
+   enlaza la issue sin cerrarla.
+3. `Production readiness` valida formato, tipos, contratos, enlaces, imágenes,
+   navegación, servidor, build independiente y bundle Cloudflare sin publicar
+   en producción.
+4. El pipeline confiable compila el SHA base y el SHA candidato sin entregar
+   secretos al código de la PR. Cloudflare crea dos Preview URLs aisladas que
+   no sustituyen la preview compartida.
+5. Chromium comprueba los estados HTTP y genera PNG de escritorio y móvil. Si
+   se pidió una sección, añade sus dos recortes.
+6. Los PNG y manifiestos con hashes se guardan de forma append-only en la rama
+   `evidence`. La PR y la issue reciben enlaces raw permanentes, los SHAs y las
+   dos URLs operativas.
+7. El job espera en `premerge-review`. La persona autorizada compara antes y
+   después y aprueba o solicita correcciones.
+8. Solo la aprobación de esa evidencia permite emitir `preview-approved` sobre
+   el SHA candidato exacto y desbloquear el merge.
+9. Después del merge, ese SHA se despliega a
+   `https://comunidad-solar-preview.comunidadsolar-dev.workers.dev`, se captura
+   de nuevo y se añade el comentario de release.
 
-El responsable web clasificará la solicitud y puede pedir una aclaración. Una
-solicitud queda lista para desarrollo cuando dispone de objetivo, alcance,
-fuente, aprobador y criterios de aceptación verificables.
+Las Preview URLs de una versión pueden caducar; los PNG, hashes y manifiestos
+de la rama `evidence` no dependen de que sigan vivas.
 
-Las prioridades se aplican así:
+### Pull Requests desde un fork
+
+Una PR desde un fork ejecuta CI sin secretos, pero no recibe previews
+privilegiadas ni `preview-approved`. Una persona responsable debe revisar el
+diff y trasladarlo a una rama interna del repositorio para continuar. Nunca se
+habilitan secretos en código de un fork.
+
+### Correcciones y reintentos
+
+- Reintentar el mismo SHA reutiliza la identidad de evidencia y no sobrescribe
+  bytes existentes.
+- Un SHA nuevo por cualquier corrección exige previews, evidencia y aprobación
+  nueva. La aprobación anterior no sirve para el nuevo head.
+- Si el selector desaparece, un estado HTTP no coincide, Chromium informa un
+  error o una captura es inválida, el flujo falla y no solicita aprobación.
+
+La persona aprobadora debe comentar correcciones concretas o confirmar la
+versión revisada. «Aprobado» sin la evidencia del SHA actual no sustituye el
+gate de GitHub.
+
+## Cuándo se cierra la solicitud
+
+La issue debe seguir abierta durante desarrollo, preview, aprobación y merge.
+Solo se cierra cuando existe el comentario de release con:
+
+- SHA integrado y enlace a la ejecución;
+- URL de la preview compartida;
+- capturas y manifiesto permanentes;
+- resultado de las comprobaciones; y
+- limitaciones o trabajo posterior, si lo hay.
+
+Una release en preview no significa publicación en el dominio principal. El
+paso a producción tiene un workflow manual distinto y permanece bloqueado
+hasta su habilitación explícita.
+
+## Rollback y recuperación
+
+- **Antes del merge:** cerrar la PR detiene la promoción; `main` no cambia.
+- **Después del merge:** abrir una PR nueva con `git revert <sha>` y repetir
+  CI, previews, evidencia y aprobación. No se reescribe el historial.
+- **Worker desplegado:** volver a una versión anterior conocida de Cloudflare,
+  registrar versión, actor y motivo, y después preparar la PR correctiva.
+
+Revertir el Worker no revierte D1 o KV. Los cambios de datos necesitan un plan
+compatible hacia atrás y una recuperación revisada por separado.
+
+## Prioridad y reglas editoriales
 
 | Prioridad | Cuándo usarla |
 | --- | --- |
-| Crítico | Riesgo de seguridad o privacidad, incumplimiento legal, información gravemente incorrecta o bloqueo real para clientes. |
-| Alta | Campaña con fecha confirmada, página importante rota o impacto comercial significativo. |
-| Normal | Mejora, contenido o corrección sin impacto inmediato. |
-| Baja | Idea exploratoria, mejora futura o trabajo sin fecha ni fuente definitiva. |
+| Crítico | Seguridad, privacidad, incumplimiento legal, información gravemente incorrecta o bloqueo real. |
+| Alta | Campaña confirmada, página importante rota o impacto comercial significativo. |
+| Normal | Cambio habitual de contenido o funcionalidad. |
+| Baja | Idea futura o trabajo sin fuente, fecha o contenido definitivo. |
 
-La prioridad no sustituye la aprobación ni las pruebas. Un cambio crítico se
-acelera, pero sigue dejando trazabilidad y revisión proporcional al riesgo.
+La prioridad acelera la atención, pero no elimina trazabilidad ni aprobación.
+Cada cifra necesita fuente y fecha; los cambios legales necesitan validación
+expresa; una URL pública exige revisar enlaces, sitemap, redirecciones y SEO;
+y todo asset necesita alternativa accesible y permiso de uso.
 
-### 6. Revisa el preview cuando se te solicite
-
-Antes de preparar el preview, el cambio pasa por una Pull Request, CI y revisión
-humana; solo entonces se integra en `main`. CI valida el cambio, pero no crea
-una URL de preview automáticamente. Cuando el responsable prepare la versión de
-revisión desde el mismo cambio integrado, compartirá su URL. La persona
-solicitante y el aprobador deben revisar, como mínimo:
-
-- el texto, cifras, fechas, enlaces y CTA;
-- imágenes, créditos y textos alternativos;
-- versión móvil y escritorio cuando afecte al diseño o navegación;
-- formularios, mensajes y consentimiento cuando aplique;
-- URL, título y descripción cuando afecte a SEO;
-- que no se haya incluido información no pública.
-
-Registra la aprobación o las correcciones en la misma solicitud. Un comentario
-como «aprobado para publicar» debe identificar a la persona autorizada y la
-versión de preview revisada. No se aprueba una rama y se publica otra: si cambia
-el contenido después de la revisión, debe prepararse y aprobarse un preview
-nuevo.
-
-### 7. Recibe la confirmación de entrega
-
-La publicación la realiza únicamente la persona responsable de release mediante
-el flujo protegido. La solicitud se cierra cuando incluye:
-
-- el enlace de la entrega o la versión publicada;
-- las pruebas aplicadas y el resultado de CI;
-- cualquier redirección, cambio SEO o limitación conocida;
-- una referencia a la aprobación de contenido.
-
-Si el cambio requiere producción, se seguirá el [runbook de pruebas y
-producción](production-release-runbook.md). Mientras el CD protegido no esté
-habilitado, una solicitud aprobada no autoriza un despliegue manual ni cambios
-en DNS, Raiola o el dominio principal.
-
-## Estados de una solicitud
-
-| Estado | Significado | Siguiente responsable |
-| --- | --- | --- |
-| Nueva | Se ha recibido, pero aún no se ha comprobado la información. | Responsable web |
-| Pendiente de información | Faltan fuente, contenido, aprobación o criterio de aceptación. | Solicitante |
-| En análisis | Se estima alcance, riesgo, SEO, privacidad y dependencia externa. | Responsable web / especialista |
-| Aprobada para desarrollo | Alcance y aprobador definidos. | Equipo de desarrollo |
-| En desarrollo | Se implementa el cambio en una rama. | Equipo de desarrollo |
-| En revisión de PR | La PR espera o supera CI y revisión humana antes de integrarse en `main`. | Revisor |
-| Preparando preview | La PR se integró en `main` y se prepara la versión de ese mismo cambio. | Responsable web / release |
-| En revisión de preview | Existe una versión de revisión del cambio ya integrado en `main`. | Solicitante / aprobador |
-| Aprobada para publicación | Preview aceptada y requisitos de release completos. | Responsable de release |
-| Publicada | Se ha confirmado la entrega. | Responsable de release |
-| Cerrada sin cambio | No procede, está duplicada o no se recibió la información necesaria. | Responsable web |
-
-## Reglas que protegen la web y a sus usuarios
-
-- Cada cifra, estado o afirmación comercial debe tener fuente y fecha de corte.
-  No se mezclan datos confirmados, trabajos en curso y escenarios.
-- Los cambios legales, de privacidad, cookies, precios, financiación o
-  condiciones necesitan validación expresa del área responsable antes de
-  publicarse.
-- No se cambia una URL pública ni se retira una página sin revisar enlaces,
-  sitemap, redirecciones y SEO.
-- Las imágenes necesitan permiso de uso y alternativa accesible; no se reutiliza
-  una imagen encontrada en internet sin autorización.
-- Los formularios solo piden datos necesarios y no se conectan a un proveedor
-  externo sin definir finalidad, consentimiento y responsable.
-- Las pruebas y el preview no sustituyen la aprobación editorial, legal o de
-  negocio.
-- Nadie comparte credenciales ni solicita acceso a infraestructura dentro de un
-  ticket de contenido.
-
-## Qué recibe el equipo técnico
-
-El equipo técnico convierte la solicitud aprobada en una rama y una Pull
-Request. La automatización comprueba formato, tipos, contratos, enlaces,
-imágenes, navegación, formularios, build independiente y la configuración de
-Cloudflare sin publicar. El detalle técnico de esas comprobaciones está en el
-[runbook de pruebas y producción](production-release-runbook.md).
-
-La guía de [ingestión de páginas](ingestion.md) se usa solo cuando se aporta una
-página o una solicitud que debe pasar por sus dos aprobaciones formales. Quien
-solicita un cambio cotidiano no necesita ejecutar esa CLI.
+El procedimiento técnico completo está en el
+[runbook de pruebas y releases](production-release-runbook.md). La
+[guía de ingestión](ingestion.md) solo se usa para páginas que entren por esa
+CLI y sus dos gates formales.
