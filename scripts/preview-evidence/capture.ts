@@ -168,6 +168,7 @@ export interface ReleaseCaptureInput {
   context: ReleaseCaptureContext;
   runAttempt?: number;
   release: CloudflareVersionDescriptor;
+  sharedUrl: string;
   outputRoot: string;
 }
 
@@ -191,6 +192,7 @@ interface CaptureCommon {
 interface Variant {
   role: EvidenceRole;
   descriptor: CloudflareVersionDescriptor;
+  captureUrl: string;
   expectedStatus: AllowedHttpStatus;
   prefix: "before" | "after" | "release";
 }
@@ -308,7 +310,9 @@ function validateGitHubUrl(
   return url.toString();
 }
 
-function validateReleaseCaptureContext(value: unknown): ReleaseCaptureContext {
+export function validateReleaseCaptureContext(
+  value: unknown,
+): ReleaseCaptureContext {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     throw new TypeError("El contexto release es inválido");
   }
@@ -470,6 +474,32 @@ function checkedDescriptor(
     );
   }
   return descriptor;
+}
+
+export function validateSharedPreviewUrl(value: unknown): string {
+  let url: URL;
+  try {
+    url = new URL(boundedText(value, "La URL del preview compartido"));
+  } catch {
+    throw new TypeError("La URL del preview compartido es inválida");
+  }
+  if (
+    url.protocol !== "https:" ||
+    url.username !== "" ||
+    url.password !== "" ||
+    url.port !== "" ||
+    url.pathname !== "/" ||
+    url.search !== "" ||
+    url.hash !== "" ||
+    !/^comunidad-solar-preview\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.workers\.dev$/u.test(
+      url.hostname,
+    )
+  ) {
+    throw new TypeError(
+      "La URL compartida debe ser el origen HTTPS exacto de comunidad-solar-preview en workers.dev",
+    );
+  }
+  return `${url.origin}/`;
 }
 
 async function assertFreshOutput(outputRoot: string): Promise<void> {
@@ -637,7 +667,7 @@ function captureRecord(
   if (!Array.isArray(result.pageErrors) || result.pageErrors.length > 0) {
     throw new Error("La captura registró un page error");
   }
-  const origin = new URL(variant.descriptor.url).origin;
+  const origin = new URL(variant.captureUrl).origin;
   validateFinalUrl(result.finalUrl, origin);
   const failures = failedOrigins(result.failedRequests, origin);
   if (failures.sameOrigin > 0) {
@@ -840,7 +870,7 @@ async function captureEvidence(
           role: variant.role,
           sourceSha: variant.descriptor.sourceSha,
           versionId: variant.descriptor.versionId,
-          url: new URL(common.request.route, variant.descriptor.url).toString(),
+          url: new URL(common.request.route, variant.captureUrl).toString(),
           expectedStatus: variant.expectedStatus,
           viewport,
           selector: common.request.selector,
@@ -956,12 +986,14 @@ export async function capturePullRequestEvidence(
       {
         role: "base",
         descriptor: base,
+        captureUrl: base.url,
         expectedStatus: request.expectedStatus.base,
         prefix: "before",
       },
       {
         role: "candidate",
         descriptor: candidate,
+        captureUrl: candidate.url,
         expectedStatus: request.expectedStatus.candidate,
         prefix: "after",
       },
@@ -982,6 +1014,7 @@ export async function captureReleaseEvidence(
     "release",
     context.sourceSha,
   );
+  const sharedUrl = validateSharedPreviewUrl(input.sharedUrl);
   return await captureEvidence(
     {
       kind: "release",
@@ -1003,6 +1036,7 @@ export async function captureReleaseEvidence(
       {
         role: "release",
         descriptor: release,
+        captureUrl: sharedUrl,
         expectedStatus: context.request.expectedStatus.candidate,
         prefix: "release",
       },

@@ -17,6 +17,7 @@ import test from "node:test";
 import {
   capturePullRequestEvidence,
   captureReleaseEvidence,
+  writeReleaseCaptureContext,
   type BrowserAdapter,
   type BrowserCaptureRequest,
   type BrowserCaptureResult,
@@ -274,6 +275,8 @@ test("publishes a release only below its immutable release SHA", async () => {
       {
         context: releaseContext(),
         release: descriptor("release"),
+        sharedUrl:
+          "https://comunidad-solar-preview.comunidadsolar-dev.workers.dev/",
         outputRoot: join(root, "capture"),
       },
       new FakeBrowser(),
@@ -627,6 +630,92 @@ test("CLI publishes, comments and approves only sealed PR evidence", async () =>
       "EVIDENCE_PUBLISHED_OK issue=4 added=6 existing=0\n",
       `EVIDENCE_COMMENTS_OK issue=4 sha=${headSha}\n`,
       `PREVIEW_APPROVED_OK sha=${headSha}\n`,
+    ]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("CLI publishes and comments a sealed shared-preview release", async () => {
+  const root = await mkdtemp(join(tmpdir(), "evidence-release-cli-"));
+  const checkout = join(root, "evidence-checkout");
+  await mkdir(checkout);
+  try {
+    const contextValue = releaseContext();
+    const capture = await captureReleaseEvidence(
+      {
+        context: contextValue,
+        release: descriptor("release"),
+        sharedUrl:
+          "https://comunidad-solar-preview.comunidadsolar-dev.workers.dev/",
+        outputRoot: join(root, "capture"),
+      },
+      new FakeBrowser(),
+    );
+    const contextPath = join(root, "context.json");
+    const publicationPath = join(root, "publication.json");
+    const githubOutput = join(root, "github-output");
+    const sealed = await writeReleaseCaptureContext(contextPath, contextValue);
+    await writeFile(githubOutput, "", "utf8");
+    const messages: string[] = [];
+
+    await runPreviewEvidenceCli(
+      [
+        "publish-release-evidence",
+        "--capture",
+        capture.root,
+        "--checkout",
+        checkout,
+        "--context",
+        contextPath,
+        "--context-sha",
+        sealed.sha256,
+        "--output",
+        publicationPath,
+        "--github-output",
+        githubOutput,
+      ],
+      {},
+      { stdout: (message) => messages.push(message) },
+    );
+    const publication = JSON.parse(await readFile(publicationPath, "utf8"));
+    assert.equal(publication.kind, "release");
+    assert.equal(publication.source.releaseSha, releaseSha);
+    const outputs = await readFile(githubOutput, "utf8");
+    assert.match(
+      outputs,
+      new RegExp(
+        `identity_manifest<<[^\\n]+\\nissue-4/releases/${releaseSha}/manifest\\.json\\n`,
+        "u",
+      ),
+    );
+
+    const api = new PipelineGitHubApi();
+    await runPreviewEvidenceCli(
+      [
+        "comment-release-evidence",
+        "--publication",
+        publicationPath,
+        "--context",
+        contextPath,
+        "--context-sha",
+        sealed.sha256,
+        "--evidence-sha",
+        "e".repeat(40),
+      ],
+      {
+        GITHUB_TOKEN: "test-github-token",
+        GITHUB_REPOSITORY: repository,
+      },
+      {
+        createApi: () => api,
+        stdout: (message) => messages.push(message),
+      },
+    );
+    assert.equal(api.calls.filter((call) => call.method === "POST").length, 2);
+    assert.deepEqual(messages, [
+      "RELEASE_EVIDENCE_PUBLISHED_OK issue=4 added=3 existing=0\n",
+      `RELEASE_EVIDENCE_COMMENTS_OK issue=4 sha=${releaseSha}\n`,
     ]);
   } finally {
     await rm(root, { recursive: true, force: true });

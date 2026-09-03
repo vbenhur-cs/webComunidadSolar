@@ -5,6 +5,7 @@ import test from "node:test";
 import { parse } from "yaml";
 
 const workflowPath = ".github/workflows/pr-preview.yml";
+const sharedWorkflowPath = ".github/workflows/shared-preview.yml";
 
 function serialized(value) {
   return JSON.stringify(value);
@@ -171,5 +172,137 @@ test("isolates untrusted builds from preview secrets and write permissions", asy
 
   assert.equal(serialized(workflow).includes("comunidadsolar.es"), false);
   assert.equal(serialized(workflow).includes("Raiola"), false);
+  assertPinnedActions(workflow);
+});
+
+test("deploys only the verified current main SHA to the shared preview", async () => {
+  const workflow = parse(await readFile(sharedWorkflowPath, "utf8"));
+
+  assert.equal(workflow.name, "Shared preview release");
+  assert.deepEqual(workflow.on, {
+    workflow_run: {
+      workflows: ["Production readiness"],
+      types: ["completed"],
+    },
+  });
+  assert.deepEqual(workflow.permissions, { contents: "read" });
+  assert.deepEqual(workflow.concurrency, {
+    group: "shared-preview-${{ github.repository }}",
+    "cancel-in-progress": false,
+  });
+  assert.deepEqual(Object.keys(workflow.jobs), [
+    "resolve",
+    "profile",
+    "build",
+    "release",
+    "capture",
+    "evidence",
+  ]);
+
+  const resolve = workflow.jobs.resolve;
+  assert.match(resolve.if, /conclusion\s*==\s*'success'/u);
+  assert.match(resolve.if, /event\s*==\s*'push'/u);
+  assert.match(resolve.if, /head_branch\s*==\s*'main'/u);
+  assert.deepEqual(resolve.permissions, {
+    contents: "read",
+    issues: "read",
+    "pull-requests": "read",
+  });
+  assert.equal(serialized(resolve).includes("secrets."), false);
+  assert.match(serialized(resolve), /vars\.PREVIEW_PIPELINE_BOOTSTRAP_PR/u);
+  assert.match(commands(resolve).join("\n"), /resolve-main/u);
+
+  for (const name of ["profile", "build", "release", "capture", "evidence"]) {
+    assert.match(
+      workflow.jobs[name].if,
+      /needs\.resolve\.outputs\.bootstrap\s*!=\s*'true'/u,
+      `${name} debe omitir el despliegue bootstrap`,
+    );
+  }
+
+  const profile = workflow.jobs.profile;
+  assert.equal(profile.environment, "preview");
+  assert.match(commands(profile).join("\n"), /materialize-profile/u);
+  assert.match(serialized(profile), /CLOUDFLARE_PREVIEW_CONFIG_B64/u);
+
+  const build = workflow.jobs.build;
+  assert.equal(build.environment, undefined);
+  assert.deepEqual(build.permissions, { contents: "read" });
+  assert.equal(serialized(build).includes("secrets."), false);
+  assert.equal(serialized(build).includes("github.token"), false);
+  assert.deepEqual(checkoutRefs(build), [
+    "main",
+    "${{ needs.resolve.outputs.source_sha }}",
+  ]);
+  assert.match(commands(build).join("\n"), /npm ci --ignore-scripts/u);
+  assert.match(commands(build).join("\n"), /npm run build/u);
+  assert.match(
+    commands(build).join("\n"),
+    /find dist drizzle -type f -exec chmod 0644/u,
+  );
+  assert.match(commands(build).join("\n"), /seal-bundle[\s\S]*--role release/u);
+
+  const release = workflow.jobs.release;
+  assert.equal(release.environment, "preview");
+  assert.deepEqual(release.permissions, { contents: "read" });
+  assert.match(serialized(release), /vars\.CLOUDFLARE_ACCOUNT_ID/u);
+  assert.match(serialized(release), /secrets\.CLOUDFLARE_API_TOKEN/u);
+  const releaseCommands = commands(release).join("\n");
+  assert.match(releaseCommands, /verify-bundle/u);
+  assert.match(releaseCommands, /recheck-main/u);
+  assert.match(releaseCommands, /upload-version[\s\S]*--role release/u);
+  assert.match(releaseCommands, /deploy-version/u);
+  assert.ok(
+    releaseCommands.indexOf("recheck-main") <
+      releaseCommands.indexOf("upload-version"),
+  );
+  assert.ok(
+    releaseCommands.indexOf("upload-version") <
+      releaseCommands.indexOf("deploy-version"),
+  );
+  assert.equal(releaseCommands.includes("wrangler deploy"), false);
+
+  const capture = workflow.jobs.capture;
+  assert.equal(capture.environment, "preview");
+  assert.deepEqual(capture.permissions, { contents: "read" });
+  assert.equal(serialized(capture).includes("secrets."), false);
+  assert.match(serialized(capture), /vars\.CLOUDFLARE_PREVIEW_URL/u);
+  assert.match(
+    commands(capture).join("\n"),
+    /capture-release[\s\S]*--shared-url/u,
+  );
+  assert.match(
+    commands(capture).join("\n"),
+    /playwright install --with-deps chromium/u,
+  );
+
+  const evidence = workflow.jobs.evidence;
+  assert.deepEqual(evidence.permissions, {
+    contents: "write",
+    issues: "write",
+    "pull-requests": "write",
+  });
+  assert.deepEqual(evidence.concurrency, {
+    group: "evidence-write-${{ github.repository }}",
+    "cancel-in-progress": false,
+  });
+  assert.equal(serialized(evidence).includes("secrets."), false);
+  assert.deepEqual(checkoutRefs(evidence), ["main", "evidence"]);
+  assert.match(commands(evidence).join("\n"), /publish-release-evidence/u);
+  assert.match(
+    commands(evidence).join("\n"),
+    /git -C evidence push origin HEAD:evidence/u,
+  );
+  assert.match(commands(evidence).join("\n"), /comment-release-evidence/u);
+
+  const serializedWorkflow = serialized(workflow);
+  assert.equal(serializedWorkflow.includes("comunidadsolar.es"), false);
+  assert.equal(serializedWorkflow.includes("Raiola"), false);
+  assert.equal(serializedWorkflow.includes("PRODUCTION_ENABLED"), false);
+  assert.equal(serializedWorkflow.includes("CLOUDFLARE_PRODUCTION"), false);
+  assert.equal(
+    serializedWorkflow.match(/secrets\.CLOUDFLARE_API_TOKEN/gu)?.length,
+    1,
+  );
   assertPinnedActions(workflow);
 });

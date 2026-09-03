@@ -896,7 +896,7 @@ git commit -m "ci: require preview evidence before merge"
 - Produces one exact Cloudflare version deployed at 100% to
   `comunidad-solar-preview` and one release evidence directory.
 
-- [ ] **Step 1: Write failing main-run and workflow tests**
+- [x] **Step 1: Write failing main-run and workflow tests**
 
 `resolveMainRun` accepts only a successful `Production readiness` run whose
 source event is `push`, head branch is `main`, and SHA still belongs to main.
@@ -911,7 +911,7 @@ non-indexable, deployment uses `deploy-version` after upload, smoke/capture uses
 the configured shared preview URL, and evidence write shares the same global
 concurrency group.
 
-- [ ] **Step 2: Run focused tests and confirm RED**
+- [x] **Step 2: Run focused tests and confirm RED**
 
 ```bash
 npm run test:unit -- tests/preview-evidence/github.test.ts tests/foundation/preview-workflows.test.mjs
@@ -919,7 +919,7 @@ npm run test:unit -- tests/preview-evidence/github.test.ts tests/foundation/prev
 
 Expected: FAIL because shared workflow support is absent.
 
-- [ ] **Step 3: Implement main context and exact-version deploy flow**
+- [x] **Step 3: Implement main context and exact-version deploy flow**
 
 Resolve the merged PR via `/commits/<sha>/pulls`, require `merged_at` and
 `merge_commit_sha`/association with current main SHA, load its request at the
@@ -927,7 +927,7 @@ main SHA, and emit sanitized context. Build and seal `role:release` without
 secrets, upload it with tag `main-<short-sha>`, then call
 `versions deploy <version-id>@100%` rather than rebuilding.
 
-- [ ] **Step 4: Smoke and capture the shared public URL**
+- [x] **Step 4: Smoke and capture the shared public URL**
 
 Read `vars.CLOUDFLARE_PREVIEW_URL`, require exact HTTPS origin ending in
 `.workers.dev`, and verify its host identifies `comunidad-solar-preview`.
@@ -935,7 +935,7 @@ Capture the request route with candidate expected status, write
 `releases/<main-sha>`, then comment the merged PR and issue with the release
 manifest and shared URL.
 
-- [ ] **Step 5: Run workflow contracts and commit**
+- [x] **Step 5: Run workflow contracts and commit**
 
 ```bash
 npm run test:unit -- tests/preview-evidence/github.test.ts tests/foundation/preview-workflows.test.mjs

@@ -1,0 +1,423 @@
+name: Shared preview release
+
+on:
+  workflow_run:
+    workflows: [Production readiness]
+    types: [completed]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: shared-preview-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  resolve:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: read
+    outputs:
+      bootstrap: ${{ steps.context.outputs.bootstrap }}
+      pr_number: ${{ steps.context.outputs.pr_number }}
+      issue_number: ${{ steps.context.outputs.issue_number }}
+      source_sha: ${{ steps.context.outputs.source_sha }}
+      request_path: ${{ steps.context.outputs.request_path }}
+      run_id: ${{ steps.context.outputs.run_id }}
+      context_sha256: ${{ steps.context.outputs.context_sha256 }}
+    steps:
+      - name: Check out the trusted controller
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Install the trusted controller
+        run: npm ci --ignore-scripts
+      - name: Resolve and seal the current main release context
+        id: context
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          PREVIEW_PIPELINE_BOOTSTRAP_PR: ${{ vars.PREVIEW_PIPELINE_BOOTSTRAP_PR }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/shared-preview-context"
+          npm run preview:evidence -- resolve-main \
+            --event "$GITHUB_EVENT_PATH" \
+            --output "$GITHUB_OUTPUT" \
+            --context "$RUNNER_TEMP/shared-preview-context/context.json"
+      - name: Upload the sealed release context
+        if: steps.context.outputs.bootstrap != 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: shared-preview-context-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/shared-preview-context/context.json
+          if-no-files-found: error
+          retention-days: 7
+
+  profile:
+    needs: [resolve]
+    if: needs.resolve.outputs.bootstrap != 'true'
+    environment: preview
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      profile_relative: ${{ steps.profile.outputs.profile_relative }}
+      profile_sha256: ${{ steps.profile.outputs.profile_sha256 }}
+    steps:
+      - name: Check out the trusted controller
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Install the trusted controller
+        run: npm ci --ignore-scripts
+      - name: Materialize only the sanitized non-indexable preview profile
+        id: profile
+        env:
+          CLOUDFLARE_PREVIEW_CONFIG_B64: ${{ secrets.CLOUDFLARE_PREVIEW_CONFIG_B64 }}
+        run: |
+          npm run preview:evidence -- materialize-profile \
+            --output "$GITHUB_WORKSPACE/.artifacts/preview-profile" \
+            --root "$GITHUB_WORKSPACE" \
+            --github-output "$GITHUB_OUTPUT"
+      - name: Upload the sanitized profile
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: shared-preview-profile-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .artifacts/preview-profile
+          if-no-files-found: error
+          retention-days: 1
+
+  build:
+    needs: [resolve, profile]
+    if: needs.resolve.outputs.bootstrap != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the trusted controller
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          path: controller
+          persist-credentials: false
+      - name: Check out the exact verified main source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.resolve.outputs.source_sha }}
+          path: source
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: controller/.nvmrc
+          cache: npm
+          cache-dependency-path: |
+            controller/package-lock.json
+            source/package-lock.json
+      - name: Install the trusted controller
+        working-directory: controller
+        run: npm ci --ignore-scripts
+      - name: Install source dependencies without lifecycle scripts
+        working-directory: source
+        run: npm ci --ignore-scripts
+      - name: Download the sanitized profile
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: shared-preview-profile-${{ github.run_id }}-${{ github.run_attempt }}
+          path: source/.artifacts/preview-profile
+      - name: Build the exact main source
+        working-directory: source
+        env:
+          PROFILE_RELATIVE: ${{ needs.profile.outputs.profile_relative }}
+        run: |
+          test -f ".artifacts/preview-profile/$PROFILE_RELATIVE"
+          CLOUDFLARE_CONFIG_PATH="./.artifacts/preview-profile/$PROFILE_RELATIVE" npm run build
+      - name: Normalize portable bundle file permissions
+        working-directory: source
+        run: find dist drizzle -type f -exec chmod 0644 {} +
+      - name: Seal the exact release bundle with the trusted controller
+        working-directory: controller
+        env:
+          SOURCE_SHA: ${{ needs.resolve.outputs.source_sha }}
+          PROFILE_RELATIVE: ${{ needs.profile.outputs.profile_relative }}
+          PROFILE_SHA256: ${{ needs.profile.outputs.profile_sha256 }}
+        run: |
+          npm run preview:evidence -- seal-bundle \
+            --source "$GITHUB_WORKSPACE/source" \
+            --output "$RUNNER_TEMP/bundle-release" \
+            --role release \
+            --sha "$SOURCE_SHA" \
+            --profile "$GITHUB_WORKSPACE/source/.artifacts/preview-profile/$PROFILE_RELATIVE" \
+            --profile-sha "$PROFILE_SHA256"
+      - name: Upload the sealed release bundle
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: shared-preview-bundle-${{ needs.resolve.outputs.source_sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/bundle-release
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1
+
+  release:
+    needs: [resolve, profile, build]
+    if: needs.resolve.outputs.bootstrap != 'true'
+    environment: preview
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the trusted controller
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          path: controller
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: controller/.nvmrc
+          cache: npm
+          cache-dependency-path: controller/package-lock.json
+      - name: Install the trusted controller
+        working-directory: controller
+        run: npm ci --ignore-scripts
+      - name: Download the sealed release context
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: shared-preview-context-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/shared-preview-context
+      - name: Download the sanitized profile
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: shared-preview-profile-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/preview-profile
+      - name: Download the sealed release bundle
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: shared-preview-bundle-${{ needs.resolve.outputs.source_sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/bundle-release
+      - name: Verify the sealed release before credentials
+        working-directory: controller
+        env:
+          SOURCE_SHA: ${{ needs.resolve.outputs.source_sha }}
+          PROFILE_RELATIVE: ${{ needs.profile.outputs.profile_relative }}
+          PROFILE_SHA256: ${{ needs.profile.outputs.profile_sha256 }}
+        run: |
+          npm run preview:evidence -- verify-bundle \
+            --root "$RUNNER_TEMP/bundle-release" \
+            --role release \
+            --sha "$SOURCE_SHA" \
+            --profile "$RUNNER_TEMP/preview-profile/$PROFILE_RELATIVE" \
+            --profile-sha "$PROFILE_SHA256"
+      - name: Recheck the exact main head immediately before release
+        working-directory: controller
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          CONTEXT_SHA256: ${{ needs.resolve.outputs.context_sha256 }}
+        run: |
+          npm run preview:evidence -- recheck-main \
+            --context "$RUNNER_TEMP/shared-preview-context/context.json" \
+            --context-sha "$CONTEXT_SHA256"
+      - name: Upload and deploy the same exact release version
+        working-directory: controller
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CONTEXT_SHA256: ${{ needs.resolve.outputs.context_sha256 }}
+          PROFILE_RELATIVE: ${{ needs.profile.outputs.profile_relative }}
+          PROFILE_SHA256: ${{ needs.profile.outputs.profile_sha256 }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/shared-preview-descriptor"
+          npm run preview:evidence -- upload-version \
+            --bundle "$RUNNER_TEMP/bundle-release" \
+            --profile "$RUNNER_TEMP/preview-profile/$PROFILE_RELATIVE" \
+            --profile-sha "$PROFILE_SHA256" \
+            --context "$RUNNER_TEMP/shared-preview-context/context.json" \
+            --context-sha "$CONTEXT_SHA256" \
+            --role release \
+            --output "$RUNNER_TEMP/shared-preview-descriptor/release.json"
+          npm run preview:evidence -- deploy-version \
+            --bundle "$RUNNER_TEMP/bundle-release" \
+            --profile "$RUNNER_TEMP/preview-profile/$PROFILE_RELATIVE" \
+            --profile-sha "$PROFILE_SHA256" \
+            --descriptor "$RUNNER_TEMP/shared-preview-descriptor/release.json"
+      - name: Upload the sanitized release descriptor
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: shared-preview-descriptor-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/shared-preview-descriptor/release.json
+          if-no-files-found: error
+          retention-days: 7
+
+  capture:
+    needs: [resolve, release]
+    if: needs.resolve.outputs.bootstrap != 'true'
+    environment: preview
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the trusted controller
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Install the trusted controller
+        run: npm ci --ignore-scripts
+      - name: Install Chromium and its system dependencies
+        run: npx playwright install --with-deps chromium
+      - name: Download the sealed release context
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: shared-preview-context-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/shared-preview-context
+      - name: Download the release descriptor
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: shared-preview-descriptor-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/shared-preview-descriptor
+      - name: Smoke and capture the configured shared preview
+        env:
+          CLOUDFLARE_PREVIEW_URL: ${{ vars.CLOUDFLARE_PREVIEW_URL }}
+          CONTEXT_SHA256: ${{ needs.resolve.outputs.context_sha256 }}
+        run: |
+          npm run preview:evidence -- capture-release \
+            --context "$RUNNER_TEMP/shared-preview-context/context.json" \
+            --context-sha "$CONTEXT_SHA256" \
+            --release "$RUNNER_TEMP/shared-preview-descriptor/release.json" \
+            --shared-url "$CLOUDFLARE_PREVIEW_URL" \
+            --output "$RUNNER_TEMP/shared-preview-capture" \
+            --run-attempt "${{ github.run_attempt }}"
+      - name: Upload the release capture set
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: shared-preview-capture-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/shared-preview-capture
+          if-no-files-found: error
+          retention-days: 7
+
+  evidence:
+    needs: [resolve, capture]
+    if: needs.resolve.outputs.bootstrap != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    concurrency:
+      group: evidence-write-${{ github.repository }}
+      cancel-in-progress: false
+    outputs:
+      evidence_sha: ${{ steps.evidence_commit.outputs.evidence_sha }}
+    steps:
+      - name: Check out the trusted controller
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          path: controller
+          persist-credentials: false
+      - name: Check out the append-only evidence branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: evidence
+          path: evidence
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: controller/.nvmrc
+          cache: npm
+          cache-dependency-path: controller/package-lock.json
+      - name: Install the trusted controller
+        working-directory: controller
+        run: npm ci --ignore-scripts
+      - name: Download the sealed release context
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: shared-preview-context-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/shared-preview-context
+      - name: Download the release capture set
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: shared-preview-capture-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/shared-preview-capture
+      - name: Publish append-only release evidence locally
+        id: publish
+        working-directory: controller
+        env:
+          CONTEXT_SHA256: ${{ needs.resolve.outputs.context_sha256 }}
+        run: |
+          npm run preview:evidence -- publish-release-evidence \
+            --capture "$RUNNER_TEMP/shared-preview-capture" \
+            --checkout "$GITHUB_WORKSPACE/evidence" \
+            --context "$RUNNER_TEMP/shared-preview-context/context.json" \
+            --context-sha "$CONTEXT_SHA256" \
+            --output "$RUNNER_TEMP/release-publication.json" \
+            --github-output "$GITHUB_OUTPUT"
+      - name: Commit and push only newly added release evidence paths
+        if: steps.publish.outputs.added_count != '0'
+        env:
+          ADDED_PATHS: ${{ steps.publish.outputs.added_paths }}
+          COMMIT_MESSAGE: ${{ steps.publish.outputs.commit_message }}
+        run: |
+          git -C evidence config user.name "github-actions[bot]"
+          git -C evidence config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          while IFS= read -r evidence_path; do
+            test -n "$evidence_path"
+            git -C evidence add -- "$evidence_path"
+          done <<< "$ADDED_PATHS"
+          git -C evidence diff --cached --quiet && exit 1
+          git -C evidence commit -m "$COMMIT_MESSAGE"
+          git -C evidence push origin HEAD:evidence
+      - name: Resolve the immutable release evidence commit
+        id: evidence_commit
+        env:
+          IDENTITY_MANIFEST: ${{ steps.publish.outputs.identity_manifest }}
+        run: |
+          evidence_sha="$(git -C evidence log -1 --format=%H -- "$IDENTITY_MANIFEST")"
+          [[ "$evidence_sha" =~ ^[a-f0-9]{40}$ ]]
+          echo "evidence_sha=$evidence_sha" >> "$GITHUB_OUTPUT"
+      - name: Comment the merged pull request and issue
+        working-directory: controller
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          CONTEXT_SHA256: ${{ needs.resolve.outputs.context_sha256 }}
+          EVIDENCE_SHA: ${{ steps.evidence_commit.outputs.evidence_sha }}
+        run: |
+          npm run preview:evidence -- comment-release-evidence \
+            --publication "$RUNNER_TEMP/release-publication.json" \
+            --context "$RUNNER_TEMP/shared-preview-context/context.json" \
+            --context-sha "$CONTEXT_SHA256" \
+            --evidence-sha "$EVIDENCE_SHA"

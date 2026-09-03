@@ -45,6 +45,8 @@ const releaseSha = "c".repeat(40);
 const bundleSha = "d".repeat(64);
 const repository = "vbenhur-cs/webComunidadSolar";
 const runUrl = `https://github.com/${repository}/actions/runs/987`;
+const sharedPreviewUrl =
+  "https://comunidad-solar-preview.comunidadsolar-dev.workers.dev/";
 
 test("ships a self-contained browser init script", () => {
   assert.doesNotMatch(DETERMINISTIC_INIT_SCRIPT, /__name/u);
@@ -301,6 +303,7 @@ test("captures a release using release names and candidate status", async () => 
         },
         runAttempt: 1,
         release: descriptor("release"),
+        sharedUrl: sharedPreviewUrl,
         outputRoot: output,
       },
       browser,
@@ -323,8 +326,62 @@ test("captures a release using release names and candidate status", async () => 
     );
     assert.equal(set.manifest.kind, "release");
     assert.equal(set.manifest.source.releaseSha, releaseSha);
+    assert.equal(
+      browser.requests.every(
+        (request) => request.url === `${sharedPreviewUrl}pruebas/guia/`,
+      ),
+      true,
+    );
+    assert.equal(
+      set.manifest.captures.every(
+        (capture) => capture.origin === new URL(sharedPreviewUrl).origin,
+      ),
+      true,
+    );
   } finally {
     await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("rejects a shared release URL that is not the exact preview Worker origin", async () => {
+  const invalidUrls = [
+    "http://comunidad-solar-preview.example.workers.dev/",
+    "https://other-worker.example.workers.dev/",
+    "https://comunidad-solar-preview.example.workers.dev/path",
+    "https://comunidad-solar-preview.example.workers.dev/?token=x",
+  ];
+  for (const [index, sharedUrl] of invalidUrls.entries()) {
+    const root = await mkdtemp(join(tmpdir(), "preview-capture-bad-shared-"));
+    try {
+      const browser = new FakeBrowserAdapter();
+      await assert.rejects(
+        captureReleaseEvidence(
+          {
+            context: {
+              schemaVersion: 1,
+              repository,
+              issueNumber: 4,
+              issueUrl: `https://github.com/${repository}/issues/4`,
+              prNumber: 4,
+              prUrl: `https://github.com/${repository}/pull/4`,
+              runId: 1001,
+              runUrl: `https://github.com/${repository}/actions/runs/1001`,
+              sourceSha: releaseSha,
+              requestPath: "evidence/requests/issue-4.yaml",
+              request: context().request,
+            },
+            release: descriptor("release"),
+            sharedUrl,
+            outputRoot: join(root, `capture-${index}`),
+          },
+          browser,
+        ),
+        /shared|preview|worker|url|origen/i,
+      );
+      assert.deepEqual(browser.requests, []);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   }
 });
 
@@ -610,6 +667,8 @@ test("capture-release CLI consumes a sealed main context", async () => {
         sealed.sha256,
         "--release",
         releasePath,
+        "--shared-url",
+        sharedPreviewUrl,
         "--output",
         output,
         "--run-attempt",

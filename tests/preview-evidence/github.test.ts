@@ -6,11 +6,14 @@ import test from "node:test";
 
 import {
   approvePreviewForCurrentPullRequest,
+  assertCurrentMainHead,
   type GitHubApi,
   readPullRequestContext,
+  resolveMainRun,
   resolvePullRequestRun,
   setPreviewApprovalStatus,
   upsertEvidenceComments,
+  upsertReleaseEvidenceComments,
   writePullRequestContext,
   writeGitHubOutputs,
 } from "../../scripts/preview-evidence/github.ts";
@@ -138,6 +141,296 @@ function validApi(): MemoryGitHubApi {
   });
   return api;
 }
+
+interface MainWorkflowPayloadFixture extends WorkflowPayloadFixture {
+  workflow_run: WorkflowPayloadFixture["workflow_run"] & {
+    head_branch: string;
+  };
+}
+
+function validMainPayload(): MainWorkflowPayloadFixture {
+  const payload = validPayload();
+  payload.workflow_run.event = "push";
+  payload.workflow_run.head_branch = "main";
+  payload.workflow_run.pull_requests = [];
+  return payload;
+}
+
+function validMergedPullRequest(): Record<string, unknown> {
+  return {
+    number: 9,
+    state: "closed",
+    merged: true,
+    merged_at: "2026-09-03T20:00:00Z",
+    merge_commit_sha: headSha,
+    changed_files: 2,
+    html_url: `https://github.com/${repository}/pull/9`,
+    body: "Implementa la solicitud #4.",
+    base: { ref: "main", sha: baseSha },
+    head: {
+      sha: "c".repeat(40),
+      ref: "feature/issue-4",
+      repo: { full_name: repository },
+    },
+  };
+}
+
+function validMainApi(): MemoryGitHubApi {
+  const api = new MemoryGitHubApi();
+  api.responses.set(`/repos/${repository}/branches/main`, {
+    name: "main",
+    commit: { sha: headSha },
+  });
+  api.responses.set(
+    `/repos/${repository}/commits/${headSha}/pulls?per_page=100`,
+    [{ number: 9 }],
+  );
+  api.responses.set(`/repos/${repository}/pulls/9`, validMergedPullRequest());
+  api.responses.set(`/repos/${repository}/pulls/9/files?per_page=100&page=1`, [
+    { filename: requestPath, status: "added" },
+    { filename: "src/pages/pruebas/guia.astro", status: "added" },
+  ]);
+  api.responses.set(
+    `/repos/${repository}/contents/evidence/requests/issue-4.yaml?ref=${headSha}`,
+    {
+      type: "file",
+      path: requestPath,
+      encoding: "base64",
+      size: Buffer.byteLength(requestYaml),
+      content: Buffer.from(requestYaml, "utf8").toString("base64"),
+    },
+  );
+  api.responses.set(`/repos/${repository}/issues/4`, {
+    number: 4,
+    state: "open",
+    html_url: `https://github.com/${repository}/issues/4`,
+  });
+  return api;
+}
+
+test("resolves a green main head and its unique merged PR into a release context", async () => {
+  const resolved = await resolveMainRun(validMainPayload(), validMainApi());
+
+  assert.deepEqual(resolved, {
+    kind: "release",
+    context: {
+      schemaVersion: 1,
+      repository,
+      issueNumber: 4,
+      issueUrl: `https://github.com/${repository}/issues/4`,
+      prNumber: 9,
+      prUrl: `https://github.com/${repository}/pull/9`,
+      runId: 987,
+      runUrl: `https://github.com/${repository}/actions/runs/987`,
+      sourceSha: headSha,
+      requestPath,
+      request: {
+        schemaVersion: 1,
+        issue: 4,
+        scope: "page",
+        route: "/pruebas/guia/",
+        selector: null,
+        expectedStatus: { base: 404, candidate: 200 },
+        viewports: ["desktop", "mobile"],
+      },
+    },
+  });
+});
+
+test("rejects main runs that are not the successful current main head", async () => {
+  const cases: Array<
+    [string, (payload: MainWorkflowPayloadFixture) => void, RegExp]
+  > = [
+    [
+      "conclusion",
+      (payload) => {
+        payload.workflow_run.conclusion = "failure";
+      },
+      /success|exitosa/i,
+    ],
+    [
+      "source event",
+      (payload) => {
+        payload.workflow_run.event = "pull_request";
+      },
+      /push/i,
+    ],
+    [
+      "head branch",
+      (payload) => {
+        payload.workflow_run.head_branch = "develop";
+      },
+      /main/i,
+    ],
+  ];
+
+  for (const [label, mutate, expected] of cases) {
+    const payload = validMainPayload();
+    mutate(payload);
+    await assert.rejects(
+      resolveMainRun(payload, validMainApi()),
+      expected,
+      label,
+    );
+  }
+
+  const moved = validMainApi();
+  moved.responses.set(`/repos/${repository}/branches/main`, {
+    name: "main",
+    commit: { sha: "d".repeat(40) },
+  });
+  await assert.rejects(
+    resolveMainRun(validMainPayload(), moved),
+    /main|sha|punta/i,
+  );
+});
+
+test("requires one exact merged PR associated with the current main SHA", async () => {
+  for (const associations of [[], [{ number: 9 }, { number: 10 }]]) {
+    const api = validMainApi();
+    api.responses.set(
+      `/repos/${repository}/commits/${headSha}/pulls?per_page=100`,
+      associations,
+    );
+    await assert.rejects(
+      resolveMainRun(validMainPayload(), api),
+      /exactamente una|merged|fusionada|pull request/i,
+    );
+  }
+
+  const cases: Array<[string, unknown, RegExp]> = [
+    ["not merged", null, /merged|fusionada/i],
+    ["wrong merge sha", "d".repeat(40), /merge|sha|main/i],
+  ];
+  for (const [label, mergedAtOrSha, expected] of cases) {
+    const api = validMainApi();
+    const pr = validMergedPullRequest();
+    if (label === "not merged") {
+      pr.merged = false;
+      pr.merged_at = mergedAtOrSha;
+    } else {
+      pr.merge_commit_sha = mergedAtOrSha;
+    }
+    api.responses.set(`/repos/${repository}/pulls/9`, pr);
+    await assert.rejects(
+      resolveMainRun(validMainPayload(), api),
+      expected,
+      label,
+    );
+  }
+});
+
+test("requires the merged PR request at the exact main SHA", async () => {
+  const missing = validMainApi();
+  missing.responses.set(`/repos/${repository}/pulls/9`, {
+    ...validMergedPullRequest(),
+    changed_files: 1,
+  });
+  missing.responses.set(
+    `/repos/${repository}/pulls/9/files?per_page=100&page=1`,
+    [{ filename: "src/pages/index.astro", status: "modified" }],
+  );
+  await assert.rejects(
+    resolveMainRun(validMainPayload(), missing),
+    /request|solicitud|bootstrap/i,
+  );
+
+  const multiple = validMainApi();
+  multiple.responses.set(`/repos/${repository}/pulls/9`, {
+    ...validMergedPullRequest(),
+    changed_files: 2,
+  });
+  multiple.responses.set(
+    `/repos/${repository}/pulls/9/files?per_page=100&page=1`,
+    [
+      { filename: requestPath, status: "added" },
+      { filename: "evidence/requests/issue-5.yaml", status: "added" },
+    ],
+  );
+  await assert.rejects(
+    resolveMainRun(validMainPayload(), multiple),
+    /exactamente una|request|solicitud/i,
+  );
+});
+
+test("permits bootstrap only for the configured PR and allowlisted pipeline paths", async () => {
+  const bootstrapApi = validMainApi();
+  bootstrapApi.responses.set(`/repos/${repository}/pulls/9`, {
+    ...validMergedPullRequest(),
+    changed_files: 3,
+  });
+  bootstrapApi.responses.set(
+    `/repos/${repository}/pulls/9/files?per_page=100&page=1`,
+    [
+      { filename: ".github/workflows/shared-preview.yml", status: "added" },
+      { filename: "scripts/preview-evidence/github.ts", status: "modified" },
+      {
+        filename:
+          "docs/superpowers/specs/2026-09-03-pr-preview-evidence-design.md",
+        status: "modified",
+      },
+    ],
+  );
+
+  assert.deepEqual(
+    await resolveMainRun(validMainPayload(), bootstrapApi, "9"),
+    {
+      kind: "bootstrap",
+      repository,
+      runId: 987,
+      runUrl: `https://github.com/${repository}/actions/runs/987`,
+      prNumber: 9,
+      prUrl: `https://github.com/${repository}/pull/9`,
+      sourceSha: headSha,
+    },
+  );
+
+  await assert.rejects(
+    resolveMainRun(validMainPayload(), bootstrapApi, "8"),
+    /bootstrap|request|solicitud/i,
+  );
+  await assert.rejects(
+    resolveMainRun(validMainPayload(), bootstrapApi, "09"),
+    /bootstrap|num[eé]ric|configuraci[oó]n/i,
+  );
+
+  const escaped = validMainApi();
+  escaped.responses.set(`/repos/${repository}/pulls/9`, {
+    ...validMergedPullRequest(),
+    changed_files: 1,
+  });
+  escaped.responses.set(
+    `/repos/${repository}/pulls/9/files?per_page=100&page=1`,
+    [{ filename: "src/pages/index.astro", status: "modified" }],
+  );
+  await assert.rejects(
+    resolveMainRun(validMainPayload(), escaped, "9"),
+    /allowlist|permitid|bootstrap/i,
+  );
+});
+
+test("rechecks the exact main head immediately before release", async () => {
+  const resolved = await resolveMainRun(validMainPayload(), validMainApi());
+  assert.equal(resolved.kind, "release");
+  if (resolved.kind !== "release") return;
+
+  const current = new MemoryGitHubApi();
+  current.responses.set(`/repos/${repository}/branches/main`, {
+    name: "main",
+    commit: { sha: headSha },
+  });
+  await assert.doesNotReject(assertCurrentMainHead(current, resolved.context));
+
+  const moved = new MemoryGitHubApi();
+  moved.responses.set(`/repos/${repository}/branches/main`, {
+    name: "main",
+    commit: { sha: "d".repeat(40) },
+  });
+  await assert.rejects(
+    assertCurrentMainHead(moved, resolved.context),
+    /main|sha|cambi[oó]|punta/i,
+  );
+});
 
 test("resolves one internal green PR into an authoritative sanitized context", async () => {
   const context = await resolvePullRequestRun(validPayload(), validApi());
@@ -570,6 +863,45 @@ function publication(): PublishEvidenceResult {
   };
 }
 
+function releasePublication(): PublishEvidenceResult {
+  return {
+    schemaVersion: 1,
+    kind: "release",
+    repository,
+    issueNumber: 4,
+    prNumber: 9,
+    source: { baseSha: null, headSha: null, releaseSha: headSha },
+    runUrl: `https://github.com/${repository}/actions/runs/1001`,
+    entries: [
+      {
+        role: "release",
+        sourceSha: headSha,
+        relativeDirectory: `issue-4/releases/${headSha}`,
+        previewUrl:
+          "https://comunidad-solar-preview.comunidadsolar-dev.workers.dev/pruebas/guia/",
+        manifestUrl: `https://github.com/${repository}/blob/evidence/issue-4/releases/${headSha}/manifest.json`,
+        pngs: [
+          {
+            filename: "release-desktop.png",
+            rawUrl: `https://raw.githubusercontent.com/${repository}/evidence/issue-4/releases/${headSha}/release-desktop.png`,
+          },
+          {
+            filename: "release-mobile.png",
+            rawUrl: `https://raw.githubusercontent.com/${repository}/evidence/issue-4/releases/${headSha}/release-mobile.png`,
+          },
+        ],
+      },
+    ],
+    addedPaths: [],
+    existingPaths: [
+      `issue-4/releases/${headSha}/manifest.json`,
+      `issue-4/releases/${headSha}/release-desktop.png`,
+      `issue-4/releases/${headSha}/release-mobile.png`,
+    ],
+    commitMessage: "evidence: record issue 4 release bbbbbbb",
+  };
+}
+
 test("creates bounded evidence comments on the PR and linked issue", async () => {
   const api = new RecordingGitHubApi();
   api.responses.set(`/repos/${repository}/issues/9/comments?per_page=100`, []);
@@ -605,6 +937,53 @@ test("creates bounded evidence comments on the PR and linked issue", async () =>
     assert.match(body, /manifest\.json/u);
     assert.match(body, new RegExp(`/commit/${evidenceCommitSha}`, "u"));
     assert.match(body, /pendiente.*revisi[oó]n humana/i);
+    assert.ok(Buffer.byteLength(body) < 64 * 1024);
+  }
+});
+
+test("comments the immutable shared-preview release on the merged PR and issue", async () => {
+  const api = new RecordingGitHubApi();
+  api.responses.set(`/repos/${repository}/issues/9/comments?per_page=100`, []);
+  api.responses.set(`/repos/${repository}/issues/4/comments?per_page=100`, []);
+  const evidenceCommitSha = "e".repeat(40);
+
+  await upsertReleaseEvidenceComments(api, {
+    context: {
+      schemaVersion: 1,
+      repository,
+      issueNumber: 4,
+      issueUrl: `https://github.com/${repository}/issues/4`,
+      prNumber: 9,
+      prUrl: `https://github.com/${repository}/pull/9`,
+      runId: 1001,
+      runUrl: `https://github.com/${repository}/actions/runs/1001`,
+      sourceSha: headSha,
+      requestPath,
+      request: reportingContext().request,
+    },
+    publication: releasePublication(),
+    evidenceCommitSha,
+  });
+
+  const writes = api.calls.filter((call) => call.method !== "GET");
+  assert.deepEqual(
+    writes.map((call) => [call.method, call.path]),
+    [
+      ["POST", `/repos/${repository}/issues/9/comments`],
+      ["POST", `/repos/${repository}/issues/4/comments`],
+    ],
+  );
+  for (const call of writes) {
+    const body = (call.body as { body: string }).body;
+    assert.match(
+      body,
+      new RegExp(`<!-- preview-release:issue-4:${headSha} -->`, "u"),
+    );
+    assert.match(body, new RegExp(headSha, "u"));
+    assert.match(body, /comunidad-solar-preview[^\s)]+\.workers\.dev/u);
+    assert.match(body, /release-desktop\.png/u);
+    assert.match(body, new RegExp(`/commit/${evidenceCommitSha}`, "u"));
+    assert.match(body, /release|desplegad[ao]|compartid[ao]/i);
     assert.ok(Buffer.byteLength(body) < 64 * 1024);
   }
 });

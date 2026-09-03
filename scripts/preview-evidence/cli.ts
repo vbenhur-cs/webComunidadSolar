@@ -16,14 +16,18 @@ import {
   capturePullRequestEvidence,
   captureReleaseEvidence,
   readReleaseCaptureContext,
+  writeReleaseCaptureContext,
 } from "./capture.ts";
 import {
   approvePreviewForCurrentPullRequest,
+  assertCurrentMainHead,
   createGitHubApi,
   type GitHubApi,
   readPullRequestContext,
+  resolveMainRun,
   resolvePullRequestRun,
   upsertEvidenceComments,
+  upsertReleaseEvidenceComments,
   writeGitHubOutputs,
   writePullRequestContext,
 } from "./github.ts";
@@ -107,6 +111,8 @@ export async function runPreviewEvidenceCli(
     dependencies.stdout ?? ((message: string) => process.stdout.write(message));
   if (
     command !== "resolve-pr" &&
+    command !== "resolve-main" &&
+    command !== "recheck-main" &&
     command !== "validate-request" &&
     command !== "seal-bundle" &&
     command !== "verify-bundle" &&
@@ -115,7 +121,9 @@ export async function runPreviewEvidenceCli(
     command !== "capture-pr" &&
     command !== "capture-release" &&
     command !== "publish-evidence" &&
+    command !== "publish-release-evidence" &&
     command !== "comment-evidence" &&
+    command !== "comment-release-evidence" &&
     command !== "approve-preview" &&
     command !== "materialize-profile"
   ) {
@@ -207,17 +215,30 @@ export async function runPreviewEvidenceCli(
       "--role",
       "--output",
     ]);
-    if (flags["--role"] !== "base" && flags["--role"] !== "candidate") {
-      throw new TypeError(
-        "upload-version con contexto PR solo admite base o candidate",
-      );
+    if (
+      flags["--role"] !== "base" &&
+      flags["--role"] !== "candidate" &&
+      flags["--role"] !== "release"
+    ) {
+      throw new TypeError("upload-version recibió un role inválido");
     }
-    const context = await readPullRequestContext(
-      flags["--context"],
-      flags["--context-sha"],
-    );
     const role = flags["--role"];
-    const sourceSha = role === "base" ? context.baseSha : context.headSha;
+    let sourceSha: string;
+    let prNumber: number | undefined;
+    if (role === "release") {
+      const context = await readReleaseCaptureContext(
+        flags["--context"],
+        flags["--context-sha"],
+      );
+      sourceSha = context.sourceSha;
+    } else {
+      const context = await readPullRequestContext(
+        flags["--context"],
+        flags["--context-sha"],
+      );
+      sourceSha = role === "base" ? context.baseSha : context.headSha;
+      prNumber = context.prNumber;
+    }
     await verifySealedBundle(flags["--bundle"], {
       role,
       sourceSha,
@@ -235,7 +256,7 @@ export async function runPreviewEvidenceCli(
         profileSha256: flags["--profile-sha"],
         role,
         sourceSha,
-        prNumber: context.prNumber,
+        prNumber,
         credentials,
       },
       dependencies.wranglerRunner,
@@ -333,6 +354,7 @@ export async function runPreviewEvidenceCli(
       "--context",
       "--context-sha",
       "--release",
+      "--shared-url",
       "--output",
       "--run-attempt",
     ]);
@@ -352,6 +374,7 @@ export async function runPreviewEvidenceCli(
       {
         context,
         release,
+        sharedUrl: flags["--shared-url"],
         outputRoot: flags["--output"],
         runAttempt,
       },
@@ -363,7 +386,10 @@ export async function runPreviewEvidenceCli(
     return;
   }
 
-  if (command === "publish-evidence") {
+  if (
+    command === "publish-evidence" ||
+    command === "publish-release-evidence"
+  ) {
     const flags = parseFlags(rest, [
       "--capture",
       "--checkout",
@@ -372,10 +398,16 @@ export async function runPreviewEvidenceCli(
       "--output",
       "--github-output",
     ]);
-    const context = await readPullRequestContext(
-      flags["--context"],
-      flags["--context-sha"],
-    );
+    const context =
+      command === "publish-release-evidence"
+        ? await readReleaseCaptureContext(
+            flags["--context"],
+            flags["--context-sha"],
+          )
+        : await readPullRequestContext(
+            flags["--context"],
+            flags["--context-sha"],
+          );
     const capture = await readCaptureSet(flags["--capture"]);
     const publication = await publishEvidenceToCheckout({
       capture,
@@ -397,23 +429,36 @@ export async function runPreviewEvidenceCli(
       commit_message: publication.commitMessage,
       identity_manifest: `${identityEntry.relativeDirectory}/manifest.json`,
     });
+    const label =
+      command === "publish-release-evidence"
+        ? "RELEASE_EVIDENCE_PUBLISHED_OK"
+        : "EVIDENCE_PUBLISHED_OK";
     stdout(
-      `EVIDENCE_PUBLISHED_OK issue=${publication.issueNumber} added=${publication.addedPaths.length} existing=${publication.existingPaths.length}\n`,
+      `${label} issue=${publication.issueNumber} added=${publication.addedPaths.length} existing=${publication.existingPaths.length}\n`,
     );
     return;
   }
 
-  if (command === "comment-evidence") {
+  if (
+    command === "comment-evidence" ||
+    command === "comment-release-evidence"
+  ) {
     const flags = parseFlags(rest, [
       "--publication",
       "--context",
       "--context-sha",
       "--evidence-sha",
     ]);
-    const context = await readPullRequestContext(
-      flags["--context"],
-      flags["--context-sha"],
-    );
+    const context =
+      command === "comment-release-evidence"
+        ? await readReleaseCaptureContext(
+            flags["--context"],
+            flags["--context-sha"],
+          )
+        : await readPullRequestContext(
+            flags["--context"],
+            flags["--context-sha"],
+          );
     const publication = await readPublishEvidenceResult(flags["--publication"]);
     const repository = requireEnvironment(environment, "GITHUB_REPOSITORY");
     if (repository !== context.repository) {
@@ -421,14 +466,31 @@ export async function runPreviewEvidenceCli(
     }
     const token = requireEnvironment(environment, "GITHUB_TOKEN");
     const api = (dependencies.createApi ?? createGitHubApi)(token, repository);
-    await upsertEvidenceComments(api, {
-      context,
-      publication,
-      evidenceCommitSha: flags["--evidence-sha"],
-    });
-    stdout(
-      `EVIDENCE_COMMENTS_OK issue=${context.issueNumber} sha=${context.headSha}\n`,
-    );
+    if (command === "comment-release-evidence") {
+      if (!("sourceSha" in context)) {
+        throw new TypeError("El contexto de comentarios release es inválido");
+      }
+      await upsertReleaseEvidenceComments(api, {
+        context,
+        publication,
+        evidenceCommitSha: flags["--evidence-sha"],
+      });
+      stdout(
+        `RELEASE_EVIDENCE_COMMENTS_OK issue=${context.issueNumber} sha=${context.sourceSha}\n`,
+      );
+    } else {
+      if (!("headSha" in context)) {
+        throw new TypeError("El contexto de comentarios PR es inválido");
+      }
+      await upsertEvidenceComments(api, {
+        context,
+        publication,
+        evidenceCommitSha: flags["--evidence-sha"],
+      });
+      stdout(
+        `EVIDENCE_COMMENTS_OK issue=${context.issueNumber} sha=${context.headSha}\n`,
+      );
+    }
     return;
   }
 
@@ -449,10 +511,72 @@ export async function runPreviewEvidenceCli(
     return;
   }
 
+  if (command === "recheck-main") {
+    const flags = parseFlags(rest, ["--context", "--context-sha"]);
+    const context = await readReleaseCaptureContext(
+      flags["--context"],
+      flags["--context-sha"],
+    );
+    const repository = requireEnvironment(environment, "GITHUB_REPOSITORY");
+    if (repository !== context.repository) {
+      throw new TypeError("El repositorio de main no coincide con GitHub");
+    }
+    const token = requireEnvironment(environment, "GITHUB_TOKEN");
+    const api = (dependencies.createApi ?? createGitHubApi)(token, repository);
+    await assertCurrentMainHead(api, context);
+    stdout(`MAIN_HEAD_RECHECK_OK sha=${context.sourceSha}\n`);
+    return;
+  }
+
   const flags = parseFlags(rest, ["--event", "--output", "--context"]);
   const token = requireEnvironment(environment, "GITHUB_TOKEN");
   const repository = requireEnvironment(environment, "GITHUB_REPOSITORY");
   const api = (dependencies.createApi ?? createGitHubApi)(token, repository);
+  if (command === "resolve-main") {
+    const resolved = await resolveMainRun(
+      await readJsonFile(flags["--event"]),
+      api,
+      environment.PREVIEW_PIPELINE_BOOTSTRAP_PR,
+    );
+    const resolvedRepository =
+      resolved.kind === "release"
+        ? resolved.context.repository
+        : resolved.repository;
+    if (resolvedRepository !== repository) {
+      throw new TypeError("El repositorio del evento no coincide con GitHub");
+    }
+    if (resolved.kind === "bootstrap") {
+      await writeGitHubOutputs(flags["--output"], {
+        bootstrap: "true",
+        pr_number: String(resolved.prNumber),
+        source_sha: resolved.sourceSha,
+        run_id: String(resolved.runId),
+      });
+      stdout(
+        `${canonicalJson({ ok: true, command: "resolve-main", bootstrap: true })}\n`,
+      );
+      return;
+    }
+    const context = resolved.context;
+    const sealed = await writeReleaseCaptureContext(
+      flags["--context"],
+      context,
+    );
+    await writeGitHubOutputs(flags["--output"], {
+      bootstrap: "false",
+      pr_number: String(context.prNumber),
+      issue_number: String(context.issueNumber),
+      source_sha: context.sourceSha,
+      request_path: context.requestPath,
+      run_id: String(context.runId),
+      context_path: sealed.path,
+      context_sha256: sealed.sha256,
+    });
+    stdout(
+      `${canonicalJson({ ok: true, command: "resolve-main", bootstrap: false })}\n`,
+    );
+    return;
+  }
   const context = await resolvePullRequestRun(
     await readJsonFile(flags["--event"]),
     api,

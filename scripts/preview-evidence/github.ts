@@ -17,6 +17,10 @@ import {
   validatePublishEvidenceResult,
   type PublishEvidenceResult,
 } from "./evidence.ts";
+import {
+  validateReleaseCaptureContext,
+  type ReleaseCaptureContext,
+} from "./capture.ts";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -46,11 +50,52 @@ export interface EvidenceCommentInput {
   evidenceCommitSha: string;
 }
 
+export interface ReleaseEvidenceCommentInput {
+  context: ReleaseCaptureContext;
+  publication: PublishEvidenceResult;
+  evidenceCommitSha: string;
+}
+
+export type MainRunContext =
+  | {
+      kind: "release";
+      context: ReleaseCaptureContext;
+    }
+  | {
+      kind: "bootstrap";
+      repository: string;
+      runId: number;
+      runUrl: string;
+      prNumber: number;
+      prUrl: string;
+      sourceSha: string;
+    };
+
 const gitShaPattern = /^[a-f0-9]{40}$/u;
 const repositoryPattern = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u;
 const maxGitHubBodyBytes = 1024 * 1024;
 const maxRequestBytes = 64 * 1024;
 const maxContextBytes = 128 * 1024;
+const bootstrapExactPaths = new Set([
+  ".github/ISSUE_TEMPLATE/solicitud-cambio-web.yml",
+  ".github/workflows/pr-preview.yml",
+  ".github/workflows/production.yml",
+  ".github/workflows/shared-preview.yml",
+  "README.md",
+  "evidence/requests/example-page.yaml",
+  "evidence/requests/example-section.yaml",
+  "package.json",
+  "package-lock.json",
+  "scripts/prepare-cloudflare-config.ts",
+  "tests/foundation/preview-workflows.test.mjs",
+]);
+const bootstrapPathPrefixes = [
+  "docs/operations/",
+  "docs/superpowers/plans/",
+  "docs/superpowers/specs/",
+  "scripts/preview-evidence/",
+  "tests/preview-evidence/",
+] as const;
 
 function isRecord(value: unknown): value is JsonRecord {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
@@ -201,6 +246,224 @@ async function changedFiles(
     throw new TypeError("GitHub devolvió un inventario de PR incompleto");
   }
   return files;
+}
+
+function configuredBootstrapPr(value: string | undefined): number | null {
+  if (value === undefined || value === "") return null;
+  if (!/^[1-9][0-9]{0,8}$/u.test(value)) {
+    throw new TypeError(
+      "La configuración numérica PREVIEW_PIPELINE_BOOTSTRAP_PR es inválida",
+    );
+  }
+  return Number(value);
+}
+
+function isBootstrapPath(filename: string): boolean {
+  return (
+    bootstrapExactPaths.has(filename) ||
+    bootstrapPathPrefixes.some((prefix) => filename.startsWith(prefix))
+  );
+}
+
+function validMergedAt(value: unknown): boolean {
+  return (
+    typeof value === "string" &&
+    value.length <= 64 &&
+    Number.isFinite(Date.parse(value))
+  );
+}
+
+async function requireCurrentMainSha(
+  api: GitHubApi,
+  repository: string,
+  expectedSha: string,
+): Promise<void> {
+  const branch = requireRecord(
+    await api.get(`/repos/${repository}/branches/main`),
+    "rama main",
+  );
+  const branchCommit = requireRecord(branch.commit, "commit de rama main");
+  const currentMainSha = requireString(
+    branchCommit.sha,
+    "SHA de rama main",
+    gitShaPattern,
+  );
+  if (branch.name !== "main" || currentMainSha !== expectedSha) {
+    throw new Error(
+      "El SHA autorizado ya no es la punta actual de main; no se despliega",
+    );
+  }
+}
+
+export async function assertCurrentMainHead(
+  api: GitHubApi,
+  value: ReleaseCaptureContext,
+): Promise<void> {
+  const context = validateReleaseCaptureContext(value);
+  await requireCurrentMainSha(api, context.repository, context.sourceSha);
+}
+
+export async function resolveMainRun(
+  payload: unknown,
+  api: GitHubApi,
+  bootstrapPrValue?: string,
+): Promise<MainRunContext> {
+  const bootstrapPr = configuredBootstrapPr(bootstrapPrValue);
+  const event = requireRecord(payload, "evento workflow_run");
+  const repositoryRecord = requireRecord(event.repository, "repositorio");
+  const repository = requireString(
+    repositoryRecord.full_name,
+    "repositorio",
+    repositoryPattern,
+  );
+  if (repositoryRecord.default_branch !== "main") {
+    throw new TypeError("La rama por defecto de GitHub debe ser main");
+  }
+  const run = requireRecord(event.workflow_run, "workflow_run");
+  if (event.action !== "completed" || run.conclusion !== "success") {
+    throw new TypeError("El workflow de CI debe terminar de forma exitosa");
+  }
+  if (run.event !== "push") {
+    throw new TypeError("El workflow origen de release debe proceder de push");
+  }
+  if (run.head_branch !== "main") {
+    throw new TypeError("El workflow de release debe corresponder a main");
+  }
+  const runId = requirePositiveInteger(run.id, "run id");
+  const runUrl = requireGitHubUrl(run.html_url, repository, "workflow run");
+  const sourceSha = requireString(run.head_sha, "head SHA", gitShaPattern);
+  const headRepository = requireRecord(run.head_repository, "head repository");
+  if (headRepository.full_name !== repository) {
+    throw new TypeError(
+      "El push de main debe pertenecer al repositorio actual",
+    );
+  }
+
+  await requireCurrentMainSha(api, repository, sourceSha);
+
+  const associations = await api.get(
+    `/repos/${repository}/commits/${sourceSha}/pulls?per_page=100`,
+  );
+  if (!Array.isArray(associations) || associations.length !== 1) {
+    throw new TypeError(
+      "El commit de main debe estar asociado con exactamente una Pull Request fusionada",
+    );
+  }
+  const association = requireRecord(
+    associations[0],
+    "Pull Request asociada al commit",
+  );
+  const prNumber = requirePositiveInteger(association.number, "PR number");
+  const pr = requireRecord(
+    await api.get(`/repos/${repository}/pulls/${prNumber}`),
+    "Pull Request fusionada",
+  );
+  if (
+    pr.number !== prNumber ||
+    pr.state !== "closed" ||
+    pr.merged !== true ||
+    !validMergedAt(pr.merged_at)
+  ) {
+    throw new TypeError("La Pull Request asociada debe estar fusionada");
+  }
+  if (pr.merge_commit_sha !== sourceSha) {
+    throw new TypeError(
+      "El merge commit SHA de la Pull Request no coincide con main",
+    );
+  }
+  const base = requireRecord(pr.base, "base de PR fusionada");
+  const head = requireRecord(pr.head, "head de PR fusionada");
+  const headRepo = requireRecord(head.repo, "repositorio head de PR fusionada");
+  if (base.ref !== "main" || headRepo.full_name !== repository) {
+    throw new TypeError(
+      "La Pull Request fusionada debe ser interna y tener main como base",
+    );
+  }
+  const prUrl = requireGitHubUrl(pr.html_url, repository, "Pull Request");
+  const fileCount = requirePositiveInteger(pr.changed_files, "changed_files");
+  const files = await changedFiles(api, repository, prNumber, fileCount);
+  if (files.some((file) => file.filename.startsWith("drizzle/"))) {
+    throw new TypeError(
+      "Una PR con migraciones drizzle requiere un flujo separado",
+    );
+  }
+  const requests = files.filter((file) =>
+    EVIDENCE_REQUEST_PATH.test(file.filename),
+  );
+
+  if (requests.length === 0) {
+    if (bootstrapPr === null || bootstrapPr !== prNumber) {
+      throw new TypeError(
+        "La PR de main necesita una solicitud de evidencia o la excepción bootstrap exacta",
+      );
+    }
+    if (
+      files.some(
+        (file) =>
+          (file.status !== "added" && file.status !== "modified") ||
+          !isBootstrapPath(file.filename),
+      )
+    ) {
+      throw new TypeError(
+        "La excepción bootstrap solo admite paths técnicos de la allowlist",
+      );
+    }
+    return {
+      kind: "bootstrap",
+      repository,
+      runId,
+      runUrl,
+      prNumber,
+      prUrl,
+      sourceSha,
+    };
+  }
+
+  if (
+    requests.length !== 1 ||
+    (requests[0].status !== "added" && requests[0].status !== "modified")
+  ) {
+    throw new TypeError(
+      "La PR fusionada debe cambiar exactamente una solicitud request de evidencia",
+    );
+  }
+  const requestPath = requests[0].filename;
+  const requestContents = decodeGitHubContent(
+    await api.get(
+      `/repos/${repository}/contents/${encodedContentPath(requestPath)}?ref=${sourceSha}`,
+    ),
+    requestPath,
+  );
+  const request = parseEvidenceRequest(requestContents, requestPath);
+  if (!linkedIssue(pr.body, repository, request.issue)) {
+    throw new TypeError("La Pull Request fusionada debe enlazar la issue");
+  }
+  const issue = requireRecord(
+    await api.get(`/repos/${repository}/issues/${request.issue}`),
+    "issue",
+  );
+  if (issue.number !== request.issue || issue.state !== "open") {
+    throw new TypeError(
+      "La issue de evidencia debe permanecer abierta hasta la release",
+    );
+  }
+  const issueUrl = requireGitHubUrl(issue.html_url, repository, "issue");
+  return {
+    kind: "release",
+    context: {
+      schemaVersion: 1,
+      repository,
+      issueNumber: request.issue,
+      issueUrl,
+      prNumber,
+      prUrl,
+      runId,
+      runUrl,
+      sourceSha,
+      requestPath,
+      request,
+    },
+  };
 }
 
 export async function resolvePullRequestRun(
@@ -677,16 +940,31 @@ export async function upsertEvidenceComments(
   input: EvidenceCommentInput,
 ): Promise<void> {
   const validated = validateEvidenceCommentInput(input);
-  const targetNumbers = [
-    validated.context.prNumber,
-    validated.context.issueNumber,
-  ].filter((value, index, all) => all.indexOf(value) === index);
+  await upsertMarkedComments(
+    api,
+    validated.context.repository,
+    [validated.context.prNumber, validated.context.issueNumber],
+    validated.marker,
+    validated.body,
+  );
+}
+
+async function upsertMarkedComments(
+  api: GitHubApi,
+  repository: string,
+  rawTargetNumbers: readonly number[],
+  marker: string,
+  body: string,
+): Promise<void> {
+  const targetNumbers = rawTargetNumbers.filter(
+    (value, index, all) => all.indexOf(value) === index,
+  );
   const planned: Array<{ target: number; commentId: number | null }> = [];
 
   // Preflight both targets before mutating either one.
   for (const target of targetNumbers) {
     const response = await api.get(
-      `/repos/${validated.context.repository}/issues/${target}/comments?per_page=100`,
+      `/repos/${repository}/issues/${target}/comments?per_page=100`,
     );
     if (!Array.isArray(response) || response.length > 100) {
       throw new TypeError("GitHub devolvió una lista de comentarios inválida");
@@ -696,7 +974,7 @@ export async function upsertEvidenceComments(
       const comment = requireRecord(value, "comentario");
       const id = requirePositiveInteger(comment.id, "comment id");
       const body = requireCommentBody(comment.body);
-      if (exactCommentMarker(body, validated.marker)) matching.push(id);
+      if (exactCommentMarker(body, marker)) matching.push(id);
     }
     if (matching.length > 1) {
       throw new Error(
@@ -707,19 +985,111 @@ export async function upsertEvidenceComments(
   }
 
   for (const operation of planned) {
-    const payload = { body: validated.body };
+    const payload = { body };
     if (operation.commentId === null) {
       await api.post(
-        `/repos/${validated.context.repository}/issues/${operation.target}/comments`,
+        `/repos/${repository}/issues/${operation.target}/comments`,
         payload,
       );
     } else {
       await api.patch(
-        `/repos/${validated.context.repository}/issues/comments/${operation.commentId}`,
+        `/repos/${repository}/issues/comments/${operation.commentId}`,
         payload,
       );
     }
   }
+}
+
+function releaseEvidenceCommentBody(
+  context: ReleaseCaptureContext,
+  publication: PublishEvidenceResult,
+  evidenceCommitSha: string,
+): string {
+  const entry = publication.entries[0];
+  const marker = `<!-- preview-release:issue-${context.issueNumber}:${context.sourceSha} -->`;
+  const lines = [
+    marker,
+    "## Release desplegada en la preview compartida",
+    "",
+    `Solicitud: [issue #${context.issueNumber}](${context.issueUrl}) · [PR #${context.prNumber}](${context.prUrl})`,
+    "",
+    `- SHA integrado completo: \`${context.sourceSha}\``,
+    `- Ejecución verificada: [GitHub Actions](${context.runUrl})`,
+    `- [Abrir preview compartida](${entry.previewUrl})`,
+    `- [Abrir manifest.json](${entry.manifestUrl})`,
+    `- Commit inmutable de evidencia: [${evidenceCommitSha.slice(0, 12)}](https://github.com/${context.repository}/commit/${evidenceCommitSha})`,
+    "",
+  ];
+  for (const png of entry.pngs) {
+    const label = escapeMarkdownLabel(png.filename);
+    lines.push(`[![${label}](${png.rawUrl})](${png.rawUrl})`, "");
+  }
+  lines.push(
+    "✅ Estado: el mismo SHA verde de `main` quedó desplegado al 100% en el Worker de preview compartida y sus comprobaciones terminaron correctamente.",
+    "",
+    "Si esta release no es aceptable, crea una PR con `git revert` para conservar el historial; producción y DNS no han sido modificados.",
+  );
+  const body = lines.join("\n");
+  if (Buffer.byteLength(body) > 64 * 1024) {
+    throw new RangeError("El comentario de release supera 64 KiB");
+  }
+  return body;
+}
+
+function validateReleaseEvidenceCommentInput(
+  input: ReleaseEvidenceCommentInput,
+): {
+  context: ReleaseCaptureContext;
+  publication: PublishEvidenceResult;
+  evidenceCommitSha: string;
+  marker: string;
+  body: string;
+} {
+  const context = validateReleaseCaptureContext(input.context);
+  const publication = validatePublishEvidenceResult(input.publication);
+  const evidenceCommitSha = requireString(
+    input.evidenceCommitSha,
+    "evidence commit SHA",
+    gitShaPattern,
+  );
+  if (
+    publication.kind !== "release" ||
+    publication.repository !== context.repository ||
+    publication.issueNumber !== context.issueNumber ||
+    publication.prNumber !== context.prNumber ||
+    publication.source.baseSha !== null ||
+    publication.source.headSha !== null ||
+    publication.source.releaseSha !== context.sourceSha ||
+    publication.runUrl !== context.runUrl ||
+    publication.entries.length !== 1 ||
+    publication.entries[0].role !== "release"
+  ) {
+    throw new TypeError(
+      "La publicación release no coincide con el contexto main autorizado",
+    );
+  }
+  const marker = `<!-- preview-release:issue-${context.issueNumber}:${context.sourceSha} -->`;
+  return {
+    context,
+    publication,
+    evidenceCommitSha,
+    marker,
+    body: releaseEvidenceCommentBody(context, publication, evidenceCommitSha),
+  };
+}
+
+export async function upsertReleaseEvidenceComments(
+  api: GitHubApi,
+  input: ReleaseEvidenceCommentInput,
+): Promise<void> {
+  const validated = validateReleaseEvidenceCommentInput(input);
+  await upsertMarkedComments(
+    api,
+    validated.context.repository,
+    [validated.context.prNumber, validated.context.issueNumber],
+    validated.marker,
+    validated.body,
+  );
 }
 
 export async function setPreviewApprovalStatus(

@@ -11,6 +11,10 @@ import {
 } from "../../scripts/preview-evidence/cloudflare.ts";
 import { createSealedBundle } from "../../scripts/preview-evidence/bundle.ts";
 import {
+  readReleaseCaptureContext,
+  writeReleaseCaptureContext,
+} from "../../scripts/preview-evidence/capture.ts";
+import {
   type GitHubApi,
   writePullRequestContext,
 } from "../../scripts/preview-evidence/github.ts";
@@ -220,6 +224,84 @@ function eventPayload(): Record<string, unknown> {
   };
 }
 
+function mainEventPayload(): Record<string, unknown> {
+  return {
+    action: "completed",
+    repository: { full_name: repository, default_branch: "main" },
+    workflow_run: {
+      id: 1001,
+      html_url: `https://github.com/${repository}/actions/runs/1001`,
+      conclusion: "success",
+      event: "push",
+      head_branch: "main",
+      head_sha: headSha,
+      head_repository: { full_name: repository },
+      pull_requests: [],
+    },
+  };
+}
+
+class MainCliGitHubApi implements GitHubApi {
+  constructor(private readonly bootstrap = false) {}
+
+  async get(path: string): Promise<unknown> {
+    const files = this.bootstrap
+      ? [{ filename: ".github/workflows/shared-preview.yml", status: "added" }]
+      : [{ filename: requestPath, status: "added" }];
+    const values: Record<string, unknown> = {
+      [`/repos/${repository}/branches/main`]: {
+        name: "main",
+        commit: { sha: headSha },
+      },
+      [`/repos/${repository}/commits/${headSha}/pulls?per_page=100`]: [
+        { number: 9 },
+      ],
+      [`/repos/${repository}/pulls/9`]: {
+        number: 9,
+        state: "closed",
+        merged: true,
+        merged_at: "2026-09-03T20:00:00Z",
+        merge_commit_sha: headSha,
+        changed_files: files.length,
+        html_url: `https://github.com/${repository}/pull/9`,
+        body: "Resuelve #4",
+        base: { ref: "main", sha: baseSha },
+        head: {
+          ref: "feature/issue-4",
+          sha: "c".repeat(40),
+          repo: { full_name: repository },
+        },
+      },
+      [`/repos/${repository}/pulls/9/files?per_page=100&page=1`]: files,
+      [`/repos/${repository}/contents/evidence/requests/issue-4.yaml?ref=${headSha}`]:
+        {
+          type: "file",
+          path: requestPath,
+          encoding: "base64",
+          size: Buffer.byteLength(requestYaml),
+          content: Buffer.from(requestYaml).toString("base64"),
+        },
+      [`/repos/${repository}/issues/4`]: {
+        number: 4,
+        state: "open",
+        html_url: `https://github.com/${repository}/issues/4`,
+      },
+    };
+    if (!Object.hasOwn(values, path)) {
+      throw new Error(`Unexpected main API path: ${path}`);
+    }
+    return structuredClone(values[path]);
+  }
+
+  async post(): Promise<unknown> {
+    throw new Error("Unexpected POST");
+  }
+
+  async patch(): Promise<unknown> {
+    throw new Error("Unexpected PATCH");
+  }
+}
+
 test("resolve-pr writes a sealed context and safe GitHub outputs", async () => {
   const root = await mkdtemp(join(tmpdir(), "preview-cli-"));
   try {
@@ -251,6 +333,79 @@ test("resolve-pr writes a sealed context and safe GitHub outputs", async () => {
     assert.match(outputs, new RegExp(`head_sha<<[^\\n]+\\n${headSha}\\n`, "u"));
     assert.match(outputs, /context_sha256<<[^\n]+\n[a-f0-9]{64}\n/u);
     assert.equal(outputs.includes("test-token"), false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("resolve-main seals a release context or emits a non-deployable bootstrap", async () => {
+  const root = await mkdtemp(join(tmpdir(), "preview-cli-main-"));
+  try {
+    const event = join(root, "event.json");
+    const output = join(root, "github-output");
+    const context = join(root, "context.json");
+    await writeFile(event, JSON.stringify(mainEventPayload()), "utf8");
+    await writeFile(output, "", "utf8");
+
+    await runPreviewEvidenceCli(
+      [
+        "resolve-main",
+        "--event",
+        event,
+        "--output",
+        output,
+        "--context",
+        context,
+      ],
+      { GITHUB_TOKEN: "test-token", GITHUB_REPOSITORY: repository },
+      { createApi: () => new MainCliGitHubApi(), stdout: () => undefined },
+    );
+
+    const outputs = await readFile(output, "utf8");
+    const digest = /context_sha256<<[^\n]+\n([a-f0-9]{64})\n/u.exec(
+      outputs,
+    )?.[1];
+    assert.equal(typeof digest, "string");
+    const stored = await readReleaseCaptureContext(context, digest as string);
+    assert.equal(stored.sourceSha, headSha);
+    assert.equal(stored.prNumber, 9);
+    assert.match(outputs, /bootstrap<<[^\n]+\nfalse\n/u);
+    assert.match(
+      outputs,
+      new RegExp(`source_sha<<[^\\n]+\\n${headSha}\\n`, "u"),
+    );
+    await runPreviewEvidenceCli(
+      ["recheck-main", "--context", context, "--context-sha", digest as string],
+      { GITHUB_TOKEN: "test-token", GITHUB_REPOSITORY: repository },
+      { createApi: () => new MainCliGitHubApi(), stdout: () => undefined },
+    );
+
+    const bootstrapOutput = join(root, "bootstrap-output");
+    const bootstrapContext = join(root, "bootstrap-context.json");
+    await writeFile(bootstrapOutput, "", "utf8");
+    await runPreviewEvidenceCli(
+      [
+        "resolve-main",
+        "--event",
+        event,
+        "--output",
+        bootstrapOutput,
+        "--context",
+        bootstrapContext,
+      ],
+      {
+        GITHUB_TOKEN: "test-token",
+        GITHUB_REPOSITORY: repository,
+        PREVIEW_PIPELINE_BOOTSTRAP_PR: "9",
+      },
+      {
+        createApi: () => new MainCliGitHubApi(true),
+        stdout: () => undefined,
+      },
+    );
+    const bootstrap = await readFile(bootstrapOutput, "utf8");
+    assert.match(bootstrap, /bootstrap<<[^\n]+\ntrue\n/u);
+    await assert.rejects(readFile(bootstrapContext), /ENOENT/u);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
@@ -547,6 +702,106 @@ test("upload-version validates sealed context before reading credentials and wri
     assert.equal(descriptor.versionId, cloudflareVersionId);
     assert.equal(descriptor.url, `${url}/`);
     assert.equal(calls.length, 2);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("upload-version derives a release identity only from the sealed main context", async () => {
+  const root = await mkdtemp(join(tmpdir(), "preview-cli-upload-release-"));
+  try {
+    const value = await sealedCliFixture(root, "release");
+    const contextPath = join(root, "main-context.json");
+    const outputPath = join(root, "release-descriptor.json");
+    const sealedContext = await writeReleaseCaptureContext(contextPath, {
+      schemaVersion: 1,
+      repository,
+      issueNumber: 4,
+      issueUrl: `https://github.com/${repository}/issues/4`,
+      prNumber: 9,
+      prUrl: `https://github.com/${repository}/pull/9`,
+      runId: 1001,
+      runUrl: `https://github.com/${repository}/actions/runs/1001`,
+      sourceSha: headSha,
+      requestPath,
+      request: {
+        schemaVersion: 1,
+        issue: 4,
+        scope: "page",
+        route: "/pruebas/guia/",
+        selector: null,
+        expectedStatus: { base: 404, candidate: 200 },
+        viewports: ["desktop", "mobile"],
+      },
+    });
+    const tag = "main-bbbbbbb";
+    const url = `https://${tag}-comunidad-solar-preview.comunidadsolar-dev.workers.dev`;
+    const calls: WranglerInvocation[] = [];
+
+    await runPreviewEvidenceCli(
+      [
+        "upload-version",
+        "--bundle",
+        value.bundle,
+        "--profile",
+        value.profilePath,
+        "--profile-sha",
+        value.profileSha256,
+        "--context",
+        contextPath,
+        "--context-sha",
+        sealedContext.sha256,
+        "--role",
+        "release",
+        "--output",
+        outputPath,
+      ],
+      {
+        CLOUDFLARE_ACCOUNT_ID: cloudflareAccountId,
+        CLOUDFLARE_API_TOKEN: cloudflareToken,
+      },
+      {
+        wranglerRunner: queuedWrangler(
+          [
+            wranglerResult({
+              stdout: [
+                `Worker Version ID: ${cloudflareVersionId}`,
+                `Version Preview URL: https://${cloudflareVersionId.slice(0, 8)}-comunidad-solar-preview.comunidadsolar-dev.workers.dev`,
+                `Version Preview Alias URL: ${url}`,
+                "",
+              ].join("\n"),
+            }),
+            wranglerResult({
+              stdout: JSON.stringify([
+                {
+                  id: cloudflareVersionId,
+                  number: 2,
+                  metadata: {
+                    created_on: "2026-09-03T20:00:00.000Z",
+                    hasPreview: true,
+                    source: "wrangler",
+                  },
+                  annotations: {
+                    "workers/alias": tag,
+                    "workers/message": "main release bbbbbbb",
+                    "workers/tag": tag,
+                  },
+                },
+              ]),
+            }),
+          ],
+          calls,
+        ),
+        stdout: () => undefined,
+      },
+    );
+
+    const descriptor = JSON.parse(await readFile(outputPath, "utf8"));
+    assert.equal(descriptor.role, "release");
+    assert.equal(descriptor.sourceSha, headSha);
+    assert.equal(descriptor.tag, tag);
+    assert.equal(descriptor.url, `${url}/`);
+    assert.equal(calls[0].argv.includes("pr-9"), false);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
