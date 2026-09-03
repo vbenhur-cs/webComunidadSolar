@@ -19,7 +19,11 @@ import {
   writePullRequestContext,
 } from "../../scripts/preview-evidence/github.ts";
 import { runPreviewEvidenceCli } from "../../scripts/preview-evidence/cli.ts";
-import { sha256 } from "../../scripts/preview-evidence/domain.ts";
+import {
+  canonicalJson,
+  sha256,
+} from "../../scripts/preview-evidence/domain.ts";
+import { readProductionReleaseContext } from "../../scripts/preview-evidence/release.ts";
 
 const repository = "vbenhur-cs/webComunidadSolar";
 const baseSha = "a".repeat(40);
@@ -302,6 +306,122 @@ class MainCliGitHubApi implements GitHubApi {
   }
 }
 
+class ProductionCliGitHubApi implements GitHubApi {
+  readonly candidateSha = "c".repeat(40);
+
+  async get(path: string): Promise<unknown> {
+    const previewOrigin =
+      "https://comunidad-solar-preview.comunidadsolar-dev.workers.dev";
+    const versionId = "33333333-3333-4333-8333-333333333333";
+    const capture = (viewport: "desktop" | "mobile", width: number) => ({
+      role: "release",
+      kind: "page",
+      sourceSha: headSha,
+      versionId,
+      origin: previewOrigin,
+      url: `${previewOrigin}/pruebas/guia/`,
+      route: "/pruebas/guia/",
+      status: 200,
+      viewport: {
+        name: viewport,
+        width,
+        height: viewport === "desktop" ? 1000 : 844,
+        deviceScaleFactor: 1,
+      },
+      selector: null,
+      filename: `release-${viewport}.png`,
+      bytes: 1234,
+      width,
+      height: 900,
+      sha256: viewport === "desktop" ? "d".repeat(64) : "e".repeat(64),
+      pageErrors: 0,
+      sameOriginFailures: 0,
+      crossOriginFailures: {},
+    });
+    const manifest = {
+      schemaVersion: 1,
+      kind: "release",
+      issue: 4,
+      prNumber: 9,
+      requestPath,
+      route: "/pruebas/guia/",
+      selector: null,
+      source: { baseSha: null, candidateSha: null, releaseSha: headSha },
+      capturedAt: "2026-09-04T00:00:00.000Z",
+      run: {
+        id: 1001,
+        url: `https://github.com/${repository}/actions/runs/1001`,
+        attempt: 1,
+      },
+      tools: {
+        node: "22.22.3",
+        playwright: "1.62.1",
+        browser: "Chromium 140.0.0.0",
+      },
+      captures: [capture("desktop", 1440), capture("mobile", 390)],
+    };
+    const manifestBytes = Buffer.from(`${canonicalJson(manifest)}\n`);
+    const values: Record<string, unknown> = {
+      [`/repos/${repository}/compare/${headSha}...main`]: {
+        status: "ahead",
+        merge_base_commit: { sha: headSha },
+      },
+      [`/repos/${repository}/commits/${headSha}/pulls?per_page=100`]: [
+        { number: 9 },
+      ],
+      [`/repos/${repository}/pulls/9`]: {
+        number: 9,
+        state: "closed",
+        merged: true,
+        merged_at: "2026-09-03T20:00:00Z",
+        merge_commit_sha: headSha,
+        changed_files: 1,
+        html_url: `https://github.com/${repository}/pull/9`,
+        base: { ref: "main" },
+        head: {
+          sha: this.candidateSha,
+          repo: { full_name: repository },
+        },
+      },
+      [`/repos/${repository}/pulls/9/files?per_page=100&page=1`]: [
+        { filename: requestPath, status: "added" },
+      ],
+      [`/repos/${repository}/contents/issue-4/releases/${headSha}/manifest.json?ref=evidence`]:
+        {
+          type: "file",
+          path: `issue-4/releases/${headSha}/manifest.json`,
+          encoding: "base64",
+          size: manifestBytes.length,
+          sha: "f".repeat(40),
+          content: manifestBytes.toString("base64"),
+        },
+      [`/repos/${repository}/commits/${this.candidateSha}/status?per_page=100`]:
+        {
+          sha: this.candidateSha,
+          statuses: [
+            {
+              context: "preview-approved",
+              state: "success",
+              target_url: `https://github.com/${repository}/actions/runs/999`,
+            },
+          ],
+        },
+    };
+    if (!Object.hasOwn(values, path)) {
+      throw new Error(`Unexpected production API path: ${path}`);
+    }
+    return structuredClone(values[path]);
+  }
+
+  async post(): Promise<unknown> {
+    throw new Error("Unexpected POST");
+  }
+
+  async patch(): Promise<unknown> {
+    throw new Error("Unexpected PATCH");
+  }
+}
+
 test("resolve-pr writes a sealed context and safe GitHub outputs", async () => {
   const root = await mkdtemp(join(tmpdir(), "preview-cli-"));
   try {
@@ -406,6 +526,90 @@ test("resolve-main seals a release context or emits a non-deployable bootstrap",
     const bootstrap = await readFile(bootstrapOutput, "utf8");
     assert.match(bootstrap, /bootstrap<<[^\n]+\ntrue\n/u);
     await assert.rejects(readFile(bootstrapContext), /ENOENT/u);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("authorize-production fails closed, seals context and can reauthorize it", async () => {
+  const root = await mkdtemp(join(tmpdir(), "production-cli-authorize-"));
+  try {
+    const output = join(root, "github-output");
+    const context = join(root, "context.json");
+    await writeFile(output, "", "utf8");
+    let apiCreated = false;
+    await assert.rejects(
+      runPreviewEvidenceCli(
+        [
+          "authorize-production",
+          "--sha",
+          headSha,
+          "--output",
+          output,
+          "--context",
+          context,
+        ],
+        { PRODUCTION_ENABLED: "false" },
+        {
+          createApi: () => {
+            apiCreated = true;
+            return new ProductionCliGitHubApi();
+          },
+        },
+      ),
+      /PRODUCTION_ENABLED|producci[oó]n/i,
+    );
+    assert.equal(apiCreated, false);
+
+    const environment = {
+      PRODUCTION_ENABLED: "true",
+      GITHUB_REPOSITORY: repository,
+      GITHUB_RUN_ID: "2001",
+      GITHUB_TOKEN: "test-token",
+    };
+    await runPreviewEvidenceCli(
+      [
+        "authorize-production",
+        "--sha",
+        headSha,
+        "--output",
+        output,
+        "--context",
+        context,
+      ],
+      environment,
+      {
+        createApi: () => new ProductionCliGitHubApi(),
+        stdout: () => undefined,
+      },
+    );
+    const outputs = await readFile(output, "utf8");
+    const digest = /context_sha256<<[^\n]+\n([a-f0-9]{64})\n/u.exec(
+      outputs,
+    )?.[1];
+    assert.equal(typeof digest, "string");
+    const stored = await readProductionReleaseContext(
+      context,
+      digest as string,
+    );
+    assert.equal(stored.sourceSha, headSha);
+    assert.equal(stored.issueNumber, 4);
+    assert.match(outputs, /issue_number<<[^\n]+\n4\n/u);
+
+    await runPreviewEvidenceCli(
+      [
+        "reauthorize-production",
+        "--context",
+        context,
+        "--context-sha",
+        digest as string,
+      ],
+      environment,
+      {
+        createApi: () => new ProductionCliGitHubApi(),
+        stdout: () => undefined,
+      },
+    );
   } finally {
     await rm(root, { recursive: true, force: true });
   }

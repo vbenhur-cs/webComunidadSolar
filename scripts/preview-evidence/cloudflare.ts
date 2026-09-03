@@ -70,7 +70,45 @@ export interface DeployVersionInput {
   credentials: CloudflareCredentials;
 }
 
+export interface ProductionUploadInput {
+  bundleRoot: string;
+  profilePath: string;
+  profileSha256: string;
+  sourceSha: string;
+  credentials: CloudflareCredentials;
+}
+
+export interface ProductionVersionDescriptor {
+  schemaVersion: 1;
+  sourceSha: string;
+  bundleSha256: string;
+  workerName: "comunidad-solar-production";
+  versionId: string;
+  tag: string;
+}
+
+export interface ProductionDeployInput {
+  bundleRoot: string;
+  profilePath: string;
+  profileSha256: string;
+  descriptor: ProductionVersionDescriptor;
+  credentials: CloudflareCredentials;
+  runUrl: string;
+}
+
+export interface ProductionRollbackDescriptor {
+  schemaVersion: 1;
+  workerName: "comunidad-solar-production";
+  sourceSha: string;
+  previousDeploymentId: string;
+  previousVersions: Array<{ versionId: string; percentage: number }>;
+  newDeploymentId: string;
+  newVersionId: string;
+  runUrl: string;
+}
+
 const workerName = "comunidad-solar-preview" as const;
+const productionWorkerName = "comunidad-solar-production" as const;
 const maxOutputBytes = 1024 * 1024;
 const maxDescriptorBytes = 32 * 1024;
 const timeoutMs = 10 * 60 * 1000;
@@ -445,7 +483,7 @@ function parseUploadOutput(
   return { versionId, url: aliasUrl.toString() };
 }
 
-function validateVersionMetadata(value: unknown): void {
+function validateVersionMetadata(value: unknown, expectedPreview = true): void {
   const metadata = requireRecord(value, "La metadata de versión Cloudflare");
   assertAllowedKeys(
     metadata,
@@ -468,9 +506,315 @@ function validateVersionMetadata(value: unknown): void {
       safeText(child, `metadata.${key}`, 1024);
     }
   }
-  if (metadata.hasPreview !== true) {
-    throw new TypeError("La versión Cloudflare no habilitó Preview URLs");
+  if (metadata.hasPreview !== expectedPreview) {
+    throw new TypeError(
+      "La versión Cloudflare no coincide con la política de Preview URLs",
+    );
   }
+}
+
+function productionIdentity(sourceSha: string): {
+  tag: string;
+  message: string;
+} {
+  if (!gitShaPattern.test(sourceSha)) {
+    throw new TypeError("El SHA de la versión production es inválido");
+  }
+  const shortSha = sourceSha.slice(0, 7);
+  return {
+    tag: `production-${shortSha}`,
+    message: `Production release ${shortSha}`,
+  };
+}
+
+function parseProductionUploadOutput(stdout: string): string {
+  const versionId = exactlyOneLine(stdout, "Worker Version ID");
+  if (!uuidPattern.test(versionId)) {
+    throw new TypeError("Cloudflare devolvió un Version ID UUID inválido");
+  }
+  if (/^Version Preview Alias URL:/mu.test(stdout)) {
+    throw new TypeError(
+      "La versión production no puede crear un alias de Preview URL",
+    );
+  }
+  return versionId;
+}
+
+function verifyListedProductionVersion(
+  stdout: string,
+  expected: { versionId: string; tag: string; message: string },
+): void {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(stdout.trim());
+  } catch {
+    throw new TypeError("Cloudflare versions list devolvió JSON inválido");
+  }
+  if (!Array.isArray(parsed) || parsed.length === 0 || parsed.length > 10) {
+    throw new TypeError("Cloudflare versions list devolvió una lista inválida");
+  }
+  const matching: Array<{ id: string; annotations: JsonRecord }> = [];
+  for (const entry of parsed) {
+    const version = requireRecord(entry, "Una versión Cloudflare production");
+    assertAllowedKeys(
+      version,
+      ["id", "number", "metadata", "annotations"],
+      "Una versión Cloudflare production",
+    );
+    const id = safeText(version.id, "Version ID Cloudflare production");
+    if (
+      !uuidPattern.test(id) ||
+      !Number.isSafeInteger(version.number) ||
+      (version.number as number) < 1
+    ) {
+      throw new TypeError("Cloudflare listó una versión production inválida");
+    }
+    validateVersionMetadata(version.metadata, false);
+    const annotations = validateAnnotations(version.annotations);
+    if (annotations["workers/tag"] === expected.tag) {
+      matching.push({ id, annotations });
+    }
+  }
+  if (matching.length !== 1) {
+    throw new TypeError(
+      "Cloudflare no listó una única versión production con el tag esperado",
+    );
+  }
+  const [match] = matching;
+  if (
+    match.id !== expected.versionId ||
+    match.annotations["workers/message"] !== expected.message ||
+    match.annotations["workers/alias"] !== undefined
+  ) {
+    throw new TypeError(
+      "La versión production listada no coincide con la subida",
+    );
+  }
+}
+
+export function validateProductionVersionDescriptor(
+  value: unknown,
+): ProductionVersionDescriptor {
+  const descriptor = requireRecord(value, "El descriptor production");
+  assertExactKeys(
+    descriptor,
+    [
+      "schemaVersion",
+      "sourceSha",
+      "bundleSha256",
+      "workerName",
+      "versionId",
+      "tag",
+    ],
+    "El descriptor production",
+  );
+  if (
+    descriptor.schemaVersion !== 1 ||
+    typeof descriptor.sourceSha !== "string" ||
+    !gitShaPattern.test(descriptor.sourceSha) ||
+    typeof descriptor.bundleSha256 !== "string" ||
+    !sha256Pattern.test(descriptor.bundleSha256) ||
+    descriptor.workerName !== productionWorkerName ||
+    typeof descriptor.versionId !== "string" ||
+    !uuidPattern.test(descriptor.versionId) ||
+    typeof descriptor.tag !== "string" ||
+    descriptor.tag !== productionIdentity(descriptor.sourceSha).tag
+  ) {
+    throw new TypeError("El descriptor production contiene identidad inválida");
+  }
+  return descriptor as unknown as ProductionVersionDescriptor;
+}
+
+interface DeploymentSnapshot {
+  id: string;
+  versions: Array<{ versionId: string; percentage: number }>;
+}
+
+function parseDeploymentSnapshot(stdout: string): DeploymentSnapshot {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(stdout.trim());
+  } catch {
+    throw new TypeError("Cloudflare deployments status devolvió JSON inválido");
+  }
+  const deployment = requireRecord(parsed, "El deployment Cloudflare");
+  assertAllowedKeys(
+    deployment,
+    [
+      "id",
+      "created_on",
+      "source",
+      "strategy",
+      "versions",
+      "annotations",
+      "author_email",
+    ],
+    "El deployment Cloudflare",
+  );
+  const id = safeText(deployment.id, "Deployment ID Cloudflare", 36);
+  const createdOn = safeText(
+    deployment.created_on,
+    "created_on Cloudflare",
+    64,
+  );
+  safeText(deployment.source, "source Cloudflare", 128);
+  if (
+    !uuidPattern.test(id) ||
+    deployment.strategy !== "percentage" ||
+    !Number.isFinite(Date.parse(createdOn)) ||
+    !Array.isArray(deployment.versions) ||
+    deployment.versions.length < 1 ||
+    deployment.versions.length > 2
+  ) {
+    throw new TypeError("El deployment Cloudflare es inválido");
+  }
+  if (deployment.annotations !== undefined) {
+    const annotations = requireRecord(
+      deployment.annotations,
+      "Las annotations del deployment",
+    );
+    assertAllowedKeys(
+      annotations,
+      ["workers/message", "workers/triggered_by"],
+      "Las annotations del deployment",
+    );
+    for (const [key, child] of Object.entries(annotations)) {
+      safeText(child, `deployment annotation ${key}`, 1000);
+    }
+  }
+  if (deployment.author_email !== undefined) {
+    safeText(deployment.author_email, "author_email Cloudflare", 320);
+  }
+  const versions = deployment.versions.map((value) => {
+    const version = requireRecord(value, "Una versión del deployment");
+    assertExactKeys(
+      version,
+      ["version_id", "percentage"],
+      "Una versión del deployment",
+    );
+    const versionId = safeText(version.version_id, "Version ID desplegado", 36);
+    if (
+      !uuidPattern.test(versionId) ||
+      typeof version.percentage !== "number" ||
+      !Number.isFinite(version.percentage) ||
+      version.percentage < 0.01 ||
+      version.percentage > 100
+    ) {
+      throw new TypeError("El reparto del deployment Cloudflare es inválido");
+    }
+    return { versionId, percentage: version.percentage };
+  });
+  const total = versions.reduce((sum, version) => sum + version.percentage, 0);
+  if (Math.abs(total - 100) > Number.EPSILON * 100) {
+    throw new TypeError(
+      "El deployment Cloudflare no reparte el 100% del tráfico",
+    );
+  }
+  return { id, versions };
+}
+
+function validateRunUrl(value: string): string {
+  let url: URL;
+  try {
+    url = new URL(safeText(value, "La URL del run production"));
+  } catch {
+    throw new TypeError("La URL del run production es inválida");
+  }
+  if (
+    url.protocol !== "https:" ||
+    url.hostname !== "github.com" ||
+    url.username !== "" ||
+    url.password !== "" ||
+    url.port !== "" ||
+    url.search !== "" ||
+    url.hash !== "" ||
+    !/^\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\/actions\/runs\/[1-9][0-9]*$/u.test(
+      url.pathname,
+    )
+  ) {
+    throw new TypeError("La URL del run production es inválida");
+  }
+  return url.toString();
+}
+
+export function validateProductionRollbackDescriptor(
+  value: unknown,
+): ProductionRollbackDescriptor {
+  const descriptor = requireRecord(value, "El descriptor de rollback");
+  assertExactKeys(
+    descriptor,
+    [
+      "schemaVersion",
+      "workerName",
+      "sourceSha",
+      "previousDeploymentId",
+      "previousVersions",
+      "newDeploymentId",
+      "newVersionId",
+      "runUrl",
+    ],
+    "El descriptor de rollback",
+  );
+  if (
+    descriptor.schemaVersion !== 1 ||
+    descriptor.workerName !== productionWorkerName ||
+    typeof descriptor.sourceSha !== "string" ||
+    !gitShaPattern.test(descriptor.sourceSha) ||
+    typeof descriptor.previousDeploymentId !== "string" ||
+    !uuidPattern.test(descriptor.previousDeploymentId) ||
+    typeof descriptor.newDeploymentId !== "string" ||
+    !uuidPattern.test(descriptor.newDeploymentId) ||
+    descriptor.newDeploymentId === descriptor.previousDeploymentId ||
+    typeof descriptor.newVersionId !== "string" ||
+    !uuidPattern.test(descriptor.newVersionId) ||
+    !Array.isArray(descriptor.previousVersions) ||
+    descriptor.previousVersions.length < 1 ||
+    descriptor.previousVersions.length > 2
+  ) {
+    throw new TypeError(
+      "El descriptor de rollback contiene identidad inválida",
+    );
+  }
+  const previousVersions = descriptor.previousVersions.map((value) => {
+    const version = requireRecord(value, "Una versión previa del rollback");
+    assertExactKeys(
+      version,
+      ["versionId", "percentage"],
+      "Una versión previa del rollback",
+    );
+    if (
+      typeof version.versionId !== "string" ||
+      !uuidPattern.test(version.versionId) ||
+      typeof version.percentage !== "number" ||
+      !Number.isFinite(version.percentage) ||
+      version.percentage < 0.01 ||
+      version.percentage > 100 ||
+      version.versionId === descriptor.newVersionId
+    ) {
+      throw new TypeError("Una versión previa del rollback es inválida");
+    }
+    return {
+      versionId: version.versionId,
+      percentage: version.percentage,
+    };
+  });
+  const total = previousVersions.reduce(
+    (sum, version) => sum + version.percentage,
+    0,
+  );
+  if (Math.abs(total - 100) > Number.EPSILON * 100) {
+    throw new TypeError("El rollback no conserva el reparto previo completo");
+  }
+  return {
+    schemaVersion: 1,
+    workerName: productionWorkerName,
+    sourceSha: descriptor.sourceSha,
+    previousDeploymentId: descriptor.previousDeploymentId,
+    previousVersions,
+    newDeploymentId: descriptor.newDeploymentId,
+    newVersionId: descriptor.newVersionId,
+    runUrl: validateRunUrl(descriptor.runUrl as string),
+  };
 }
 
 function validateAnnotations(value: unknown): JsonRecord {
@@ -726,6 +1070,163 @@ export async function deployExactVersion(
   );
 }
 
+export async function uploadProductionVersion(
+  input: ProductionUploadInput,
+  runner: WranglerRunner = runWrangler,
+): Promise<ProductionVersionDescriptor> {
+  const identity = productionIdentity(input.sourceSha);
+  const manifest = await verifySealedBundle(input.bundleRoot, {
+    role: "release",
+    sourceSha: input.sourceSha,
+    profilePath: input.profilePath,
+    profileSha256: input.profileSha256,
+    target: "production",
+  });
+  if (
+    manifest.topology.workerName !== productionWorkerName ||
+    !manifest.topology.indexable
+  ) {
+    throw new TypeError(
+      "El bundle production no identifica el destino aprobado",
+    );
+  }
+  const credentials = validateCredentials(input.credentials);
+  const bundleRoot = resolve(input.bundleRoot);
+  const config = resolve(bundleRoot, "dist", "server", "wrangler.json");
+  const uploaded = await runChecked(
+    runner,
+    invocation(
+      [
+        "versions",
+        "upload",
+        "--config",
+        config,
+        "--no-bundle",
+        "--strict",
+        "--tag",
+        identity.tag,
+        "--message",
+        identity.message,
+      ],
+      bundleRoot,
+      credentials,
+    ),
+    credentials,
+  );
+  const versionId = parseProductionUploadOutput(uploaded.stdout);
+  const listed = await runChecked(
+    runner,
+    invocation(
+      ["versions", "list", "--json", "--config", config],
+      bundleRoot,
+      credentials,
+    ),
+    credentials,
+  );
+  verifyListedProductionVersion(listed.stdout, { ...identity, versionId });
+  return validateProductionVersionDescriptor({
+    schemaVersion: 1,
+    sourceSha: input.sourceSha,
+    bundleSha256: manifest.bundleSha256,
+    workerName: productionWorkerName,
+    versionId,
+    tag: identity.tag,
+  });
+}
+
+export async function deployProductionVersion(
+  input: ProductionDeployInput,
+  runner: WranglerRunner = runWrangler,
+): Promise<ProductionRollbackDescriptor> {
+  const descriptor = validateProductionVersionDescriptor(input.descriptor);
+  const manifest = await verifySealedBundle(input.bundleRoot, {
+    role: "release",
+    sourceSha: descriptor.sourceSha,
+    profilePath: input.profilePath,
+    profileSha256: input.profileSha256,
+    target: "production",
+  });
+  if (
+    manifest.bundleSha256 !== descriptor.bundleSha256 ||
+    manifest.topology.workerName !== productionWorkerName ||
+    !manifest.topology.indexable
+  ) {
+    throw new Error(
+      "El descriptor production no coincide con el bundle sellado",
+    );
+  }
+  const runUrl = validateRunUrl(input.runUrl);
+  const credentials = validateCredentials(input.credentials);
+  const bundleRoot = resolve(input.bundleRoot);
+  const config = resolve(bundleRoot, "dist", "server", "wrangler.json");
+  const statusArgv = [
+    "deployments",
+    "status",
+    "--json",
+    "--config",
+    config,
+  ] as const;
+  const previousResult = await runChecked(
+    runner,
+    invocation(statusArgv, bundleRoot, credentials),
+    credentials,
+  );
+  const previous = parseDeploymentSnapshot(previousResult.stdout);
+  if (
+    previous.versions.some(
+      (version) => version.versionId === descriptor.versionId,
+    )
+  ) {
+    throw new Error("La versión production solicitada ya estaba desplegada");
+  }
+
+  const message = productionIdentity(descriptor.sourceSha).message;
+  await runChecked(
+    runner,
+    invocation(
+      [
+        "versions",
+        "deploy",
+        `${descriptor.versionId}@100%`,
+        "--yes",
+        "--config",
+        config,
+        "--message",
+        message,
+      ],
+      bundleRoot,
+      credentials,
+    ),
+    credentials,
+  );
+  const currentResult = await runChecked(
+    runner,
+    invocation(statusArgv, bundleRoot, credentials),
+    credentials,
+  );
+  const current = parseDeploymentSnapshot(currentResult.stdout);
+  if (
+    current.id === previous.id ||
+    current.versions.length !== 1 ||
+    current.versions[0].versionId !== descriptor.versionId ||
+    current.versions[0].percentage !== 100
+  ) {
+    throw new Error(
+      "Cloudflare no confirmó la nueva versión production al 100%",
+    );
+  }
+  return validateProductionRollbackDescriptor({
+    schemaVersion: 1,
+    workerName: productionWorkerName,
+    sourceSha: descriptor.sourceSha,
+    previousDeploymentId: previous.id,
+    previousVersions: previous.versions,
+    newDeploymentId: current.id,
+    newVersionId: descriptor.versionId,
+    runUrl,
+  });
+}
+
 export async function writeCloudflareVersionDescriptor(
   path: string,
   value: CloudflareVersionDescriptor,
@@ -775,4 +1276,90 @@ export async function readCloudflareVersionDescriptor(
     throw new TypeError("El descriptor Cloudflare contiene JSON inválido");
   }
   return validateCloudflareVersionDescriptor(parsed);
+}
+
+async function writeProductionDescriptor(
+  path: string,
+  value: ProductionVersionDescriptor | ProductionRollbackDescriptor,
+): Promise<void> {
+  const contents = Buffer.from(`${canonicalJson(value)}\n`, "utf8");
+  if (contents.length > maxDescriptorBytes) {
+    throw new RangeError("El descriptor production supera el tamaño permitido");
+  }
+  const parent = await lstat(dirname(path));
+  if (parent.isSymbolicLink() || !parent.isDirectory()) {
+    throw new TypeError("El directorio del descriptor production es inválido");
+  }
+  let handle: Awaited<ReturnType<typeof open>> | undefined;
+  try {
+    handle = await open(
+      path,
+      constants.O_WRONLY |
+        constants.O_CREAT |
+        constants.O_EXCL |
+        constants.O_NOFOLLOW,
+      0o600,
+    );
+    await handle.writeFile(contents);
+  } finally {
+    await handle?.close();
+  }
+}
+
+async function readProductionDescriptor(path: string): Promise<unknown> {
+  const stat = await lstat(path);
+  if (
+    stat.isSymbolicLink() ||
+    !stat.isFile() ||
+    stat.nlink !== 1 ||
+    stat.size < 1 ||
+    stat.size > maxDescriptorBytes
+  ) {
+    throw new TypeError(
+      "El descriptor production debe ser un archivo regular acotado",
+    );
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(await readFile(path, "utf8"));
+  } catch {
+    throw new TypeError("El descriptor production contiene JSON inválido");
+  }
+  return parsed;
+}
+
+export async function writeProductionVersionDescriptor(
+  path: string,
+  value: ProductionVersionDescriptor,
+): Promise<void> {
+  await writeProductionDescriptor(
+    path,
+    validateProductionVersionDescriptor(value),
+  );
+}
+
+export async function readProductionVersionDescriptor(
+  path: string,
+): Promise<ProductionVersionDescriptor> {
+  return validateProductionVersionDescriptor(
+    await readProductionDescriptor(path),
+  );
+}
+
+export async function writeProductionRollbackDescriptor(
+  path: string,
+  value: ProductionRollbackDescriptor,
+): Promise<void> {
+  await writeProductionDescriptor(
+    path,
+    validateProductionRollbackDescriptor(value),
+  );
+}
+
+export async function readProductionRollbackDescriptor(
+  path: string,
+): Promise<ProductionRollbackDescriptor> {
+  return validateProductionRollbackDescriptor(
+    await readProductionDescriptor(path),
+  );
 }

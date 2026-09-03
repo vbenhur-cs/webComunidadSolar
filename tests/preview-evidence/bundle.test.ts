@@ -408,3 +408,68 @@ test("rejects generated Wrangler topology outside the preview profile", async ()
     }
   }
 });
+
+test("seals an explicitly indexable production bundle only for production", async () => {
+  const fixture = await bundleFixture();
+  try {
+    const productionProfile: Record<string, unknown> = {
+      ...profileConfig(),
+      name: "comunidad-solar-production",
+      d1_databases: [
+        {
+          binding: "DB",
+          database_id: previewD1Id,
+          database_name: "comunidad-solar-production",
+          migrations_dir: "../../drizzle",
+        },
+      ],
+      vars: { SITE_INDEXABLE: "true" },
+    };
+    delete productionProfile.preview_urls;
+    delete productionProfile.workers_dev;
+    const productionGenerated = generatedConfig({
+      topLevelName: "comunidad-solar-production",
+      name: "comunidad-solar-production",
+      vars: { SITE_INDEXABLE: "true" },
+      d1_databases: [
+        {
+          binding: "DB",
+          database_id: previewD1Id,
+          database_name: "comunidad-solar-production",
+          migrations_dir: "../../drizzle",
+        },
+      ],
+    });
+    await writeFile(
+      fixture.profilePath,
+      `${JSON.stringify(productionProfile)}\n`,
+    );
+    fixture.profileSha256 = sha256(`${JSON.stringify(productionProfile)}\n`);
+    await writeFile(
+      join(fixture.source, "dist", "server", "wrangler.json"),
+      JSON.stringify(productionGenerated),
+    );
+    const productionInput = {
+      ...input(fixture),
+      role: "release" as const,
+      target: "production" as const,
+    };
+
+    const manifest = await createSealedBundle(productionInput);
+    assert.equal(manifest.topology.workerName, "comunidad-solar-production");
+    assert.equal(manifest.topology.database.name, "comunidad-solar-production");
+    assert.equal(manifest.topology.indexable, true);
+    assert.deepEqual(
+      await verifySealedBundle(fixture.output, {
+        role: "release",
+        sourceSha,
+        profilePath: fixture.profilePath,
+        profileSha256: fixture.profileSha256,
+        target: "production",
+      }),
+      manifest,
+    );
+  } finally {
+    await rm(fixture.root, { recursive: true, force: true });
+  }
+});

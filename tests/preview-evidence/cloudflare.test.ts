@@ -6,8 +6,11 @@ import test from "node:test";
 
 import {
   deployExactVersion,
+  deployProductionVersion,
   runWrangler,
+  type ProductionUploadInput,
   type UploadInput,
+  uploadProductionVersion,
   uploadPreviewVersion,
   type WranglerInvocation,
   type WranglerResult,
@@ -25,6 +28,7 @@ const accountId = "a".repeat(32);
 const apiToken = "unit-test-cloudflare-token_1234567890";
 const databaseId = "11111111-2222-4333-8444-555555555555";
 const workerName = "comunidad-solar-preview";
+const productionWorkerName = "comunidad-solar-production";
 
 interface Fixture {
   root: string;
@@ -492,6 +496,207 @@ test("deploys only a sealed release descriptor by exact UUID at 100 percent", as
         ],
       ],
     );
+  } finally {
+    await rm(value.root, { recursive: true, force: true });
+  }
+});
+
+async function productionFixture(): Promise<Fixture> {
+  const value = await fixture("release");
+  await rm(value.bundle, { recursive: true, force: true });
+  const productionProfile: Record<string, unknown> = {
+    ...profileConfig(),
+    name: productionWorkerName,
+    d1_databases: [
+      {
+        binding: "DB",
+        database_id: databaseId,
+        database_name: productionWorkerName,
+        migrations_dir: "../../drizzle",
+      },
+    ],
+    vars: { SITE_INDEXABLE: "true" },
+  };
+  delete productionProfile.preview_urls;
+  delete productionProfile.workers_dev;
+  const profileBytes = `${JSON.stringify(productionProfile)}\n`;
+  value.profileSha256 = sha256(profileBytes);
+  await writeFile(value.profilePath, profileBytes);
+  await writeFile(
+    join(value.source, "dist", "server", "wrangler.json"),
+    JSON.stringify({
+      ...generatedConfig(),
+      topLevelName: productionWorkerName,
+      name: productionWorkerName,
+      vars: { SITE_INDEXABLE: "true" },
+      d1_databases: [
+        {
+          binding: "DB",
+          database_id: databaseId,
+          database_name: productionWorkerName,
+          migrations_dir: "../../drizzle",
+        },
+      ],
+    }),
+  );
+  await createSealedBundle({
+    sourceRoot: value.source,
+    outputRoot: value.bundle,
+    role: "release",
+    sourceSha: candidateSha,
+    profilePath: value.profilePath,
+    profileSha256: value.profileSha256,
+    target: "production",
+  });
+  return value;
+}
+
+function productionUploadInput(value: Fixture): ProductionUploadInput {
+  return {
+    bundleRoot: value.bundle,
+    profilePath: value.profilePath,
+    profileSha256: value.profileSha256,
+    sourceSha: candidateSha,
+    credentials: { accountId, apiToken },
+  };
+}
+
+function deployment(
+  id: string,
+  deployedVersionId: string,
+): Record<string, unknown> {
+  return {
+    id,
+    created_on: "2026-09-04T00:00:00.000Z",
+    source: "wrangler",
+    strategy: "percentage",
+    author_email: "operator@example.invalid",
+    annotations: { "workers/message": "production release" },
+    versions: [{ version_id: deployedVersionId, percentage: 100 }],
+  };
+}
+
+test("uploads and deploys one production version with an exact rollback record", async () => {
+  const value = await productionFixture();
+  const uploadCalls: WranglerInvocation[] = [];
+  const deployCalls: WranglerInvocation[] = [];
+  const previousDeploymentId = "22222222-2222-4222-8222-222222222222";
+  const previousVersionId = "44444444-4444-4444-8444-444444444444";
+  const newDeploymentId = "55555555-5555-4555-8555-555555555555";
+  const runUrl =
+    "https://github.com/vbenhur-cs/webComunidadSolar/actions/runs/2001";
+  try {
+    const descriptor = await uploadProductionVersion(
+      productionUploadInput(value),
+      fakeRunner(
+        [
+          result({
+            stdout: `Uploaded ${productionWorkerName} (1 sec)\nWorker Version ID: ${versionId}\n`,
+          }),
+          result({
+            stdout: JSON.stringify([
+              {
+                id: versionId,
+                number: 8,
+                metadata: {
+                  author_email: "operator@example.invalid",
+                  author_id: "b".repeat(32),
+                  created_on: "2026-09-04T00:00:00.000Z",
+                  modified_on: "2026-09-04T00:00:00.000Z",
+                  hasPreview: false,
+                  source: "wrangler",
+                },
+                annotations: {
+                  "workers/message": "Production release a1b2c3d",
+                  "workers/tag": "production-a1b2c3d",
+                  "workers/triggered_by": "versions upload",
+                },
+              },
+            ]),
+          }),
+        ],
+        uploadCalls,
+      ),
+    );
+    assert.equal(descriptor.workerName, productionWorkerName);
+    assert.equal(descriptor.versionId, versionId);
+    assert.equal(descriptor.tag, "production-a1b2c3d");
+    assert.deepEqual(uploadCalls[0].argv, [
+      "versions",
+      "upload",
+      "--config",
+      resolve(value.bundle, "dist", "server", "wrangler.json"),
+      "--no-bundle",
+      "--strict",
+      "--tag",
+      "production-a1b2c3d",
+      "--message",
+      "Production release a1b2c3d",
+    ]);
+
+    const rollback = await deployProductionVersion(
+      {
+        bundleRoot: value.bundle,
+        profilePath: value.profilePath,
+        profileSha256: value.profileSha256,
+        descriptor,
+        credentials: { accountId, apiToken },
+        runUrl,
+      },
+      fakeRunner(
+        [
+          result({
+            stdout: JSON.stringify(
+              deployment(previousDeploymentId, previousVersionId),
+            ),
+          }),
+          result(),
+          result({
+            stdout: JSON.stringify(deployment(newDeploymentId, versionId)),
+          }),
+        ],
+        deployCalls,
+      ),
+    );
+    assert.deepEqual(
+      deployCalls.map((call) => call.argv),
+      [
+        [
+          "deployments",
+          "status",
+          "--json",
+          "--config",
+          resolve(value.bundle, "dist", "server", "wrangler.json"),
+        ],
+        [
+          "versions",
+          "deploy",
+          `${versionId}@100%`,
+          "--yes",
+          "--config",
+          resolve(value.bundle, "dist", "server", "wrangler.json"),
+          "--message",
+          "Production release a1b2c3d",
+        ],
+        [
+          "deployments",
+          "status",
+          "--json",
+          "--config",
+          resolve(value.bundle, "dist", "server", "wrangler.json"),
+        ],
+      ],
+    );
+    assert.deepEqual(rollback, {
+      schemaVersion: 1,
+      workerName: productionWorkerName,
+      sourceSha: candidateSha,
+      previousDeploymentId,
+      previousVersions: [{ versionId: previousVersionId, percentage: 100 }],
+      newDeploymentId,
+      newVersionId: versionId,
+      runUrl,
+    });
   } finally {
     await rm(value.root, { recursive: true, force: true });
   }

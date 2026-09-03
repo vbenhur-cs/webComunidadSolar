@@ -6,10 +6,16 @@ import { canonicalJson } from "./domain.ts";
 import { createSealedBundle, verifySealedBundle } from "./bundle.ts";
 import {
   deployExactVersion,
+  deployProductionVersion,
   readCloudflareVersionDescriptor,
+  readProductionRollbackDescriptor,
+  readProductionVersionDescriptor,
+  uploadProductionVersion,
   uploadPreviewVersion,
   type WranglerRunner,
   writeCloudflareVersionDescriptor,
+  writeProductionRollbackDescriptor,
+  writeProductionVersionDescriptor,
 } from "./cloudflare.ts";
 import {
   type BrowserAdapter,
@@ -39,11 +45,24 @@ import {
 } from "./evidence.ts";
 import { loadEvidenceRequest } from "./request.ts";
 import { materializePreviewProfile } from "./profile.ts";
+import {
+  authorizeProductionRelease,
+  materializeProductionProfile,
+  publishProductionEvidence,
+  readProductionReleaseContext,
+  readProductionSmokeRecord,
+  reauthorizeProductionRelease,
+  smokeProduction,
+  type ProductionHttpAdapter,
+  writeProductionReleaseContext,
+  writeProductionSmokeRecord,
+} from "./release.ts";
 
 export interface PreviewEvidenceCliDependencies {
   createApi?: (token: string, repository: string) => GitHubApi;
   wranglerRunner?: WranglerRunner;
   browserAdapter?: BrowserAdapter;
+  productionHttpAdapter?: ProductionHttpAdapter;
   stdout?: (message: string) => void;
 }
 
@@ -101,6 +120,21 @@ function requireEnvironment(environment: CliEnvironment, key: string): string {
   return value;
 }
 
+function requirePositiveEnvironmentInteger(
+  environment: CliEnvironment,
+  key: string,
+): number {
+  const value = requireEnvironment(environment, key);
+  if (!/^[1-9][0-9]*$/u.test(value)) {
+    throw new TypeError(`La configuración ${key} debe ser un entero positivo`);
+  }
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed)) {
+    throw new TypeError(`La configuración ${key} debe ser un entero positivo`);
+  }
+  return parsed;
+}
+
 export async function runPreviewEvidenceCli(
   argv: readonly string[],
   environment: CliEnvironment = process.env,
@@ -113,6 +147,8 @@ export async function runPreviewEvidenceCli(
     command !== "resolve-pr" &&
     command !== "resolve-main" &&
     command !== "recheck-main" &&
+    command !== "authorize-production" &&
+    command !== "reauthorize-production" &&
     command !== "validate-request" &&
     command !== "seal-bundle" &&
     command !== "verify-bundle" &&
@@ -125,11 +161,97 @@ export async function runPreviewEvidenceCli(
     command !== "comment-evidence" &&
     command !== "comment-release-evidence" &&
     command !== "approve-preview" &&
-    command !== "materialize-profile"
+    command !== "materialize-profile" &&
+    command !== "materialize-production-profile" &&
+    command !== "upload-production-version" &&
+    command !== "deploy-production-version" &&
+    command !== "smoke-production" &&
+    command !== "publish-production-evidence"
   ) {
     throw new TypeError(
       "Comando preview:evidence desconocido; consulte el uso",
     );
+  }
+
+  if (command === "authorize-production") {
+    const flags = parseFlags(rest, ["--sha", "--output", "--context"]);
+    if (environment.PRODUCTION_ENABLED !== "true") {
+      throw new Error(
+        "Producción está cerrada: PRODUCTION_ENABLED debe ser literalmente true",
+      );
+    }
+    const repository = requireEnvironment(environment, "GITHUB_REPOSITORY");
+    const runId = requirePositiveEnvironmentInteger(
+      environment,
+      "GITHUB_RUN_ID",
+    );
+    const token = requireEnvironment(environment, "GITHUB_TOKEN");
+    const api = (dependencies.createApi ?? createGitHubApi)(token, repository);
+    const context = await authorizeProductionRelease(
+      {
+        enabled: environment.PRODUCTION_ENABLED,
+        repository,
+        sourceSha: flags["--sha"],
+        runId,
+        runUrl: `https://github.com/${repository}/actions/runs/${runId}`,
+      },
+      api,
+    );
+    const sealed = await writeProductionReleaseContext(
+      flags["--context"],
+      context,
+    );
+    await writeGitHubOutputs(flags["--output"], {
+      source_sha: context.sourceSha,
+      pr_number: String(context.prNumber),
+      issue_number: String(context.issueNumber),
+      request_path: context.requestPath,
+      context_sha256: sealed.sha256,
+    });
+    stdout(`PRODUCTION_AUTHORIZED_OK sha=${context.sourceSha}\n`);
+    return;
+  }
+
+  if (command === "reauthorize-production") {
+    const flags = parseFlags(rest, ["--context", "--context-sha"]);
+    const context = await readProductionReleaseContext(
+      flags["--context"],
+      flags["--context-sha"],
+    );
+    const repository = requireEnvironment(environment, "GITHUB_REPOSITORY");
+    if (repository !== context.repository) {
+      throw new TypeError("El repositorio production no coincide con GitHub");
+    }
+    const token = requireEnvironment(environment, "GITHUB_TOKEN");
+    const api = (dependencies.createApi ?? createGitHubApi)(token, repository);
+    await reauthorizeProductionRelease(
+      context,
+      environment.PRODUCTION_ENABLED,
+      api,
+    );
+    stdout(`PRODUCTION_REAUTHORIZED_OK sha=${context.sourceSha}\n`);
+    return;
+  }
+
+  if (command === "materialize-production-profile") {
+    const flags = parseFlags(rest, ["--output", "--root", "--github-output"]);
+    const artifact = await materializeProductionProfile(
+      requireEnvironment(environment, "CLOUDFLARE_PRODUCTION_CONFIG_B64"),
+      flags["--output"],
+      flags["--root"],
+    );
+    const relativePath = relative(resolve(flags["--output"]), artifact.path)
+      .split(sep)
+      .join("/");
+    if (relativePath.startsWith("../") || relativePath.startsWith("/")) {
+      throw new TypeError("El perfil production salió del output esperado");
+    }
+    await writeGitHubOutputs(flags["--github-output"], {
+      profile_relative: relativePath,
+      profile_sha256: artifact.sha256,
+    });
+    stdout(`PRODUCTION_PROFILE_OK indexable=${artifact.indexable}\n`);
+    return;
   }
 
   if (command === "validate-request") {
@@ -163,6 +285,7 @@ export async function runPreviewEvidenceCli(
   }
 
   if (command === "seal-bundle") {
+    const includesTarget = rest.includes("--target");
     const flags = parseFlags(rest, [
       "--source",
       "--output",
@@ -170,7 +293,12 @@ export async function runPreviewEvidenceCli(
       "--sha",
       "--profile",
       "--profile-sha",
+      ...(includesTarget ? ["--target"] : []),
     ]);
+    const target = flags["--target"] ?? "preview";
+    if (target !== "preview" && target !== "production") {
+      throw new TypeError("seal-bundle recibió un target inválido");
+    }
     const manifest = await createSealedBundle({
       sourceRoot: flags["--source"],
       outputRoot: flags["--output"],
@@ -178,6 +306,7 @@ export async function runPreviewEvidenceCli(
       sourceSha: flags["--sha"],
       profilePath: flags["--profile"],
       profileSha256: flags["--profile-sha"],
+      target,
     });
     stdout(
       `BUNDLE_SEALED_OK role=${manifest.role} sha256=${manifest.bundleSha256}\n`,
@@ -186,18 +315,25 @@ export async function runPreviewEvidenceCli(
   }
 
   if (command === "verify-bundle") {
+    const includesTarget = rest.includes("--target");
     const flags = parseFlags(rest, [
       "--root",
       "--role",
       "--sha",
       "--profile",
       "--profile-sha",
+      ...(includesTarget ? ["--target"] : []),
     ]);
+    const target = flags["--target"] ?? "preview";
+    if (target !== "preview" && target !== "production") {
+      throw new TypeError("verify-bundle recibió un target inválido");
+    }
     const manifest = await verifySealedBundle(flags["--root"], {
       role: flags["--role"] as "base" | "candidate" | "release",
       sourceSha: flags["--sha"],
       profilePath: flags["--profile"],
       profileSha256: flags["--profile-sha"],
+      target,
     });
     stdout(
       `BUNDLE_VERIFIED_OK role=${manifest.role} sha256=${manifest.bundleSha256}\n`,
@@ -305,6 +441,172 @@ export async function runPreviewEvidenceCli(
     );
     stdout(
       `CLOUDFLARE_VERSION_DEPLOYED_OK role=${descriptor.role} sha=${descriptor.sourceSha}\n`,
+    );
+    return;
+  }
+
+  if (command === "upload-production-version") {
+    const flags = parseFlags(rest, [
+      "--bundle",
+      "--profile",
+      "--profile-sha",
+      "--context",
+      "--context-sha",
+      "--output",
+    ]);
+    const context = await readProductionReleaseContext(
+      flags["--context"],
+      flags["--context-sha"],
+    );
+    await verifySealedBundle(flags["--bundle"], {
+      role: "release",
+      sourceSha: context.sourceSha,
+      profilePath: flags["--profile"],
+      profileSha256: flags["--profile-sha"],
+      target: "production",
+    });
+    const descriptor = await uploadProductionVersion(
+      {
+        bundleRoot: flags["--bundle"],
+        profilePath: flags["--profile"],
+        profileSha256: flags["--profile-sha"],
+        sourceSha: context.sourceSha,
+        credentials: {
+          accountId: requireEnvironment(
+            environment,
+            "CLOUDFLARE_PRODUCTION_ACCOUNT_ID",
+          ),
+          apiToken: requireEnvironment(
+            environment,
+            "CLOUDFLARE_PRODUCTION_API_TOKEN",
+          ),
+        },
+      },
+      dependencies.wranglerRunner,
+    );
+    await writeProductionVersionDescriptor(flags["--output"], descriptor);
+    stdout(
+      `PRODUCTION_VERSION_UPLOADED_OK sha=${descriptor.sourceSha} version=${descriptor.versionId}\n`,
+    );
+    return;
+  }
+
+  if (command === "deploy-production-version") {
+    const flags = parseFlags(rest, [
+      "--bundle",
+      "--profile",
+      "--profile-sha",
+      "--context",
+      "--context-sha",
+      "--descriptor",
+      "--rollback",
+    ]);
+    const context = await readProductionReleaseContext(
+      flags["--context"],
+      flags["--context-sha"],
+    );
+    const descriptor = await readProductionVersionDescriptor(
+      flags["--descriptor"],
+    );
+    await verifySealedBundle(flags["--bundle"], {
+      role: "release",
+      sourceSha: context.sourceSha,
+      profilePath: flags["--profile"],
+      profileSha256: flags["--profile-sha"],
+      target: "production",
+    });
+    if (descriptor.sourceSha !== context.sourceSha) {
+      throw new TypeError(
+        "El descriptor production no coincide con el contexto autorizado",
+      );
+    }
+    const rollback = await deployProductionVersion(
+      {
+        bundleRoot: flags["--bundle"],
+        profilePath: flags["--profile"],
+        profileSha256: flags["--profile-sha"],
+        descriptor,
+        credentials: {
+          accountId: requireEnvironment(
+            environment,
+            "CLOUDFLARE_PRODUCTION_ACCOUNT_ID",
+          ),
+          apiToken: requireEnvironment(
+            environment,
+            "CLOUDFLARE_PRODUCTION_API_TOKEN",
+          ),
+        },
+        runUrl: context.runUrl,
+      },
+      dependencies.wranglerRunner,
+    );
+    await writeProductionRollbackDescriptor(flags["--rollback"], rollback);
+    stdout(
+      `PRODUCTION_VERSION_DEPLOYED_OK sha=${context.sourceSha} version=${descriptor.versionId}\n`,
+    );
+    return;
+  }
+
+  if (command === "smoke-production") {
+    const flags = parseFlags(rest, [
+      "--context",
+      "--context-sha",
+      "--descriptor",
+      "--rollback",
+      "--output",
+      "--run-attempt",
+    ]);
+    if (!/^[1-9][0-9]*$/u.test(flags["--run-attempt"])) {
+      throw new TypeError("El run attempt production es inválido");
+    }
+    const context = await readProductionReleaseContext(
+      flags["--context"],
+      flags["--context-sha"],
+    );
+    const descriptor = await readProductionVersionDescriptor(
+      flags["--descriptor"],
+    );
+    const rollback = await readProductionRollbackDescriptor(
+      flags["--rollback"],
+    );
+    const smoke = await smokeProduction(
+      {
+        context,
+        descriptor,
+        rollback,
+        configuredOrigin: requireEnvironment(
+          environment,
+          "CLOUDFLARE_PRODUCTION_URL",
+        ),
+        runAttempt: Number(flags["--run-attempt"]),
+      },
+      dependencies.productionHttpAdapter,
+    );
+    await writeProductionSmokeRecord(flags["--output"], smoke);
+    stdout(
+      `PRODUCTION_SMOKE_OK sha=${context.sourceSha} status=${smoke.status}\n`,
+    );
+    return;
+  }
+
+  if (command === "publish-production-evidence") {
+    const flags = parseFlags(rest, [
+      "--smoke",
+      "--checkout",
+      "--github-output",
+    ]);
+    const smoke = await readProductionSmokeRecord(flags["--smoke"]);
+    const publication = await publishProductionEvidence(
+      smoke,
+      flags["--checkout"],
+    );
+    await writeGitHubOutputs(flags["--github-output"], {
+      added_count: publication.state === "new" ? "1" : "0",
+      added_path: publication.relativePath,
+      commit_message: `evidence: record production issue ${smoke.issueNumber} at ${smoke.sourceSha.slice(0, 7)}`,
+    });
+    stdout(
+      `PRODUCTION_EVIDENCE_OK issue=${smoke.issueNumber} state=${publication.state}\n`,
     );
     return;
   }

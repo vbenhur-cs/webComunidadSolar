@@ -28,7 +28,7 @@ export interface BundleFile {
 }
 
 export interface BundleTopology {
-  workerName: "comunidad-solar-preview";
+  workerName: "comunidad-solar-preview" | "comunidad-solar-production";
   database: {
     binding: "DB";
     id: string;
@@ -41,8 +41,10 @@ export interface BundleTopology {
   };
   sessionBinding: true;
   imagesBinding: true;
-  indexable: false;
+  indexable: boolean;
 }
+
+export type DeploymentTarget = "preview" | "production";
 
 export interface BundleManifest {
   schemaVersion: 1;
@@ -61,6 +63,7 @@ export interface SealBundleInput {
   sourceSha: string;
   profilePath: string;
   profileSha256: string;
+  target?: DeploymentTarget;
 }
 
 export interface BundleExpectation {
@@ -68,6 +71,7 @@ export interface BundleExpectation {
   sourceSha: string;
   profilePath: string;
   profileSha256: string;
+  target?: DeploymentTarget;
 }
 
 interface LoadedFile extends BundleFile {
@@ -83,11 +87,12 @@ function bundleFileProjection(file: LoadedFile): BundleFile {
   };
 }
 
-interface PreviewProfileExpectation {
-  workerName: "comunidad-solar-preview";
+interface DeploymentProfileExpectation {
+  workerName: "comunidad-solar-preview" | "comunidad-solar-production";
   compatibilityDate: string;
   compatibilityFlags: string[];
   database: { id: string; name: string };
+  indexable: boolean;
 }
 
 const defaultLimits: BundleLimits = {
@@ -164,11 +169,15 @@ function validateIdentity(input: {
   role: EvidenceRole;
   sourceSha: string;
   profileSha256: string;
+  target?: DeploymentTarget;
 }): void {
+  const target = input.target ?? "preview";
   if (
     !safeRoles.has(input.role) ||
     !gitShaPattern.test(input.sourceSha) ||
-    !sha256Pattern.test(input.profileSha256)
+    !sha256Pattern.test(input.profileSha256) ||
+    (target !== "preview" && target !== "production") ||
+    (target === "production" && input.role !== "release")
   ) {
     throw new TypeError("La identidad del bundle es inválida");
   }
@@ -356,28 +365,37 @@ async function parseJsonFile(
   return { value: requireRecord(value, label), contents: loaded.contents };
 }
 
-async function loadPreviewProfile(
+async function loadDeploymentProfile(
   path: string,
   expectedSha256: string,
-): Promise<PreviewProfileExpectation> {
+  target: DeploymentTarget,
+): Promise<DeploymentProfileExpectation> {
   const { value, contents } = await parseJsonFile(
     path,
     maxRequestProfileBytes,
-    "El perfil preview",
+    "El perfil de despliegue",
   );
   if (sha256(contents) !== expectedSha256) {
-    throw new Error("Falló la integridad hash del perfil preview");
+    throw new Error("Falló la integridad hash del perfil de despliegue");
   }
-  if (
-    value.name !== "comunidad-solar-preview" ||
-    value.workers_dev !== true ||
-    value.preview_urls !== true
-  ) {
-    throw new TypeError("El perfil no identifica el Worker preview aprobado");
-  }
+  const expectedWorker =
+    target === "preview"
+      ? "comunidad-solar-preview"
+      : "comunidad-solar-production";
   const vars = requireRecord(value.vars, "SITE_INDEXABLE del perfil");
-  if (vars.SITE_INDEXABLE !== "false" || Object.keys(vars).length !== 1) {
-    throw new TypeError("El perfil preview no puede ser indexable");
+  const expectedIndexability = target === "production" ? "true" : "false";
+  if (
+    value.name !== expectedWorker ||
+    vars.SITE_INDEXABLE !== expectedIndexability ||
+    Object.keys(vars).length !== 1 ||
+    (target === "preview" &&
+      (value.workers_dev !== true || value.preview_urls !== true)) ||
+    (target === "production" &&
+      (value.workers_dev !== undefined || value.preview_urls !== undefined))
+  ) {
+    throw new TypeError(
+      `El perfil no identifica el Worker ${target} aprobado o su indexabilidad`,
+    );
   }
   const compatibilityDate = requireString(
     value.compatibility_date,
@@ -395,11 +413,11 @@ async function loadPreviewProfile(
     throw new TypeError("El perfil preview requiere exactamente un D1 DB");
   }
   const database = requireRecord(value.d1_databases[0], "D1 del perfil");
-  if (database.binding !== "DB") {
-    throw new TypeError("El binding D1 del perfil debe ser DB");
+  if (database.binding !== "DB" || database.database_name !== expectedWorker) {
+    throw new TypeError("El binding D1 del perfil no coincide con el destino");
   }
   return {
-    workerName: "comunidad-solar-preview",
+    workerName: expectedWorker,
     compatibilityDate,
     compatibilityFlags: [...value.compatibility_flags] as string[],
     database: {
@@ -414,6 +432,7 @@ async function loadPreviewProfile(
         /^[a-z0-9][a-z0-9-]{0,62}$/u,
       ),
     },
+    indexable: target === "production",
   };
 }
 
@@ -428,14 +447,14 @@ function emptyCollection(value: unknown): boolean {
 
 function validateGeneratedTopology(
   config: JsonRecord,
-  profile: PreviewProfileExpectation,
+  profile: DeploymentProfileExpectation,
 ): BundleTopology {
   if (
     config.name !== profile.workerName ||
     (config.topLevelName !== undefined &&
       config.topLevelName !== profile.workerName)
   ) {
-    throw new TypeError("El Worker name generado no coincide con preview");
+    throw new TypeError("El Worker name generado no coincide con el perfil");
   }
   if (config.main !== "entry.mjs") {
     throw new TypeError("El main generado debe ser entry.mjs");
@@ -459,8 +478,13 @@ function validateGeneratedTopology(
     throw new TypeError("La topología assets generada es inválida");
   }
   const vars = requireRecord(config.vars, "Las vars generadas");
-  if (vars.SITE_INDEXABLE !== "false" || Object.keys(vars).length !== 1) {
-    throw new TypeError("El bundle preview no puede ser indexable");
+  if (
+    vars.SITE_INDEXABLE !== (profile.indexable ? "true" : "false") ||
+    Object.keys(vars).length !== 1
+  ) {
+    throw new TypeError(
+      "SITE_INDEXABLE del bundle no coincide con el perfil indexable",
+    );
   }
   if (!Array.isArray(config.d1_databases) || config.d1_databases.length !== 1) {
     throw new TypeError("La topología D1 generada es inválida");
@@ -522,7 +546,7 @@ function validateGeneratedTopology(
     }
   }
   return {
-    workerName: "comunidad-solar-preview",
+    workerName: profile.workerName,
     database: {
       binding: "DB",
       id: profile.database.id,
@@ -535,13 +559,13 @@ function validateGeneratedTopology(
     },
     sessionBinding: true,
     imagesBinding: true,
-    indexable: false,
+    indexable: profile.indexable,
   };
 }
 
 async function loadTopology(
   root: string,
-  profile: PreviewProfileExpectation,
+  profile: DeploymentProfileExpectation,
 ): Promise<BundleTopology> {
   const { value } = await parseJsonFile(
     resolve(root, "dist", "server", "wrangler.json"),
@@ -625,9 +649,11 @@ export async function createSealedBundle(
     throw new TypeError("El output del bundle debe estar fuera del source");
   }
   await assertOutputAbsent(outputRoot);
-  const profile = await loadPreviewProfile(
+  const target = input.target ?? "preview";
+  const profile = await loadDeploymentProfile(
     resolve(input.profilePath),
     input.profileSha256,
+    target,
   );
   const topology = await loadTopology(sourceRoot, profile);
   const loaded = await collectBundleFiles(sourceRoot, limits);
@@ -773,9 +799,11 @@ export async function verifySealedBundle(
       "La identidad del manifest no coincide con el bundle esperado",
     );
   }
-  const profile = await loadPreviewProfile(
+  const target = expected.target ?? "preview";
+  const profile = await loadDeploymentProfile(
     resolve(expected.profilePath),
     expected.profileSha256,
+    target,
   );
   const topology = await loadTopology(resolvedRoot, profile);
   const loaded = await collectBundleFiles(

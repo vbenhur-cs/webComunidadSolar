@@ -423,7 +423,7 @@ function validateCaptureRecord(
   };
 }
 
-function validateCaptureManifest(value: unknown): CaptureManifest {
+export function validateCaptureManifest(value: unknown): CaptureManifest {
   const manifest = record(value, "El manifest de captura");
   exactKeys(
     manifest,

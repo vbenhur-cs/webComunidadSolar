@@ -961,7 +961,7 @@ git commit -m "ci: deploy merged SHA to shared preview"
 - Consumes existing profile, bundle, upload, deploy, capture and evidence
   commands only after authorization.
 
-- [ ] **Step 1: Write failing fail-closed tests**
+- [x] **Step 1: Write failing fail-closed tests**
 
 Reject absent, empty, differently-cased or nonliteral `PRODUCTION_ENABLED`;
 non-40-hex SHA; SHA not reachable from `main`; absent release manifest on the
@@ -969,14 +969,14 @@ evidence branch; manifest whose SHA/hash differs; missing successful
 `preview-approved` status; production URL outside exact configured HTTPS
 origin; and production profile with `SITE_INDEXABLE=false`.
 
-- [ ] **Step 2: Write failing workflow contract**
+- [x] **Step 2: Write failing workflow contract**
 
 Assert only `workflow_dispatch` with required `sha` input, top-level read-only
 permissions, a first unprivileged guard, protected `environment: production`
 before token use, distinct `CLOUDFLARE_PRODUCTION_*` names, exact version
 deployment, smoke test, rollback descriptor artifact and no Raiola/DNS command.
 
-- [ ] **Step 3: Run focused tests and confirm RED**
+- [x] **Step 3: Run focused tests and confirm RED**
 
 ```bash
 npm run test:unit -- tests/preview-evidence/release.test.ts tests/foundation/preview-workflows.test.mjs
@@ -984,14 +984,14 @@ npm run test:unit -- tests/preview-evidence/release.test.ts tests/foundation/pre
 
 Expected: FAIL because production authorization/workflow do not exist.
 
-- [ ] **Step 4: Implement authorization before production capability**
+- [x] **Step 4: Implement authorization before production capability**
 
 The guard reads `vars.PRODUCTION_ENABLED` and exits nonzero unless it is exactly
 `true`. It queries GitHub and raw evidence with read permission, validates the
 release manifest and status, and emits only SHA, issue, request path and
 manifest hash. Token/profile jobs cannot start unless the guard succeeds.
 
-- [ ] **Step 5: Define the reusable but inactive deployment path**
+- [x] **Step 5: Define the reusable but inactive deployment path**
 
 Use production Account ID, API token, encoded operator profile and public URL
 only from the `production` environment. Build the trusted main SHA without
@@ -1002,7 +1002,7 @@ descriptor containing previous deployment ID, new version ID, SHA and run URL.
 No production variable or secret is configured as part of this task, so the
 guard remains closed in authoritative repository state.
 
-- [ ] **Step 6: Run contracts and commit**
+- [x] **Step 6: Run contracts and commit**
 
 ```bash
 npm run test:unit -- tests/preview-evidence/release.test.ts tests/foundation/preview-workflows.test.mjs
