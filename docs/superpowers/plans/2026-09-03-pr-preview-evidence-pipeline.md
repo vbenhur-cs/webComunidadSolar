@@ -751,7 +751,7 @@ environment data or profile contents.
 - [x] **Step 6: Add CLI commands and run tests**
 
 ```text
-publish-evidence --capture <dir> --checkout <dir> --context <path> --context-sha <64hex> --output <path>
+publish-evidence --capture <dir> --checkout <dir> --context <path> --context-sha <64hex> --output <path> --github-output <path>
 comment-evidence --publication <path> --context <path> --context-sha <64hex> --evidence-sha <40hex>
 approve-preview --context <path> --context-sha <64hex>
 ```
@@ -786,7 +786,7 @@ git commit -m "feat: publish immutable preview evidence"
 - Produces trusted commit status `preview-approved` for branch protection.
 - Produces artifacts named with run ID, role and full SHA.
 
-- [ ] **Step 1: Write failing static workflow tests**
+- [x] **Step 1: Write failing static workflow tests**
 
 Parse YAML and assert:
 
@@ -804,7 +804,7 @@ Parse YAML and assert:
 - concurrency for evidence writing is `evidence-write-${{ github.repository }}`
   with `cancel-in-progress:false`.
 
-- [ ] **Step 2: Run the workflow contract and confirm RED**
+- [x] **Step 2: Run the workflow contract and confirm RED**
 
 ```bash
 npm run test:unit -- tests/foundation/preview-workflows.test.mjs tests/foundation/production-readiness-workflow.test.mjs
@@ -812,7 +812,7 @@ npm run test:unit -- tests/foundation/preview-workflows.test.mjs tests/foundatio
 
 Expected: FAIL because `pr-preview.yml` does not exist.
 
-- [ ] **Step 3: Create resolve/profile/build jobs**
+- [x] **Step 3: Create resolve/profile/build jobs**
 
 Use these pinned actions:
 
@@ -830,7 +830,7 @@ hash. A two-entry matrix checks out base/candidate with
 `persist-credentials:false`, runs `npm ci --ignore-scripts`, the existing build
 sequence, and controller-owned `seal-bundle`.
 
-- [ ] **Step 4: Create upload/capture/evidence jobs**
+- [x] **Step 4: Create upload/capture/evidence jobs**
 
 `upload` downloads both bundles, runs trusted `verify-bundle`, then uploads
 base and candidate sequentially using the preview token. It uploads only two
@@ -840,7 +840,7 @@ the `evidence` branch and controller separately, publishes append-only,
 commits only when `addedPaths` is nonempty, pushes normally and comments PR +
 issue.
 
-- [ ] **Step 5: Add the protected approval job**
+- [x] **Step 5: Add the protected approval job**
 
 The final job has:
 
@@ -857,14 +857,14 @@ permissions:
 After the environment releases it, rerun authoritative PR/head checks and call
 `approve-preview`. A changed/closed PR cannot receive success.
 
-- [ ] **Step 6: Keep Production readiness stable**
+- [x] **Step 6: Keep Production readiness stable**
 
 Do not give `verify.yml` secrets or write permissions. Only add a candidate
 bundle artifact if the implementation actually consumes it; otherwise leave
 its four-job topology unchanged. Update its contract test to prove the stable
 gate remains `production-readiness`.
 
-- [ ] **Step 7: Run workflow and formatting tests**
+- [x] **Step 7: Run workflow and formatting tests**
 
 ```bash
 npm run test:unit -- tests/foundation/preview-workflows.test.mjs tests/foundation/production-readiness-workflow.test.mjs tests/preview-evidence
@@ -873,7 +873,7 @@ npx prettier --check .github/workflows scripts/preview-evidence tests/preview-ev
 
 Expected: PASS.
 
-- [ ] **Step 8: Commit the PR workflow**
+- [x] **Step 8: Commit the PR workflow**
 
 ```bash
 git add .github/workflows/pr-preview.yml .github/workflows/verify.yml tests/foundation/preview-workflows.test.mjs tests/foundation/production-readiness-workflow.test.mjs

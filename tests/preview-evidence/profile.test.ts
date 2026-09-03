@@ -13,6 +13,7 @@ import { join } from "node:path";
 import test from "node:test";
 
 import { prepareCloudflarePreviewConfig } from "../../scripts/prepare-cloudflare-config.ts";
+import { runPreviewEvidenceCli } from "../../scripts/preview-evidence/cli.ts";
 import { materializePreviewProfile } from "../../scripts/preview-evidence/profile.ts";
 
 const previewD1Id = "11111111-2222-4333-8444-555555555555";
@@ -191,6 +192,42 @@ test("rejects malformed or oversized base64 before writing a decoded file", asyn
       /64 KiB|tamaño/i,
     );
     assert.deepEqual(await readdir(artifactRoot), []);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("materialize-profile CLI emits only sanitized artifact coordinates", async () => {
+  const root = await projectFixture();
+  try {
+    const outputRoot = join(root, ".artifacts", "profile");
+    const githubOutput = join(root, "github-output");
+    const encoded = Buffer.from(validPreviewConfig(), "utf8").toString(
+      "base64",
+    );
+    await writeFile(githubOutput, "", "utf8");
+    const messages: string[] = [];
+    await runPreviewEvidenceCli(
+      [
+        "materialize-profile",
+        "--output",
+        outputRoot,
+        "--root",
+        root,
+        "--github-output",
+        githubOutput,
+      ],
+      { CLOUDFLARE_PREVIEW_CONFIG_B64: encoded },
+      { stdout: (message) => messages.push(message) },
+    );
+    const coordinates = await readFile(githubOutput, "utf8");
+    assert.match(
+      coordinates,
+      /profile_relative<<[^\n]+\nconfig\/cloudflare-[a-f0-9]{64}\.json/u,
+    );
+    assert.match(coordinates, /profile_sha256<<[^\n]+\n[a-f0-9]{64}/u);
+    assert.equal(coordinates.includes(encoded), false);
+    assert.deepEqual(messages, ["PREVIEW_PROFILE_OK indexable=false\n"]);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

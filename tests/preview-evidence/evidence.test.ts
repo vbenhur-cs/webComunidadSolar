@@ -542,7 +542,9 @@ test("CLI publishes, comments and approves only sealed PR evidence", async () =>
     const capture = await createPrCapture(root);
     const contextPath = join(root, "context.json");
     const publicationPath = join(root, "publication.json");
+    const githubOutput = join(root, "github-output");
     const sealed = await writePullRequestContext(contextPath, prContext());
+    await writeFile(githubOutput, "", "utf8");
     const messages: string[] = [];
     await runPreviewEvidenceCli(
       [
@@ -557,6 +559,8 @@ test("CLI publishes, comments and approves only sealed PR evidence", async () =>
         sealed.sha256,
         "--output",
         publicationPath,
+        "--github-output",
+        githubOutput,
       ],
       {},
       { stdout: (message) => messages.push(message) },
@@ -564,6 +568,15 @@ test("CLI publishes, comments and approves only sealed PR evidence", async () =>
     const publication = JSON.parse(await readFile(publicationPath, "utf8"));
     assert.equal(publication.source.headSha, headSha);
     assert.equal(publication.addedPaths.length, 6);
+    const publicationOutputs = await readFile(githubOutput, "utf8");
+    assert.match(publicationOutputs, /added_count<<[^\n]+\n6\n/u);
+    assert.match(
+      publicationOutputs,
+      new RegExp(
+        `identity_manifest<<[^\\n]+\\nissue-4/candidates/${headSha}/manifest\\.json\\n`,
+        "u",
+      ),
+    );
 
     const api = new PipelineGitHubApi();
     const environment = {

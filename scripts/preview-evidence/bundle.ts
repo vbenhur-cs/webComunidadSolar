@@ -74,6 +74,15 @@ interface LoadedFile extends BundleFile {
   contents: Buffer;
 }
 
+function bundleFileProjection(file: LoadedFile): BundleFile {
+  return {
+    path: file.path,
+    bytes: file.bytes,
+    mode: file.mode,
+    sha256: file.sha256,
+  };
+}
+
 interface PreviewProfileExpectation {
   workerName: "comunidad-solar-preview";
   compatibilityDate: string;
@@ -622,7 +631,7 @@ export async function createSealedBundle(
   );
   const topology = await loadTopology(sourceRoot, profile);
   const loaded = await collectBundleFiles(sourceRoot, limits);
-  const files = loaded.map(({ contents: _contents, ...file }) => file);
+  const files = loaded.map(bundleFileProjection);
   const manifest = manifestWithDigest(
     unsignedManifest(
       input.role,
@@ -773,7 +782,7 @@ export async function verifySealedBundle(
     resolvedRoot,
     validLimits(options.limits ?? defaultLimits),
   );
-  const files = loaded.map(({ contents: _contents, ...file }) => file);
+  const files = loaded.map(bundleFileProjection);
   if (canonicalJson(files) !== canonicalJson(manifest.files)) {
     throw new Error("Falló la integridad del inventario o hash del bundle");
   }

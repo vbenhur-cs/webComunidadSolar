@@ -1,5 +1,5 @@
 import { lstat, readFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { canonicalJson } from "./domain.ts";
@@ -34,6 +34,7 @@ import {
   writePublishEvidenceResult,
 } from "./evidence.ts";
 import { loadEvidenceRequest } from "./request.ts";
+import { materializePreviewProfile } from "./profile.ts";
 
 export interface PreviewEvidenceCliDependencies {
   createApi?: (token: string, repository: string) => GitHubApi;
@@ -115,7 +116,8 @@ export async function runPreviewEvidenceCli(
     command !== "capture-release" &&
     command !== "publish-evidence" &&
     command !== "comment-evidence" &&
-    command !== "approve-preview"
+    command !== "approve-preview" &&
+    command !== "materialize-profile"
   ) {
     throw new TypeError(
       "Comando preview:evidence desconocido; consulte el uso",
@@ -128,6 +130,27 @@ export async function runPreviewEvidenceCli(
     stdout(
       `EVIDENCE_REQUEST_OK issue=${request.issue} route=${request.route}\n`,
     );
+    return;
+  }
+
+  if (command === "materialize-profile") {
+    const flags = parseFlags(rest, ["--output", "--root", "--github-output"]);
+    const artifact = await materializePreviewProfile(
+      requireEnvironment(environment, "CLOUDFLARE_PREVIEW_CONFIG_B64"),
+      flags["--output"],
+      flags["--root"],
+    );
+    const relativePath = relative(resolve(flags["--output"]), artifact.path)
+      .split(sep)
+      .join("/");
+    if (relativePath.startsWith("../") || relativePath.startsWith("/")) {
+      throw new TypeError("El perfil saneado salió del output esperado");
+    }
+    await writeGitHubOutputs(flags["--github-output"], {
+      profile_relative: relativePath,
+      profile_sha256: artifact.sha256,
+    });
+    stdout(`PREVIEW_PROFILE_OK indexable=${artifact.indexable}\n`);
     return;
   }
 
@@ -347,6 +370,7 @@ export async function runPreviewEvidenceCli(
       "--context",
       "--context-sha",
       "--output",
+      "--github-output",
     ]);
     const context = await readPullRequestContext(
       flags["--context"],
@@ -359,6 +383,20 @@ export async function runPreviewEvidenceCli(
       context,
     });
     await writePublishEvidenceResult(flags["--output"], publication);
+    const identityEntry = publication.entries.find(
+      (entry) =>
+        entry.role ===
+        (publication.kind === "pull-request" ? "candidate" : "release"),
+    );
+    if (identityEntry === undefined) {
+      throw new Error("La publicación no contiene su identidad principal");
+    }
+    await writeGitHubOutputs(flags["--github-output"], {
+      added_count: String(publication.addedPaths.length),
+      added_paths: publication.addedPaths.join("\n"),
+      commit_message: publication.commitMessage,
+      identity_manifest: `${identityEntry.relativeDirectory}/manifest.json`,
+    });
     stdout(
       `EVIDENCE_PUBLISHED_OK issue=${publication.issueNumber} added=${publication.addedPaths.length} existing=${publication.existingPaths.length}\n`,
     );
