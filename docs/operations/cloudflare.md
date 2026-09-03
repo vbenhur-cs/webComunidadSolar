@@ -16,8 +16,9 @@ mínima para este proyecto es:
 | --- | --- | --- |
 | Account | Workers Scripts: Write | Crear y actualizar el Worker y sus assets. |
 | Account | D1: Edit | Crear/consultar D1 y aplicar migraciones. |
+| Account | Workers KV Storage: Edit | Permitir que el adaptador de Astro aprovisione el namespace `SESSION` usado para las sesiones. |
 
-No concedas DNS, Zone, Billing, API Tokens, Workers Routes, KV ni R2 para el
+No concedas DNS, Zone, Billing, API Tokens, Workers Routes ni R2 para el
 preview `workers.dev`. Si en el futuro se automatiza Cloudflare Access o un
 dominio personalizado, usa preferiblemente credenciales separadas y añade
 solo el permiso concreto durante esa fase.
@@ -30,7 +31,7 @@ Para crear un token nuevo desde el panel:
 
 1. Abre **Manage Account > Account API Tokens**.
 2. Pulsa **Create Token** y selecciona una política personalizada.
-3. Añade los dos permisos de la tabla y limita **Account resources** a la
+3. Añade los tres permisos de la tabla y limita **Account resources** a la
    cuenta concreta, no a todas las cuentas.
 4. Ponle un nombre como `comunidad-solar-preview-cd`, define caducidad si el
    procedimiento de rotación lo permite y crea el token.
@@ -123,8 +124,8 @@ Cloudflare documenta la creación, formato y protección de estas URL en
 - Cuenta Cloudflare con Workers habilitado. La zona DNS solo será necesaria al
   conectar el dominio personalizado de producción.
 - `CLOUDFLARE_ACCOUNT_ID`.
-- Un `CLOUDFLARE_API_TOKEN` limitado a la cuenta con `Workers Scripts: Write`
-  y `D1: Edit`.
+- Un `CLOUDFLARE_API_TOKEN` limitado a la cuenta con `Workers Scripts: Write`,
+  `D1: Edit` y `Workers KV Storage: Edit`.
 - Una base D1 de preview y otra de producción, preferiblemente con jurisdicción
   `eu`, ambas enlazadas como `DB`.
 - Perfiles Wrangler externos para preview y producción.

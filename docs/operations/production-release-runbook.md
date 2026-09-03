@@ -241,8 +241,10 @@ El workflow actual es CI, no CD: valida cambios pero no despliega.
    `comunidad-solar-preview` quedará disponible como
    `https://comunidad-solar-preview.<subdominio-cuenta>.workers.dev`.
 3. Crea o reutiliza un Account API Token limitado únicamente a esta cuenta,
-   con `Workers Scripts: Write` y `D1: Edit`. No necesita permisos DNS, Zone,
-   KV, R2, Billing ni gestión de tokens para el preview.
+   con `Workers Scripts: Write`, `D1: Edit` y `Workers KV Storage: Edit`.
+   Astro aprovisiona el namespace `SESSION` durante el primer despliegue. No
+   necesita permisos DNS, Zone, R2, Billing ni gestión de tokens para el
+   preview.
 4. Crea recursos separados para `preview` y `production`; nunca apuntes la
    producción al UUID cero de `wrangler.jsonc`.
 5. Crea una base D1 por entorno, preferiblemente con jurisdicción `eu`, y anota
@@ -335,7 +337,7 @@ El workflow futuro debe cumplir todo lo siguiente:
 4. Guardar `CLOUDFLARE_ACCOUNT_ID` como variable y
    `CLOUDFLARE_API_TOKEN` como secret del environment de GitHub, separados
    entre preview y producción. El token debe estar limitado a la cuenta con
-   `Workers Scripts: Write` y `D1: Edit`.
+   `Workers Scripts: Write`, `D1: Edit` y `Workers KV Storage: Edit`.
 5. Materializar el perfil externo en el directorio temporal del runner, no en
    el repositorio ni en los logs.
 6. Ejecutar, en orden: validación del perfil, pruebas, migraciones revisadas,
