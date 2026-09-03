@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
-import { chmod, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  chmod,
+  mkdir,
+  readFile,
+  realpath,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import test from "node:test";
@@ -10,7 +17,10 @@ import {
   runCloudflareDryRun,
   type PreparedProfileBuildChild,
 } from "../../scripts/deploy-dry.ts";
-import { prepareCloudflareConfig } from "../../scripts/prepare-cloudflare-config.ts";
+import {
+  prepareCloudflareConfig,
+  prepareCloudflareDryRunConfig,
+} from "../../scripts/prepare-cloudflare-config.ts";
 
 const localD1Id = "00000000-0000-4000-8000-000000000000";
 
@@ -87,6 +97,7 @@ test("dry deployment validates a local profile without fetching or publishing", 
         build: async (_root, environment) => {
           preparedOutputPath = environment.CLOUDFLARE_CONFIG_PATH ?? "";
         },
+        dryRunBundle: async () => undefined,
         readGeneratedConfig: async () =>
           generatedLocalProfile(preparedOutputPath),
         resolveTopology: async () => ({
@@ -130,6 +141,7 @@ test("dry deployment builds the prepared profile locally without a deploy or net
           buildRoot = requestedRoot;
           buildEnvironment = environment;
         },
+        dryRunBundle: async () => undefined,
         readGeneratedConfig: async () =>
           generatedLocalProfile(buildEnvironment?.CLOUDFLARE_CONFIG_PATH ?? ""),
         resolveTopology: async () => topology,
@@ -143,6 +155,189 @@ test("dry deployment builds the prepared profile locally without a deploy or net
     assert.equal(result.deployed, false);
     assert.deepEqual(result.topology, topology);
   } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("dry deployment rejects an unresolved import in the generated Wrangler artifact", async () => {
+  const root = await mkdirTemp();
+  const inputPath = join(root, "wrangler.jsonc");
+  const artifactRoot = join(root, "artifacts", "config");
+  const generatedRoot = join(root, "dist", "server");
+  const generatedConfigPath = join(generatedRoot, "wrangler.json");
+  const entryPath = join(generatedRoot, "entry.mjs");
+  await mkdir(generatedRoot, { recursive: true });
+  await writeFile(inputPath, localConfig(), "utf8");
+
+  try {
+    const prepared = await prepareCloudflareDryRunConfig(inputPath, undefined, {
+      artifactRoot,
+      projectRoot: process.cwd(),
+    });
+    await writeFile(
+      entryPath,
+      'import "./missing-deployment-module.mjs";\nexport default {};\n',
+      "utf8",
+    );
+    await writeFile(
+      generatedConfigPath,
+      JSON.stringify({
+        configPath: prepared.outputPath,
+        targetEnvironment: "",
+        name: "comunidad-solar-astro-local",
+        main: "entry.mjs",
+        compatibility_date: "2026-08-21",
+        compatibility_flags: ["nodejs_compat"],
+        vars: { SITE_INDEXABLE: "false" },
+        d1_databases: [
+          {
+            binding: "DB",
+            database_name: "comunidad-solar-local",
+            database_id: localD1Id,
+          },
+        ],
+      }),
+      "utf8",
+    );
+
+    await assert.rejects(
+      runCloudflareDryRun(
+        {
+          inputPath,
+          artifactRoot,
+          projectRoot: process.cwd(),
+        },
+        {
+          build: async () => undefined,
+          resolveTopology: async () => ({
+            deployConfigPath: join(root, ".wrangler", "deploy", "config.json"),
+            wranglerConfigPath: generatedConfigPath,
+            entryPath,
+          }),
+        },
+      ),
+      /missing-deployment-module/u,
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("dry deployment keeps Wrangler outside the project environment and strips Cloudflare credentials", async () => {
+  const root = await mkdirTemp();
+  const inputPath = join(root, "wrangler.jsonc");
+  const artifactRoot = join(root, "artifacts", "config");
+  const generatedRoot = join(root, "dist", "server");
+  const generatedConfigPath = join(generatedRoot, "wrangler.json");
+  const entryPath = join(generatedRoot, "entry.mjs");
+  const executable = join(root, "node_modules", ".bin", "wrangler");
+  const observationPath = join(root, "wrangler-observation.json");
+  const environmentKeys = [
+    "CLOUDFLARE_API_KEY",
+    "CLOUDFLARE_API_TOKEN",
+    "CLOUDFLARE_EMAIL",
+    "DRY_RUN_OBSERVATION",
+  ] as const;
+  const previousEnvironment = Object.fromEntries(
+    environmentKeys.map((key) => [key, process.env[key]]),
+  );
+
+  await mkdir(join(root, "src"), { recursive: true });
+  await mkdir(join(root, "drizzle"), { recursive: true });
+  await mkdir(generatedRoot, { recursive: true });
+  await mkdir(join(root, "node_modules", ".bin"), { recursive: true });
+  await writeFile(
+    join(root, "src", "worker.ts"),
+    "export default {};\n",
+    "utf8",
+  );
+  await writeFile(inputPath, localConfig(), "utf8");
+  await writeFile(entryPath, "export default {};\n", "utf8");
+  await writeFile(
+    executable,
+    `#!/usr/bin/env node
+const { realpathSync, writeFileSync } = require("node:fs");
+writeFileSync(process.env.DRY_RUN_OBSERVATION, JSON.stringify({
+  argv: process.argv.slice(2),
+  cwd: process.cwd(),
+  outdir: realpathSync(process.argv.at(-1)),
+  hasApiKey: process.env.CLOUDFLARE_API_KEY !== undefined,
+  hasApiToken: process.env.CLOUDFLARE_API_TOKEN !== undefined,
+  hasEmail: process.env.CLOUDFLARE_EMAIL !== undefined,
+}));
+`,
+    { mode: 0o755 },
+  );
+  await chmod(executable, 0o755);
+
+  try {
+    const prepared = await prepareCloudflareDryRunConfig(inputPath, undefined, {
+      artifactRoot,
+      projectRoot: root,
+    });
+    await writeFile(
+      generatedConfigPath,
+      JSON.stringify({
+        configPath: prepared.outputPath,
+        targetEnvironment: "",
+        name: "comunidad-solar-astro-local",
+        main: "entry.mjs",
+        compatibility_date: "2026-08-21",
+        compatibility_flags: ["nodejs_compat"],
+        vars: { SITE_INDEXABLE: "false" },
+        d1_databases: [
+          {
+            binding: "DB",
+            database_name: "comunidad-solar-local",
+            database_id: localD1Id,
+          },
+        ],
+      }),
+      "utf8",
+    );
+    process.env.CLOUDFLARE_API_KEY = "synthetic-api-key";
+    process.env.CLOUDFLARE_API_TOKEN = "synthetic-api-token";
+    process.env.CLOUDFLARE_EMAIL = "synthetic@example.invalid";
+    process.env.DRY_RUN_OBSERVATION = observationPath;
+
+    await runCloudflareDryRun(
+      { inputPath, artifactRoot, projectRoot: root },
+      {
+        build: async () => undefined,
+        resolveTopology: async () => ({
+          deployConfigPath: join(root, ".wrangler", "deploy", "config.json"),
+          wranglerConfigPath: generatedConfigPath,
+          entryPath,
+        }),
+      },
+    );
+
+    const observation = JSON.parse(await readFile(observationPath, "utf8")) as {
+      argv: string[];
+      cwd: string;
+      outdir: string;
+      hasApiKey: boolean;
+      hasApiToken: boolean;
+      hasEmail: boolean;
+    };
+    assert.notEqual(observation.cwd, await realpath(root));
+    assert.deepEqual(observation.argv.slice(0, 5), [
+      "deploy",
+      "--dry-run",
+      "--config",
+      generatedConfigPath,
+      "--outdir",
+    ]);
+    assert.equal(observation.outdir, observation.cwd);
+    assert.equal(observation.hasApiKey, false);
+    assert.equal(observation.hasApiToken, false);
+    assert.equal(observation.hasEmail, false);
+  } finally {
+    for (const key of environmentKeys) {
+      const previous = previousEnvironment[key];
+      if (previous === undefined) delete process.env[key];
+      else process.env[key] = previous;
+    }
     await rm(root, { recursive: true, force: true });
   }
 });
@@ -399,7 +594,7 @@ setInterval(() => undefined, 1_000);
   },
 );
 
-test("the package dry script uses the local validator instead of wrangler deploy", async () => {
+test("the package dry script uses the guarded local dry-run validator", async () => {
   const packageJson = JSON.parse(
     await readFile(new URL("../../package.json", import.meta.url), "utf8"),
   ) as {

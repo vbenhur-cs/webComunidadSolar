@@ -176,6 +176,7 @@ npm run deploy:dry
 
 `deploy:dry` es una comprobación local y determinista del perfil del
 repositorio: permite inspeccionar únicamente su UUID D1 local, deja una copia
-saneada ignorada, ejecuta la build con esa copia y comprueba la topología
-emitida. No invoca `wrangler deploy`, un cliente de red ni una acción externa;
-no es una autorización de publicación.
+saneada ignorada, ejecuta la build con esa copia, comprueba la topología emitida
+y ejecuta `wrangler deploy --dry-run` sobre el `dist/server/wrangler.json`
+generado por Astro. Wrangler recibe el artefacto sin credenciales Cloudflare y
+no lo sube ni publica; este comando no es una autorización de publicación.

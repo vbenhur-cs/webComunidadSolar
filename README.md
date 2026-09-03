@@ -21,7 +21,8 @@ is a read-only parity oracle only: production, builds, previews and the
 autonomous verifier do not depend on it. The generated Wrangler topology is
 checked by `npm run check`; `npm run deploy:dry` prepares a deterministic local
 Cloudflare profile, builds it, and checks the emitted topology without invoking
-a deploy command or network client.
+an upload. It runs `wrangler deploy --dry-run` against Astro's generated
+configuration so unresolved deployment modules fail before production.
 
 Parity evidence is versioned and can be refreshed or checked with:
 

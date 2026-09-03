@@ -1,7 +1,9 @@
-import { spawn } from "node:child_process";
-import { readFile } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { execFile, spawn } from "node:child_process";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 
 import {
   resolveDeploymentTopology,
@@ -26,6 +28,11 @@ export interface CloudflareDryRunOptions extends PrepareCloudflareConfigOptions 
 
 export interface CloudflareDryRunDependencies {
   build?(root: string, environment: NodeJS.ProcessEnv): Promise<void>;
+  dryRunBundle?(
+    root: string,
+    topology: DeploymentTopology,
+    environment: NodeJS.ProcessEnv,
+  ): Promise<void>;
   readGeneratedConfig?(path: string): Promise<unknown>;
   resolveTopology?(root: string): Promise<DeploymentTopology>;
 }
@@ -57,6 +64,7 @@ export interface PreparedProfileBuildDependencies {
 
 const dryBuildTimeoutMs = 120_000;
 const dryBuildKillGraceMs = 5_000;
+const execFileAsync = promisify(execFile);
 
 function positiveMilliseconds(value: number, label: string): number {
   if (!Number.isInteger(value) || value <= 0) {
@@ -358,9 +366,60 @@ function environmentForPreparedProfile(
   return environment;
 }
 
+async function dryRunGeneratedBundle(
+  root: string,
+  topology: DeploymentTopology,
+  environment: NodeJS.ProcessEnv,
+): Promise<void> {
+  const outputDirectory = await mkdtemp(
+    join(tmpdir(), "comunidadsolar-wrangler-dry-"),
+  );
+  const commandEnvironment: NodeJS.ProcessEnv = {
+    ...environment,
+    CLOUDFLARE_LOAD_DEV_VARS_FROM_DOT_ENV: "false",
+    WRANGLER_SEND_METRICS: "false",
+  };
+  delete commandEnvironment.CLOUDFLARE_API_KEY;
+  delete commandEnvironment.CLOUDFLARE_API_TOKEN;
+  delete commandEnvironment.CLOUDFLARE_EMAIL;
+
+  try {
+    await execFileAsync(
+      resolve(root, "node_modules", ".bin", "wrangler"),
+      [
+        "deploy",
+        "--dry-run",
+        "--config",
+        topology.wranglerConfigPath,
+        "--outdir",
+        outputDirectory,
+      ],
+      {
+        cwd: outputDirectory,
+        env: commandEnvironment,
+        maxBuffer: 16 * 1024 * 1024,
+        timeout: dryBuildTimeoutMs,
+      },
+    );
+  } catch (error: unknown) {
+    const failure = error as Error & { stderr?: string; stdout?: string };
+    const detail = [failure.stderr, failure.stdout]
+      .filter((value): value is string => typeof value === "string")
+      .join("\n")
+      .trim();
+    throw new Error(
+      `El dry-run real de Wrangler falló${detail === "" ? "" : `:\n${detail}`}`,
+      { cause: error },
+    );
+  } finally {
+    await rm(outputDirectory, { recursive: true, force: true });
+  }
+}
+
 /**
- * This command builds the sanitized profile locally and verifies its emitted
- * Wrangler topology. It never invokes Wrangler deploy or a network client.
+ * This command builds the sanitized profile locally, verifies its emitted
+ * Wrangler topology and asks Wrangler to bundle that exact artifact without
+ * publishing it.
  */
 export async function runCloudflareDryRun(
   options: CloudflareDryRunOptions = {},
@@ -381,6 +440,11 @@ export async function runCloudflareDryRun(
     dependencies.readGeneratedConfig ?? readGeneratedCloudflareConfig
   )(topology.wranglerConfigPath);
   verifyPreparedCloudflareTopology(prepared, topology, generated);
+  await (dependencies.dryRunBundle ?? dryRunGeneratedBundle)(
+    root,
+    topology,
+    environment,
+  );
   return { ...prepared, deployed: false, network: false, topology };
 }
 
