@@ -16,12 +16,19 @@ mínima para este proyecto es:
 | --- | --- | --- |
 | Account | Workers Scripts: Write | Crear y actualizar el Worker y sus assets. |
 | Account | D1: Edit | Crear/consultar D1 y aplicar migraciones. |
-| Account | Workers KV Storage: Edit | Permitir que el adaptador de Astro aprovisione el namespace `SESSION` usado para las sesiones. |
+| Account | Workers KV Storage: Edit | Wrangler aprovisiona el namespace `SESSION` que el adaptador de Astro genera para las sesiones. |
 
 No concedas DNS, Zone, Billing, API Tokens, Workers Routes ni R2 para el
 preview `workers.dev`. Si en el futuro se automatiza Cloudflare Access o un
 dominio personalizado, usa preferiblemente credenciales separadas y añade
 solo el permiso concreto durante esa fase.
+
+Estos permisos se conceden al nivel completo de la cuenta: Cloudflare no
+permite reducirlos a un Worker, una base D1 o un namespace KV concretos. Usa
+tokens distintos para preview y producción y secretos separados en los
+environments de GitHub como control de proceso, pero no los confundas con un
+aislamiento de autorización. Si preview y producción requieren una frontera
+exigible por credencial, deben vivir en cuentas Cloudflare distintas.
 
 Referencias oficiales: [Account API Tokens](https://developers.cloudflare.com/fundamentals/api/get-started/account-owned-tokens/),
 [permisos de API tokens](https://developers.cloudflare.com/fundamentals/api/reference/permissions/)
@@ -124,8 +131,9 @@ Cloudflare documenta la creación, formato y protección de estas URL en
 - Cuenta Cloudflare con Workers habilitado. La zona DNS solo será necesaria al
   conectar el dominio personalizado de producción.
 - `CLOUDFLARE_ACCOUNT_ID`.
-- Un `CLOUDFLARE_API_TOKEN` limitado a la cuenta con `Workers Scripts: Write`,
-  `D1: Edit` y `Workers KV Storage: Edit`.
+- Un `CLOUDFLARE_API_TOKEN` distinto por entorno, limitado a la cuenta con
+  `Workers Scripts: Write`, `D1: Edit` y `Workers KV Storage: Edit`. Dentro de
+  la misma cuenta, esos scopes no aíslan un Worker o una D1 de otros recursos.
 - Una base D1 de preview y otra de producción, preferiblemente con jurisdicción
   `eu`, ambas enlazadas como `DB`.
 - Perfiles Wrangler externos para preview y producción.
