@@ -1077,7 +1077,7 @@ exact URL/desired route, request a stable `data-evidence-id` for section
 capture, name the approver, and warn that the issue must remain open until the
 release comment is present.
 
-- [ ] **Step 4: Run the complete local verification matrix**
+- [x] **Step 4: Run the complete local verification matrix**
 
 Run each command and retain exit status:
 
@@ -1099,7 +1099,7 @@ git diff --check origin/main...HEAD
 Expected: every command exits 0. The baseline was 731 passing tests; the final
 count must be greater because the new suites are auto-discovered.
 
-- [ ] **Step 5: Review secrets and workflow capabilities**
+- [x] **Step 5: Review secrets and workflow capabilities**
 
 Run:
 
@@ -1112,7 +1112,7 @@ git log --oneline origin/main..HEAD
 Expected: secret names appear only in docs/workflows/tests; no value is
 present. The worktree contains only intended tracked changes.
 
-- [ ] **Step 6: Commit documentation and mark the spec implemented**
+- [x] **Step 6: Commit documentation and mark the spec implemented**
 
 ```bash
 git add README.md docs/operations .github/ISSUE_TEMPLATE/solicitud-cambio-web.yml docs/superpowers/specs/2026-09-03-pr-preview-evidence-design.md docs/superpowers/plans/2026-09-03-pr-preview-evidence-pipeline.md
