@@ -16,6 +16,13 @@ covers static quality, unit/server contracts, local D1, the real development
 server, public browser contracts, link closure, a clean Git-archive rebuild and
 a Cloudflare dry deployment. It never deploys or reads production secrets.
 
+## Solicitar cambios en la web
+
+Las personas no técnicas pueden abrir una **Solicitud de cambio web** desde
+GitHub. La [guía de solicitudes](docs/operations/web-change-requests.md)
+explica la información necesaria, la revisión de preview y las reglas de
+contenido, privacidad, SEO y aprobación antes de publicar.
+
 `npm run source:check` protects the immutable reference checkout. The sibling
 is a read-only parity oracle only: production, builds, previews and the
 autonomous verifier do not depend on it. The generated Wrangler topology is

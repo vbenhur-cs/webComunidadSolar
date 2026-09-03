@@ -1,0 +1,156 @@
+name: Solicitud de cambio web
+description: Propón una corrección, contenido, página o mejora para Comunidad Solar.
+title: "[Web] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Gracias por describir el cambio. No incluyas contraseñas, tokens,
+        datos de clientes, contratos ni información confidencial. Si no tienes
+        acceso al repositorio, pide al responsable web que abra esta solicitud
+        en tu nombre.
+
+  - type: input
+    id: requester
+    attributes:
+      label: Persona solicitante
+      description: Nombre y área o equipo de contacto.
+      placeholder: Nombre — Marketing
+    validations:
+      required: true
+
+  - type: dropdown
+    id: change_type
+    attributes:
+      label: Tipo de cambio
+      options:
+        - Corrección de contenido o enlace
+        - Imagen, vídeo o logo
+        - Página nueva o campaña
+        - Comunidad, proyecto o dato público
+        - Formulario o captación
+        - URL, navegación o SEO
+        - Calculadora o integración externa
+        - Error técnico
+        - Otro cambio
+    validations:
+      required: true
+
+  - type: textarea
+    id: objective
+    attributes:
+      label: Objetivo y motivo
+      description: Explica qué resultado se busca, para quién y por qué es necesario.
+      placeholder: Queremos que una persona interesada pueda entender…
+    validations:
+      required: true
+
+  - type: textarea
+    id: affected_pages
+    attributes:
+      label: Página o URL afectada
+      description: Añade la URL actual. Para una página nueva, propone la URL deseada.
+      placeholder: |
+        Actual: https://…
+        Deseada: /ruta-nueva
+    validations:
+      required: true
+
+  - type: textarea
+    id: requested_change
+    attributes:
+      label: Cambio solicitado
+      description: Incluye texto actual y nuevo, comportamiento esperado o una descripción concreta.
+      placeholder: |
+        Actual: …
+        Nuevo: …
+        Debe ocurrir: …
+    validations:
+      required: true
+
+  - type: textarea
+    id: source
+    attributes:
+      label: Fuente y evidencias
+      description: Enlace, documento aprobado o persona que confirma las cifras, fechas y afirmaciones.
+      placeholder: "Fuente oficial: https://…"
+    validations:
+      required: true
+
+  - type: textarea
+    id: assets
+    attributes:
+      label: Materiales adjuntos o enlaces
+      description: Para imágenes/vídeos/logos incluye enlace estable, permiso de uso, autoría, crédito y texto alternativo. Si no aplica, escribe “No aplica”.
+      placeholder: |
+        Archivo: https://…
+        Uso autorizado por: …
+        Texto alternativo: …
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Criterios de aceptación
+      description: Indica qué debe comprobarse en preview para considerar el cambio correcto.
+      placeholder: |
+        - El texto es exactamente…
+        - El enlace lleva a…
+        - Se ve correctamente en móvil y escritorio.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: data_impact
+    attributes:
+      label: ¿Afecta a datos, un formulario, cookies, precio o condiciones legales?
+      options:
+        - No
+        - Sí
+        - No estoy seguro/a
+    validations:
+      required: true
+
+  - type: input
+    id: approver
+    attributes:
+      label: Persona responsable de aprobar
+      description: Quien validará el contenido, negocio o legal antes de publicar.
+      placeholder: Nombre — área responsable
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Prioridad solicitada
+      description: La prioridad final se confirma durante la revisión inicial.
+      options:
+        - Crítico — seguridad, privacidad, legal o bloqueo real
+        - Alta — campaña o impacto comercial con fecha confirmada
+        - Normal — cambio habitual
+        - Baja — mejora futura o exploración
+    validations:
+      required: true
+
+  - type: input
+    id: deadline
+    attributes:
+      label: Fecha relevante (si existe)
+      description: Indica la fecha y qué ocurre si no se publica. Si no existe, escribe “No aplica”.
+      placeholder: 2026-10-15 — comienza la campaña
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Confirmaciones
+      options:
+        - label: La información que aporto está autorizada para revisión y no contiene secretos ni datos personales de clientes.
+          required: true
+        - label: He indicado una fuente y una persona responsable de aprobar el resultado.
+          required: true
+        - label: Revisaré la URL de preview antes de que se solicite la publicación.
+          required: true
