@@ -506,7 +506,7 @@ git commit -m "feat: seal preview deployment bundles"
 - `CloudflareVersionDescriptor` contains schema version, role, source SHA,
   bundle digest, worker name, version ID, tag, alias and validated HTTPS URL.
 
-- [ ] **Step 1: Write failing uploader tests using a fake runner**
+- [x] **Step 1: Write failing uploader tests using a fake runner**
 
 Assert fixed argv for upload:
 
@@ -530,7 +530,7 @@ control sequences.
 Prove deploy argv is exactly
 `versions deploy <uuid>@100% --yes --config <path> --message <fixed>`.
 
-- [ ] **Step 2: Run uploader tests and confirm RED**
+- [x] **Step 2: Run uploader tests and confirm RED**
 
 ```bash
 npm run test:unit -- tests/preview-evidence/cloudflare.test.ts
@@ -538,7 +538,7 @@ npm run test:unit -- tests/preview-evidence/cloudflare.test.ts
 
 Expected: FAIL because the uploader does not exist.
 
-- [ ] **Step 3: Implement a capability-bounded Wrangler runner**
+- [x] **Step 3: Implement a capability-bounded Wrangler runner**
 
 Spawn the absolute `node_modules/.bin/wrangler` with `shell:false`, a 10-minute
 deadline and only these environment values:
@@ -556,21 +556,24 @@ Validate Account ID and token presence without reflecting either. Kill the
 detached process group on timeout. Redact fixed token-like patterns from every
 error.
 
-- [ ] **Step 4: Verify upload output against JSON listing**
+- [x] **Step 4: Verify upload output against JSON listing**
 
 Use a full UUID regex for version ID and exactly one HTTPS URL regex from the
 upload output. Parse the subsequent JSON list as a bounded array of closed
 objects and find exactly one matching tag. Compare its ID and message with the
 upload result before writing the descriptor.
 
-- [ ] **Step 5: Add CLI commands and run tests**
+- [x] **Step 5: Add CLI commands and run tests**
 
 ```text
-upload-version --bundle <root> --context <path> --role <base|candidate|release> --output <path>
-deploy-version --bundle <root> --descriptor <path>
+upload-version --bundle <root> --profile <path> --profile-sha <64hex> --context <path> --context-sha <64hex> --role <base|candidate> --output <path>
+deploy-version --bundle <root> --profile <path> --profile-sha <64hex> --descriptor <path>
 ```
 
-Credentials are read only after argument, bundle and request validation.
+The PR command derives its source SHA and PR number exclusively from the sealed
+context. Task 9 extends upload dispatch for a sealed main/release context.
+Credentials are read only after argument, context, bundle and request
+validation.
 
 Run:
 
@@ -580,7 +583,7 @@ npm run test:unit -- tests/preview-evidence/cloudflare.test.ts tests/preview-evi
 
 Expected: PASS without network access.
 
-- [ ] **Step 6: Commit the uploader**
+- [x] **Step 6: Commit the uploader**
 
 ```bash
 git add scripts/preview-evidence/cloudflare.ts scripts/preview-evidence/cli.ts tests/preview-evidence/cloudflare.test.ts

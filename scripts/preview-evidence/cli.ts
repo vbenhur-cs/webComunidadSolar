@@ -5,8 +5,16 @@ import { fileURLToPath } from "node:url";
 import { canonicalJson } from "./domain.ts";
 import { createSealedBundle, verifySealedBundle } from "./bundle.ts";
 import {
+  deployExactVersion,
+  readCloudflareVersionDescriptor,
+  uploadPreviewVersion,
+  type WranglerRunner,
+  writeCloudflareVersionDescriptor,
+} from "./cloudflare.ts";
+import {
   createGitHubApi,
   type GitHubApi,
+  readPullRequestContext,
   resolvePullRequestRun,
   writeGitHubOutputs,
   writePullRequestContext,
@@ -15,6 +23,7 @@ import { loadEvidenceRequest } from "./request.ts";
 
 export interface PreviewEvidenceCliDependencies {
   createApi?: (token: string, repository: string) => GitHubApi;
+  wranglerRunner?: WranglerRunner;
   stdout?: (message: string) => void;
 }
 
@@ -84,7 +93,9 @@ export async function runPreviewEvidenceCli(
     command !== "resolve-pr" &&
     command !== "validate-request" &&
     command !== "seal-bundle" &&
-    command !== "verify-bundle"
+    command !== "verify-bundle" &&
+    command !== "upload-version" &&
+    command !== "deploy-version"
   ) {
     throw new TypeError(
       "Comando preview:evidence desconocido; consulte el uso",
@@ -139,6 +150,97 @@ export async function runPreviewEvidenceCli(
     });
     stdout(
       `BUNDLE_VERIFIED_OK role=${manifest.role} sha256=${manifest.bundleSha256}\n`,
+    );
+    return;
+  }
+
+  if (command === "upload-version") {
+    const flags = parseFlags(rest, [
+      "--bundle",
+      "--profile",
+      "--profile-sha",
+      "--context",
+      "--context-sha",
+      "--role",
+      "--output",
+    ]);
+    if (flags["--role"] !== "base" && flags["--role"] !== "candidate") {
+      throw new TypeError(
+        "upload-version con contexto PR solo admite base o candidate",
+      );
+    }
+    const context = await readPullRequestContext(
+      flags["--context"],
+      flags["--context-sha"],
+    );
+    const role = flags["--role"];
+    const sourceSha = role === "base" ? context.baseSha : context.headSha;
+    await verifySealedBundle(flags["--bundle"], {
+      role,
+      sourceSha,
+      profilePath: flags["--profile"],
+      profileSha256: flags["--profile-sha"],
+    });
+    const credentials = {
+      accountId: requireEnvironment(environment, "CLOUDFLARE_ACCOUNT_ID"),
+      apiToken: requireEnvironment(environment, "CLOUDFLARE_API_TOKEN"),
+    };
+    const descriptor = await uploadPreviewVersion(
+      {
+        bundleRoot: flags["--bundle"],
+        profilePath: flags["--profile"],
+        profileSha256: flags["--profile-sha"],
+        role,
+        sourceSha,
+        prNumber: context.prNumber,
+        credentials,
+      },
+      dependencies.wranglerRunner,
+    );
+    await writeCloudflareVersionDescriptor(flags["--output"], descriptor);
+    stdout(
+      `CLOUDFLARE_VERSION_UPLOADED_OK role=${role} sha256=${descriptor.bundleSha256}\n`,
+    );
+    return;
+  }
+
+  if (command === "deploy-version") {
+    const flags = parseFlags(rest, [
+      "--bundle",
+      "--profile",
+      "--profile-sha",
+      "--descriptor",
+    ]);
+    const descriptor = await readCloudflareVersionDescriptor(
+      flags["--descriptor"],
+    );
+    const manifest = await verifySealedBundle(flags["--bundle"], {
+      role: descriptor.role,
+      sourceSha: descriptor.sourceSha,
+      profilePath: flags["--profile"],
+      profileSha256: flags["--profile-sha"],
+    });
+    if (manifest.bundleSha256 !== descriptor.bundleSha256) {
+      throw new Error(
+        "El descriptor Cloudflare no coincide con el bundle sellado",
+      );
+    }
+    const credentials = {
+      accountId: requireEnvironment(environment, "CLOUDFLARE_ACCOUNT_ID"),
+      apiToken: requireEnvironment(environment, "CLOUDFLARE_API_TOKEN"),
+    };
+    await deployExactVersion(
+      {
+        bundleRoot: flags["--bundle"],
+        profilePath: flags["--profile"],
+        profileSha256: flags["--profile-sha"],
+        descriptor,
+        credentials,
+      },
+      dependencies.wranglerRunner,
+    );
+    stdout(
+      `CLOUDFLARE_VERSION_DEPLOYED_OK role=${descriptor.role} sha=${descriptor.sourceSha}\n`,
     );
     return;
   }

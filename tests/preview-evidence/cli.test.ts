@@ -1,10 +1,19 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
-import { type GitHubApi } from "../../scripts/preview-evidence/github.ts";
+import {
+  type WranglerInvocation,
+  type WranglerResult,
+  type WranglerRunner,
+} from "../../scripts/preview-evidence/cloudflare.ts";
+import { createSealedBundle } from "../../scripts/preview-evidence/bundle.ts";
+import {
+  type GitHubApi,
+  writePullRequestContext,
+} from "../../scripts/preview-evidence/github.ts";
 import { runPreviewEvidenceCli } from "../../scripts/preview-evidence/cli.ts";
 import { sha256 } from "../../scripts/preview-evidence/domain.ts";
 
@@ -21,6 +30,132 @@ expected_status:
   candidate: 200
 viewports: [desktop, mobile]
 `;
+
+const cloudflareVersionId = "12345678-1234-4abc-8def-123456789abc";
+const cloudflareAccountId = "a".repeat(32);
+const cloudflareToken = "unit-test-cloudflare-token_1234567890";
+
+function wranglerResult(
+  overrides: Partial<WranglerResult> = {},
+): WranglerResult {
+  return {
+    exitCode: 0,
+    signal: null,
+    stdout: "",
+    stderr: "",
+    timedOut: false,
+    outputLimitExceeded: false,
+    ...overrides,
+  };
+}
+
+function queuedWrangler(
+  results: WranglerResult[],
+  calls: WranglerInvocation[],
+): WranglerRunner {
+  return async (invocation) => {
+    calls.push(invocation);
+    const result = results.shift();
+    if (result === undefined) throw new Error("Unexpected Wrangler call");
+    return result;
+  };
+}
+
+async function sealedCliFixture(
+  root: string,
+  role: "candidate" | "release",
+): Promise<{
+  bundle: string;
+  profilePath: string;
+  profileSha256: string;
+  bundleSha256: string;
+}> {
+  const source = join(root, `source-${role}`);
+  const bundle = join(root, `bundle-${role}`);
+  const profileDirectory = join(source, ".artifacts", "config");
+  const databaseId = "11111111-2222-4333-8444-555555555555";
+  await mkdir(join(source, "dist", "server"), { recursive: true });
+  await mkdir(join(source, "dist", "client"), { recursive: true });
+  await mkdir(join(source, "drizzle"));
+  await mkdir(profileDirectory, { recursive: true });
+  const profile = `${JSON.stringify({
+    name: "comunidad-solar-preview",
+    main: "../../src/worker.ts",
+    compatibility_date: "2026-08-21",
+    compatibility_flags: ["nodejs_compat"],
+    workers_dev: true,
+    preview_urls: true,
+    assets: {
+      binding: "ASSETS",
+      directory: "../../dist",
+      run_worker_first: true,
+    },
+    d1_databases: [
+      {
+        binding: "DB",
+        database_name: "comunidad-solar-preview",
+        database_id: databaseId,
+        migrations_dir: "../../drizzle",
+      },
+    ],
+    vars: { SITE_INDEXABLE: "false" },
+  })}\n`;
+  const profilePath = join(profileDirectory, "preview.json");
+  const profileSha256 = sha256(profile);
+  await writeFile(profilePath, profile);
+  await writeFile(
+    join(source, "dist", "server", "wrangler.json"),
+    JSON.stringify({
+      topLevelName: "comunidad-solar-preview",
+      name: "comunidad-solar-preview",
+      main: "entry.mjs",
+      no_bundle: true,
+      compatibility_date: "2026-08-21",
+      compatibility_flags: ["nodejs_compat"],
+      assets: {
+        binding: "ASSETS",
+        directory: "../client",
+        run_worker_first: true,
+      },
+      vars: { SITE_INDEXABLE: "false" },
+      d1_databases: [
+        {
+          binding: "DB",
+          database_name: "comunidad-solar-preview",
+          database_id: databaseId,
+          migrations_dir: "../../drizzle",
+        },
+      ],
+      routes: [],
+      triggers: {},
+      services: [],
+      durable_objects: { bindings: [] },
+      kv_namespaces: [{ binding: "SESSION" }],
+      images: { binding: "IMAGES" },
+      secrets_store_secrets: [],
+    }),
+  );
+  await writeFile(
+    join(source, "dist", "server", "entry.mjs"),
+    "export default {};\n",
+  );
+  await writeFile(join(source, "dist", "client", "index.html"), "ok\n");
+  await writeFile(join(source, "drizzle", "0000.sql"), "SELECT 1;\n");
+  const manifest = await createSealedBundle({
+    sourceRoot: source,
+    outputRoot: bundle,
+    role,
+    sourceSha: headSha,
+    profilePath,
+    profileSha256,
+  });
+  return {
+    bundle,
+    profilePath,
+    profileSha256,
+    bundleSha256: manifest.bundleSha256,
+  };
+}
 
 class CliGitHubApi implements GitHubApi {
   async get(path: string): Promise<unknown> {
@@ -276,6 +411,191 @@ test("seal-bundle and verify-bundle operate on the same exact identity", async (
         ),
       ).bundleSha256,
       "string",
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("upload-version validates sealed context before reading credentials and writes a descriptor", async () => {
+  const root = await mkdtemp(join(tmpdir(), "preview-cli-upload-"));
+  try {
+    const value = await sealedCliFixture(root, "candidate");
+    const contextPath = join(root, "context.json");
+    const outputPath = join(root, "candidate-descriptor.json");
+    const sealedContext = await writePullRequestContext(contextPath, {
+      repository,
+      runId: 987,
+      runUrl: `https://github.com/${repository}/actions/runs/987`,
+      prNumber: 4,
+      prUrl: `https://github.com/${repository}/pull/4`,
+      issueNumber: 4,
+      issueUrl: `https://github.com/${repository}/issues/4`,
+      baseSha,
+      headSha,
+      requestPath,
+      request: {
+        schemaVersion: 1,
+        issue: 4,
+        scope: "page",
+        route: "/pruebas/guia/",
+        selector: null,
+        expectedStatus: { base: 404, candidate: 200 },
+        viewports: ["desktop", "mobile"],
+      },
+    });
+    let credentialReads = 0;
+    const unreadableEnvironment = new Proxy<Record<string, string>>(
+      {},
+      {
+        get() {
+          credentialReads += 1;
+          return "must-not-be-read";
+        },
+      },
+    );
+    await assert.rejects(
+      runPreviewEvidenceCli(
+        [
+          "upload-version",
+          "--bundle",
+          join(root, "missing-bundle"),
+          "--profile",
+          value.profilePath,
+          "--profile-sha",
+          value.profileSha256,
+          "--context",
+          contextPath,
+          "--context-sha",
+          sealedContext.sha256,
+          "--role",
+          "candidate",
+          "--output",
+          outputPath,
+        ],
+        unreadableEnvironment,
+      ),
+      /bundle|ENOENT|directorio/i,
+    );
+    assert.equal(credentialReads, 0);
+
+    const tag = "pr-4-head-bbbbbbb";
+    const message = "PR 4 candidate bbbbbbb";
+    const url = `https://${tag}-comunidad-solar-preview.comunidadsolar-dev.workers.dev`;
+    const calls: WranglerInvocation[] = [];
+    await runPreviewEvidenceCli(
+      [
+        "upload-version",
+        "--bundle",
+        value.bundle,
+        "--profile",
+        value.profilePath,
+        "--profile-sha",
+        value.profileSha256,
+        "--context",
+        contextPath,
+        "--context-sha",
+        sealedContext.sha256,
+        "--role",
+        "candidate",
+        "--output",
+        outputPath,
+      ],
+      {
+        CLOUDFLARE_ACCOUNT_ID: cloudflareAccountId,
+        CLOUDFLARE_API_TOKEN: cloudflareToken,
+      },
+      {
+        wranglerRunner: queuedWrangler(
+          [
+            wranglerResult({
+              stdout: [
+                `Worker Version ID: ${cloudflareVersionId}`,
+                `Version Preview URL: https://${cloudflareVersionId.slice(0, 8)}-comunidad-solar-preview.comunidadsolar-dev.workers.dev`,
+                `Version Preview Alias URL: ${url}`,
+                "",
+              ].join("\n"),
+            }),
+            wranglerResult({
+              stdout: JSON.stringify([
+                {
+                  id: cloudflareVersionId,
+                  number: 1,
+                  metadata: {
+                    created_on: "2026-09-03T20:00:00.000Z",
+                    hasPreview: true,
+                    source: "wrangler",
+                  },
+                  annotations: {
+                    "workers/alias": tag,
+                    "workers/message": message,
+                    "workers/tag": tag,
+                  },
+                },
+              ]),
+            }),
+          ],
+          calls,
+        ),
+        stdout: () => undefined,
+      },
+    );
+
+    const descriptor = JSON.parse(await readFile(outputPath, "utf8"));
+    assert.equal(descriptor.role, "candidate");
+    assert.equal(descriptor.sourceSha, headSha);
+    assert.equal(descriptor.versionId, cloudflareVersionId);
+    assert.equal(descriptor.url, `${url}/`);
+    assert.equal(calls.length, 2);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("deploy-version activates only the exact sealed release descriptor", async () => {
+  const root = await mkdtemp(join(tmpdir(), "preview-cli-deploy-"));
+  try {
+    const value = await sealedCliFixture(root, "release");
+    const descriptorPath = join(root, "release-descriptor.json");
+    await writeFile(
+      descriptorPath,
+      JSON.stringify({
+        schemaVersion: 1,
+        role: "release",
+        sourceSha: headSha,
+        bundleSha256: value.bundleSha256,
+        workerName: "comunidad-solar-preview",
+        versionId: cloudflareVersionId,
+        tag: "main-bbbbbbb",
+        alias: "main-bbbbbbb",
+        url: "https://main-bbbbbbb-comunidad-solar-preview.comunidadsolar-dev.workers.dev/",
+      }),
+    );
+    const calls: WranglerInvocation[] = [];
+    await runPreviewEvidenceCli(
+      [
+        "deploy-version",
+        "--bundle",
+        value.bundle,
+        "--profile",
+        value.profilePath,
+        "--profile-sha",
+        value.profileSha256,
+        "--descriptor",
+        descriptorPath,
+      ],
+      {
+        CLOUDFLARE_ACCOUNT_ID: cloudflareAccountId,
+        CLOUDFLARE_API_TOKEN: cloudflareToken,
+      },
+      {
+        wranglerRunner: queuedWrangler([wranglerResult()], calls),
+        stdout: () => undefined,
+      },
+    );
+    assert.deepEqual(
+      calls.map((call) => call.argv.slice(0, 3)),
+      [["versions", "deploy", `${cloudflareVersionId}@100%`]],
     );
   } finally {
     await rm(root, { recursive: true, force: true });
