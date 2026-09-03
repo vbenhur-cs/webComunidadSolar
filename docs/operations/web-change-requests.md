@@ -15,8 +15,9 @@ entrega.
 ## Resumen del proceso
 
 ```text
-Solicitud completa → revisión inicial → desarrollo en rama → CI → preview
-→ aprobación de contenido → publicación controlada → confirmación
+Solicitud completa → revisión inicial → rama y PR → CI + revisión humana
+→ integración en main → preview del mismo cambio → aprobación de contenido
+→ publicación controlada → confirmación
 ```
 
 No se compromete una fecha de publicación hasta completar la revisión inicial:
@@ -113,8 +114,10 @@ acelera, pero sigue dejando trazabilidad y revisión proporcional al riesgo.
 
 ### 6. Revisa el preview cuando se te solicite
 
-CI valida el cambio, pero no crea una URL de preview automáticamente. Cuando
-el responsable prepare la versión de revisión, compartirá su URL. La persona
+Antes de preparar el preview, el cambio pasa por una Pull Request, CI y revisión
+humana; solo entonces se integra en `main`. CI valida el cambio, pero no crea
+una URL de preview automáticamente. Cuando el responsable prepare la versión de
+revisión desde el mismo cambio integrado, compartirá su URL. La persona
 solicitante y el aprobador deben revisar, como mínimo:
 
 - el texto, cifras, fechas, enlaces y CTA;
@@ -126,7 +129,9 @@ solicitante y el aprobador deben revisar, como mínimo:
 
 Registra la aprobación o las correcciones en la misma solicitud. Un comentario
 como «aprobado para publicar» debe identificar a la persona autorizada y la
-versión de preview revisada.
+versión de preview revisada. No se aprueba una rama y se publica otra: si cambia
+el contenido después de la revisión, debe prepararse y aprobarse un preview
+nuevo.
 
 ### 7. Recibe la confirmación de entrega
 
@@ -151,8 +156,10 @@ en DNS, Raiola o el dominio principal.
 | Pendiente de información | Faltan fuente, contenido, aprobación o criterio de aceptación. | Solicitante |
 | En análisis | Se estima alcance, riesgo, SEO, privacidad y dependencia externa. | Responsable web / especialista |
 | Aprobada para desarrollo | Alcance y aprobador definidos. | Equipo de desarrollo |
-| En desarrollo | Existe una rama y una PR asociada. | Equipo de desarrollo |
-| En revisión de preview | CI ha validado el cambio y existe una versión de revisión preparada. | Solicitante / aprobador |
+| En desarrollo | Se implementa el cambio en una rama. | Equipo de desarrollo |
+| En revisión de PR | La PR espera o supera CI y revisión humana antes de integrarse en `main`. | Revisor |
+| Preparando preview | La PR se integró en `main` y se prepara la versión de ese mismo cambio. | Responsable web / release |
+| En revisión de preview | Existe una versión de revisión del cambio ya integrado en `main`. | Solicitante / aprobador |
 | Aprobada para publicación | Preview aceptada y requisitos de release completos. | Responsable de release |
 | Publicada | Se ha confirmado la entrega. | Responsable de release |
 | Cerrada sin cambio | No procede, está duplicada o no se recibió la información necesaria. | Responsable web |
