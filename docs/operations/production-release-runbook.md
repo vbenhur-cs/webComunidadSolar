@@ -19,9 +19,10 @@ Raiola queda cerrada mientras la aplicación dependa del adaptador Cloudflare,
 D1, bindings de Workers y el publicador Cloudflare. Esta decisión no habilita
 por sí misma un despliegue.
 
-No dispone todavía de un despliegue real automatizado. `deploy:dry` **no usa
-red ni ejecuta `wrangler deploy`**. El `wrangler.jsonc` versionado contiene una
-base D1 local y no debe emplearse para producción.
+No dispone todavía de un despliegue real automatizado. `deploy:dry` ejecuta
+`wrangler deploy --dry-run` localmente y sin credenciales para validar el bundle,
+pero **no sube ni publica** el Worker. El `wrangler.jsonc` versionado contiene
+una base D1 local y no debe emplearse para producción.
 
 Por tanto, no ejecutes una publicación real hasta haber completado la sección
 «Habilitación inicial». Una vez habilitado el pipeline, el despliegue de
@@ -126,8 +127,9 @@ Qué comprueba cada paso:
 - `test:dev` y `verify:public` recorren el servidor de desarrollo y el Worker
   generado con Chromium, incluidos imágenes, menús, hidratación y formularios.
 - `verify:links` y `verify:server` cierran los inventarios público y privado.
-- `deploy:dry` prepara un perfil local saneado, construye y verifica la
-  topología emitida. No publica nada.
+- `deploy:dry` prepara un perfil local saneado, construye, verifica la topología
+  emitida y obliga a Wrangler a procesar el bundle generado con `--dry-run`.
+  No sube ni publica nada.
 
 Antes del primer push del repositorio o de una entrega estructural, añade la
 verificación del archive Git independiente:
