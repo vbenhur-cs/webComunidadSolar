@@ -555,7 +555,9 @@ function verifyListedVersion(
   }
 }
 
-function validateDescriptor(value: unknown): CloudflareVersionDescriptor {
+export function validateCloudflareVersionDescriptor(
+  value: unknown,
+): CloudflareVersionDescriptor {
   const descriptor = requireRecord(value, "El descriptor Cloudflare");
   assertExactKeys(
     descriptor,
@@ -666,7 +668,7 @@ export async function uploadPreviewVersion(
     credentials,
   );
   verifyListedVersion(listed.stdout, { ...parsed, ...identity });
-  return validateDescriptor({
+  return validateCloudflareVersionDescriptor({
     schemaVersion: 1,
     role: input.role,
     sourceSha: input.sourceSha,
@@ -683,7 +685,7 @@ export async function deployExactVersion(
   input: DeployVersionInput,
   runner: WranglerRunner = runWrangler,
 ): Promise<void> {
-  const descriptor = validateDescriptor(input.descriptor);
+  const descriptor = validateCloudflareVersionDescriptor(input.descriptor);
   if (descriptor.role !== "release") {
     throw new TypeError(
       "Solo una versión release puede activar el preview compartido",
@@ -728,7 +730,7 @@ export async function writeCloudflareVersionDescriptor(
   path: string,
   value: CloudflareVersionDescriptor,
 ): Promise<void> {
-  const descriptor = validateDescriptor(value);
+  const descriptor = validateCloudflareVersionDescriptor(value);
   const contents = Buffer.from(`${canonicalJson(descriptor)}\n`, "utf8");
   if (contents.length > maxDescriptorBytes) {
     throw new RangeError("El descriptor Cloudflare supera el tamaño permitido");
@@ -772,5 +774,5 @@ export async function readCloudflareVersionDescriptor(
   } catch {
     throw new TypeError("El descriptor Cloudflare contiene JSON inválido");
   }
-  return validateDescriptor(parsed);
+  return validateCloudflareVersionDescriptor(parsed);
 }

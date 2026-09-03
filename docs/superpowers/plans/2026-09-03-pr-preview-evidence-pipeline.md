@@ -608,7 +608,7 @@ git commit -m "feat: upload exact Cloudflare preview versions"
   `captureReleaseEvidence(input: ReleaseCaptureInput, adapter?: BrowserAdapter): Promise<CaptureSet>`.
 - `CaptureSet` names every PNG and a `manifest.json`; no caller invents names.
 
-- [ ] **Step 1: Write failing browser-adapter tests**
+- [x] **Step 1: Write failing browser-adapter tests**
 
 Use a fake browser to prove both variants and viewports execute in canonical
 order. For `page`, expect four PNGs; for `section`, expect eight. Assert base
@@ -620,7 +620,7 @@ selector, invalid/truncated PNG, width mismatch, height above 30,000, file over
 8 MiB and total capture set over 40 MiB. Cross-origin request failure is
 recorded by origin count but does not fail the page.
 
-- [ ] **Step 2: Run capture tests and confirm RED**
+- [x] **Step 2: Run capture tests and confirm RED**
 
 ```bash
 npm run test:unit -- tests/preview-evidence/capture.test.ts
@@ -628,7 +628,7 @@ npm run test:unit -- tests/preview-evidence/capture.test.ts
 
 Expected: FAIL because capture logic does not exist.
 
-- [ ] **Step 3: Implement the Playwright adapter**
+- [x] **Step 3: Implement the Playwright adapter**
 
 Create one Chromium browser, a fresh context per viewport and these exact
 context options:
@@ -650,18 +650,18 @@ Install an init script that disables animations/transitions, navigate with
 30-second page deadline and capture with `fullPage:true`. Close context/browser
 in `finally` with bounded cleanup.
 
-- [ ] **Step 4: Validate PNG bytes and write the manifest**
+- [x] **Step 4: Validate PNG bytes and write the manifest**
 
 Use `PNG.sync.read` to verify dimensions. Record status, URL origin, version ID,
 viewport, selector, filename, bytes and SHA-256. Include `capturedAt`, GitHub
 run URL and tool versions, while defining `stableCaptureProjection` that omits
 only `capturedAt` and run-attempt metadata for idempotent reruns.
 
-- [ ] **Step 5: Add capture CLI and run tests**
+- [x] **Step 5: Add capture CLI and run tests**
 
 ```text
-capture-pr --context <path> --base <descriptor> --candidate <descriptor> --output <dir>
-capture-release --context <path> --release <descriptor> --output <dir>
+capture-pr --context <path> --context-sha <64hex> --base <descriptor> --candidate <descriptor> --output <dir> --run-attempt <n>
+capture-release --context <path> --context-sha <64hex> --release <descriptor> --output <dir> --run-attempt <n>
 ```
 
 Run:
@@ -672,7 +672,7 @@ npm run test:unit -- tests/preview-evidence/capture.test.ts
 
 Expected: PASS with fake adapter and no browser/network.
 
-- [ ] **Step 6: Commit browser evidence capture**
+- [x] **Step 6: Commit browser evidence capture**
 
 ```bash
 git add scripts/preview-evidence/capture.ts scripts/preview-evidence/cli.ts tests/preview-evidence/capture.test.ts

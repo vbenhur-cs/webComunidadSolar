@@ -12,6 +12,12 @@ import {
   writeCloudflareVersionDescriptor,
 } from "./cloudflare.ts";
 import {
+  type BrowserAdapter,
+  capturePullRequestEvidence,
+  captureReleaseEvidence,
+  readReleaseCaptureContext,
+} from "./capture.ts";
+import {
   createGitHubApi,
   type GitHubApi,
   readPullRequestContext,
@@ -24,6 +30,7 @@ import { loadEvidenceRequest } from "./request.ts";
 export interface PreviewEvidenceCliDependencies {
   createApi?: (token: string, repository: string) => GitHubApi;
   wranglerRunner?: WranglerRunner;
+  browserAdapter?: BrowserAdapter;
   stdout?: (message: string) => void;
 }
 
@@ -95,7 +102,9 @@ export async function runPreviewEvidenceCli(
     command !== "seal-bundle" &&
     command !== "verify-bundle" &&
     command !== "upload-version" &&
-    command !== "deploy-version"
+    command !== "deploy-version" &&
+    command !== "capture-pr" &&
+    command !== "capture-release"
   ) {
     throw new TypeError(
       "Comando preview:evidence desconocido; consulte el uso",
@@ -241,6 +250,81 @@ export async function runPreviewEvidenceCli(
     );
     stdout(
       `CLOUDFLARE_VERSION_DEPLOYED_OK role=${descriptor.role} sha=${descriptor.sourceSha}\n`,
+    );
+    return;
+  }
+
+  if (command === "capture-pr") {
+    const flags = parseFlags(rest, [
+      "--context",
+      "--context-sha",
+      "--base",
+      "--candidate",
+      "--output",
+      "--run-attempt",
+    ]);
+    if (!/^[1-9][0-9]*$/u.test(flags["--run-attempt"])) {
+      throw new TypeError("El run attempt de captura es inválido");
+    }
+    const runAttempt = Number(flags["--run-attempt"]);
+    if (!Number.isSafeInteger(runAttempt)) {
+      throw new TypeError("El run attempt de captura es inválido");
+    }
+    const context = await readPullRequestContext(
+      flags["--context"],
+      flags["--context-sha"],
+    );
+    const base = await readCloudflareVersionDescriptor(flags["--base"]);
+    const candidate = await readCloudflareVersionDescriptor(
+      flags["--candidate"],
+    );
+    const set = await capturePullRequestEvidence(
+      {
+        context,
+        base,
+        candidate,
+        outputRoot: flags["--output"],
+        runAttempt,
+      },
+      dependencies.browserAdapter,
+    );
+    stdout(
+      `PREVIEW_CAPTURE_OK issue=${set.manifest.issue} files=${set.manifest.captures.length}\n`,
+    );
+    return;
+  }
+
+  if (command === "capture-release") {
+    const flags = parseFlags(rest, [
+      "--context",
+      "--context-sha",
+      "--release",
+      "--output",
+      "--run-attempt",
+    ]);
+    if (!/^[1-9][0-9]*$/u.test(flags["--run-attempt"])) {
+      throw new TypeError("El run attempt de captura es inválido");
+    }
+    const runAttempt = Number(flags["--run-attempt"]);
+    if (!Number.isSafeInteger(runAttempt)) {
+      throw new TypeError("El run attempt de captura es inválido");
+    }
+    const context = await readReleaseCaptureContext(
+      flags["--context"],
+      flags["--context-sha"],
+    );
+    const release = await readCloudflareVersionDescriptor(flags["--release"]);
+    const set = await captureReleaseEvidence(
+      {
+        context,
+        release,
+        outputRoot: flags["--output"],
+        runAttempt,
+      },
+      dependencies.browserAdapter,
+    );
+    stdout(
+      `RELEASE_CAPTURE_OK issue=${set.manifest.issue} files=${set.manifest.captures.length}\n`,
     );
     return;
   }
