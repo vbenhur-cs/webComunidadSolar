@@ -13,6 +13,10 @@ import {
   parseEvidenceRequest,
   validateNormalizedEvidenceRequest,
 } from "./request.ts";
+import {
+  validatePublishEvidenceResult,
+  type PublishEvidenceResult,
+} from "./evidence.ts";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -34,6 +38,12 @@ export interface PullRequestRunContext {
   headSha: string;
   requestPath: string;
   request: EvidenceRequest;
+}
+
+export interface EvidenceCommentInput {
+  context: PullRequestRunContext;
+  publication: PublishEvidenceResult;
+  evidenceCommitSha: string;
 }
 
 const gitShaPattern = /^[a-f0-9]{40}$/u;
@@ -548,4 +558,226 @@ export function createGitHubApi(
     post: (path, body) => request("POST", path, body),
     patch: (path, body) => request("PATCH", path, body),
   };
+}
+
+function exactCommentMarker(body: string, marker: string): boolean {
+  return body.split(/\r?\n/u).some((line) => line === marker);
+}
+
+function requireCommentBody(value: unknown): string {
+  if (
+    typeof value !== "string" ||
+    value.includes("\0") ||
+    Buffer.byteLength(value) > 64 * 1024
+  ) {
+    throw new TypeError("GitHub devolvió comment body inválido");
+  }
+  return value;
+}
+
+function escapeMarkdownLabel(value: string): string {
+  return value
+    .replaceAll("\\", "\\\\")
+    .replaceAll("[", "\\[")
+    .replaceAll("]", "\\]")
+    .replaceAll("(", "\\(")
+    .replaceAll(")", "\\)");
+}
+
+function evidenceCommentBody(
+  context: PullRequestRunContext,
+  publication: PublishEvidenceResult,
+  evidenceCommitSha: string,
+): string {
+  const marker = `<!-- preview-evidence:issue-${context.issueNumber}:${context.headSha} -->`;
+  const lines = [
+    marker,
+    "## Evidencia visual pendiente de revisión humana",
+    "",
+    `Solicitud: [issue #${context.issueNumber}](${context.issueUrl}) · [PR #${context.prNumber}](${context.prUrl})`,
+    "",
+    `- SHA base completo: \`${context.baseSha}\``,
+    `- SHA candidato completo: \`${context.headSha}\``,
+    `- Ejecución verificada: [GitHub Actions](${context.runUrl})`,
+    `- Commit inmutable de evidencia: [${evidenceCommitSha.slice(0, 12)}](https://github.com/${context.repository}/commit/${evidenceCommitSha})`,
+    "",
+  ];
+  for (const entry of publication.entries) {
+    const title =
+      entry.role === "base"
+        ? "Antes (base)"
+        : entry.role === "candidate"
+          ? "Después (candidato)"
+          : "Release";
+    lines.push(
+      `### ${title}`,
+      "",
+      `- SHA: \`${entry.sourceSha}\``,
+      `- [Abrir Preview URL](${entry.previewUrl})`,
+      `- [Abrir manifest.json](${entry.manifestUrl})`,
+      "",
+    );
+    for (const png of entry.pngs) {
+      const label = escapeMarkdownLabel(png.filename);
+      lines.push(`[![${label}](${png.rawUrl})](${png.rawUrl})`, "");
+    }
+  }
+  lines.push(
+    "Las comprobaciones automáticas terminaron correctamente: status HTTP, documento visible, ausencia de errores de página y recursos del mismo origen, dimensiones y hashes PNG.",
+    "",
+    "⏳ Estado: pendiente de revisión humana. Revisa ambas Preview URLs y las capturas; después aprueba el environment `premerge-review` o solicita correcciones en la PR.",
+  );
+  const body = lines.join("\n");
+  if (Buffer.byteLength(body) > 64 * 1024) {
+    throw new RangeError("El comentario de evidencia supera 64 KiB");
+  }
+  return body;
+}
+
+function validateEvidenceCommentInput(input: EvidenceCommentInput): {
+  context: PullRequestRunContext;
+  publication: PublishEvidenceResult;
+  evidenceCommitSha: string;
+  body: string;
+  marker: string;
+} {
+  const context = validateStoredPullRequestContext(input.context);
+  const publication = validatePublishEvidenceResult(input.publication);
+  const evidenceCommitSha = requireString(
+    input.evidenceCommitSha,
+    "evidence commit SHA",
+    gitShaPattern,
+  );
+  if (
+    publication.kind !== "pull-request" ||
+    publication.repository !== context.repository ||
+    publication.issueNumber !== context.issueNumber ||
+    publication.prNumber !== context.prNumber ||
+    publication.source.baseSha !== context.baseSha ||
+    publication.source.headSha !== context.headSha ||
+    publication.source.releaseSha !== null ||
+    publication.runUrl !== context.runUrl
+  ) {
+    throw new TypeError(
+      "La publicación no coincide con el contexto PR autorizado",
+    );
+  }
+  const marker = `<!-- preview-evidence:issue-${context.issueNumber}:${context.headSha} -->`;
+  return {
+    context,
+    publication,
+    evidenceCommitSha,
+    marker,
+    body: evidenceCommentBody(context, publication, evidenceCommitSha),
+  };
+}
+
+export async function upsertEvidenceComments(
+  api: GitHubApi,
+  input: EvidenceCommentInput,
+): Promise<void> {
+  const validated = validateEvidenceCommentInput(input);
+  const targetNumbers = [
+    validated.context.prNumber,
+    validated.context.issueNumber,
+  ].filter((value, index, all) => all.indexOf(value) === index);
+  const planned: Array<{ target: number; commentId: number | null }> = [];
+
+  // Preflight both targets before mutating either one.
+  for (const target of targetNumbers) {
+    const response = await api.get(
+      `/repos/${validated.context.repository}/issues/${target}/comments?per_page=100`,
+    );
+    if (!Array.isArray(response) || response.length > 100) {
+      throw new TypeError("GitHub devolvió una lista de comentarios inválida");
+    }
+    const matching: number[] = [];
+    for (const value of response) {
+      const comment = requireRecord(value, "comentario");
+      const id = requirePositiveInteger(comment.id, "comment id");
+      const body = requireCommentBody(comment.body);
+      if (exactCommentMarker(body, validated.marker)) matching.push(id);
+    }
+    if (matching.length > 1) {
+      throw new Error(
+        `GitHub contiene múltiples comentarios con el marcador de evidencia en #${target}`,
+      );
+    }
+    planned.push({ target, commentId: matching[0] ?? null });
+  }
+
+  for (const operation of planned) {
+    const payload = { body: validated.body };
+    if (operation.commentId === null) {
+      await api.post(
+        `/repos/${validated.context.repository}/issues/${operation.target}/comments`,
+        payload,
+      );
+    } else {
+      await api.patch(
+        `/repos/${validated.context.repository}/issues/comments/${operation.commentId}`,
+        payload,
+      );
+    }
+  }
+}
+
+export async function setPreviewApprovalStatus(
+  api: GitHubApi,
+  repository: string,
+  headSha: string,
+  state: "success",
+  targetUrl: string,
+): Promise<void> {
+  if (!repositoryPattern.test(repository)) {
+    throw new TypeError("El repositorio del status es inválido");
+  }
+  if (!gitShaPattern.test(headSha)) {
+    throw new TypeError("El SHA del status preview-approved es inválido");
+  }
+  if (state !== "success") {
+    throw new TypeError("preview-approved solo admite el estado success");
+  }
+  const match = new RegExp(
+    `^https://github\\.com/${repository.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&")}/actions/runs/([1-9][0-9]*)$`,
+    "u",
+  ).exec(targetUrl);
+  if (match === null) {
+    throw new TypeError("La URL del run para preview-approved es inválida");
+  }
+  const trustedUrl = requireGitHubUrl(targetUrl, repository, "workflow run");
+  await api.post(`/repos/${repository}/statuses/${headSha}`, {
+    state,
+    context: "preview-approved",
+    description: "Preview y evidencia aprobadas por una persona",
+    target_url: trustedUrl,
+  });
+}
+
+export async function approvePreviewForCurrentPullRequest(
+  api: GitHubApi,
+  inputContext: PullRequestRunContext,
+): Promise<void> {
+  const context = validateStoredPullRequestContext(inputContext);
+  const response = requireRecord(
+    await api.get(`/repos/${context.repository}/pulls/${context.prNumber}`),
+    "Pull Request antes de aprobar preview",
+  );
+  const head = requireRecord(response.head, "head de Pull Request");
+  if (
+    response.number !== context.prNumber ||
+    response.state !== "open" ||
+    head.sha !== context.headSha
+  ) {
+    throw new Error(
+      "La Pull Request se cerró o su head SHA cambió antes de la aprobación",
+    );
+  }
+  await setPreviewApprovalStatus(
+    api,
+    context.repository,
+    context.headSha,
+    "success",
+    context.runUrl,
+  );
 }

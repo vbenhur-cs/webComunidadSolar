@@ -699,7 +699,7 @@ git commit -m "feat: capture preview evidence with Playwright"
 - Produces:
   `setPreviewApprovalStatus(api, repository, headSha, state): Promise<void>`.
 
-- [ ] **Step 1: Write failing append-only tests**
+- [x] **Step 1: Write failing append-only tests**
 
 For a temporary evidence checkout, assert exact PR paths under
 `issue-4/baseline/<sha>` and `issue-4/candidates/<sha>` and release paths under
@@ -711,7 +711,7 @@ altering any existing byte.
 Reject any symlink in source/destination, paths outside the checkout, more than
 eight PNGs and filenames not present in the manifest.
 
-- [ ] **Step 2: Write failing comment/status tests**
+- [x] **Step 2: Write failing comment/status tests**
 
 Use the in-memory API to assert marker
 `<!-- preview-evidence:issue-4:<head-sha> -->`, full SHAs, two Preview URLs, raw
@@ -722,7 +722,7 @@ Assert `preview-approved` always targets the 40-hex candidate SHA with
 `target_url` equal to the trusted workflow run URL and description
 `Preview y evidencia aprobadas por una persona`.
 
-- [ ] **Step 3: Run focused tests and confirm RED**
+- [x] **Step 3: Run focused tests and confirm RED**
 
 ```bash
 npm run test:unit -- tests/preview-evidence/evidence.test.ts tests/preview-evidence/github.test.ts
@@ -730,7 +730,7 @@ npm run test:unit -- tests/preview-evidence/evidence.test.ts tests/preview-evide
 
 Expected: FAIL because append-only publication and reporting are absent.
 
-- [ ] **Step 4: Implement transactional local publication**
+- [x] **Step 4: Implement transactional local publication**
 
 Validate the complete source set before creating any destination. For new
 paths, copy to sibling exclusive temporary files, hash them, then link/rename
@@ -741,19 +741,19 @@ write them.
 Return sorted `addedPaths`, `existingPaths`, raw URLs and the one commit message
 `evidence: record issue 4 candidate <short-sha>`.
 
-- [ ] **Step 5: Implement bounded GitHub reporting**
+- [x] **Step 5: Implement bounded GitHub reporting**
 
 List at most 100 issue comments, compare only exact markers, bound response
 bodies and send closed JSON payloads. Escape all Markdown labels; URLs must
 already pass the HTTPS GitHub/Cloudflare validators. Never include stderr,
 environment data or profile contents.
 
-- [ ] **Step 6: Add CLI commands and run tests**
+- [x] **Step 6: Add CLI commands and run tests**
 
 ```text
-publish-evidence --capture <dir> --checkout <dir> --context <path> --output <path>
-comment-evidence --publication <path> --context <path>
-approve-preview --context <path>
+publish-evidence --capture <dir> --checkout <dir> --context <path> --context-sha <64hex> --output <path>
+comment-evidence --publication <path> --context <path> --context-sha <64hex> --evidence-sha <40hex>
+approve-preview --context <path> --context-sha <64hex>
 ```
 
 Run:
@@ -764,7 +764,7 @@ npm run test:unit -- tests/preview-evidence/evidence.test.ts tests/preview-evide
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit evidence publication**
+- [x] **Step 7: Commit evidence publication**
 
 ```bash
 git add scripts/preview-evidence/evidence.ts scripts/preview-evidence/github.ts scripts/preview-evidence/cli.ts tests/preview-evidence/evidence.test.ts tests/preview-evidence/github.test.ts

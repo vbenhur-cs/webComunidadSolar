@@ -18,13 +18,21 @@ import {
   readReleaseCaptureContext,
 } from "./capture.ts";
 import {
+  approvePreviewForCurrentPullRequest,
   createGitHubApi,
   type GitHubApi,
   readPullRequestContext,
   resolvePullRequestRun,
+  upsertEvidenceComments,
   writeGitHubOutputs,
   writePullRequestContext,
 } from "./github.ts";
+import {
+  publishEvidenceToCheckout,
+  readCaptureSet,
+  readPublishEvidenceResult,
+  writePublishEvidenceResult,
+} from "./evidence.ts";
 import { loadEvidenceRequest } from "./request.ts";
 
 export interface PreviewEvidenceCliDependencies {
@@ -104,7 +112,10 @@ export async function runPreviewEvidenceCli(
     command !== "upload-version" &&
     command !== "deploy-version" &&
     command !== "capture-pr" &&
-    command !== "capture-release"
+    command !== "capture-release" &&
+    command !== "publish-evidence" &&
+    command !== "comment-evidence" &&
+    command !== "approve-preview"
   ) {
     throw new TypeError(
       "Comando preview:evidence desconocido; consulte el uso",
@@ -326,6 +337,77 @@ export async function runPreviewEvidenceCli(
     stdout(
       `RELEASE_CAPTURE_OK issue=${set.manifest.issue} files=${set.manifest.captures.length}\n`,
     );
+    return;
+  }
+
+  if (command === "publish-evidence") {
+    const flags = parseFlags(rest, [
+      "--capture",
+      "--checkout",
+      "--context",
+      "--context-sha",
+      "--output",
+    ]);
+    const context = await readPullRequestContext(
+      flags["--context"],
+      flags["--context-sha"],
+    );
+    const capture = await readCaptureSet(flags["--capture"]);
+    const publication = await publishEvidenceToCheckout({
+      capture,
+      checkoutRoot: flags["--checkout"],
+      context,
+    });
+    await writePublishEvidenceResult(flags["--output"], publication);
+    stdout(
+      `EVIDENCE_PUBLISHED_OK issue=${publication.issueNumber} added=${publication.addedPaths.length} existing=${publication.existingPaths.length}\n`,
+    );
+    return;
+  }
+
+  if (command === "comment-evidence") {
+    const flags = parseFlags(rest, [
+      "--publication",
+      "--context",
+      "--context-sha",
+      "--evidence-sha",
+    ]);
+    const context = await readPullRequestContext(
+      flags["--context"],
+      flags["--context-sha"],
+    );
+    const publication = await readPublishEvidenceResult(flags["--publication"]);
+    const repository = requireEnvironment(environment, "GITHUB_REPOSITORY");
+    if (repository !== context.repository) {
+      throw new TypeError("El repositorio de comments no coincide con GitHub");
+    }
+    const token = requireEnvironment(environment, "GITHUB_TOKEN");
+    const api = (dependencies.createApi ?? createGitHubApi)(token, repository);
+    await upsertEvidenceComments(api, {
+      context,
+      publication,
+      evidenceCommitSha: flags["--evidence-sha"],
+    });
+    stdout(
+      `EVIDENCE_COMMENTS_OK issue=${context.issueNumber} sha=${context.headSha}\n`,
+    );
+    return;
+  }
+
+  if (command === "approve-preview") {
+    const flags = parseFlags(rest, ["--context", "--context-sha"]);
+    const context = await readPullRequestContext(
+      flags["--context"],
+      flags["--context-sha"],
+    );
+    const repository = requireEnvironment(environment, "GITHUB_REPOSITORY");
+    if (repository !== context.repository) {
+      throw new TypeError("El repositorio de approval no coincide con GitHub");
+    }
+    const token = requireEnvironment(environment, "GITHUB_TOKEN");
+    const api = (dependencies.createApi ?? createGitHubApi)(token, repository);
+    await approvePreviewForCurrentPullRequest(api, context);
+    stdout(`PREVIEW_APPROVED_OK sha=${context.headSha}\n`);
     return;
   }
 

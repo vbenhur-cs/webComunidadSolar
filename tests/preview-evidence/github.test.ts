@@ -5,12 +5,16 @@ import { join } from "node:path";
 import test from "node:test";
 
 import {
+  approvePreviewForCurrentPullRequest,
   type GitHubApi,
   readPullRequestContext,
   resolvePullRequestRun,
+  setPreviewApprovalStatus,
+  upsertEvidenceComments,
   writePullRequestContext,
   writeGitHubOutputs,
 } from "../../scripts/preview-evidence/github.ts";
+import type { PublishEvidenceResult } from "../../scripts/preview-evidence/evidence.ts";
 
 const repository = "vbenhur-cs/webComunidadSolar";
 const baseSha = "a".repeat(40);
@@ -25,6 +29,35 @@ expected_status:
   candidate: 200
 viewports: [desktop, mobile]
 `;
+
+interface WorkflowPayloadFixture {
+  action: string;
+  repository: { full_name: string; default_branch: string };
+  workflow_run: {
+    id: number;
+    html_url: string;
+    conclusion: string;
+    event: string;
+    head_branch: string;
+    head_sha: string;
+    head_repository: { full_name: string };
+    pull_requests: Array<{ number: number }>;
+  };
+}
+
+interface PullRequestFixture {
+  number: number;
+  state: string;
+  changed_files: number;
+  html_url: string;
+  body: string;
+  base: { ref: string; sha: string };
+  head: {
+    sha: string;
+    ref: string;
+    repo: { full_name: string };
+  };
+}
 
 class MemoryGitHubApi implements GitHubApi {
   readonly responses = new Map<string, unknown>();
@@ -45,7 +78,7 @@ class MemoryGitHubApi implements GitHubApi {
   }
 }
 
-function validPayload(): Record<string, unknown> {
+function validPayload(): WorkflowPayloadFixture {
   return {
     action: "completed",
     repository: {
@@ -66,7 +99,7 @@ function validPayload(): Record<string, unknown> {
   };
 }
 
-function validPullRequest(): Record<string, unknown> {
+function validPullRequest(): PullRequestFixture {
   return {
     number: 4,
     state: "open",
@@ -133,7 +166,9 @@ test("resolves one internal green PR into an authoritative sanitized context", a
 });
 
 test("rejects workflow payloads that do not identify a successful internal PR", async () => {
-  const cases: Array<[string, (payload: any) => void, RegExp]> = [
+  const cases: Array<
+    [string, (payload: WorkflowPayloadFixture) => void, RegExp]
+  > = [
     [
       "conclusion",
       (payload) => {
@@ -172,7 +207,7 @@ test("rejects workflow payloads that do not identify a successful internal PR", 
   ];
 
   for (const [label, mutate, expected] of cases) {
-    const payload: any = validPayload();
+    const payload = validPayload();
     mutate(payload);
     await assert.rejects(
       resolvePullRequestRun(payload, validApi()),
@@ -183,7 +218,7 @@ test("rejects workflow payloads that do not identify a successful internal PR", 
 });
 
 test("rechecks PR state, branch, repository and head through the API", async () => {
-  const cases: Array<[string, (pr: any) => void, RegExp]> = [
+  const cases: Array<[string, (pr: PullRequestFixture) => void, RegExp]> = [
     [
       "closed",
       (pr) => {
@@ -216,7 +251,7 @@ test("rechecks PR state, branch, repository and head through the API", async () 
 
   for (const [label, mutate, expected] of cases) {
     const api = validApi();
-    const pr: any = validPullRequest();
+    const pr = validPullRequest();
     mutate(pr);
     api.responses.set(`/repos/${repository}/pulls/4`, pr);
     await assert.rejects(
@@ -426,4 +461,293 @@ test("seals and reloads the sanitized PR context by digest", async () => {
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+});
+
+class RecordingGitHubApi implements GitHubApi {
+  readonly responses = new Map<string, unknown>();
+  readonly calls: Array<{ method: string; path: string; body?: unknown }> = [];
+
+  async get(path: string): Promise<unknown> {
+    this.calls.push({ method: "GET", path });
+    if (!this.responses.has(path)) {
+      throw new Error(`Unexpected GitHub path: ${path}`);
+    }
+    return structuredClone(this.responses.get(path));
+  }
+
+  async post(path: string, body: unknown): Promise<unknown> {
+    this.calls.push({ method: "POST", path, body: structuredClone(body) });
+    return { id: 100 };
+  }
+
+  async patch(path: string, body: unknown): Promise<unknown> {
+    this.calls.push({ method: "PATCH", path, body: structuredClone(body) });
+    return { id: 101 };
+  }
+}
+
+function reportingContext() {
+  return {
+    repository,
+    runId: 987,
+    runUrl: `https://github.com/${repository}/actions/runs/987`,
+    prNumber: 9,
+    prUrl: `https://github.com/${repository}/pull/9`,
+    issueNumber: 4,
+    issueUrl: `https://github.com/${repository}/issues/4`,
+    baseSha,
+    headSha,
+    requestPath,
+    request: {
+      schemaVersion: 1 as const,
+      issue: 4,
+      scope: "page" as const,
+      route: "/pruebas/guia/",
+      selector: null,
+      expectedStatus: { base: 404 as const, candidate: 200 as const },
+      viewports: ["desktop", "mobile"] as const,
+    },
+  };
+}
+
+function publication(): PublishEvidenceResult {
+  return {
+    schemaVersion: 1,
+    kind: "pull-request",
+    repository,
+    issueNumber: 4,
+    prNumber: 9,
+    source: { baseSha, headSha, releaseSha: null },
+    runUrl: `https://github.com/${repository}/actions/runs/987`,
+    entries: [
+      {
+        role: "base",
+        sourceSha: baseSha,
+        relativeDirectory: `issue-4/baseline/${baseSha}`,
+        previewUrl:
+          "https://pr-9-base-aaaaaaa-comunidad-solar-preview.comunidadsolar-dev.workers.dev/pruebas/guia/",
+        manifestUrl: `https://github.com/${repository}/blob/evidence/issue-4/baseline/${baseSha}/manifest.json`,
+        pngs: [
+          {
+            filename: "before-desktop.png",
+            rawUrl: `https://raw.githubusercontent.com/${repository}/evidence/issue-4/baseline/${baseSha}/before-desktop.png`,
+          },
+          {
+            filename: "before-mobile.png",
+            rawUrl: `https://raw.githubusercontent.com/${repository}/evidence/issue-4/baseline/${baseSha}/before-mobile.png`,
+          },
+        ],
+      },
+      {
+        role: "candidate",
+        sourceSha: headSha,
+        relativeDirectory: `issue-4/candidates/${headSha}`,
+        previewUrl:
+          "https://pr-9-head-bbbbbbb-comunidad-solar-preview.comunidadsolar-dev.workers.dev/pruebas/guia/",
+        manifestUrl: `https://github.com/${repository}/blob/evidence/issue-4/candidates/${headSha}/manifest.json`,
+        pngs: [
+          {
+            filename: "after-desktop.png",
+            rawUrl: `https://raw.githubusercontent.com/${repository}/evidence/issue-4/candidates/${headSha}/after-desktop.png`,
+          },
+          {
+            filename: "after-mobile.png",
+            rawUrl: `https://raw.githubusercontent.com/${repository}/evidence/issue-4/candidates/${headSha}/after-mobile.png`,
+          },
+        ],
+      },
+    ],
+    addedPaths: [],
+    existingPaths: [
+      `issue-4/baseline/${baseSha}/before-desktop.png`,
+      `issue-4/baseline/${baseSha}/before-mobile.png`,
+      `issue-4/baseline/${baseSha}/manifest.json`,
+      `issue-4/candidates/${headSha}/after-desktop.png`,
+      `issue-4/candidates/${headSha}/after-mobile.png`,
+      `issue-4/candidates/${headSha}/manifest.json`,
+    ],
+    commitMessage: "evidence: record issue 4 candidate bbbbbbb",
+  };
+}
+
+test("creates bounded evidence comments on the PR and linked issue", async () => {
+  const api = new RecordingGitHubApi();
+  api.responses.set(`/repos/${repository}/issues/9/comments?per_page=100`, []);
+  api.responses.set(`/repos/${repository}/issues/4/comments?per_page=100`, []);
+  const evidenceCommitSha = "e".repeat(40);
+
+  await upsertEvidenceComments(api, {
+    context: reportingContext(),
+    publication: publication(),
+    evidenceCommitSha,
+  });
+
+  const writes = api.calls.filter((call) => call.method !== "GET");
+  assert.deepEqual(
+    writes.map((call) => [call.method, call.path]),
+    [
+      ["POST", `/repos/${repository}/issues/9/comments`],
+      ["POST", `/repos/${repository}/issues/4/comments`],
+    ],
+  );
+  for (const call of writes) {
+    assert.deepEqual(Object.keys(call.body as object), ["body"]);
+    const body = (call.body as { body: string }).body;
+    assert.match(
+      body,
+      new RegExp(`<!-- preview-evidence:issue-4:${headSha} -->`, "u"),
+    );
+    assert.match(body, new RegExp(baseSha, "u"));
+    assert.match(body, new RegExp(headSha, "u"));
+    assert.match(body, /pr-9-base-aaaaaaa-[^\s)]+\.workers\.dev/u);
+    assert.match(body, /pr-9-head-bbbbbbb-[^\s)]+\.workers\.dev/u);
+    assert.match(body, /raw\.githubusercontent\.com/u);
+    assert.match(body, /manifest\.json/u);
+    assert.match(body, new RegExp(`/commit/${evidenceCommitSha}`, "u"));
+    assert.match(body, /pendiente.*revisi[oó]n humana/i);
+    assert.ok(Buffer.byteLength(body) < 64 * 1024);
+  }
+});
+
+test("patches one exact marker and rejects duplicate markers before writing", async () => {
+  const marker = `<!-- preview-evidence:issue-4:${headSha} -->`;
+  const api = new RecordingGitHubApi();
+  api.responses.set(`/repos/${repository}/issues/9/comments?per_page=100`, [
+    { id: 91, body: `old\n${marker}` },
+  ]);
+  api.responses.set(`/repos/${repository}/issues/4/comments?per_page=100`, [
+    { id: 41, body: marker },
+  ]);
+  await upsertEvidenceComments(api, {
+    context: reportingContext(),
+    publication: publication(),
+    evidenceCommitSha: "e".repeat(40),
+  });
+  assert.deepEqual(
+    api.calls
+      .filter((call) => call.method === "PATCH")
+      .map((call) => call.path),
+    [
+      `/repos/${repository}/issues/comments/91`,
+      `/repos/${repository}/issues/comments/41`,
+    ],
+  );
+
+  const duplicate = new RecordingGitHubApi();
+  duplicate.responses.set(
+    `/repos/${repository}/issues/9/comments?per_page=100`,
+    [
+      { id: 91, body: marker },
+      { id: 92, body: `prefix\n${marker}\nsuffix` },
+    ],
+  );
+  duplicate.responses.set(
+    `/repos/${repository}/issues/4/comments?per_page=100`,
+    [],
+  );
+  await assert.rejects(
+    upsertEvidenceComments(duplicate, {
+      context: reportingContext(),
+      publication: publication(),
+      evidenceCommitSha: "e".repeat(40),
+    }),
+    /m[uú]ltiples|marcador/i,
+  );
+  assert.equal(
+    duplicate.calls.some((call) => call.method !== "GET"),
+    false,
+  );
+});
+
+test("scans bounded long unrelated comments without treating them as markers", async () => {
+  const api = new RecordingGitHubApi();
+  api.responses.set(`/repos/${repository}/issues/9/comments?per_page=100`, [
+    { id: 90, body: "x".repeat(10_000) },
+  ]);
+  api.responses.set(`/repos/${repository}/issues/4/comments?per_page=100`, []);
+  await upsertEvidenceComments(api, {
+    context: reportingContext(),
+    publication: publication(),
+    evidenceCommitSha: "e".repeat(40),
+  });
+  assert.equal(api.calls.filter((call) => call.method === "POST").length, 2);
+});
+
+test("sets preview-approved only on the exact candidate SHA", async () => {
+  const api = new RecordingGitHubApi();
+  const targetUrl = `https://github.com/${repository}/actions/runs/987`;
+  await setPreviewApprovalStatus(
+    api,
+    repository,
+    headSha,
+    "success",
+    targetUrl,
+  );
+  assert.deepEqual(api.calls, [
+    {
+      method: "POST",
+      path: `/repos/${repository}/statuses/${headSha}`,
+      body: {
+        state: "success",
+        context: "preview-approved",
+        description: "Preview y evidencia aprobadas por una persona",
+        target_url: targetUrl,
+      },
+    },
+  ]);
+
+  const invalid = new RecordingGitHubApi();
+  await assert.rejects(
+    setPreviewApprovalStatus(
+      invalid,
+      repository,
+      "short",
+      "success",
+      targetUrl,
+    ),
+    /SHA/i,
+  );
+  await assert.rejects(
+    setPreviewApprovalStatus(
+      invalid,
+      repository,
+      headSha,
+      "success",
+      "https://example.com/actions/runs/987",
+    ),
+    /URL|run|GitHub/i,
+  );
+  assert.deepEqual(invalid.calls, []);
+});
+
+test("rechecks the open PR head immediately before approval", async () => {
+  const api = new RecordingGitHubApi();
+  api.responses.set(`/repos/${repository}/pulls/9`, {
+    number: 9,
+    state: "open",
+    head: { sha: headSha },
+  });
+  await approvePreviewForCurrentPullRequest(api, reportingContext());
+  assert.deepEqual(
+    api.calls.map((call) => [call.method, call.path]),
+    [
+      ["GET", `/repos/${repository}/pulls/9`],
+      ["POST", `/repos/${repository}/statuses/${headSha}`],
+    ],
+  );
+
+  const changed = new RecordingGitHubApi();
+  changed.responses.set(`/repos/${repository}/pulls/9`, {
+    number: 9,
+    state: "open",
+    head: { sha: "c".repeat(40) },
+  });
+  await assert.rejects(
+    approvePreviewForCurrentPullRequest(changed, reportingContext()),
+    /cambi[oó]|head|SHA/i,
+  );
+  assert.equal(
+    changed.calls.some((call) => call.method === "POST"),
+    false,
+  );
 });
