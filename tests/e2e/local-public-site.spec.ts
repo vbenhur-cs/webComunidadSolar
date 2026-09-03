@@ -105,9 +105,19 @@ test("every public page runs from local source without failed resources or brows
         }
       });
 
-      for (let attempt = 0; attempt < 30; attempt += 1) {
-        if ((await page.locator("astro-island[ssr]").count()) === 0) break;
-        await page.waitForTimeout(100);
+      while (true) {
+        const pendingIslands = page.locator("astro-island[ssr]");
+        const pendingCount = await pendingIslands.count();
+        if (pendingCount === 0) break;
+
+        await pendingIslands.first().scrollIntoViewIfNeeded();
+        await expect
+          .poll(() => page.locator("astro-island[ssr]").count(), {
+            message:
+              "La isla visible debe hidratarse tras entrar en el viewport",
+            timeout: 5_000,
+          })
+          .toBeLessThan(pendingCount);
       }
 
       const structure = await page.evaluate(() => ({
