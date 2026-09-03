@@ -113,8 +113,9 @@ acelera, pero sigue dejando trazabilidad y revisión proporcional al riesgo.
 
 ### 6. Revisa el preview cuando se te solicite
 
-Cuando el cambio esté listo, el responsable compartirá una URL de preview. La
-persona solicitante y el aprobador deben revisar, como mínimo:
+CI valida el cambio, pero no crea una URL de preview automáticamente. Cuando
+el responsable prepare la versión de revisión, compartirá su URL. La persona
+solicitante y el aprobador deben revisar, como mínimo:
 
 - el texto, cifras, fechas, enlaces y CTA;
 - imágenes, créditos y textos alternativos;
@@ -151,7 +152,7 @@ en DNS, Raiola o el dominio principal.
 | En análisis | Se estima alcance, riesgo, SEO, privacidad y dependencia externa. | Responsable web / especialista |
 | Aprobada para desarrollo | Alcance y aprobador definidos. | Equipo de desarrollo |
 | En desarrollo | Existe una rama y una PR asociada. | Equipo de desarrollo |
-| En revisión de preview | CI ha validado el cambio y espera revisión funcional o editorial. | Solicitante / aprobador |
+| En revisión de preview | CI ha validado el cambio y existe una versión de revisión preparada. | Solicitante / aprobador |
 | Aprobada para publicación | Preview aceptada y requisitos de release completos. | Responsable de release |
 | Publicada | Se ha confirmado la entrega. | Responsable de release |
 | Cerrada sin cambio | No procede, está duplicada o no se recibió la información necesaria. | Responsable web |
