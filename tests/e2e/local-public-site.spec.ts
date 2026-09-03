@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 import { buildSitemap } from "../../src/lib/site/sitemap";
 
@@ -25,6 +25,52 @@ type RuntimeIssue = {
   kind: string;
   detail: string;
 };
+
+async function loadVisibleImages(page: Page): Promise<void> {
+  const images = page.locator("img:visible");
+  const imageCount = await images.count();
+
+  for (let index = 0; index < imageCount; index += 1) {
+    const image = images.nth(index);
+    await image.scrollIntoViewIfNeeded();
+    await expect
+      .poll(
+        () =>
+          image.evaluate((element) => {
+            const candidate = element as HTMLImageElement;
+            return candidate.complete && candidate.naturalWidth > 0;
+          }),
+        {
+          message:
+            "La imagen visible debe terminar de cargar tras entrar en el viewport",
+          timeout: 5_000,
+        },
+      )
+      .toBe(true);
+  }
+}
+
+async function hydrateVisibleIslands(page: Page): Promise<void> {
+  while (true) {
+    const pendingCount = await page.locator("astro-island[ssr]").count();
+    if (pendingCount === 0) return;
+
+    const visited = await page.evaluate(() => {
+      const island = document.querySelector("astro-island[ssr]");
+      if (!island) return false;
+      island.scrollIntoView({ block: "center" });
+      return true;
+    });
+    if (!visited) continue;
+
+    await expect
+      .poll(() => page.locator("astro-island[ssr]").count(), {
+        message: "La isla visible debe hidratarse tras entrar en el viewport",
+        timeout: 5_000,
+      })
+      .toBeLessThan(pendingCount);
+  }
+}
 
 test("every public page runs from local source without failed resources or browser errors", async ({
   page,
@@ -96,29 +142,8 @@ test("every public page runs from local source without failed resources or brows
         continue;
       }
 
-      await page.evaluate(async () => {
-        document.documentElement.style.scrollBehavior = "auto";
-        const step = Math.max(600, Math.floor(window.innerHeight * 0.8));
-        for (let y = 0; y < document.documentElement.scrollHeight; y += step) {
-          window.scrollTo(0, y);
-          await new Promise((resolve) => setTimeout(resolve, 40));
-        }
-      });
-
-      while (true) {
-        const pendingIslands = page.locator("astro-island[ssr]");
-        const pendingCount = await pendingIslands.count();
-        if (pendingCount === 0) break;
-
-        await pendingIslands.first().scrollIntoViewIfNeeded();
-        await expect
-          .poll(() => page.locator("astro-island[ssr]").count(), {
-            message:
-              "La isla visible debe hidratarse tras entrar en el viewport",
-            timeout: 5_000,
-          })
-          .toBeLessThan(pendingCount);
-      }
+      await loadVisibleImages(page);
+      await hydrateVisibleIslands(page);
 
       const structure = await page.evaluate(() => ({
         title: document.title.trim(),
