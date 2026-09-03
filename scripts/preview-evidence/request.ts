@@ -164,6 +164,14 @@ export function parseEvidenceRequest(
   }
   const pathIssue = issueFromPath(requestPath);
   const parsed = parseSafeYaml(contents);
+  return validateEvidenceRequestValue(parsed, requestPath, pathIssue);
+}
+
+export function validateEvidenceRequestValue(
+  parsed: unknown,
+  requestPath: string,
+  knownPathIssue = issueFromPath(requestPath),
+): EvidenceRequest {
   if (!isRecord(parsed)) {
     throw new TypeError("La solicitud de evidencia debe ser un objeto YAML");
   }
@@ -179,7 +187,7 @@ export function parseEvidenceRequest(
     throw new TypeError("La solicitud de evidencia no cumple el schema");
   }
   const issue = requireIssue(parsed.issue);
-  if (issue !== pathIssue) {
+  if (issue !== knownPathIssue) {
     throw new TypeError("La issue no coincide con el path de evidencia");
   }
   const scope = requireScope(parsed.scope);
@@ -196,6 +204,45 @@ export function parseEvidenceRequest(
     expectedStatus: requireExpectedStatus(parsed.expected_status),
     viewports: requireViewports(parsed.viewports),
   };
+}
+
+export function validateNormalizedEvidenceRequest(
+  value: unknown,
+  requestPath: string,
+): EvidenceRequest {
+  if (!isRecord(value)) {
+    throw new TypeError("El request normalizado debe ser un objeto");
+  }
+  const normalizedKeys = new Set([
+    "schemaVersion",
+    "issue",
+    "scope",
+    "route",
+    "selector",
+    "expectedStatus",
+    "viewports",
+  ]);
+  assertExactKeys(value, normalizedKeys, "request normalizado");
+  if (!isRecord(value.expectedStatus)) {
+    throw new TypeError("El estado HTTP normalizado es inválido");
+  }
+  assertExactKeys(
+    value.expectedStatus,
+    new Set(["base", "candidate"]),
+    "estado HTTP normalizado",
+  );
+  return validateEvidenceRequestValue(
+    {
+      schema_version: value.schemaVersion,
+      issue: value.issue,
+      scope: value.scope,
+      route: value.route,
+      selector: value.selector,
+      expected_status: value.expectedStatus,
+      viewports: value.viewports,
+    },
+    requestPath,
+  );
 }
 
 function isInside(root: string, candidate: string): boolean {

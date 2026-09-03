@@ -338,7 +338,7 @@ export interface PullRequestRunContext {
 }
 ```
 
-- [ ] **Step 1: Write failing resolver tests with an in-memory API**
+- [x] **Step 1: Write failing resolver tests with an in-memory API**
 
 Cover one valid internal PR and reject: non-success conclusion,
 non-`pull_request` source event, fork, base branch other than `main`, closed PR,
@@ -349,7 +349,7 @@ and any `drizzle/` change.
 Use a payload whose authoritative values disagree with untrusted PR body text
 and assert the resolver keeps API SHAs.
 
-- [ ] **Step 2: Run the resolver test and confirm RED**
+- [x] **Step 2: Run the resolver test and confirm RED**
 
 ```bash
 npm run test:unit -- tests/preview-evidence/github.test.ts
@@ -357,7 +357,7 @@ npm run test:unit -- tests/preview-evidence/github.test.ts
 
 Expected: FAIL because `github.ts` does not exist.
 
-- [ ] **Step 3: Implement bounded GitHub API and payload validation**
+- [x] **Step 3: Implement bounded GitHub API and payload validation**
 
 Validate all objects as closed projections. Fetch the PR, up to three pages of
 100 files, raw request contents for `headSha`, and the issue. Decode GitHub's
@@ -367,15 +367,15 @@ Call `parseEvidenceRequest`; never execute code from the candidate checkout.
 `writeGitHubOutputs` uses the documented random delimiter form and rejects
 keys outside `/^[a-z][a-z0-9_]{0,62}$/` and values containing NUL.
 
-- [ ] **Step 4: Add strict CLI commands**
+- [x] **Step 4: Add strict CLI commands**
 
-`cli.ts` accepts the following exact commands and rejects all others before
-reading environment or files:
+At this stage `cli.ts` accepts the following exact commands and rejects all
+others before reading environment or files. Task 9 adds `resolve-main` only
+after its main-run tests exist:
 
 ```text
-resolve-pr --event <path> --output <path>
-resolve-main --event <path> --output <path>
-validate-request --path <path>
+resolve-pr --event <path> --output <path> --context <path>
+validate-request --path <path> --root <path>
 ```
 
 `resolve-pr` requires `GITHUB_TOKEN` and `GITHUB_REPOSITORY`; it writes
@@ -384,7 +384,7 @@ and a path to a sanitized context JSON. That JSON embeds only the normalized
 `EvidenceRequest`, never the raw YAML or PR body, so later jobs do not need a
 candidate checkout to learn the route.
 
-- [ ] **Step 5: Run tests and a malformed CLI smoke test**
+- [x] **Step 5: Run tests and a malformed CLI smoke test**
 
 ```bash
 npm run test:unit -- tests/preview-evidence/github.test.ts
@@ -393,7 +393,7 @@ npm run preview:evidence -- unknown-command
 
 Expected: tests PASS; malformed command exits nonzero with a fixed usage error.
 
-- [ ] **Step 6: Commit trusted context resolution**
+- [x] **Step 6: Commit trusted context resolution**
 
 ```bash
 git add scripts/preview-evidence/github.ts scripts/preview-evidence/cli.ts tests/preview-evidence/github.test.ts
