@@ -216,7 +216,7 @@ git commit -m "feat: validate preview evidence requests"
 - `PreviewProfileArtifact` contains only `path`, `sha256`, `workerName`,
   `databaseName`, `databaseId` and `indexable: false`.
 
-- [ ] **Step 1: Write failing preview-profile tests**
+- [x] **Step 1: Write failing preview-profile tests**
 
 Extend the existing tests and add a focused test:
 
@@ -248,7 +248,7 @@ Also prove that a valid preview config preserves
 `materializePreviewProfile` removes its decoded 0600 temporary even when
 validation fails.
 
-- [ ] **Step 2: Run focused tests and confirm RED**
+- [x] **Step 2: Run focused tests and confirm RED**
 
 ```bash
 npm run test:unit -- tests/server/cloudflare-config.test.ts tests/preview-evidence/profile.test.ts
@@ -257,7 +257,7 @@ npm run test:unit -- tests/server/cloudflare-config.test.ts tests/preview-eviden
 Expected: FAIL because preview-purpose validation and materialization do not
 exist.
 
-- [ ] **Step 3: Add preview-purpose sanitization**
+- [x] **Step 3: Add preview-purpose sanitization**
 
 Extend `SanitizedProfile` with optional literal-true routing fields and add a
 purpose option:
@@ -274,7 +274,7 @@ When `requirePreviewRouting` is true, require `workers_dev === true`,
 worker name `comunidad-solar-preview`; preserve the two booleans in the
 sanitized output. Keep existing generic and dry-run behavior unchanged.
 
-- [ ] **Step 4: Materialize the encoded GitHub secret without logging it**
+- [x] **Step 4: Materialize the encoded GitHub secret without logging it**
 
 `materializePreviewProfile` must:
 
@@ -287,7 +287,7 @@ sanitized output. Keep existing generic and dry-run behavior unchanged.
 
 No thrown error may contain the encoded or decoded bytes.
 
-- [ ] **Step 5: Run focused and existing Cloudflare tests**
+- [x] **Step 5: Run focused and existing Cloudflare tests**
 
 ```bash
 npm run test:unit -- tests/server/cloudflare-config.test.ts tests/preview-evidence/profile.test.ts tests/server/cloudflare-dry-run.test.ts
@@ -296,7 +296,7 @@ npm run deploy:dry
 
 Expected: PASS and `CLOUDFLARE_DEPLOY_DRY_OK` from the dry run.
 
-- [ ] **Step 6: Commit the preview profile boundary**
+- [x] **Step 6: Commit the preview profile boundary**
 
 ```bash
 git add scripts/prepare-cloudflare-config.ts scripts/preview-evidence/profile.ts tests/server/cloudflare-config.test.ts tests/preview-evidence/profile.test.ts

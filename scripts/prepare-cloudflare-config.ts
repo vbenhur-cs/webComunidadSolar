@@ -56,7 +56,9 @@ interface SanitizedProfile {
   }>;
   main: string;
   name: string;
+  preview_urls?: true;
   vars: { SITE_INDEXABLE: "false" | "true" };
+  workers_dev?: true;
 }
 
 interface SanitizedConfig extends SanitizedProfile {
@@ -66,6 +68,8 @@ interface SanitizedConfig extends SanitizedProfile {
 interface SanitizeCloudflareConfigOptions {
   /** A local dry validation can inspect the repository's intentionally local D1 id. */
   allowLocalD1?: boolean;
+  /** A PR preview must stay on workers.dev, expose version aliases, and be noindex. */
+  requirePreviewRouting?: boolean;
 }
 
 function isRecord(value: unknown): value is JsonRecord {
@@ -385,6 +389,20 @@ async function sanitizeProfile(
   );
   const indexable = configuredIndexability(config.vars);
   const compatibility = configuredCompatibility(config);
+  if (options.requirePreviewRouting) {
+    if (name !== "comunidad-solar-preview") {
+      throw new Error("El perfil preview requiere el Worker aprobado");
+    }
+    if (config.workers_dev !== true) {
+      throw new Error("El perfil preview requiere workers_dev=true");
+    }
+    if (config.preview_urls !== true) {
+      throw new Error("El perfil preview requiere preview_urls=true");
+    }
+    if (indexable) {
+      throw new Error("El perfil preview no puede ser indexable");
+    }
+  }
   return {
     assets: {
       binding: "ASSETS",
@@ -402,7 +420,9 @@ async function sanitizeProfile(
     ...compatibility,
     main: rebasedMain,
     name,
+    ...(options.requirePreviewRouting ? { preview_urls: true as const } : {}),
     vars: { SITE_INDEXABLE: indexable ? "true" : "false" },
+    ...(options.requirePreviewRouting ? { workers_dev: true as const } : {}),
   };
 }
 
@@ -427,13 +447,13 @@ async function sanitizeSelectedConfig(
   effective: SanitizedProfile;
   indexable: boolean;
 }> {
-  const base = await sanitizeProfile(
-    selected.base,
-    projectRoot,
-    artifactRoot,
-    options,
-  );
   if (selected.environment === null || selected.rawEnvironment === null) {
+    const base = await sanitizeProfile(
+      selected.base,
+      projectRoot,
+      artifactRoot,
+      options,
+    );
     return {
       config: base,
       effective: base,
@@ -441,6 +461,14 @@ async function sanitizeSelectedConfig(
     };
   }
   assertNamedEnvironmentShape(selected.rawEnvironment);
+  const base = await sanitizeProfile(
+    selected.base,
+    projectRoot,
+    artifactRoot,
+    options.requirePreviewRouting
+      ? { ...options, requirePreviewRouting: false }
+      : options,
+  );
   const effective = await sanitizeProfile(
     selected.effective,
     projectRoot,
@@ -450,6 +478,9 @@ async function sanitizeSelectedConfig(
   return {
     config: {
       ...base,
+      ...(options.requirePreviewRouting
+        ? { preview_urls: true as const, workers_dev: true as const }
+        : {}),
       env: {
         [selected.environment]: {
           d1_databases: effective.d1_databases,
@@ -680,6 +711,21 @@ export async function prepareCloudflareConfig(
   options: PrepareCloudflareConfigOptions = {},
 ): Promise<PreparedConfig> {
   return prepareCloudflareConfigForPurpose(inputPath, environment, options);
+}
+
+/**
+ * Validates the dedicated public, noindex Workers Preview destination used by
+ * pull requests. It preserves only the two routing flags needed for version
+ * aliases and never accepts the local D1 id.
+ */
+export async function prepareCloudflarePreviewConfig(
+  inputPath: string,
+  environment?: string,
+  options: PrepareCloudflareConfigOptions = {},
+): Promise<PreparedConfig> {
+  return prepareCloudflareConfigForPurpose(inputPath, environment, options, {
+    requirePreviewRouting: true,
+  });
 }
 
 /**
