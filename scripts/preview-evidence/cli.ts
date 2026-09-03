@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { canonicalJson } from "./domain.ts";
+import { createSealedBundle, verifySealedBundle } from "./bundle.ts";
 import {
   createGitHubApi,
   type GitHubApi,
@@ -79,7 +80,12 @@ export async function runPreviewEvidenceCli(
   const [command, ...rest] = argv;
   const stdout =
     dependencies.stdout ?? ((message: string) => process.stdout.write(message));
-  if (command !== "resolve-pr" && command !== "validate-request") {
+  if (
+    command !== "resolve-pr" &&
+    command !== "validate-request" &&
+    command !== "seal-bundle" &&
+    command !== "verify-bundle"
+  ) {
     throw new TypeError(
       "Comando preview:evidence desconocido; consulte el uso",
     );
@@ -90,6 +96,49 @@ export async function runPreviewEvidenceCli(
     const request = await loadEvidenceRequest(flags["--path"], flags["--root"]);
     stdout(
       `EVIDENCE_REQUEST_OK issue=${request.issue} route=${request.route}\n`,
+    );
+    return;
+  }
+
+  if (command === "seal-bundle") {
+    const flags = parseFlags(rest, [
+      "--source",
+      "--output",
+      "--role",
+      "--sha",
+      "--profile",
+      "--profile-sha",
+    ]);
+    const manifest = await createSealedBundle({
+      sourceRoot: flags["--source"],
+      outputRoot: flags["--output"],
+      role: flags["--role"] as "base" | "candidate" | "release",
+      sourceSha: flags["--sha"],
+      profilePath: flags["--profile"],
+      profileSha256: flags["--profile-sha"],
+    });
+    stdout(
+      `BUNDLE_SEALED_OK role=${manifest.role} sha256=${manifest.bundleSha256}\n`,
+    );
+    return;
+  }
+
+  if (command === "verify-bundle") {
+    const flags = parseFlags(rest, [
+      "--root",
+      "--role",
+      "--sha",
+      "--profile",
+      "--profile-sha",
+    ]);
+    const manifest = await verifySealedBundle(flags["--root"], {
+      role: flags["--role"] as "base" | "candidate" | "release",
+      sourceSha: flags["--sha"],
+      profilePath: flags["--profile"],
+      profileSha256: flags["--profile-sha"],
+    });
+    stdout(
+      `BUNDLE_VERIFIED_OK role=${manifest.role} sha256=${manifest.bundleSha256}\n`,
     );
     return;
   }

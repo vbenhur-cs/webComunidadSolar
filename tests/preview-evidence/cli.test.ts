@@ -6,6 +6,7 @@ import test from "node:test";
 
 import { type GitHubApi } from "../../scripts/preview-evidence/github.ts";
 import { runPreviewEvidenceCli } from "../../scripts/preview-evidence/cli.ts";
+import { sha256 } from "../../scripts/preview-evidence/domain.ts";
 
 const repository = "vbenhur-cs/webComunidadSolar";
 const baseSha = "a".repeat(40);
@@ -159,6 +160,123 @@ test("validate-request checks the real file without GitHub credentials", async (
     assert.deepEqual(messages, [
       "EVIDENCE_REQUEST_OK issue=4 route=/pruebas/guia/\n",
     ]);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("seal-bundle and verify-bundle operate on the same exact identity", async () => {
+  const root = await mkdtemp(join(tmpdir(), "preview-cli-bundle-"));
+  try {
+    const source = join(root, "source");
+    const output = join(root, "bundle");
+    const profileDirectory = join(source, ".artifacts", "config");
+    const { mkdir } = await import("node:fs/promises");
+    await mkdir(join(source, "dist", "server"), { recursive: true });
+    await mkdir(join(source, "dist", "client"), { recursive: true });
+    await mkdir(join(source, "drizzle"));
+    await mkdir(profileDirectory, { recursive: true });
+    const databaseId = "11111111-2222-4333-8444-555555555555";
+    const profile = `${JSON.stringify({
+      name: "comunidad-solar-preview",
+      main: "../../src/worker.ts",
+      compatibility_date: "2026-08-21",
+      compatibility_flags: ["nodejs_compat"],
+      workers_dev: true,
+      preview_urls: true,
+      assets: {
+        binding: "ASSETS",
+        directory: "../../dist",
+        run_worker_first: true,
+      },
+      d1_databases: [
+        {
+          binding: "DB",
+          database_name: "comunidad-solar-preview",
+          database_id: databaseId,
+          migrations_dir: "../../drizzle",
+        },
+      ],
+      vars: { SITE_INDEXABLE: "false" },
+    })}\n`;
+    const profilePath = join(profileDirectory, "preview.json");
+    await writeFile(profilePath, profile);
+    await writeFile(
+      join(source, "dist", "server", "wrangler.json"),
+      JSON.stringify({
+        topLevelName: "comunidad-solar-preview",
+        name: "comunidad-solar-preview",
+        main: "entry.mjs",
+        no_bundle: true,
+        compatibility_date: "2026-08-21",
+        compatibility_flags: ["nodejs_compat"],
+        assets: {
+          binding: "ASSETS",
+          directory: "../client",
+          run_worker_first: true,
+        },
+        vars: { SITE_INDEXABLE: "false" },
+        d1_databases: [
+          {
+            binding: "DB",
+            database_name: "comunidad-solar-preview",
+            database_id: databaseId,
+            migrations_dir: "../../drizzle",
+          },
+        ],
+        routes: [],
+        triggers: {},
+        services: [],
+        durable_objects: { bindings: [] },
+        kv_namespaces: [{ binding: "SESSION" }],
+        images: { binding: "IMAGES" },
+        secrets_store_secrets: [],
+      }),
+    );
+    await writeFile(
+      join(source, "dist", "server", "entry.mjs"),
+      "export default {};\n",
+    );
+    await writeFile(join(source, "dist", "client", "index.html"), "ok\n");
+    await writeFile(join(source, "drizzle", "0000.sql"), "SELECT 1;\n");
+    const messages: string[] = [];
+
+    const shared = [
+      "--role",
+      "candidate",
+      "--sha",
+      headSha,
+      "--profile",
+      profilePath,
+      "--profile-sha",
+      sha256(profile),
+    ];
+    await runPreviewEvidenceCli(
+      ["seal-bundle", "--source", source, "--output", output, ...shared],
+      {},
+      { stdout: (message) => messages.push(message) },
+    );
+    await runPreviewEvidenceCli(
+      ["verify-bundle", "--root", output, ...shared],
+      {},
+      { stdout: (message) => messages.push(message) },
+    );
+
+    assert.equal(
+      messages.every((message) =>
+        /BUNDLE_(?:SEALED|VERIFIED)_OK/u.test(message),
+      ),
+      true,
+    );
+    assert.equal(
+      typeof JSON.parse(
+        await readFile(
+          join(output, ".preview-evidence", "bundle-manifest.json"),
+          "utf8",
+        ),
+      ).bundleSha256,
+      "string",
+    );
   } finally {
     await rm(root, { recursive: true, force: true });
   }

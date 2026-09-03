@@ -420,7 +420,7 @@ git commit -m "feat: resolve trusted preview workflow context"
 - `BundleManifest.files` is sorted and each entry contains `path`, `bytes`,
   `mode` and `sha256`.
 
-- [ ] **Step 1: Write failing bundle tests**
+- [x] **Step 1: Write failing bundle tests**
 
 Build a temporary fixture with `dist/server/wrangler.json`, an entry module,
 `dist/client/index.html` and `drizzle/0000.sql`. Prove deterministic output and
@@ -434,7 +434,7 @@ Assert topology rejects routes/custom domains, a worker name other than
 `no_bundle !== true`, main other than `entry.mjs` and assets other than
 `../client`.
 
-- [ ] **Step 2: Run focused tests and confirm RED**
+- [x] **Step 2: Run focused tests and confirm RED**
 
 ```bash
 npm run test:unit -- tests/preview-evidence/bundle.test.ts
@@ -442,7 +442,7 @@ npm run test:unit -- tests/preview-evidence/bundle.test.ts
 
 Expected: FAIL because bundle sealing is absent.
 
-- [ ] **Step 3: Copy only approved roots by bytes**
+- [x] **Step 3: Copy only approved roots by bytes**
 
 Walk `dist` and `drizzle` using `lstat` without following links. Require regular
 files with link count 1, mode 0644 or 0755, portable NFC paths and the fixed
@@ -453,7 +453,7 @@ bytes.
 Write `.preview-evidence/bundle-manifest.json` as
 `${canonicalJson(manifest)}\n` only after every file succeeds.
 
-- [ ] **Step 4: Validate emitted Wrangler topology**
+- [x] **Step 4: Validate emitted Wrangler topology**
 
 Parse `dist/server/wrangler.json` as JSON and compare its effective worker, D1,
 assets and indexability to the sanitized profile. Reject deploy routes,
@@ -461,7 +461,7 @@ triggers, service bindings, extra D1/KV namespaces other than generated
 `SESSION`, and any secrets-store binding. Permit the generated `IMAGES` binding
 and record it explicitly in the manifest.
 
-- [ ] **Step 5: Add bundle CLI commands and verify**
+- [x] **Step 5: Add bundle CLI commands and verify**
 
 Add:
 
@@ -474,14 +474,14 @@ Run:
 
 ```bash
 npm run test:unit -- tests/preview-evidence/bundle.test.ts
+npm run test:unit -- tests/preview-evidence/cli.test.ts
 npm run build
-npm run preview:evidence -- seal-bundle --source . --output .artifacts/preview-bundle --role candidate --sha fd93f1857ba7739dcfc89ef178eb9e91650c5afb --profile .artifacts/config/missing.json --profile-sha 0000000000000000000000000000000000000000000000000000000000000000
 ```
 
-The final smoke command is expected to fail safely because the deliberately
-nonexistent profile is rejected before copying; it must not alter `dist`.
+The CLI unit test creates an isolated source/profile fixture outside its output,
+then proves `seal-bundle` and `verify-bundle` accept only the same exact identity.
 
-- [ ] **Step 6: Commit bundle sealing**
+- [x] **Step 6: Commit bundle sealing**
 
 ```bash
 git add scripts/preview-evidence/bundle.ts scripts/preview-evidence/cli.ts tests/preview-evidence/bundle.test.ts
