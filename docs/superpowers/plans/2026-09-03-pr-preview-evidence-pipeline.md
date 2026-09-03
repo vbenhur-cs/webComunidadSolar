@@ -102,7 +102,7 @@ export type AllowedHttpStatus = 200 | 301 | 302 | 307 | 308 | 404 | 410;
 - Later tasks consume `EvidenceRequest`, `canonicalJson` and `sha256` without
   redefining them.
 
-- [ ] **Step 1: Write the failing request-contract tests**
+- [x] **Step 1: Write the failing request-contract tests**
 
 Create table-driven tests that prove canonical key conversion and every closed
 boundary:
@@ -134,7 +134,7 @@ selector on `page`, absent selector on `section`, selectors longer than 160,
 and private/API route prefixes. Accept only `#id`, `.class` and a single
 `[data-evidence-id='lowercase-kebab']` selector form.
 
-- [ ] **Step 2: Run the focused test and confirm RED**
+- [x] **Step 2: Run the focused test and confirm RED**
 
 Run:
 
@@ -144,7 +144,7 @@ npm run test:unit -- tests/preview-evidence/request.test.ts
 
 Expected: FAIL because `scripts/preview-evidence/request.ts` does not exist.
 
-- [ ] **Step 3: Implement the minimal closed parser and domain helpers**
+- [x] **Step 3: Implement the minimal closed parser and domain helpers**
 
 Use `yaml.parseDocument` with `uniqueKeys: true`, reject `doc.errors`, reject
 aliases/custom tags by walking `doc.contents`, then project from snake_case to
@@ -167,7 +167,7 @@ export const EVIDENCE_VIEWPORTS = [
 
 All errors use fixed Spanish messages and never interpolate YAML values.
 
-- [ ] **Step 4: Add valid versioned examples and the package command**
+- [x] **Step 4: Add valid versioned examples and the package command**
 
 The examples use issue `1`, public route `/`, base/candidate status `200`, and
 for the section example selector `[data-evidence-id='hero']`. Add:
@@ -179,7 +179,7 @@ for the section example selector `[data-evidence-id='hero']`. Add:
 Do not name either example `issue-<N>.yaml`, so a workflow never mistakes them
 for a live request.
 
-- [ ] **Step 5: Run focused tests and formatting**
+- [x] **Step 5: Run focused tests and formatting**
 
 Run:
 
@@ -190,7 +190,7 @@ npx prettier --check scripts/preview-evidence tests/preview-evidence evidence/re
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit the request contract**
+- [x] **Step 6: Commit the request contract**
 
 ```bash
 git add package.json scripts/preview-evidence/domain.ts scripts/preview-evidence/request.ts tests/preview-evidence/request.test.ts evidence/requests/example-page.yaml evidence/requests/example-section.yaml
