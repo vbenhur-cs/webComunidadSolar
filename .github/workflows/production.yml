@@ -1,0 +1,396 @@
+name: Production release
+
+on:
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: SHA de main aprobado para producción
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  authorize:
+    if: github.ref == 'refs/heads/main'
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+      statuses: read
+    outputs:
+      source_sha: ${{ steps.authorization.outputs.source_sha }}
+      pr_number: ${{ steps.authorization.outputs.pr_number }}
+      issue_number: ${{ steps.authorization.outputs.issue_number }}
+      request_path: ${{ steps.authorization.outputs.request_path }}
+      context_sha256: ${{ steps.authorization.outputs.context_sha256 }}
+    steps:
+      - name: Check out the trusted production controller
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Install the trusted controller
+        run: npm ci --ignore-scripts
+      - name: Fail closed and authorize the exact evidenced SHA
+        id: authorization
+        env:
+          PRODUCTION_ENABLED: ${{ vars.PRODUCTION_ENABLED }}
+          REQUESTED_SHA: ${{ github.event.inputs.sha }}
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/production-context"
+          npm run preview:evidence -- authorize-production \
+            --sha "$REQUESTED_SHA" \
+            --output "$GITHUB_OUTPUT" \
+            --context "$RUNNER_TEMP/production-context/context.json"
+      - name: Upload the sealed production authorization
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: production-context-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/production-context/context.json
+          if-no-files-found: error
+          retention-days: 30
+
+  profile:
+    needs: [authorize]
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      profile_relative: ${{ steps.profile.outputs.profile_relative }}
+      profile_sha256: ${{ steps.profile.outputs.profile_sha256 }}
+    steps:
+      - name: Check out the trusted production controller
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Install the trusted controller
+        run: npm ci --ignore-scripts
+      - name: Materialize only the sanitized indexable production profile
+        id: profile
+        env:
+          CLOUDFLARE_PRODUCTION_CONFIG_B64: ${{ secrets.CLOUDFLARE_PRODUCTION_CONFIG_B64 }}
+        run: |
+          npm run preview:evidence -- materialize-production-profile \
+            --output "$GITHUB_WORKSPACE/.artifacts/production-profile" \
+            --root "$GITHUB_WORKSPACE" \
+            --github-output "$GITHUB_OUTPUT"
+      - name: Upload the sanitized production profile
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: production-profile-${{ github.run_id }}-${{ github.run_attempt }}
+          path: .artifacts/production-profile
+          if-no-files-found: error
+          retention-days: 1
+
+  build:
+    needs: [authorize, profile]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the trusted production controller
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: controller
+          persist-credentials: false
+      - name: Check out the exact authorized main source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.authorize.outputs.source_sha }}
+          path: source
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: controller/.nvmrc
+          cache: npm
+          cache-dependency-path: |
+            controller/package-lock.json
+            source/package-lock.json
+      - name: Install the trusted controller
+        working-directory: controller
+        run: npm ci --ignore-scripts
+      - name: Install source dependencies without lifecycle scripts
+        working-directory: source
+        run: npm ci --ignore-scripts
+      - name: Download the sanitized production profile
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: production-profile-${{ github.run_id }}-${{ github.run_attempt }}
+          path: source/.artifacts/production-profile
+      - name: Build the exact authorized source without credentials
+        working-directory: source
+        env:
+          PROFILE_RELATIVE: ${{ needs.profile.outputs.profile_relative }}
+        run: |
+          test -f ".artifacts/production-profile/$PROFILE_RELATIVE"
+          CLOUDFLARE_CONFIG_PATH="./.artifacts/production-profile/$PROFILE_RELATIVE" npm run build
+      - name: Normalize portable bundle file permissions
+        working-directory: source
+        run: find dist drizzle -type f -exec chmod 0644 {} +
+      - name: Seal the exact production bundle
+        working-directory: controller
+        env:
+          SOURCE_SHA: ${{ needs.authorize.outputs.source_sha }}
+          PROFILE_RELATIVE: ${{ needs.profile.outputs.profile_relative }}
+          PROFILE_SHA256: ${{ needs.profile.outputs.profile_sha256 }}
+        run: |
+          npm run preview:evidence -- seal-bundle \
+            --source "$GITHUB_WORKSPACE/source" \
+            --output "$RUNNER_TEMP/bundle-production" \
+            --role release \
+            --sha "$SOURCE_SHA" \
+            --profile "$GITHUB_WORKSPACE/source/.artifacts/production-profile/$PROFILE_RELATIVE" \
+            --profile-sha "$PROFILE_SHA256" \
+            --target production
+      - name: Upload the sealed production bundle
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: production-bundle-${{ needs.authorize.outputs.source_sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/bundle-production
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1
+
+  deploy:
+    needs: [authorize, profile, build]
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the trusted production controller
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: controller
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: controller/.nvmrc
+          cache: npm
+          cache-dependency-path: controller/package-lock.json
+      - name: Install the trusted controller
+        working-directory: controller
+        run: npm ci --ignore-scripts
+      - name: Download the sealed production authorization
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: production-context-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/production-context
+      - name: Download the sanitized production profile
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: production-profile-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/production-profile
+      - name: Download the sealed production bundle
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: production-bundle-${{ needs.authorize.outputs.source_sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/bundle-production
+      - name: Verify the production bundle before credentials
+        working-directory: controller
+        env:
+          SOURCE_SHA: ${{ needs.authorize.outputs.source_sha }}
+          PROFILE_RELATIVE: ${{ needs.profile.outputs.profile_relative }}
+          PROFILE_SHA256: ${{ needs.profile.outputs.profile_sha256 }}
+        run: |
+          npm run preview:evidence -- verify-bundle \
+            --root "$RUNNER_TEMP/bundle-production" \
+            --role release \
+            --sha "$SOURCE_SHA" \
+            --profile "$RUNNER_TEMP/production-profile/$PROFILE_RELATIVE" \
+            --profile-sha "$PROFILE_SHA256" \
+            --target production
+      - name: Reauthorize immediately before production credentials
+        working-directory: controller
+        env:
+          PRODUCTION_ENABLED: ${{ vars.PRODUCTION_ENABLED }}
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          CONTEXT_SHA256: ${{ needs.authorize.outputs.context_sha256 }}
+        run: |
+          npm run preview:evidence -- reauthorize-production \
+            --context "$RUNNER_TEMP/production-context/context.json" \
+            --context-sha "$CONTEXT_SHA256"
+      - name: Upload and deploy the same exact production version
+        working-directory: controller
+        env:
+          CLOUDFLARE_PRODUCTION_ACCOUNT_ID: ${{ vars.CLOUDFLARE_PRODUCTION_ACCOUNT_ID }}
+          CLOUDFLARE_PRODUCTION_API_TOKEN: ${{ secrets.CLOUDFLARE_PRODUCTION_API_TOKEN }}
+          CONTEXT_SHA256: ${{ needs.authorize.outputs.context_sha256 }}
+          PROFILE_RELATIVE: ${{ needs.profile.outputs.profile_relative }}
+          PROFILE_SHA256: ${{ needs.profile.outputs.profile_sha256 }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/production-deployment"
+          npm run preview:evidence -- upload-production-version \
+            --bundle "$RUNNER_TEMP/bundle-production" \
+            --profile "$RUNNER_TEMP/production-profile/$PROFILE_RELATIVE" \
+            --profile-sha "$PROFILE_SHA256" \
+            --context "$RUNNER_TEMP/production-context/context.json" \
+            --context-sha "$CONTEXT_SHA256" \
+            --output "$RUNNER_TEMP/production-deployment/version.json"
+          npm run preview:evidence -- deploy-production-version \
+            --bundle "$RUNNER_TEMP/bundle-production" \
+            --profile "$RUNNER_TEMP/production-profile/$PROFILE_RELATIVE" \
+            --profile-sha "$PROFILE_SHA256" \
+            --context "$RUNNER_TEMP/production-context/context.json" \
+            --context-sha "$CONTEXT_SHA256" \
+            --descriptor "$RUNNER_TEMP/production-deployment/version.json" \
+            --rollback "$RUNNER_TEMP/production-deployment/rollback.json"
+      - name: Upload the sanitized production version descriptor
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: production-version-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/production-deployment/version.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Upload the rollback descriptor
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: production-rollback-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/production-deployment/rollback.json
+          if-no-files-found: error
+          retention-days: 90
+
+  smoke:
+    needs: [authorize, deploy]
+    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the trusted production controller
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Install the trusted controller
+        run: npm ci --ignore-scripts
+      - name: Download the sealed production authorization
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: production-context-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/production-context
+      - name: Download the production version descriptor
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: production-version-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/production-deployment
+      - name: Download the rollback descriptor
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: production-rollback-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/production-deployment
+      - name: Smoke the exact configured production origin
+        env:
+          CLOUDFLARE_PRODUCTION_URL: ${{ vars.CLOUDFLARE_PRODUCTION_URL }}
+          CONTEXT_SHA256: ${{ needs.authorize.outputs.context_sha256 }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/production-smoke"
+          npm run preview:evidence -- smoke-production \
+            --context "$RUNNER_TEMP/production-context/context.json" \
+            --context-sha "$CONTEXT_SHA256" \
+            --descriptor "$RUNNER_TEMP/production-deployment/version.json" \
+            --rollback "$RUNNER_TEMP/production-deployment/rollback.json" \
+            --output "$RUNNER_TEMP/production-smoke/manifest.json" \
+            --run-attempt "${{ github.run_attempt }}"
+      - name: Upload the production smoke record
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: production-smoke-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/production-smoke/manifest.json
+          if-no-files-found: error
+          retention-days: 90
+
+  evidence:
+    needs: [authorize, smoke]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    concurrency:
+      group: evidence-write-${{ github.repository }}
+      cancel-in-progress: false
+    steps:
+      - name: Check out the trusted production controller
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: controller
+          persist-credentials: false
+      - name: Check out the append-only evidence branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: evidence
+          path: evidence
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: controller/.nvmrc
+          cache: npm
+          cache-dependency-path: controller/package-lock.json
+      - name: Install the trusted controller
+        working-directory: controller
+        run: npm ci --ignore-scripts
+      - name: Download the production smoke record
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: production-smoke-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/production-smoke
+      - name: Publish append-only production evidence locally
+        id: publish
+        working-directory: controller
+        run: |
+          npm run preview:evidence -- publish-production-evidence \
+            --smoke "$RUNNER_TEMP/production-smoke/manifest.json" \
+            --checkout "$GITHUB_WORKSPACE/evidence" \
+            --github-output "$GITHUB_OUTPUT"
+      - name: Commit and push only the new production manifest
+        if: steps.publish.outputs.added_count != '0'
+        env:
+          ADDED_PATH: ${{ steps.publish.outputs.added_path }}
+          COMMIT_MESSAGE: ${{ steps.publish.outputs.commit_message }}
+        run: |
+          test -n "$ADDED_PATH"
+          git -C evidence config user.name "github-actions[bot]"
+          git -C evidence config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C evidence add -- "$ADDED_PATH"
+          git -C evidence diff --cached --quiet && exit 1
+          git -C evidence commit -m "$COMMIT_MESSAGE"
+          git -C evidence push origin HEAD:evidence

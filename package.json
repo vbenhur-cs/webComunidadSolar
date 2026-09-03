@@ -30,6 +30,7 @@
     "verify:server": "tsx scripts/verify-server.ts",
     "preview:cloudflare": "tsx scripts/prepare-cloudflare-config.ts",
     "verify:independent": "tsx scripts/verify-independent.ts",
+    "preview:evidence": "tsx scripts/preview-evidence/cli.ts",
     "ingest": "tsx src/ingest/cli.ts",
     "ingest:fixture": "tsx tests/fixtures/ingestion/run-e2e.ts",
     "verify:ingestion": "tsx scripts/verify-ingestion.ts",
