@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto";
+import { constants as fsConstants } from "node:fs";
 import {
   lstat,
   link,
   mkdir,
   open,
-  readFile,
   realpath,
   rename,
   unlink,
@@ -99,6 +99,8 @@ export interface StateStoreOptions extends IngestPathOptions {
     afterRecoveryGuardAcquired?: () => Promise<void>;
     /** Deterministic boundary before a durable owner file becomes visible. */
     beforeOwnerFilePublished?: (path: string) => Promise<void>;
+    /** Deterministic boundary after a regular file is admitted for reading. */
+    afterRegularFileAdmitted?: (path: string) => Promise<void>;
   };
 }
 
@@ -194,21 +196,40 @@ function assertChangeRecord(
   }
 }
 
-async function readRegularFile(path: string): Promise<Uint8Array | null> {
+async function readRegularFile(
+  path: string,
+  afterAdmitted?: (path: string) => Promise<void>,
+): Promise<Uint8Array | null> {
+  let handle;
   try {
-    const entry = await lstat(path);
-    if (entry.isSymbolicLink() || !entry.isFile()) {
-      throw new TypeError(
-        "El estado no puede leer enlaces simbólicos ni rutas no regulares",
-      );
-    }
+    handle = await open(
+      path,
+      fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW | fsConstants.O_NONBLOCK,
+    );
   } catch (error: unknown) {
     if (isNodeError(error, "ENOENT")) {
       return null;
     }
+    if (isNodeError(error, "ELOOP")) {
+      throw new TypeError(
+        "El estado no puede leer enlaces simbólicos ni rutas no regulares",
+      );
+    }
     throw error;
   }
-  return readFile(path);
+
+  try {
+    const entry = await handle.stat();
+    if (!entry.isFile()) {
+      throw new TypeError(
+        "El estado no puede leer enlaces simbólicos ni rutas no regulares",
+      );
+    }
+    await afterAdmitted?.(path);
+    return handle.readFile();
+  } finally {
+    await handle.close();
+  }
 }
 
 async function ensureAtomicParent(path: string): Promise<void> {
@@ -802,7 +823,10 @@ export function createStateStore(options: StateStoreOptions = {}): StateStore {
   }
 
   async function reclaimStaleRecoveryGuard(paths: IngestPaths): Promise<void> {
-    const existing = await readRegularFile(paths.recoveryGuard);
+    const existing = await readRegularFile(
+      paths.recoveryGuard,
+      options.testHooks?.afterRegularFileAdmitted,
+    );
     if (existing === null) {
       throw new Error("El cambio está bloqueado por otro proceso");
     }

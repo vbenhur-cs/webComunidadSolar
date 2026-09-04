@@ -638,6 +638,42 @@ test("reclaims only a stale local recovery guard and leaves no lock residue", as
   });
 });
 
+test("fails closed if a recovery guard path disappears after read admission", async () => {
+  await withStore(async ({ stateRoot }) => {
+    const setup = createStateStore({ stateRoot });
+    await setup.transition(changeId, event("request-received", "received"));
+    const paths = await ingestPaths(changeId, { stateRoot });
+    await writeFile(
+      paths.recoveryGuard,
+      JSON.stringify({
+        pid: process.pid,
+        hostname: hostname(),
+        createdAt: new Date().toISOString(),
+      }),
+      "utf8",
+    );
+    let removed = false;
+    const racingStore = createStateStore({
+      stateRoot,
+      testHooks: {
+        afterRegularFileAdmitted: async (path) => {
+          if (!removed && path === paths.recoveryGuard) {
+            removed = true;
+            await unlink(path);
+          }
+        },
+      },
+    });
+
+    await assert.rejects(
+      racingStore.withChangeLock(changeId, async () => undefined),
+      /bloqueado por otro proceso/i,
+    );
+    assert.equal(removed, true);
+    await assert.rejects(lstat(paths.recoveryGuard), { code: "ENOENT" });
+  });
+});
+
 test("reclaims a recovery guard left by an abruptly exited local process", async () => {
   const root = await mkdtemp(join(tmpdir(), "comunidadsolar-recovery-crash-"));
   const stateRoot = join(root, ".change-state");
