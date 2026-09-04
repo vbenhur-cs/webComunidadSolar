@@ -390,7 +390,7 @@ for (const viewport of issue4Viewports) {
     expect(geometry.offenders).toEqual([]);
 
     const contrastRatios = await page
-      .locator(".guide-status dt, .review-section .section-index")
+      .locator(".guide-status dt, .section-index, .point-number")
       .evaluateAll((elements) => {
         type Rgba = { red: number; green: number; blue: number; alpha: number };
 
@@ -468,7 +468,7 @@ for (const viewport of issue4Viewports) {
           );
         });
       });
-    expect(contrastRatios).toHaveLength(3);
+    expect(contrastRatios).toHaveLength(8);
     for (const ratio of contrastRatios) {
       expect.soft(ratio).toBeGreaterThanOrEqual(4.5);
     }
