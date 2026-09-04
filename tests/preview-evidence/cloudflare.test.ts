@@ -305,6 +305,68 @@ test("uploads with fixed argv and verifies the exact listed version", async () =
   }
 });
 
+test("accepts the current Cloudflare has_preview metadata field", async () => {
+  const value = await fixture();
+  try {
+    const descriptor = await uploadPreviewVersion(
+      uploadInput(value),
+      fakeRunner(
+        [
+          result({ stdout: uploadStdout() }),
+          result({
+            stdout: listStdout("candidate", {
+              metadata: {
+                author_email: "operator@example.invalid",
+                author_id: "b".repeat(32),
+                created_on: "2026-09-03T20:00:00.000Z",
+                has_preview: true,
+                source: "wrangler",
+              },
+            }),
+          }),
+        ],
+        [],
+      ),
+    );
+
+    assert.equal(descriptor.versionId, versionId);
+  } finally {
+    await rm(value.root, { recursive: true, force: true });
+  }
+});
+
+test("rejects ambiguous Cloudflare preview metadata spellings", async () => {
+  const value = await fixture();
+  try {
+    await assert.rejects(
+      uploadPreviewVersion(
+        uploadInput(value),
+        fakeRunner(
+          [
+            result({ stdout: uploadStdout() }),
+            result({
+              stdout: listStdout("candidate", {
+                metadata: {
+                  author_email: "operator@example.invalid",
+                  author_id: "b".repeat(32),
+                  created_on: "2026-09-03T20:00:00.000Z",
+                  hasPreview: true,
+                  has_preview: true,
+                  source: "wrangler",
+                },
+              }),
+            }),
+          ],
+          [],
+        ),
+      ),
+      /ambigua/i,
+    );
+  } finally {
+    await rm(value.root, { recursive: true, force: true });
+  }
+});
+
 test("rejects failed, timed out and oversized Wrangler runs without leaking credentials", async () => {
   const value = await fixture();
   try {
