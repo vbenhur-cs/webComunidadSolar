@@ -1,0 +1,793 @@
+---
+export const prerender = true;
+
+import SiteLayout from "../../layouts/SiteLayout.astro";
+
+const meta = {
+  title: "Guía de prueba para comunidades de propietarios",
+  description:
+    "Ejemplo interno de una solicitud de página completa para Comunidad Solar.",
+  canonical: null,
+  robots: {
+    index: false,
+    follow: false,
+    noarchive: true,
+    noimageindex: true,
+  },
+  openGraph: false,
+};
+
+const explanationPoints = [
+  {
+    number: "01",
+    title: "Objetivo",
+    copy: "Mostrar, con un ejemplo sencillo, qué información necesita el equipo para entender una petición de página completa.",
+  },
+  {
+    number: "02",
+    title: "Audiencia",
+    copy: "Personas que gestionan una comunidad de propietarios y quieren explorar una solución energética compartida.",
+  },
+  {
+    number: "03",
+    title: "Siguiente paso",
+    copy: "Revisar esta maqueta en el entorno de pruebas y decidir si la dirección visual y el contenido son correctos.",
+  },
+];
+---
+
+<SiteLayout page="comunidades" {meta}>
+  <main class="request-guide">
+    <section class="guide-hero" aria-labelledby="guide-title">
+      <div class="shell guide-hero-grid">
+        <div class="guide-hero-copy">
+          <p class="guide-eyebrow">
+            <span aria-hidden="true"></span>
+            Ejemplo interno · Página completa
+          </p>
+          <h1 id="guide-title">
+            Guía de prueba para comunidades de propietarios
+          </h1>
+          <p class="guide-intro">
+            Este contenido es ficticio y solo demuestra cómo se solicita una
+            página completa.
+          </p>
+          <dl class="guide-status" aria-label="Estado de esta demostración">
+            <div>
+              <dt>Tipo</dt>
+              <dd>Página nueva</dd>
+            </div>
+            <div>
+              <dt>Estado</dt>
+              <dd>En revisión</dd>
+            </div>
+          </dl>
+        </div>
+
+        <div class="energy-scene" aria-hidden="true">
+          <div class="scene-label">Una idea compartida</div>
+          <div class="scene-sun"></div>
+          <div class="scene-cable cable-one"></div>
+          <div class="scene-cable cable-two"></div>
+          <div class="solar-roof">
+            <div class="solar-panels">
+              <span></span><span></span><span></span><span></span>
+            </div>
+            <div class="roof-base"></div>
+          </div>
+          <div class="shared-meter"><span></span></div>
+          <div class="building building-one"><i></i><i></i></div>
+          <div class="building building-two"><i></i><i></i><i></i></div>
+          <p>cubierta <span>→</span> red <span>→</span> comunidad</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="guide-purpose" aria-labelledby="purpose-title">
+      <div class="shell purpose-grid">
+        <header class="purpose-heading">
+          <p class="section-index">01 · Contenido</p>
+          <h2 id="purpose-title">Qué queremos explicar</h2>
+          <p>
+            Una petición clara conecta la intención de negocio con la persona
+            que leerá la página y con una acción concreta para continuar.
+          </p>
+        </header>
+
+        <ol class="explanation-list">
+          {
+            explanationPoints.map((point) => (
+              <li>
+                <span class="point-number" aria-hidden="true">
+                  {point.number}
+                </span>
+                <div>
+                  <h3>{point.title}</h3>
+                  <p>{point.copy}</p>
+                </div>
+              </li>
+            ))
+          }
+        </ol>
+      </div>
+    </section>
+
+    <section class="review-section" aria-labelledby="review-title">
+      <div class="shell review-grid">
+        <div class="review-copy">
+          <p class="section-index">02 · Control de calidad</p>
+          <h2 id="review-title">Cómo se revisará</h2>
+          <p>
+            La información, los enlaces y la versión móvil se comprobarán en una
+            vista previa antes de aprobar cualquier publicación.
+          </p>
+        </div>
+
+        <ul class="review-checks" aria-label="Aspectos que se revisarán">
+          <li>
+            <span aria-hidden="true">✓</span>
+            <div>
+              <strong>Información</strong>
+              <small>Textos completos y fáciles de entender</small>
+            </div>
+          </li>
+          <li>
+            <span aria-hidden="true">✓</span>
+            <div>
+              <strong>Enlaces</strong>
+              <small>Destinos correctos antes de activarlos</small>
+            </div>
+          </li>
+          <li>
+            <span aria-hidden="true">✓</span>
+            <div>
+              <strong>Versión móvil</strong>
+              <small>Lectura y composición en pantalla pequeña</small>
+            </div>
+          </li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="demo-action" aria-labelledby="action-title">
+      <div class="shell action-inner">
+        <div>
+          <p class="section-index">03 · Acción de demostración</p>
+          <h2 id="action-title">Una acción visible, todavía sin activar.</h2>
+          <p>
+            Este botón permite revisar el texto y su jerarquía visual. No abre
+            un formulario ni envía información.
+          </p>
+        </div>
+        <button type="button" disabled>Solicitar información</button>
+      </div>
+    </section>
+
+    <footer class="publication-note">
+      <div class="shell">
+        <span>Control de publicación</span>
+        <strong>No publicar: ejemplo interno de solicitud.</strong>
+      </div>
+    </footer>
+  </main>
+</SiteLayout>
+
+<style>
+  .request-guide {
+    background: var(--paper);
+  }
+
+  .guide-hero {
+    position: relative;
+    overflow: hidden;
+    background: var(--green-deep);
+    color: var(--white);
+  }
+
+  .guide-hero::after {
+    position: absolute;
+    right: -90px;
+    bottom: -160px;
+    width: 380px;
+    height: 380px;
+    border: 64px solid rgba(168, 217, 111, 0.1);
+    border-radius: 50%;
+    content: "";
+  }
+
+  .guide-hero-grid {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: minmax(0, 1.05fr) minmax(420px, 0.95fr);
+    align-items: center;
+    gap: clamp(48px, 8vw, 112px);
+    min-height: 670px;
+    padding-block: 86px 92px;
+  }
+
+  .guide-eyebrow,
+  .section-index {
+    margin: 0 0 22px;
+    font-size: 0.72rem;
+    font-weight: 850;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+  }
+
+  .guide-eyebrow {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    color: var(--green);
+  }
+
+  .guide-eyebrow span {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--yellow);
+    box-shadow: 0 0 0 6px rgba(255, 217, 104, 0.14);
+  }
+
+  .guide-hero h1 {
+    max-width: 720px;
+    margin: 0;
+    font-size: clamp(3.15rem, 6.2vw, 5.9rem);
+    line-height: 0.94;
+    letter-spacing: -0.065em;
+  }
+
+  .guide-intro {
+    max-width: 650px;
+    margin: 30px 0 0;
+    color: rgba(255, 255, 255, 0.75);
+    font-size: clamp(1.06rem, 1.6vw, 1.28rem);
+    line-height: 1.65;
+  }
+
+  .guide-status {
+    display: flex;
+    gap: 46px;
+    margin: 42px 0 0;
+  }
+
+  .guide-status div {
+    display: grid;
+    gap: 7px;
+  }
+
+  .guide-status dt {
+    color: rgba(255, 255, 255, 0.48);
+    font-size: 0.67rem;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+
+  .guide-status dd {
+    margin: 0;
+    font-size: 0.94rem;
+    font-weight: 750;
+  }
+
+  .energy-scene {
+    position: relative;
+    min-height: 444px;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    background: #1c4b3c;
+  }
+
+  .energy-scene::before,
+  .energy-scene::after {
+    position: absolute;
+    content: "";
+  }
+
+  .energy-scene::before {
+    inset: 24px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .energy-scene::after {
+    right: 0;
+    bottom: 68px;
+    left: 0;
+    height: 1px;
+    background: rgba(255, 255, 255, 0.16);
+  }
+
+  .scene-label {
+    position: absolute;
+    top: 42px;
+    left: 44px;
+    color: rgba(255, 255, 255, 0.58);
+    font-size: 0.68rem;
+    font-weight: 850;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+  }
+
+  .scene-sun {
+    position: absolute;
+    top: 62px;
+    right: 58px;
+    width: 58px;
+    height: 58px;
+    border-radius: 50%;
+    background: var(--yellow);
+    box-shadow: 0 0 0 15px rgba(255, 217, 104, 0.09);
+  }
+
+  .solar-roof {
+    position: absolute;
+    bottom: 69px;
+    left: 43px;
+    width: 170px;
+    height: 144px;
+  }
+
+  .solar-panels {
+    position: absolute;
+    top: 0;
+    left: 17px;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 4px;
+    width: 137px;
+    padding: 6px;
+    background: var(--white);
+    transform: skewY(-14deg);
+  }
+
+  .solar-panels span {
+    height: 34px;
+    border: 1px solid rgba(255, 255, 255, 0.7);
+    background: var(--blue-strong);
+  }
+
+  .roof-base {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    height: 62px;
+    border-left: 18px solid transparent;
+    border-right: 18px solid transparent;
+    border-bottom: 62px solid #f2f1e7;
+  }
+
+  .shared-meter {
+    position: absolute;
+    right: 205px;
+    bottom: 139px;
+    width: 48px;
+    height: 48px;
+    display: grid;
+    place-items: center;
+    border: 6px solid var(--green);
+    border-radius: 50%;
+    background: #1c4b3c;
+  }
+
+  .shared-meter span {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--yellow);
+  }
+
+  .scene-cable {
+    position: absolute;
+    height: 2px;
+    background: var(--green);
+    transform-origin: left center;
+  }
+
+  .cable-one {
+    left: 203px;
+    bottom: 159px;
+    width: 91px;
+    transform: rotate(-8deg);
+  }
+
+  .cable-two {
+    right: 91px;
+    bottom: 159px;
+    width: 120px;
+    transform: rotate(11deg);
+  }
+
+  .building {
+    position: absolute;
+    bottom: 69px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 9px;
+    align-content: flex-start;
+    padding: 19px 14px;
+    background: var(--yellow-soft);
+  }
+
+  .building i {
+    width: 13px;
+    height: 17px;
+    background: var(--green-deep);
+  }
+
+  .building-one {
+    right: 98px;
+    width: 76px;
+    height: 112px;
+  }
+
+  .building-two {
+    right: 34px;
+    width: 57px;
+    height: 150px;
+  }
+
+  .energy-scene > p {
+    position: absolute;
+    right: 33px;
+    bottom: 22px;
+    left: 33px;
+    z-index: 1;
+    display: flex;
+    justify-content: space-between;
+    margin: 0;
+    color: rgba(255, 255, 255, 0.58);
+    font-size: 0.65rem;
+    font-weight: 800;
+    letter-spacing: 0.11em;
+    text-transform: uppercase;
+  }
+
+  .energy-scene > p span {
+    color: var(--green);
+  }
+
+  .guide-purpose {
+    padding-block: clamp(92px, 11vw, 150px);
+  }
+
+  .purpose-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 0.78fr) minmax(0, 1.22fr);
+    gap: clamp(64px, 10vw, 150px);
+  }
+
+  .section-index {
+    color: #52783e;
+  }
+
+  .purpose-heading h2,
+  .review-copy h2,
+  .demo-action h2 {
+    margin: 0;
+    font-size: clamp(2.35rem, 4.3vw, 4.5rem);
+    line-height: 1;
+    letter-spacing: -0.055em;
+  }
+
+  .purpose-heading > p:last-child,
+  .review-copy > p:last-child,
+  .demo-action h2 + p {
+    margin: 24px 0 0;
+    color: var(--muted);
+    font-size: 1.06rem;
+    line-height: 1.7;
+  }
+
+  .explanation-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    counter-reset: explanation;
+  }
+
+  .explanation-list li {
+    display: grid;
+    grid-template-columns: 56px 1fr;
+    gap: 24px;
+    padding: 31px 0 34px;
+    border-top: 1px solid var(--line);
+  }
+
+  .explanation-list li:last-child {
+    border-bottom: 1px solid var(--line);
+  }
+
+  .point-number {
+    color: #789368;
+    font-size: 0.73rem;
+    font-weight: 850;
+    letter-spacing: 0.1em;
+  }
+
+  .explanation-list h3 {
+    margin: -5px 0 10px;
+    font-size: 1.45rem;
+    letter-spacing: -0.03em;
+  }
+
+  .explanation-list p {
+    max-width: 570px;
+    margin: 0;
+    color: var(--muted);
+    line-height: 1.7;
+  }
+
+  .review-section {
+    background: var(--yellow-soft);
+    padding-block: clamp(82px, 9vw, 122px);
+  }
+
+  .review-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(390px, 0.78fr);
+    align-items: end;
+    gap: clamp(54px, 9vw, 136px);
+  }
+
+  .review-copy {
+    max-width: 670px;
+  }
+
+  .review-checks {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .review-checks li {
+    display: grid;
+    grid-template-columns: 38px 1fr;
+    align-items: start;
+    gap: 15px;
+    padding: 22px 0;
+    border-top: 1px solid rgba(16, 27, 22, 0.18);
+  }
+
+  .review-checks li:last-child {
+    border-bottom: 1px solid rgba(16, 27, 22, 0.18);
+  }
+
+  .review-checks li > span {
+    width: 30px;
+    height: 30px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: var(--green-deep);
+    color: var(--white);
+    font-size: 0.78rem;
+    font-weight: 900;
+  }
+
+  .review-checks strong,
+  .review-checks small {
+    display: block;
+  }
+
+  .review-checks strong {
+    font-size: 1rem;
+  }
+
+  .review-checks small {
+    margin-top: 5px;
+    color: #5d665f;
+    font-size: 0.83rem;
+    line-height: 1.5;
+  }
+
+  .demo-action {
+    padding-block: clamp(88px, 10vw, 132px);
+  }
+
+  .action-inner {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+    gap: 72px;
+  }
+
+  .demo-action h2 {
+    max-width: 750px;
+  }
+
+  .demo-action h2 + p {
+    max-width: 620px;
+  }
+
+  .demo-action button {
+    min-width: 220px;
+    min-height: 58px;
+    border: 0;
+    border-radius: 999px;
+    background: #d8ddd4;
+    color: #6d756f;
+    padding: 16px 25px;
+    font-weight: 850;
+    cursor: not-allowed;
+  }
+
+  .publication-note {
+    background: var(--ink);
+    color: var(--white);
+  }
+
+  .publication-note .shell {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 30px;
+    min-height: 94px;
+  }
+
+  .publication-note span {
+    color: var(--yellow);
+    font-size: 0.69rem;
+    font-weight: 850;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+  }
+
+  .publication-note strong {
+    font-size: 0.95rem;
+    letter-spacing: -0.01em;
+  }
+
+  @media (max-width: 900px) {
+    .guide-hero-grid,
+    .purpose-grid,
+    .review-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .guide-hero-grid {
+      gap: 60px;
+      padding-block: 72px 76px;
+    }
+
+    .energy-scene {
+      width: min(100%, 580px);
+    }
+
+    .purpose-grid,
+    .review-grid {
+      gap: 54px;
+    }
+
+    .action-inner {
+      grid-template-columns: 1fr;
+      align-items: start;
+      gap: 42px;
+    }
+  }
+
+  @media (max-width: 560px) {
+    .guide-hero-grid {
+      padding-block: 58px 62px;
+    }
+
+    .guide-hero h1 {
+      font-size: clamp(2.75rem, 14vw, 4rem);
+    }
+
+    .guide-status {
+      gap: 30px;
+    }
+
+    .energy-scene {
+      min-height: 345px;
+    }
+
+    .scene-label {
+      top: 30px;
+      left: 27px;
+    }
+
+    .scene-sun {
+      top: 46px;
+      right: 35px;
+      width: 48px;
+      height: 48px;
+    }
+
+    .solar-roof {
+      bottom: 69px;
+      left: 25px;
+      width: 124px;
+      height: 112px;
+    }
+
+    .solar-panels {
+      left: 12px;
+      width: 101px;
+      padding: 4px;
+    }
+
+    .solar-panels span {
+      height: 25px;
+    }
+
+    .roof-base {
+      height: 49px;
+      border-bottom-width: 49px;
+    }
+
+    .shared-meter {
+      right: 127px;
+      bottom: 124px;
+      width: 39px;
+      height: 39px;
+      border-width: 5px;
+    }
+
+    .cable-one {
+      left: 141px;
+      bottom: 141px;
+      width: 75px;
+    }
+
+    .cable-two {
+      right: 66px;
+      bottom: 142px;
+      width: 73px;
+    }
+
+    .building {
+      bottom: 69px;
+      gap: 6px;
+      padding: 13px 10px;
+    }
+
+    .building i {
+      width: 10px;
+      height: 13px;
+    }
+
+    .building-one {
+      right: 56px;
+      width: 54px;
+      height: 82px;
+    }
+
+    .building-two {
+      right: 18px;
+      width: 34px;
+      height: 112px;
+    }
+
+    .energy-scene > p {
+      right: 18px;
+      left: 18px;
+      letter-spacing: 0.06em;
+    }
+
+    .purpose-grid,
+    .review-grid {
+      gap: 42px;
+    }
+
+    .purpose-heading h2,
+    .review-copy h2,
+    .demo-action h2 {
+      font-size: clamp(2.3rem, 11vw, 3.3rem);
+    }
+
+    .explanation-list li {
+      grid-template-columns: 42px 1fr;
+      gap: 13px;
+    }
+
+    .publication-note .shell {
+      align-items: flex-start;
+      flex-direction: column;
+      justify-content: center;
+      gap: 8px;
+      padding-block: 24px;
+    }
+  }
+</style>

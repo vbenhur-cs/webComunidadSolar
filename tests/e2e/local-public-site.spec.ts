@@ -272,3 +272,73 @@ test("local metadata endpoints remain available", async ({ request }) => {
   expect(sitemap.status()).toBe(200);
   expect(sitemap.headers()["content-type"]).toContain("application/xml");
 });
+
+test("issue 4 guide page is complete, private and safe on mobile", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+
+  const response = await page.goto("/pruebas/guia-comunidades-propietarios", {
+    waitUntil: "domcontentloaded",
+  });
+
+  expect(response?.status()).toBe(200);
+  await expect(page.locator("main")).toHaveCount(1);
+  await expect(
+    page.getByRole("heading", {
+      level: 1,
+      name: "Guía de prueba para comunidades de propietarios",
+    }),
+  ).toHaveCount(1);
+  await expect(
+    page.getByText(
+      "Este contenido es ficticio y solo demuestra cómo se solicita una página completa.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { level: 2, name: "Qué queremos explicar" }),
+  ).toBeVisible();
+  for (const point of ["Objetivo", "Audiencia", "Siguiente paso"]) {
+    await expect(
+      page.getByRole("heading", { level: 3, name: point }),
+    ).toBeVisible();
+  }
+  await expect(
+    page.getByRole("heading", { level: 2, name: "Cómo se revisará" }),
+  ).toBeVisible();
+  await expect(
+    page.getByText(
+      "La información, los enlaces y la versión móvil se comprobarán en una vista previa antes de aprobar cualquier publicación.",
+      { exact: true },
+    ),
+  ).toBeVisible();
+  await expect(page.locator('meta[name="robots"]')).toHaveAttribute(
+    "content",
+    "noindex, nofollow, noarchive, noimageindex",
+  );
+  await expect(page.locator('link[rel="canonical"]')).toHaveCount(0);
+  await expect(page.locator("form")).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: "Solicitar información" }),
+  ).toBeDisabled();
+  await expect(
+    page.getByText("No publicar: ejemplo interno de solicitud.", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(
+    page.locator('nav a[href="/pruebas/guia-comunidades-propietarios"]'),
+  ).toHaveCount(0);
+
+  const sitemap = await page.request.get("/sitemap.xml");
+  expect(sitemap.status()).toBe(200);
+  expect(await sitemap.text()).not.toContain(
+    "/pruebas/guia-comunidades-propietarios",
+  );
+
+  const overflowsHorizontally = await page.evaluate(
+    () => document.documentElement.scrollWidth > window.innerWidth,
+  );
+  expect(overflowsHorizontally).toBe(false);
+});
