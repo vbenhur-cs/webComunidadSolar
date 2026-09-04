@@ -8,8 +8,10 @@ import { createStateStore } from "../../../src/ingest/state-store.ts";
 
 const changeId = "stress-lock";
 const workerCount = 8;
-// Hosted CI can take more than five seconds to schedule eight Node children
-// while the parallel verification jobs are also installing and building.
+// Hosted CI can take a while to schedule eight Node children while parallel
+// verification jobs are also installing and building. Keep process startup
+// outside the lock-contention window by waiting for an explicit ready barrier.
+const startupTimeoutMs = 45_000;
 const coordinationTimeoutMs = 15_000;
 const fixturePath = fileURLToPath(import.meta.url);
 
@@ -85,10 +87,14 @@ function waitForClose(child: ChildProcess): Promise<number> {
 
 async function runWorker(
   stateRoot: string,
+  readyDir: string,
   startPath: string,
   releasePath: string,
   resultsDir: string,
 ): Promise<void> {
+  await writeFile(join(readyDir, `ready-${process.pid}`), "ready", {
+    flag: "wx",
+  });
   await waitForFile(startPath);
   const store = createStateStore({ stateRoot });
   try {
@@ -115,6 +121,7 @@ async function runWorker(
 async function runStress(): Promise<void> {
   const root = await mkdtemp(join(tmpdir(), "comunidadsolar-stress-locks-"));
   const stateRoot = join(root, ".change-state");
+  const readyDir = join(root, "ready");
   const startPath = join(root, "start");
   const releasePath = join(root, "release");
   const resultsDir = join(root, "results");
@@ -122,6 +129,7 @@ async function runStress(): Promise<void> {
   const exits: Promise<number>[] = [];
 
   try {
+    await mkdir(readyDir);
     await mkdir(resultsDir);
     const store = createStateStore({ stateRoot });
     await store.transition(changeId, {
@@ -139,15 +147,17 @@ async function runStress(): Promise<void> {
           fixturePath,
           "--worker",
           stateRoot,
+          readyDir,
           startPath,
           releasePath,
           resultsDir,
         ],
-        { stdio: "ignore" },
+        { stdio: ["ignore", "ignore", "inherit"] },
       );
       workers.push(worker);
       exits.push(waitForClose(worker));
     }
+    await waitForResultCount(readyDir, workerCount, startupTimeoutMs);
     await writeFile(startPath, "start", { flag: "wx" });
 
     const entries = await waitForResultCount(resultsDir, workerCount);
@@ -180,15 +190,16 @@ async function runStress(): Promise<void> {
 }
 
 if (process.argv[2] === "--worker") {
-  const [stateRoot, startPath, releasePath, resultsDir] = process.argv.slice(3);
+  const [stateRoot, readyDir, startPath, releasePath, resultsDir] =
+    process.argv.slice(3);
   if (
-    [stateRoot, startPath, releasePath, resultsDir].some(
+    [stateRoot, readyDir, startPath, releasePath, resultsDir].some(
       (value) => value === undefined,
     )
   ) {
     throw new Error("El worker del stress no recibió sus rutas");
   }
-  await runWorker(stateRoot, startPath, releasePath, resultsDir);
+  await runWorker(stateRoot, readyDir, startPath, releasePath, resultsDir);
 } else {
   await runStress();
 }

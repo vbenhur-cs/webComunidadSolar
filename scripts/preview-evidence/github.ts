@@ -87,8 +87,12 @@ const bootstrapExactPaths = new Set([
   "package.json",
   "package-lock.json",
   "scripts/prepare-cloudflare-config.ts",
+  "src/ingest/state-store.ts",
   "tests/foundation/preview-documentation.test.mjs",
   "tests/foundation/preview-workflows.test.mjs",
+  "tests/e2e/editorial.spec.ts",
+  "tests/fixtures/ingestion/stress-locks.ts",
+  "tests/ingest/state-store.test.ts",
 ]);
 const bootstrapPathPrefixes = [
   "docs/operations/",
