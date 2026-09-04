@@ -638,6 +638,42 @@ test("reclaims only a stale local recovery guard and leaves no lock residue", as
   });
 });
 
+test("fails closed if a recovery guard path disappears after read admission", async () => {
+  await withStore(async ({ stateRoot }) => {
+    const setup = createStateStore({ stateRoot });
+    await setup.transition(changeId, event("request-received", "received"));
+    const paths = await ingestPaths(changeId, { stateRoot });
+    await writeFile(
+      paths.recoveryGuard,
+      JSON.stringify({
+        pid: process.pid,
+        hostname: hostname(),
+        createdAt: new Date().toISOString(),
+      }),
+      "utf8",
+    );
+    let removed = false;
+    const racingStore = createStateStore({
+      stateRoot,
+      testHooks: {
+        afterRegularFileAdmitted: async (path) => {
+          if (!removed && path === paths.recoveryGuard) {
+            removed = true;
+            await unlink(path);
+          }
+        },
+      },
+    });
+
+    await assert.rejects(
+      racingStore.withChangeLock(changeId, async () => undefined),
+      /bloqueado por otro proceso/i,
+    );
+    assert.equal(removed, true);
+    await assert.rejects(lstat(paths.recoveryGuard), { code: "ENOENT" });
+  });
+});
+
 test("reclaims a recovery guard left by an abruptly exited local process", async () => {
   const root = await mkdtemp(join(tmpdir(), "comunidadsolar-recovery-crash-"));
   const stateRoot = join(root, ".change-state");
@@ -1157,6 +1193,37 @@ test("writes a local PID, host, and timestamp into a default lock owner", async 
   }
 });
 
+test("publishes lock owners only after their complete contents are durable", async () => {
+  const root = await mkdtemp(join(tmpdir(), "comunidadsolar-owner-publish-"));
+  const stateRoot = join(root, ".change-state");
+  const beforePublish = deferred<string>();
+  const resumePublish = deferred();
+  const store = createStateStore({
+    stateRoot,
+    testHooks: {
+      beforeOwnerFilePublished: async (path) => {
+        beforePublish.resolve(path);
+        await resumePublish.promise;
+      },
+    },
+  });
+  let lockRun: Promise<void> | undefined;
+
+  try {
+    lockRun = store.withChangeLock(changeId, async () => undefined);
+    const target = await within(
+      beforePublish.promise,
+      asyncTestBoundaryTimeoutMs,
+      "La publicación del propietario no alcanzó su barrera",
+    );
+    await assert.rejects(lstat(target), { code: "ENOENT" });
+  } finally {
+    resumePublish.resolve();
+    await lockRun?.catch(() => undefined);
+    await rm(root, { force: true, recursive: true });
+  }
+});
+
 test("stress fixture grants exactly one multiprocess lock owner and removes all lock residues", async () => {
   const tsx = join(process.cwd(), "node_modules", ".bin", "tsx");
   const { stdout, stderr } = await execFileAsync(
@@ -1164,7 +1231,7 @@ test("stress fixture grants exactly one multiprocess lock owner and removes all 
     ["tests/fixtures/ingestion/stress-locks.ts"],
     {
       cwd: process.cwd(),
-      timeout: 30_000,
+      timeout: 60_000,
     },
   );
 

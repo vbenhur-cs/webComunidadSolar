@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto";
+import { constants as fsConstants } from "node:fs";
 import {
   lstat,
   link,
   mkdir,
   open,
-  readFile,
   realpath,
   rename,
   unlink,
@@ -97,6 +97,10 @@ export interface StateStoreOptions extends IngestPathOptions {
     afterRecoveryGuardVerified?: () => Promise<void>;
     /** Deterministic boundary after a recovery guard is durably acquired. */
     afterRecoveryGuardAcquired?: () => Promise<void>;
+    /** Deterministic boundary before a durable owner file becomes visible. */
+    beforeOwnerFilePublished?: (path: string) => Promise<void>;
+    /** Deterministic boundary after a regular file is admitted for reading. */
+    afterRegularFileAdmitted?: (path: string) => Promise<void>;
   };
 }
 
@@ -192,21 +196,40 @@ function assertChangeRecord(
   }
 }
 
-async function readRegularFile(path: string): Promise<Uint8Array | null> {
+async function readRegularFile(
+  path: string,
+  afterAdmitted?: (path: string) => Promise<void>,
+): Promise<Uint8Array | null> {
+  let handle;
   try {
-    const entry = await lstat(path);
-    if (entry.isSymbolicLink() || !entry.isFile()) {
-      throw new TypeError(
-        "El estado no puede leer enlaces simbólicos ni rutas no regulares",
-      );
-    }
+    handle = await open(
+      path,
+      fsConstants.O_RDONLY | fsConstants.O_NOFOLLOW | fsConstants.O_NONBLOCK,
+    );
   } catch (error: unknown) {
     if (isNodeError(error, "ENOENT")) {
       return null;
     }
+    if (isNodeError(error, "ELOOP")) {
+      throw new TypeError(
+        "El estado no puede leer enlaces simbólicos ni rutas no regulares",
+      );
+    }
     throw error;
   }
-  return readFile(path);
+
+  try {
+    const entry = await handle.stat();
+    if (!entry.isFile()) {
+      throw new TypeError(
+        "El estado no puede leer enlaces simbólicos ni rutas no regulares",
+      );
+    }
+    await afterAdmitted?.(path);
+    return handle.readFile();
+  } finally {
+    await handle.close();
+  }
 }
 
 async function ensureAtomicParent(path: string): Promise<void> {
@@ -392,13 +415,57 @@ async function removeOwnedLock(
 async function createExclusiveOwnerFile(
   path: string,
   ownerBytes: Uint8Array,
+  beforePublish?: (path: string) => Promise<void>,
 ): Promise<void> {
-  const handle = await open(path, "wx", 0o600);
+  const target = resolve(path);
+  const parent = dirname(target);
+  const temporary = resolve(
+    parent,
+    `.tmp-${process.pid}-${randomUUID()}-${basename(target)}`,
+  );
+  let temporaryCreated = false;
+  let targetPublished = false;
+
   try {
-    await handle.writeFile(ownerBytes);
-    await handle.sync();
-  } finally {
-    await handle.close();
+    const handle = await open(temporary, "wx", 0o600);
+    temporaryCreated = true;
+    try {
+      await handle.writeFile(ownerBytes);
+      await handle.sync();
+    } finally {
+      await handle.close();
+    }
+
+    await beforePublish?.(target);
+    await link(temporary, target);
+    targetPublished = true;
+    await unlink(temporary);
+    temporaryCreated = false;
+  } catch (error) {
+    const cleanupErrors: unknown[] = [];
+    if (targetPublished) {
+      try {
+        await removeOwnedLock(target, ownerBytes);
+      } catch (cleanupError) {
+        cleanupErrors.push(cleanupError);
+      }
+    }
+    if (temporaryCreated) {
+      try {
+        await unlink(temporary);
+      } catch (cleanupError: unknown) {
+        if (!isNodeError(cleanupError, "ENOENT")) {
+          cleanupErrors.push(cleanupError);
+        }
+      }
+    }
+    if (cleanupErrors.length > 0) {
+      throw new AggregateError(
+        [error, ...cleanupErrors],
+        "No se pudo publicar ni limpiar el propietario del lock",
+      );
+    }
+    throw error;
   }
 }
 
@@ -678,7 +745,11 @@ export function createStateStore(options: StateStoreOptions = {}): StateStore {
     const ownerBytes = new TextEncoder().encode(canonicalJson(owner));
 
     try {
-      await createExclusiveOwnerFile(paths.lock, ownerBytes);
+      await createExclusiveOwnerFile(
+        paths.lock,
+        ownerBytes,
+        options.testHooks?.beforeOwnerFilePublished,
+      );
       return { ownerBytes, recoveryPending: false };
     } catch (error: unknown) {
       if (!isNodeError(error, "EEXIST")) {
@@ -689,7 +760,11 @@ export function createStateStore(options: StateStoreOptions = {}): StateStore {
     const existing = await readRegularFile(paths.lock);
     if (existing === null) {
       try {
-        await createExclusiveOwnerFile(paths.lock, ownerBytes);
+        await createExclusiveOwnerFile(
+          paths.lock,
+          ownerBytes,
+          options.testHooks?.beforeOwnerFilePublished,
+        );
         return { ownerBytes, recoveryPending: false };
       } catch (error: unknown) {
         if (!isNodeError(error, "EEXIST")) {
@@ -720,7 +795,11 @@ export function createStateStore(options: StateStoreOptions = {}): StateStore {
     await options.testHooks?.afterStaleLockVerified?.();
     await unlink(paths.lock);
     try {
-      await createExclusiveOwnerFile(paths.lock, ownerBytes);
+      await createExclusiveOwnerFile(
+        paths.lock,
+        ownerBytes,
+        options.testHooks?.beforeOwnerFilePublished,
+      );
     } catch (error: unknown) {
       if (isNodeError(error, "EEXIST")) {
         throw new Error("El cambio está bloqueado por otro proceso");
@@ -744,7 +823,10 @@ export function createStateStore(options: StateStoreOptions = {}): StateStore {
   }
 
   async function reclaimStaleRecoveryGuard(paths: IngestPaths): Promise<void> {
-    const existing = await readRegularFile(paths.recoveryGuard);
+    const existing = await readRegularFile(
+      paths.recoveryGuard,
+      options.testHooks?.afterRegularFileAdmitted,
+    );
     if (existing === null) {
       throw new Error("El cambio está bloqueado por otro proceso");
     }
@@ -791,14 +873,22 @@ export function createStateStore(options: StateStoreOptions = {}): StateStore {
     };
     const guardBytes = new TextEncoder().encode(canonicalJson(guardOwner));
     try {
-      await createExclusiveOwnerFile(paths.recoveryGuard, guardBytes);
+      await createExclusiveOwnerFile(
+        paths.recoveryGuard,
+        guardBytes,
+        options.testHooks?.beforeOwnerFilePublished,
+      );
     } catch (error: unknown) {
       if (!isNodeError(error, "EEXIST")) {
         throw error;
       }
       await reclaimStaleRecoveryGuard(paths);
       try {
-        await createExclusiveOwnerFile(paths.recoveryGuard, guardBytes);
+        await createExclusiveOwnerFile(
+          paths.recoveryGuard,
+          guardBytes,
+          options.testHooks?.beforeOwnerFilePublished,
+        );
       } catch (retryError: unknown) {
         if (isNodeError(retryError, "EEXIST")) {
           throw new Error("El cambio está bloqueado por otro proceso");
