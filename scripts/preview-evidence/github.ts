@@ -89,6 +89,8 @@ const bootstrapExactPaths = new Set([
   "scripts/prepare-cloudflare-config.ts",
   "tests/foundation/preview-documentation.test.mjs",
   "tests/foundation/preview-workflows.test.mjs",
+  "tests/fixtures/ingestion/stress-locks.ts",
+  "tests/ingest/state-store.test.ts",
 ]);
 const bootstrapPathPrefixes = [
   "docs/operations/",

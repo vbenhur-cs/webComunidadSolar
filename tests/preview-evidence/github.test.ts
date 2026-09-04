@@ -357,7 +357,7 @@ test("permits bootstrap only for the configured PR and allowlisted pipeline path
   const bootstrapApi = validMainApi();
   bootstrapApi.responses.set(`/repos/${repository}/pulls/9`, {
     ...validMergedPullRequest(),
-    changed_files: 4,
+    changed_files: 6,
   });
   bootstrapApi.responses.set(
     `/repos/${repository}/pulls/9/files?per_page=100&page=1`,
@@ -372,6 +372,14 @@ test("permits bootstrap only for the configured PR and allowlisted pipeline path
       {
         filename: "tests/foundation/preview-documentation.test.mjs",
         status: "added",
+      },
+      {
+        filename: "tests/fixtures/ingestion/stress-locks.ts",
+        status: "modified",
+      },
+      {
+        filename: "tests/ingest/state-store.test.ts",
+        status: "modified",
       },
     ],
   );
