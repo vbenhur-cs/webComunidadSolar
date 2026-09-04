@@ -511,9 +511,10 @@ function validateVersionMetadata(value: unknown, expectedPreview = true): void {
           "Cloudflare devolvió el indicador preview inválido",
         );
       }
-    } else {
-      safeText(child, `metadata.${key}`, 1024);
+      continue;
     }
+    if (key === "author_email" && child === "") continue;
+    safeText(child, `metadata.${key}`, 1024);
   }
   const previewFlag = metadata.has_preview ?? metadata.hasPreview;
   if (previewFlag !== expectedPreview) {
