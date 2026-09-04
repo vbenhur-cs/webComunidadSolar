@@ -341,6 +341,27 @@ test("resolves relative and same-origin absolute links without treating protocol
   assert.deepEqual(fetched, ["/docs/child", "/ready"]);
 });
 
+test("validates a same-document fragment without requiring an unlisted route in the manifest", async () => {
+  let fetched = false;
+  const report = await auditInternalLinks({
+    documents: [
+      {
+        path: "/unlisted-preview",
+        html: '<a href="#contenido">Saltar</a><main id="contenido">Vista previa</main>',
+      },
+    ],
+    routes: [],
+    fetchPath: async () => {
+      fetched = true;
+      return new Response("unexpected");
+    },
+  });
+
+  assert.equal(report.checkedLinks, 1);
+  assert.deepEqual(report.violations, []);
+  assert.equal(fetched, false);
+});
+
 test("bounds hung link-worker readiness and completes raw teardown before returning", async () => {
   const events: string[] = [];
   await assert.rejects(

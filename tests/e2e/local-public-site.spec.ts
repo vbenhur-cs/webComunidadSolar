@@ -272,3 +272,205 @@ test("local metadata endpoints remain available", async ({ request }) => {
   expect(sitemap.status()).toBe(200);
   expect(sitemap.headers()["content-type"]).toContain("application/xml");
 });
+
+const issue4Viewports = [
+  { name: "desktop", width: 1440, height: 1000 },
+  { name: "mobile", width: 390, height: 844 },
+] as const;
+
+for (const viewport of issue4Viewports) {
+  test(`issue 4 guide page is complete, unlisted and safe on ${viewport.name}`, async ({
+    page,
+  }) => {
+    await page.setViewportSize(viewport);
+
+    const response = await page.goto("/pruebas/guia-comunidades-propietarios", {
+      waitUntil: "domcontentloaded",
+    });
+
+    expect(response?.status()).toBe(200);
+    const main = page.locator("main");
+    await expect(main).toHaveCount(1);
+    await expect(
+      page.getByRole("heading", {
+        level: 1,
+        name: "Guía de prueba para comunidades de propietarios",
+      }),
+    ).toHaveCount(1);
+    await expect(
+      page.getByText(
+        "Este contenido es ficticio y solo demuestra cómo se solicita una página completa.",
+        { exact: true },
+      ),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", {
+        level: 2,
+        name: "Qué queremos explicar",
+      }),
+    ).toBeVisible();
+    for (const point of ["Objetivo", "Público", "Siguiente paso"]) {
+      await expect
+        .soft(page.getByRole("heading", { level: 3, name: point }))
+        .toBeVisible();
+    }
+    await expect(
+      page.getByRole("heading", { level: 2, name: "Cómo se revisará" }),
+    ).toBeVisible();
+    await expect(
+      page.getByText(
+        "La información, los enlaces y la versión móvil se comprobarán en una vista previa antes de aprobar cualquier publicación.",
+        { exact: true },
+      ),
+    ).toBeVisible();
+    await expect(page.locator('meta[name="robots"]')).toHaveAttribute(
+      "content",
+      "noindex, nofollow, noarchive, noimageindex",
+    );
+    await expect(page.locator('link[rel="canonical"]')).toHaveCount(0);
+    await expect(page.locator("form")).toHaveCount(0);
+    await expect(main.locator("a[href]")).toHaveCount(0);
+    await expect
+      .soft(page.locator('header [aria-current="page"]'))
+      .toHaveCount(0);
+    await expect(
+      page.getByRole("button", { name: "Solicitar información" }),
+    ).toBeDisabled();
+    await expect(
+      page.getByText("No publicar: ejemplo interno de solicitud.", {
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(
+      page.locator('nav a[href="/pruebas/guia-comunidades-propietarios"]'),
+    ).toHaveCount(0);
+
+    const sitemap = await page.request.get("/sitemap.xml");
+    expect(sitemap.status()).toBe(200);
+    expect(await sitemap.text()).not.toContain(
+      "/pruebas/guia-comunidades-propietarios",
+    );
+
+    const geometry = await main.evaluate((element) => {
+      const viewportWidth = document.documentElement.clientWidth;
+      const visibleContent = Array.from(
+        element.querySelectorAll(
+          "h1, h2, h3, p, dt, dd, li, strong, small, button",
+        ),
+      ).filter((candidate) => {
+        const style = getComputedStyle(candidate);
+        const rect = candidate.getBoundingClientRect();
+        return (
+          style.display !== "none" &&
+          style.visibility !== "hidden" &&
+          rect.width > 0 &&
+          rect.height > 0
+        );
+      });
+
+      return {
+        mainClientWidth: element.clientWidth,
+        mainScrollWidth: element.scrollWidth,
+        offenders: visibleContent
+          .map((candidate) => {
+            const rect = candidate.getBoundingClientRect();
+            return {
+              tag: candidate.tagName.toLowerCase(),
+              text: candidate.textContent?.trim().slice(0, 80) ?? "",
+              left: rect.left,
+              right: rect.right,
+            };
+          })
+          .filter(({ left, right }) => left < -1 || right > viewportWidth + 1),
+      };
+    });
+    expect(geometry.mainScrollWidth).toBeLessThanOrEqual(
+      geometry.mainClientWidth + 1,
+    );
+    expect(geometry.offenders).toEqual([]);
+
+    const contrastRatios = await page
+      .locator(".guide-status dt, .section-index, .point-number")
+      .evaluateAll((elements) => {
+        type Rgba = { red: number; green: number; blue: number; alpha: number };
+
+        const parseColor = (value: string): Rgba => {
+          const channels = value.match(/[\d.]+/gu)?.map(Number) ?? [];
+          if (channels.length < 3)
+            throw new TypeError(`Color inválido: ${value}`);
+          return {
+            red: channels[0] ?? 0,
+            green: channels[1] ?? 0,
+            blue: channels[2] ?? 0,
+            alpha: channels[3] ?? 1,
+          };
+        };
+
+        const blend = (foreground: Rgba, background: Rgba): Rgba => {
+          const alpha =
+            foreground.alpha + background.alpha * (1 - foreground.alpha);
+          const channel = (front: number, back: number) =>
+            (front * foreground.alpha +
+              back * background.alpha * (1 - foreground.alpha)) /
+            alpha;
+          return {
+            red: channel(foreground.red, background.red),
+            green: channel(foreground.green, background.green),
+            blue: channel(foreground.blue, background.blue),
+            alpha,
+          };
+        };
+
+        const backgroundFor = (element: Element): Rgba => {
+          const layers: Rgba[] = [];
+          let current: Element | null = element;
+          while (current !== null) {
+            const color = parseColor(getComputedStyle(current).backgroundColor);
+            if (color.alpha > 0) layers.push(color);
+            if (color.alpha >= 1) break;
+            current = current.parentElement;
+          }
+          return layers
+            .reverse()
+            .reduce((background, foreground) => blend(foreground, background), {
+              red: 255,
+              green: 255,
+              blue: 255,
+              alpha: 1,
+            });
+        };
+
+        const luminance = (color: Rgba): number => {
+          const linear = (channel: number) => {
+            const value = channel / 255;
+            return value <= 0.04045
+              ? value / 12.92
+              : ((value + 0.055) / 1.055) ** 2.4;
+          };
+          return (
+            0.2126 * linear(color.red) +
+            0.7152 * linear(color.green) +
+            0.0722 * linear(color.blue)
+          );
+        };
+
+        return elements.map((element) => {
+          const background = backgroundFor(element);
+          const foreground = blend(
+            parseColor(getComputedStyle(element).color),
+            background,
+          );
+          const foregroundLuminance = luminance(foreground);
+          const backgroundLuminance = luminance(background);
+          return (
+            (Math.max(foregroundLuminance, backgroundLuminance) + 0.05) /
+            (Math.min(foregroundLuminance, backgroundLuminance) + 0.05)
+          );
+        });
+      });
+    expect(contrastRatios).toHaveLength(8);
+    for (const ratio of contrastRatios) {
+      expect.soft(ratio).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+}

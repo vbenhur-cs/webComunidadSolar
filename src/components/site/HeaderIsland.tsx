@@ -82,7 +82,7 @@ const solutionGroups = [
 ] as const;
 
 export interface HeaderIslandProps {
-  page: HeaderPageKey;
+  page: HeaderPageKey | null;
 }
 
 export function HeaderIsland({ page }: HeaderIslandProps) {
@@ -91,6 +91,8 @@ export function HeaderIsland({ page }: HeaderIslandProps) {
     "closed" | "hover" | "pinned"
   >("closed");
   const solutionsOpen = solutionsMode !== "closed";
+  const isCurrent = (href: string) =>
+    page !== null && isCurrentPageLink(page, href);
 
   const closeMenus = () => {
     setOpen(false);
@@ -160,7 +162,7 @@ export function HeaderIsland({ page }: HeaderIslandProps) {
                   <div className="solutions-group" key={group.title}>
                     <p>{group.title}</p>
                     {group.items.map((item) => {
-                      const current = isCurrentPageLink(page, item.href);
+                      const current = isCurrent(item.href);
                       return (
                         <a
                           key={item.label}
@@ -179,7 +181,7 @@ export function HeaderIsland({ page }: HeaderIslandProps) {
               </div>
             </div>
             {navItems.map((item) => {
-              const current = isCurrentPageLink(page, item.href);
+              const current = isCurrent(item.href);
               return (
                 <a
                   key={item.href}
@@ -228,9 +230,7 @@ export function HeaderIsland({ page }: HeaderIslandProps) {
             <a
               key={item.href}
               href={item.href}
-              aria-current={
-                isCurrentPageLink(page, item.href) ? "page" : undefined
-              }
+              aria-current={isCurrent(item.href) ? "page" : undefined}
               onClick={() => setOpen(false)}
             >
               {item.label}
@@ -241,9 +241,7 @@ export function HeaderIsland({ page }: HeaderIslandProps) {
             <a
               key={item.label}
               href={item.href}
-              aria-current={
-                isCurrentPageLink(page, item.href) ? "page" : undefined
-              }
+              aria-current={isCurrent(item.href) ? "page" : undefined}
               onClick={() => setOpen(false)}
             >
               {item.label}
@@ -254,9 +252,7 @@ export function HeaderIsland({ page }: HeaderIslandProps) {
             <a
               key={item.label}
               href={item.href}
-              aria-current={
-                isCurrentPageLink(page, item.href) ? "page" : undefined
-              }
+              aria-current={isCurrent(item.href) ? "page" : undefined}
               onClick={() => setOpen(false)}
             >
               {item.label}
@@ -267,9 +263,7 @@ export function HeaderIsland({ page }: HeaderIslandProps) {
             <a
               key={item.label}
               href={item.href}
-              aria-current={
-                isCurrentPageLink(page, item.href) ? "page" : undefined
-              }
+              aria-current={isCurrent(item.href) ? "page" : undefined}
               onClick={() => setOpen(false)}
             >
               {item.label}
@@ -280,9 +274,7 @@ export function HeaderIsland({ page }: HeaderIslandProps) {
             <a
               key={item.label}
               href={item.href}
-              aria-current={
-                isCurrentPageLink(page, item.href) ? "page" : undefined
-              }
+              aria-current={isCurrent(item.href) ? "page" : undefined}
               onClick={() => setOpen(false)}
             >
               {item.label}
