@@ -83,8 +83,8 @@ function capture(viewport: "desktop" | "mobile", width: number) {
     sourceSha,
     versionId,
     origin: sharedOrigin,
-    url: `${sharedOrigin}/pruebas/guia/`,
-    route: "/pruebas/guia/",
+    url: `${sharedOrigin}/pruebas/guia`,
+    route: "/pruebas/guia",
     status: 200,
     viewport: {
       name: viewport,
@@ -111,7 +111,7 @@ function releaseManifest(): Record<string, unknown> {
     issue: 4,
     prNumber: 9,
     requestPath,
-    route: "/pruebas/guia/",
+    route: "/pruebas/guia",
     selector: null,
     source: {
       baseSha: null,
@@ -207,7 +207,7 @@ test("authorizes only a reachable evidenced release with human preview approval"
     prUrl: `https://github.com/${repository}/pull/9`,
     issueNumber: 4,
     requestPath,
-    route: "/pruebas/guia/",
+    route: "/pruebas/guia",
     expectedStatus: 200,
     previewApprovedSha: candidateSha,
     releaseManifestPath,
@@ -351,16 +351,16 @@ test("keeps production navigation inside the exact configured HTTPS origin", () 
   assert.equal(
     validateProductionUrl(
       "https://www.comunidadsolar.es/",
-      "https://www.comunidadsolar.es/pruebas/guia/",
+      "https://www.comunidadsolar.es/pruebas/guia",
     ),
-    "https://www.comunidadsolar.es/pruebas/guia/",
+    "https://www.comunidadsolar.es/pruebas/guia",
   );
   for (const candidate of [
-    "http://www.comunidadsolar.es/pruebas/guia/",
-    "https://evil.example/pruebas/guia/",
-    "https://www.comunidadsolar.es:444/pruebas/guia/",
-    "https://user@www.comunidadsolar.es/pruebas/guia/",
-    "https://www.comunidadsolar.es/pruebas/guia/?token=x",
+    "http://www.comunidadsolar.es/pruebas/guia",
+    "https://evil.example/pruebas/guia",
+    "https://www.comunidadsolar.es:444/pruebas/guia",
+    "https://user@www.comunidadsolar.es/pruebas/guia",
+    "https://www.comunidadsolar.es/pruebas/guia?token=x",
   ]) {
     assert.throws(
       () => validateProductionUrl("https://www.comunidadsolar.es/", candidate),
@@ -498,7 +498,7 @@ test("smokes the exact production route and publishes one append-only record", a
     );
     assert.equal(
       record.productionUrl,
-      "https://www.comunidadsolar.es/pruebas/guia/",
+      "https://www.comunidadsolar.es/pruebas/guia",
     );
     assert.equal(record.status, 200);
     assert.equal(

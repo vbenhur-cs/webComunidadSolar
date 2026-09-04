@@ -26,7 +26,8 @@ const allowedRootKeys = new Set([
 ]);
 const stableSelector =
   /^(?:#[a-z][a-z0-9_-]{0,158}|\.[a-z][a-z0-9_-]{0,158}|\[data-evidence-id='[a-z0-9]+(?:-[a-z0-9]+)*'\])$/u;
-const publicRoute = /^\/(?:[a-z0-9][a-z0-9-]*\/)*$/u;
+const publicRoute =
+  /^(?:\/|\/(?:[a-z0-9][a-z0-9-]*)(?:\/[a-z0-9][a-z0-9-]*)*)$/u;
 
 type JsonRecord = Record<string, unknown>;
 
@@ -74,7 +75,7 @@ function requireRoute(value: unknown): string {
   }
   if (
     PRIVATE_ROUTE_PREFIXES.some(
-      (prefix) => value === `${prefix}/` || value.startsWith(`${prefix}/`),
+      (prefix) => value === prefix || value.startsWith(`${prefix}/`),
     )
   ) {
     throw new TypeError("La ruta de evidencia debe ser pública");

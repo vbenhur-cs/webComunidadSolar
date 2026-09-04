@@ -111,14 +111,14 @@ boundary:
 test("normalizes the closed page request", () => {
   assert.deepEqual(
     parseEvidenceRequest(
-      `schema_version: 1\nissue: 4\nscope: page\nroute: /pruebas/guia/\nexpected_status:\n  base: 404\n  candidate: 200\nviewports: [desktop, mobile]\n`,
+      `schema_version: 1\nissue: 4\nscope: page\nroute: /pruebas/guia\nexpected_status:\n  base: 404\n  candidate: 200\nviewports: [desktop, mobile]\n`,
       "evidence/requests/issue-4.yaml",
     ),
     {
       schemaVersion: 1,
       issue: 4,
       scope: "page",
-      route: "/pruebas/guia/",
+      route: "/pruebas/guia",
       selector: null,
       expectedStatus: { base: 404, candidate: 200 },
       viewports: ["desktop", "mobile"],

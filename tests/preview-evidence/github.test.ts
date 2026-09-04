@@ -26,7 +26,7 @@ const requestPath = "evidence/requests/issue-4.yaml";
 const requestYaml = `schema_version: 1
 issue: 4
 scope: page
-route: /pruebas/guia/
+route: /pruebas/guia
 expected_status:
   base: 404
   candidate: 200
@@ -228,7 +228,7 @@ test("resolves a green main head and its unique merged PR into a release context
         schemaVersion: 1,
         issue: 4,
         scope: "page",
-        route: "/pruebas/guia/",
+        route: "/pruebas/guia",
         selector: null,
         expectedStatus: { base: 404, candidate: 200 },
         viewports: ["desktop", "mobile"],
@@ -454,7 +454,7 @@ test("resolves one internal green PR into an authoritative sanitized context", a
       schemaVersion: 1,
       issue: 4,
       scope: "page",
-      route: "/pruebas/guia/",
+      route: "/pruebas/guia",
       selector: null,
       expectedStatus: { base: 404, candidate: 200 },
       viewports: ["desktop", "mobile"],
@@ -799,7 +799,7 @@ function reportingContext() {
       schemaVersion: 1 as const,
       issue: 4,
       scope: "page" as const,
-      route: "/pruebas/guia/",
+      route: "/pruebas/guia",
       selector: null,
       expectedStatus: { base: 404 as const, candidate: 200 as const },
       viewports: ["desktop", "mobile"] as const,
@@ -822,7 +822,7 @@ function publication(): PublishEvidenceResult {
         sourceSha: baseSha,
         relativeDirectory: `issue-4/baseline/${baseSha}`,
         previewUrl:
-          "https://pr-9-base-aaaaaaa-comunidad-solar-preview.comunidadsolar-dev.workers.dev/pruebas/guia/",
+          "https://pr-9-base-aaaaaaa-comunidad-solar-preview.comunidadsolar-dev.workers.dev/pruebas/guia",
         manifestUrl: `https://github.com/${repository}/blob/evidence/issue-4/baseline/${baseSha}/manifest.json`,
         pngs: [
           {
@@ -840,7 +840,7 @@ function publication(): PublishEvidenceResult {
         sourceSha: headSha,
         relativeDirectory: `issue-4/candidates/${headSha}`,
         previewUrl:
-          "https://pr-9-head-bbbbbbb-comunidad-solar-preview.comunidadsolar-dev.workers.dev/pruebas/guia/",
+          "https://pr-9-head-bbbbbbb-comunidad-solar-preview.comunidadsolar-dev.workers.dev/pruebas/guia",
         manifestUrl: `https://github.com/${repository}/blob/evidence/issue-4/candidates/${headSha}/manifest.json`,
         pngs: [
           {
@@ -882,7 +882,7 @@ function releasePublication(): PublishEvidenceResult {
         sourceSha: headSha,
         relativeDirectory: `issue-4/releases/${headSha}`,
         previewUrl:
-          "https://comunidad-solar-preview.comunidadsolar-dev.workers.dev/pruebas/guia/",
+          "https://comunidad-solar-preview.comunidadsolar-dev.workers.dev/pruebas/guia",
         manifestUrl: `https://github.com/${repository}/blob/evidence/issue-4/releases/${headSha}/manifest.json`,
         pngs: [
           {

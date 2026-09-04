@@ -137,7 +137,7 @@ function prContext(scope: "page" | "section" = "page"): PullRequestRunContext {
       schemaVersion: 1,
       issue: 4,
       scope,
-      route: "/pruebas/guia/",
+      route: "/pruebas/guia",
       selector: scope === "section" ? "[data-evidence-id='hero']" : null,
       expectedStatus: { base: 404, candidate: 200 },
       viewports: ["desktop", "mobile"],

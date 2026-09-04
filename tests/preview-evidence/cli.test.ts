@@ -32,7 +32,7 @@ const requestPath = "evidence/requests/issue-4.yaml";
 const requestYaml = `schema_version: 1
 issue: 4
 scope: page
-route: /pruebas/guia/
+route: /pruebas/guia
 expected_status:
   base: 404
   candidate: 200
@@ -319,8 +319,8 @@ class ProductionCliGitHubApi implements GitHubApi {
       sourceSha: headSha,
       versionId,
       origin: previewOrigin,
-      url: `${previewOrigin}/pruebas/guia/`,
-      route: "/pruebas/guia/",
+      url: `${previewOrigin}/pruebas/guia`,
+      route: "/pruebas/guia",
       status: 200,
       viewport: {
         name: viewport,
@@ -344,7 +344,7 @@ class ProductionCliGitHubApi implements GitHubApi {
       issue: 4,
       prNumber: 9,
       requestPath,
-      route: "/pruebas/guia/",
+      route: "/pruebas/guia",
       selector: null,
       source: { baseSha: null, candidateSha: null, releaseSha: headSha },
       capturedAt: "2026-09-04T00:00:00.000Z",
@@ -448,7 +448,7 @@ test("resolve-pr writes a sealed context and safe GitHub outputs", async () => {
     const stored = JSON.parse(await readFile(context, "utf8"));
     const outputs = await readFile(output, "utf8");
     assert.equal(stored.headSha, headSha);
-    assert.equal(stored.request.route, "/pruebas/guia/");
+    assert.equal(stored.request.route, "/pruebas/guia");
     assert.match(outputs, /pr_number<<[^\n]+\n4\n/u);
     assert.match(outputs, new RegExp(`head_sha<<[^\\n]+\\n${headSha}\\n`, "u"));
     assert.match(outputs, /context_sha256<<[^\n]+\n[a-f0-9]{64}\n/u);
@@ -652,7 +652,7 @@ test("validate-request checks the real file without GitHub credentials", async (
     );
 
     assert.deepEqual(messages, [
-      "EVIDENCE_REQUEST_OK issue=4 route=/pruebas/guia/\n",
+      "EVIDENCE_REQUEST_OK issue=4 route=/pruebas/guia\n",
     ]);
   } finally {
     await rm(root, { recursive: true, force: true });
@@ -797,7 +797,7 @@ test("upload-version validates sealed context before reading credentials and wri
         schemaVersion: 1,
         issue: 4,
         scope: "page",
-        route: "/pruebas/guia/",
+        route: "/pruebas/guia",
         selector: null,
         expectedStatus: { base: 404, candidate: 200 },
         viewports: ["desktop", "mobile"],
@@ -932,7 +932,7 @@ test("upload-version derives a release identity only from the sealed main contex
         schemaVersion: 1,
         issue: 4,
         scope: "page",
-        route: "/pruebas/guia/",
+        route: "/pruebas/guia",
         selector: null,
         expectedStatus: { base: 404, candidate: 200 },
         viewports: ["desktop", "mobile"],
