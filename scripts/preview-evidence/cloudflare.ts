@@ -492,21 +492,31 @@ function validateVersionMetadata(value: unknown, expectedPreview = true): void {
       "author_id",
       "created_on",
       "hasPreview",
+      "has_preview",
       "modified_on",
       "source",
     ],
     "La metadata de versión Cloudflare",
   );
+  if (
+    Object.hasOwn(metadata, "hasPreview") &&
+    Object.hasOwn(metadata, "has_preview")
+  ) {
+    throw new TypeError("Cloudflare devolvió metadata preview ambigua");
+  }
   for (const [key, child] of Object.entries(metadata)) {
-    if (key === "hasPreview") {
+    if (key === "hasPreview" || key === "has_preview") {
       if (typeof child !== "boolean") {
-        throw new TypeError("Cloudflare devolvió hasPreview inválido");
+        throw new TypeError(
+          "Cloudflare devolvió el indicador preview inválido",
+        );
       }
     } else {
       safeText(child, `metadata.${key}`, 1024);
     }
   }
-  if (metadata.hasPreview !== expectedPreview) {
+  const previewFlag = metadata.has_preview ?? metadata.hasPreview;
+  if (previewFlag !== expectedPreview) {
     throw new TypeError(
       "La versión Cloudflare no coincide con la política de Preview URLs",
     );
