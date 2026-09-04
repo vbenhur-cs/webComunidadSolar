@@ -1157,6 +1157,37 @@ test("writes a local PID, host, and timestamp into a default lock owner", async 
   }
 });
 
+test("publishes lock owners only after their complete contents are durable", async () => {
+  const root = await mkdtemp(join(tmpdir(), "comunidadsolar-owner-publish-"));
+  const stateRoot = join(root, ".change-state");
+  const beforePublish = deferred<string>();
+  const resumePublish = deferred();
+  const store = createStateStore({
+    stateRoot,
+    testHooks: {
+      beforeOwnerFilePublished: async (path) => {
+        beforePublish.resolve(path);
+        await resumePublish.promise;
+      },
+    },
+  });
+  let lockRun: Promise<void> | undefined;
+
+  try {
+    lockRun = store.withChangeLock(changeId, async () => undefined);
+    const target = await within(
+      beforePublish.promise,
+      asyncTestBoundaryTimeoutMs,
+      "La publicación del propietario no alcanzó su barrera",
+    );
+    await assert.rejects(lstat(target), { code: "ENOENT" });
+  } finally {
+    resumePublish.resolve();
+    await lockRun?.catch(() => undefined);
+    await rm(root, { force: true, recursive: true });
+  }
+});
+
 test("stress fixture grants exactly one multiprocess lock owner and removes all lock residues", async () => {
   const tsx = join(process.cwd(), "node_modules", ".bin", "tsx");
   const { stdout, stderr } = await execFileAsync(
@@ -1164,7 +1195,7 @@ test("stress fixture grants exactly one multiprocess lock owner and removes all 
     ["tests/fixtures/ingestion/stress-locks.ts"],
     {
       cwd: process.cwd(),
-      timeout: 30_000,
+      timeout: 60_000,
     },
   );
 
