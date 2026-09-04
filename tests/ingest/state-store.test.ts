@@ -1164,7 +1164,7 @@ test("stress fixture grants exactly one multiprocess lock owner and removes all 
     ["tests/fixtures/ingestion/stress-locks.ts"],
     {
       cwd: process.cwd(),
-      timeout: 15_000,
+      timeout: 30_000,
     },
   );
 

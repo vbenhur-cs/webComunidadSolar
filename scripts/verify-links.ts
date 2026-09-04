@@ -377,6 +377,18 @@ export async function auditInternalLinks(
         const targetPath = normalizePath(target.pathname);
         const targetWithFragment = `${targetPath}${target.hash}`;
 
+        if (target.hash && targetPath === sourcePath) {
+          const id = decodeURIComponent(target.hash.slice(1));
+          if (!hasId(document.html, id)) {
+            violations.push({
+              sourcePath,
+              targetPath: targetWithFragment,
+              reason: "fragment-missing",
+            });
+          }
+          continue;
+        }
+
         if (isPhase3DeferredPublicRoute(targetPath)) {
           deferred.push(deferredLink(sourcePath, targetPath));
           continue;
@@ -389,18 +401,6 @@ export async function auditInternalLinks(
             targetPath: targetWithFragment,
             reason: "manifest-missing",
           });
-          continue;
-        }
-
-        if (target.hash && targetPath === sourcePath) {
-          const id = decodeURIComponent(target.hash.slice(1));
-          if (!hasId(document.html, id)) {
-            violations.push({
-              sourcePath,
-              targetPath: targetWithFragment,
-              reason: "fragment-missing",
-            });
-          }
           continue;
         }
 

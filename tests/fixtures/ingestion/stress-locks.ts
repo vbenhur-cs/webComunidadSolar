@@ -8,13 +8,19 @@ import { createStateStore } from "../../../src/ingest/state-store.ts";
 
 const changeId = "stress-lock";
 const workerCount = 8;
+// Hosted CI can take more than five seconds to schedule eight Node children
+// while the parallel verification jobs are also installing and building.
+const coordinationTimeoutMs = 15_000;
 const fixturePath = fileURLToPath(import.meta.url);
 
 function pause(milliseconds: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
-async function waitForFile(path: string, timeoutMs = 5_000): Promise<void> {
+async function waitForFile(
+  path: string,
+  timeoutMs = coordinationTimeoutMs,
+): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     try {
@@ -38,8 +44,9 @@ async function waitForFile(path: string, timeoutMs = 5_000): Promise<void> {
 async function waitForResultCount(
   resultsDir: string,
   expected: number,
+  timeoutMs = coordinationTimeoutMs,
 ): Promise<string[]> {
-  const deadline = Date.now() + 5_000;
+  const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const entries = await readdir(resultsDir);
     if (entries.length === expected) {
