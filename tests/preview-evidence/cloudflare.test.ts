@@ -305,7 +305,7 @@ test("uploads with fixed argv and verifies the exact listed version", async () =
   }
 });
 
-test("accepts the current Cloudflare has_preview metadata field", async () => {
+test("accepts the current Cloudflare API-token version metadata", async () => {
   const value = await fixture();
   try {
     const descriptor = await uploadPreviewVersion(
@@ -316,7 +316,7 @@ test("accepts the current Cloudflare has_preview metadata field", async () => {
           result({
             stdout: listStdout("candidate", {
               metadata: {
-                author_email: "operator@example.invalid",
+                author_email: "",
                 author_id: "b".repeat(32),
                 created_on: "2026-09-03T20:00:00.000Z",
                 has_preview: true,
@@ -330,6 +330,39 @@ test("accepts the current Cloudflare has_preview metadata field", async () => {
     );
 
     assert.equal(descriptor.versionId, versionId);
+  } finally {
+    await rm(value.root, { recursive: true, force: true });
+  }
+});
+
+test("keeps non-empty Cloudflare author metadata bounded and control-free", async () => {
+  const value = await fixture();
+  try {
+    for (const authorEmail of [`bad\u001bvalue`, "a".repeat(1025)]) {
+      await assert.rejects(
+        uploadPreviewVersion(
+          uploadInput(value),
+          fakeRunner(
+            [
+              result({ stdout: uploadStdout() }),
+              result({
+                stdout: listStdout("candidate", {
+                  metadata: {
+                    author_email: authorEmail,
+                    author_id: "b".repeat(32),
+                    created_on: "2026-09-03T20:00:00.000Z",
+                    has_preview: true,
+                    source: "wrangler",
+                  },
+                }),
+              }),
+            ],
+            [],
+          ),
+        ),
+        /metadata\.author_email/i,
+      );
+    }
   } finally {
     await rm(value.root, { recursive: true, force: true });
   }
