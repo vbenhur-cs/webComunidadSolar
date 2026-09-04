@@ -67,6 +67,15 @@ test("remote and about videos defer their iframe until visitor intent", async ({
 
   const remoteVideo = page.locator("[data-remote-hero-video]");
   await expect(remoteVideo.locator("iframe")).toHaveCount(0);
+  const remoteIsland = page.locator(
+    'astro-island[component-export="RemoteVideo"]',
+  );
+  await remoteVideo.scrollIntoViewIfNeeded();
+  await expect
+    .poll(() =>
+      remoteIsland.first().evaluate((element) => !element.hasAttribute("ssr")),
+    )
+    .toBe(true);
   await remoteVideo.getByRole("button").click();
   await expect(remoteVideo.locator("iframe")).toHaveCount(1);
 
@@ -74,6 +83,13 @@ test("remote and about videos defer their iframe until visitor intent", async ({
 
   const aboutVideo = page.locator("[data-about-video]");
   await expect(aboutVideo.locator("iframe")).toHaveCount(0);
+  const aboutIsland = page.locator(
+    'astro-island[component-export="AboutVideo"]',
+  );
+  await aboutVideo.scrollIntoViewIfNeeded();
+  await expect
+    .poll(() => aboutIsland.evaluate((element) => !element.hasAttribute("ssr")))
+    .toBe(true);
   await aboutVideo.getByRole("button", { name: /ver hay decisiones/i }).click();
   await expect(page.locator("#about-legacy-video-dialog iframe")).toHaveCount(
     1,

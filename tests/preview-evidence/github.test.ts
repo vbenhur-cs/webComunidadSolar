@@ -357,7 +357,7 @@ test("permits bootstrap only for the configured PR and allowlisted pipeline path
   const bootstrapApi = validMainApi();
   bootstrapApi.responses.set(`/repos/${repository}/pulls/9`, {
     ...validMergedPullRequest(),
-    changed_files: 6,
+    changed_files: 7,
   });
   bootstrapApi.responses.set(
     `/repos/${repository}/pulls/9/files?per_page=100&page=1`,
@@ -379,6 +379,10 @@ test("permits bootstrap only for the configured PR and allowlisted pipeline path
       },
       {
         filename: "tests/ingest/state-store.test.ts",
+        status: "modified",
+      },
+      {
+        filename: "tests/e2e/editorial.spec.ts",
         status: "modified",
       },
     ],

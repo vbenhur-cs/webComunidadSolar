@@ -89,6 +89,7 @@ const bootstrapExactPaths = new Set([
   "scripts/prepare-cloudflare-config.ts",
   "tests/foundation/preview-documentation.test.mjs",
   "tests/foundation/preview-workflows.test.mjs",
+  "tests/e2e/editorial.spec.ts",
   "tests/fixtures/ingestion/stress-locks.ts",
   "tests/ingest/state-store.test.ts",
 ]);
