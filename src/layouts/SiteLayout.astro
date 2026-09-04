@@ -7,7 +7,7 @@ import type { HeaderPageKey } from "../lib/site/page-registry";
 import DocumentLayout from "./DocumentLayout.astro";
 
 interface Props {
-  page: HeaderPageKey;
+  page: HeaderPageKey | null;
   meta?: Partial<SiteMeta>;
 }
 
