@@ -357,7 +357,7 @@ test("permits bootstrap only for the configured PR and allowlisted pipeline path
   const bootstrapApi = validMainApi();
   bootstrapApi.responses.set(`/repos/${repository}/pulls/9`, {
     ...validMergedPullRequest(),
-    changed_files: 3,
+    changed_files: 4,
   });
   bootstrapApi.responses.set(
     `/repos/${repository}/pulls/9/files?per_page=100&page=1`,
@@ -368,6 +368,10 @@ test("permits bootstrap only for the configured PR and allowlisted pipeline path
         filename:
           "docs/superpowers/specs/2026-09-03-pr-preview-evidence-design.md",
         status: "modified",
+      },
+      {
+        filename: "tests/foundation/preview-documentation.test.mjs",
+        status: "added",
       },
     ],
   );
