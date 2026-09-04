@@ -110,7 +110,7 @@ function context(scope: "page" | "section" = "page"): PullRequestRunContext {
       schemaVersion: 1,
       issue: 4,
       scope,
-      route: "/pruebas/guia/",
+      route: "/pruebas/guia",
       selector: scope === "section" ? "[data-evidence-id='hero']" : null,
       expectedStatus: { base: 404, candidate: 200 },
       viewports: ["desktop", "mobile"],
@@ -272,7 +272,7 @@ test("adds one canonical section PNG for every variant and viewport", async () =
       set.manifest.captures.every(
         (capture) =>
           capture.selector === "[data-evidence-id='hero']" &&
-          capture.route === "/pruebas/guia/",
+          capture.route === "/pruebas/guia",
       ),
       true,
     );
@@ -328,7 +328,7 @@ test("captures a release using release names and candidate status", async () => 
     assert.equal(set.manifest.source.releaseSha, releaseSha);
     assert.equal(
       browser.requests.every(
-        (request) => request.url === `${sharedPreviewUrl}pruebas/guia/`,
+        (request) => request.url === `${sharedPreviewUrl}pruebas/guia`,
       ),
       true,
     );

@@ -161,7 +161,7 @@ Cada PR funcional añade exactamente un archivo nuevo bajo
 schema_version: 1
 issue: 4
 scope: page
-route: /pruebas/guia-comunidades-propietarios/
+route: /pruebas/guia-comunidades-propietarios
 expected_status:
   base: 404
   candidate: 200
@@ -176,7 +176,7 @@ Para una sección:
 schema_version: 1
 issue: 5
 scope: section
-route: /autoconsumo-remoto/
+route: /autoconsumo-remoto
 selector: "[data-evidence-id='beneficios']"
 expected_status:
   base: 200
@@ -191,7 +191,8 @@ Reglas:
 - el nombre y el campo `issue` deben coincidir;
 - `issue` es un entero positivo y debe identificar una issue abierta;
 - `scope` solo admite `page` o `section`;
-- `route` es un path local normalizado, sin origen, query, fragmento,
+- `route` es el path local canónico del sitio: `/` para portada y sin barra
+  final para el resto, además de no admitir origen, query, fragmento,
   traversal ni caracteres de control;
 - las rutas privadas y endpoints API quedan prohibidos en la primera versión;
 - `selector` es obligatorio solo para `section`, tiene longitud limitada y no

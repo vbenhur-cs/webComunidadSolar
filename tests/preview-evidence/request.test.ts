@@ -17,7 +17,7 @@ import {
 const validPageYaml = `schema_version: 1
 issue: 4
 scope: page
-route: /pruebas/guia/
+route: /pruebas/guia
 expected_status:
   base: 404
   candidate: 200
@@ -27,7 +27,7 @@ viewports: [desktop, mobile]
 const validSectionYaml = `schema_version: 1
 issue: 5
 scope: section
-route: /autoconsumo-remoto/
+route: /autoconsumo-remoto
 selector: "[data-evidence-id='beneficios']"
 expected_status:
   base: 200
@@ -44,11 +44,37 @@ test("normalizes the closed page request", () => {
       schemaVersion: 1,
       issue: 4,
       scope: "page",
-      route: "/pruebas/guia/",
+      route: "/pruebas/guia",
       selector: null,
       expectedStatus: { base: 404, candidate: 200 },
       viewports: ["desktop", "mobile"],
     },
+  );
+});
+
+test("uses the site's slashless URL convention for evidence routes", () => {
+  const slashlessRequest = `schema_version: 1
+issue: 4
+scope: page
+route: /pruebas/guia
+expected_status:
+  base: 404
+  candidate: 200
+viewports: [desktop, mobile]
+`;
+
+  assert.equal(
+    parseEvidenceRequest(slashlessRequest, "evidence/requests/issue-4.yaml")
+      .route,
+    "/pruebas/guia",
+  );
+  assert.throws(
+    () =>
+      parseEvidenceRequest(
+        slashlessRequest.replace("/pruebas/guia", "/pruebas/guia/"),
+        "evidence/requests/issue-4.yaml",
+      ),
+    /canónic|route|ruta/i,
   );
 });
 
@@ -59,7 +85,7 @@ test("normalizes a section request with one stable selector", () => {
       schemaVersion: 1,
       issue: 5,
       scope: "section",
-      route: "/autoconsumo-remoto/",
+      route: "/autoconsumo-remoto",
       selector: "[data-evidence-id='beneficios']",
       expectedStatus: { base: 200, candidate: 200 },
       viewports: ["desktop", "mobile"],
@@ -150,20 +176,20 @@ test("binds the request issue to its canonical repository path", () => {
 
 test("rejects routes that are not canonical public paths", () => {
   const routes = [
-    "https://example.com/pruebas/",
-    "//example.com/pruebas/",
-    "/pruebas/?draft=1",
-    "/pruebas/#hero",
-    "/pruebas/../socios/",
-    "/pruebas//guia/",
-    "/pruebas/guia",
-    "/pruebas/\\guia/",
-    "/pruebas/%2e%2e/socios/",
-    "/pruebas/\u0000/",
+    "https://example.com/pruebas",
+    "//example.com/pruebas",
+    "/pruebas?draft=1",
+    "/pruebas#hero",
+    "/pruebas/../socios",
+    "/pruebas//guia",
+    "/pruebas/guia/",
+    "/pruebas/\\guia",
+    "/pruebas/%2e%2e/socios",
+    "/pruebas/\u0000",
   ];
 
   for (const route of routes) {
-    const yaml = validPageYaml.replace("/pruebas/guia/", route);
+    const yaml = validPageYaml.replace("/pruebas/guia", route);
     assert.throws(
       () => parseEvidenceRequest(yaml, "evidence/requests/issue-4.yaml"),
       /route|ruta|yaml/i,
@@ -174,13 +200,13 @@ test("rejects routes that are not canonical public paths", () => {
 
 test("rejects private and API route families", () => {
   for (const route of [
-    "/api/quote/",
-    "/socios/",
-    "/socios/dashboard/",
-    "/guia-equipo/",
-    "/manganafer/interesados/",
+    "/api/quote",
+    "/socios",
+    "/socios/dashboard",
+    "/guia-equipo",
+    "/manganafer/interesados",
   ]) {
-    const yaml = validPageYaml.replace("/pruebas/guia/", route);
+    const yaml = validPageYaml.replace("/pruebas/guia", route);
     assert.throws(
       () => parseEvidenceRequest(yaml, "evidence/requests/issue-4.yaml"),
       /públic|privad|route|ruta/i,

@@ -45,7 +45,7 @@ aprobación. Antes de desarrollar deben quedar definidos:
 - la persona responsable de aprobar contenido, negocio o legal.
 
 Para identificar una página existente, pega su URL completa y escribe también
-su ruta, por ejemplo `/autoconsumo-remoto/`. Para una página nueva, indica la
+su ruta, por ejemplo `/autoconsumo-remoto`. Para una página nueva, indica la
 ruta deseada aunque todavía devuelva 404.
 
 ## Dos modelos de solicitud
@@ -69,11 +69,15 @@ Aprobador: <nombre y área>.
 La PR implementadora añadirá exactamente un contrato
 `evidence/requests/issue-<N>.yaml`, sustituyendo `<N>` por el número real:
 
+La ruta debe copiar la URL canónica del proyecto: `/` para la portada y sin
+barra final para cualquier otra página. Así la captura verifica directamente
+el estado esperado y no el estado intermedio de una redirección.
+
 ```yaml
 schema_version: 1
 issue: 4
 scope: page
-route: /pruebas/guia-comunidades-propietarios/
+route: /pruebas/guia-comunidades-propietarios
 expected_status:
   base: 404
   candidate: 200
@@ -87,8 +91,8 @@ viewports:
 ```text
 Título: [Web] Actualizar beneficios de autoconsumo remoto
 Objetivo: aclarar tres ventajas para una persona que compara opciones.
-URL actual: https://<sitio>/autoconsumo-remoto/
-Ruta exacta: /autoconsumo-remoto/
+URL actual: https://<sitio>/autoconsumo-remoto
+Ruta exacta: /autoconsumo-remoto
 Alcance de evidencia: Sección concreta.
 Selector estable: [data-evidence-id='beneficios']
 Cambio: sustituir el contenido actual por <texto aprobado>.
@@ -111,7 +115,7 @@ Y su contrato será:
 schema_version: 1
 issue: 5
 scope: section
-route: /autoconsumo-remoto/
+route: /autoconsumo-remoto
 selector: "[data-evidence-id='beneficios']"
 expected_status:
   base: 200
